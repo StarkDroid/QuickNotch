@@ -147,7 +147,7 @@ fun SettingsScreen(
                         onResetDefaults = {
                             repository.updateConfig {
                                 it.copy(
-                                    dockScaleFactor = 1.65f,
+                                    dockScaleFactor = 1.35f,
                                     dockMagnificationRadius = 130f,
                                     baseIconSizeDp = 38,
                                     collapsedPillWidthDp = 160,
@@ -377,9 +377,9 @@ private fun DockSizingTab(
 
                     MinimalistSliderRow(
                         title = "Magnification Peak Scale",
-                        valueLabel = "${String.format("%.2f", config.dockScaleFactor.coerceIn(1.15f, 1.90f))}x",
-                        value = config.dockScaleFactor.coerceIn(1.15f, 1.90f),
-                        valueRange = 1.15f..1.90f,
+                        valueLabel = "${String.format("%.2f", config.dockScaleFactor.coerceIn(1.10f, 1.45f))}x",
+                        value = config.dockScaleFactor.coerceIn(1.10f, 1.45f),
+                        valueRange = 1.10f..1.45f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockScaleFactor = it) } }
                     )
 

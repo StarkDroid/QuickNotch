@@ -23,7 +23,7 @@ enum class NotchPosition(val displayName: String) {
 @Serializable
 data class NotchConfig(
     val position: NotchPosition = NotchPosition.TOP_CENTER,
-    val dockScaleFactor: Float = 1.65f,
+    val dockScaleFactor: Float = 1.35f,
     val dockMagnificationRadius: Float = 130f,
     val baseIconSizeDp: Int = 38,
     val collapsedPillWidthDp: Int = 160,
