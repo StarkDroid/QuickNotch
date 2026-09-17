@@ -55,8 +55,10 @@ fun SettingsScreen(
     val favorites by repository.favorites.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Dock & Sizing", "Pinned Apps", "Behavior", "About")
-    val tabIcons = listOf(Icons.Default.Tune, Icons.Default.Apps, Icons.Default.ToggleOn, Icons.Default.Info)
+    val tabs = listOf("Dock & Sizing", "Pinned Apps", "Behavior")
+    val tabIcons = listOf(Icons.Default.Tune, Icons.Default.Apps, Icons.Default.ToggleOn)
+
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     var scannedApps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -77,7 +79,9 @@ fun SettingsScreen(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                SettingsTopBar(onClose = onClose)
+                SettingsTopBar(
+                    onOpenAbout = { showAboutDialog = true }
+                )
             }
         ) { innerPadding ->
             Column(
@@ -157,15 +161,20 @@ fun SettingsScreen(
                         config = config,
                         onUpdate = { repository.updateConfig(it) }
                     )
-                    3 -> AboutTab()
                 }
             }
+        }
+
+        if (showAboutDialog) {
+            AboutDialog(onDismiss = { showAboutDialog = false })
         }
     }
 }
 
 @Composable
-private fun SettingsTopBar(onClose: () -> Unit) {
+private fun SettingsTopBar(
+    onOpenAbout: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,28 +200,12 @@ private fun SettingsTopBar(onClose: () -> Unit) {
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "QuickNotch",
-                        style = AppTypography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(AccentIndigo.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "v1.0.0",
-                            style = AppTypography.labelSmall,
-                            color = AccentIndigoLight,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
+                Text(
+                    text = "QuickNotch",
+                    style = AppTypography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
                 Text(
                     text = "Dynamic Island & Floating Dock Customizer",
                     style = AppTypography.bodySmall,
@@ -220,6 +213,22 @@ private fun SettingsTopBar(onClose: () -> Unit) {
                     fontSize = 12.sp
                 )
             }
+        }
+
+        IconButton(
+            onClick = onOpenAbout,
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(FlatSurfaceElevated)
+                .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "About",
+                tint = TextSecondary,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
@@ -329,29 +338,26 @@ private fun DockSizingTab(
                         valueLabel = "${String.format("%.2f", config.dockScaleFactor)}x",
                         value = config.dockScaleFactor,
                         valueRange = 1.0f..2.4f,
-                        accentColor = AccentIndigoLight,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockScaleFactor = it) } }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     MinimalistSliderRow(
                         title = "Magnification Wave Radius",
                         valueLabel = "${config.dockMagnificationRadius.toInt()} px",
                         value = config.dockMagnificationRadius,
                         valueRange = 70f..220f,
-                        accentColor = AccentCyan,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockMagnificationRadius = it) } }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     MinimalistSliderRow(
                         title = "Base Icon Size",
                         valueLabel = "${config.baseIconSizeDp} dp",
                         value = config.baseIconSizeDp.toFloat(),
                         valueRange = 26f..56f,
-                        accentColor = AccentPurple,
                         onValueChange = { onUpdate { cfg -> cfg.copy(baseIconSizeDp = it.toInt()) } }
                     )
                 }
@@ -386,18 +392,16 @@ private fun DockSizingTab(
                         valueLabel = "${config.collapsedPillWidthDp} dp",
                         value = config.collapsedPillWidthDp.toFloat(),
                         valueRange = 120f..240f,
-                        accentColor = AccentIndigoLight,
                         onValueChange = { onUpdate { cfg -> cfg.copy(collapsedPillWidthDp = it.toInt()) } }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     MinimalistSliderRow(
                         title = "Expanded Dock Height",
                         valueLabel = "${config.expandedNotchHeightDp} dp",
                         value = config.expandedNotchHeightDp.toFloat(),
                         valueRange = 64f..100f,
-                        accentColor = AccentGreen,
                         onValueChange = { onUpdate { cfg -> cfg.copy(expandedNotchHeightDp = it.toInt()) } }
                     )
                 }
@@ -617,13 +621,13 @@ private fun PositionGridCell(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MinimalistSliderRow(
     title: String,
     valueLabel: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    accentColor: Color,
     onValueChange: (Float) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -635,30 +639,45 @@ private fun MinimalistSliderRow(
             Text(title, style = AppTypography.bodySmall, color = TextSecondary)
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(5.dp))
+                    .clip(RoundedCornerShape(4.dp))
                     .background(FlatSurfaceElevated)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(5.dp))
+                    .border(1.dp, FlatBorder, RoundedCornerShape(4.dp))
                     .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = valueLabel,
                     style = AppTypography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = accentColor,
+                    color = TextPrimary,
                     fontSize = 11.sp
                 )
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Slider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
-            colors = SliderDefaults.colors(
-                thumbColor = accentColor,
-                activeTrackColor = accentColor,
-                inactiveTrackColor = FlatBorder
-            )
+            modifier = Modifier.height(20.dp),
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(width = 8.dp, height = 14.dp)
+                        .clip(RoundedCornerShape(2.5.dp))
+                        .background(Color(0xFFE2E8F0))
+                        .border(0.5.dp, Color(0xFF64748B), RoundedCornerShape(2.5.dp))
+                )
+            },
+            track = { sliderState ->
+                SliderDefaults.Track(
+                    sliderState = sliderState,
+                    modifier = Modifier.height(2.5.dp),
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = Color(0xFFA0AEC0),
+                        inactiveTrackColor = Color(0xFF1E2436)
+                    )
+                )
+            }
         )
     }
 }
@@ -1174,101 +1193,177 @@ private fun BehaviorSwitchRow(
                 fontSize = 12.sp
             )
         }
-        Switch(
+        MinimalistRectSwitch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = AccentIndigo,
-                uncheckedThumbColor = TextMuted,
-                uncheckedTrackColor = FlatBorder
-            )
+            onCheckedChange = onCheckedChange
         )
     }
 }
 
 @Composable
-private fun AboutTab() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = FlatSurface),
-        border = BorderStroke(1.dp, FlatBorder),
-        shape = RoundedCornerShape(12.dp)
+private fun MinimalistRectSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val thumbOffset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (checked) 16.dp else 2.dp,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 600f),
+        label = "switchOffset"
+    )
+    val trackBg = if (checked) AccentIndigo else FlatSurfaceElevated
+    val trackBorder = if (checked) AccentIndigoLight else FlatBorder
+    val thumbBg = if (checked) Color.White else TextMuted
+
+    Box(
+        modifier = modifier
+            .width(36.dp)
+            .height(20.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(trackBg)
+            .border(1.dp, trackBorder, RoundedCornerShape(5.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 2.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Column(
-            modifier = Modifier.padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .size(width = 16.dp, height = 14.dp)
+                .clip(RoundedCornerShape(3.5.dp))
+                .background(thumbBg)
+        )
+    }
+}
+
+@Composable
+private fun AboutDialog(
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.65f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .width(420.dp)
+                .clickable(enabled = false) {},
+            colors = CardDefaults.cardColors(containerColor = FlatSurface),
+            border = BorderStroke(1.dp, FlatBorder),
+            shape = RoundedCornerShape(14.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(FlatSurfaceElevated)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.Widgets,
-                    contentDescription = "QuickNotch",
-                    tint = AccentIndigoLight,
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-
-            Text(
-                text = "QuickNotch Desktop",
-                style = AppTypography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(AccentIndigo.copy(alpha = 0.15f))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    text = "Version 1.0.0",
-                    style = AppTypography.labelMedium,
-                    color = AccentCyan
-                )
-            }
-
-            Text(
-                text = "Dynamic Island & Dock floating app launcher for Windows 10 & 11 built with Kotlin Multiplatform and Jetpack Compose Desktop.",
-                style = AppTypography.bodyMedium,
-                color = TextSecondary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                listOf("Kotlin Multiplatform", "Compose Desktop", "Win32 Shell API", "JNA").forEach { tag ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(FlatSurfaceElevated)
-                            .border(1.dp, FlatBorder, RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "About QuickNotch",
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        Text(tag, style = AppTypography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(FlatSurfaceElevated)
+                        .border(1.dp, FlatBorder, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Widgets,
+                        contentDescription = "QuickNotch",
+                        tint = AccentIndigoLight,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "QuickNotch Desktop",
+                    style = AppTypography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AccentIndigo.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "Version 1.0.0",
+                        style = AppTypography.labelSmall,
+                        color = AccentCyan,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Dynamic Island & Dock floating app launcher for Windows 10 & 11 built with Kotlin Multiplatform and Jetpack Compose Desktop.",
+                    style = AppTypography.bodySmall,
+                    color = TextSecondary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    listOf("Kotlin", "Compose Desktop", "Win32 JNA").forEach { tag ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(FlatSurfaceElevated)
+                                .border(1.dp, FlatBorder, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                        ) {
+                            Text(tag, style = AppTypography.labelSmall, color = TextMuted, fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "© 2025 StarkDroid. All rights reserved.",
+                    style = AppTypography.labelSmall,
+                    color = TextMuted,
+                    fontSize = 11.sp
+                )
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "© 2025 StarkDroid. All rights reserved.",
-                style = AppTypography.labelSmall,
-                color = TextMuted,
-                fontSize = 11.sp
-            )
         }
     }
 }
