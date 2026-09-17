@@ -1,0 +1,129 @@
+name: Release & Package Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version Bump Type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: "Custom Version (if bump_type is custom, e.g. 1.0.0)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Windows Distribution & Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Determine & Increment Version
+        id: versioning
+        shell: pwsh
+        run: |
+          $buildGradlePath = "composeApp/build.gradle.kts"
+          $content = Get-Content $buildGradlePath -Raw
+          if ($content -match 'version\s*=\s*"([^"]+)"') {
+              $currentVersion = $matches[1]
+          } else {
+              $currentVersion = "1.0.0"
+          }
+
+          $tagInput = "${{ github.ref_name }}"
+          $bumpType = "${{ github.event.inputs.bump_type }}"
+          $customVer = "${{ github.event.inputs.custom_version }}"
+
+          if ($tagInput -like "v*") {
+              $newVersion = $tagInput.TrimStart("v")
+          } elseif ($bumpType -eq "custom" -and $customVer -ne "") {
+              $newVersion = $customVer.TrimStart("v")
+          } else {
+              $parts = $currentVersion.Split('.')
+              $major = [int]$parts[0]
+              $minor = if ($parts.Length -gt 1) { [int]$parts[1] } else { 0 }
+              $patch = if ($parts.Length -gt 2) { [int]$parts[2] } else { 0 }
+
+              switch ($bumpType) {
+                  "major" { $major++; $minor = 0; $patch = 0 }
+                  "minor" { $minor++; $patch = 0 }
+                  default { $patch++ }
+              }
+              $newVersion = "$major.$minor.$patch"
+          }
+
+          Write-Host "New Target Version: $newVersion"
+          "NEW_VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TAG_NAME=v$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          (Get-Content $buildGradlePath) -replace 'version\s*=\s*"[^"]+"', "version = `"$newVersion`"" | Set-Content $buildGradlePath
+
+      - name: Build Windows Installers (.msi & .exe)
+        run: ./gradlew packageDistributionForCurrentOS --no-daemon
+
+      - name: Generate Checksums & Release Notes
+        id: changelog
+        shell: pwsh
+        run: |
+          $newVer = $env:NEW_VERSION
+          $msiPath = Get-ChildItem -Path "composeApp/build/compose/binaries/main/msi" -Filter "*.msi" | Select-Object -First 1
+          $exePath = Get-ChildItem -Path "composeApp/build/compose/binaries/main/exe" -Filter "*.exe" | Select-Object -First 1
+
+          $msiHash = if ($msiPath) { (Get-FileHash -Path $msiPath.FullName -Algorithm SHA256).Hash } else { "N/A" }
+          $exeHash = if ($exePath) { (Get-FileHash -Path $exePath.FullName -Algorithm SHA256).Hash } else { "N/A" }
+
+          $body = @"
+          # QuickNotch v$newVer
+
+          A sleek, ultra-responsive macOS Dynamic Island & Dock floating app launcher for Windows 10 & 11.
+
+          ### 📦 Installation Packages & Checksums (SHA-256)
+
+          | Package | Format | SHA-256 Checksum |
+          | :--- | :--- | :--- |
+          | **$($msiPath.Name)** | Windows Installer (`.msi`) | ``$msiHash`` |
+          | **$($exePath.Name)** | Executable Installer (`.exe`) | ``$exeHash`` |
+
+          ---
+          *Built automatically with GitHub Actions.*
+          "@
+
+          $body | Out-File -FilePath "RELEASE_NOTES.md" -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: "v${{ env.NEW_VERSION }}"
+          body_path: RELEASE_NOTES.md
+          files: |
+            composeApp/build/compose/binaries/main/msi/*.msi
+            composeApp/build/compose/binaries/main/exe/*.exe
+          draft: false
+          prerelease: false
