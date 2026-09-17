@@ -143,7 +143,19 @@ fun SettingsScreen(
                 when (selectedTab) {
                     0 -> DockSizingTab(
                         config = config,
-                        onUpdate = { repository.updateConfig(it) }
+                        onUpdate = { repository.updateConfig(it) },
+                        onResetDefaults = {
+                            repository.updateConfig {
+                                it.copy(
+                                    dockScaleFactor = 1.65f,
+                                    dockMagnificationRadius = 130f,
+                                    baseIconSizeDp = 38,
+                                    collapsedPillWidthDp = 160,
+                                    collapsedPillHeightDp = 30,
+                                    expandedNotchHeightDp = 78
+                                )
+                            }
+                        }
                     )
                     1 -> PinnedAppsTab(
                         favorites = favorites,
@@ -236,13 +248,43 @@ private fun SettingsTopBar(
 @Composable
 private fun DockSizingTab(
     config: NotchConfig,
-    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit
+    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
+    onResetDefaults: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
+        // Tab Header with Reset Defaults action
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Dock Layout & Sizing",
+                    style = AppTypography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextSecondary
+                )
+                TextButton(
+                    onClick = onResetDefaults,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = AccentRed,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Reset Defaults", style = AppTypography.labelSmall, color = AccentRed)
+                }
+            }
+        }
+
         // Section 1: Minimalist 3x3 Screen Edge Positioning Grid
         item {
             Card(
@@ -335,9 +377,9 @@ private fun DockSizingTab(
 
                     MinimalistSliderRow(
                         title = "Magnification Peak Scale",
-                        valueLabel = "${String.format("%.2f", config.dockScaleFactor)}x",
-                        value = config.dockScaleFactor,
-                        valueRange = 1.0f..2.4f,
+                        valueLabel = "${String.format("%.2f", config.dockScaleFactor.coerceIn(1.15f, 1.90f))}x",
+                        value = config.dockScaleFactor.coerceIn(1.15f, 1.90f),
+                        valueRange = 1.15f..1.90f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockScaleFactor = it) } }
                     )
 
@@ -345,9 +387,9 @@ private fun DockSizingTab(
 
                     MinimalistSliderRow(
                         title = "Magnification Wave Radius",
-                        valueLabel = "${config.dockMagnificationRadius.toInt()} px",
-                        value = config.dockMagnificationRadius,
-                        valueRange = 70f..220f,
+                        valueLabel = "${config.dockMagnificationRadius.coerceIn(90f, 160f).toInt()} px",
+                        value = config.dockMagnificationRadius.coerceIn(90f, 160f),
+                        valueRange = 90f..160f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockMagnificationRadius = it) } }
                     )
 
@@ -355,9 +397,9 @@ private fun DockSizingTab(
 
                     MinimalistSliderRow(
                         title = "Base Icon Size",
-                        valueLabel = "${config.baseIconSizeDp} dp",
-                        value = config.baseIconSizeDp.toFloat(),
-                        valueRange = 26f..56f,
+                        valueLabel = "${config.baseIconSizeDp.coerceIn(32, 44)} dp",
+                        value = config.baseIconSizeDp.toFloat().coerceIn(32f, 44f),
+                        valueRange = 32f..44f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(baseIconSizeDp = it.toInt()) } }
                     )
                 }
@@ -389,9 +431,9 @@ private fun DockSizingTab(
 
                     MinimalistSliderRow(
                         title = "Collapsed Pill Width",
-                        valueLabel = "${config.collapsedPillWidthDp} dp",
-                        value = config.collapsedPillWidthDp.toFloat(),
-                        valueRange = 120f..240f,
+                        valueLabel = "${config.collapsedPillWidthDp.coerceIn(140, 190)} dp",
+                        value = config.collapsedPillWidthDp.toFloat().coerceIn(140f, 190f),
+                        valueRange = 140f..190f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(collapsedPillWidthDp = it.toInt()) } }
                     )
 
@@ -399,9 +441,9 @@ private fun DockSizingTab(
 
                     MinimalistSliderRow(
                         title = "Expanded Dock Height",
-                        valueLabel = "${config.expandedNotchHeightDp} dp",
-                        value = config.expandedNotchHeightDp.toFloat(),
-                        valueRange = 64f..100f,
+                        valueLabel = "${config.expandedNotchHeightDp.coerceIn(70, 86)} dp",
+                        value = config.expandedNotchHeightDp.toFloat().coerceIn(70f, 86f),
+                        valueRange = 70f..86f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(expandedNotchHeightDp = it.toInt()) } }
                     )
                 }
