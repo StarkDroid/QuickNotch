@@ -402,6 +402,37 @@ private fun DockSizingTab(
                         valueRange = 32f..44f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(baseIconSizeDp = it.toInt()) } }
                     )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show App Labels",
+                                style = AppTypography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Display app name labels when hovering over icons",
+                                style = AppTypography.labelSmall,
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                        MinimalistRectSwitch(
+                            checked = config.showTooltips,
+                            onCheckedChange = { checked ->
+                                onUpdate { it.copy(showTooltips = checked) }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1185,8 +1216,8 @@ private fun BehaviorTab(
                     HorizontalDivider(color = FlatBorder)
 
                     BehaviorSwitchRow(
-                        title = "Show App Tooltips",
-                        subtitle = "Display frosted glass tooltip badge above active hovered icon",
+                        title = "Show App Labels",
+                        subtitle = "Display app name labels when hovering over icons in the notch",
                         checked = config.showTooltips,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(showTooltips = checked) }

@@ -683,22 +683,20 @@ private fun VerticalDockItemIcon(
 
 @Composable
 private fun TooltipBadge(text: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(TooltipGlassBackground)
-            .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
-    ) {
-        Text(
-            text = text,
-            style = AppTypography.labelSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+    Text(
+        text = text,
+        style = AppTypography.labelSmall.copy(
+            shadow = androidx.compose.ui.graphics.Shadow(
+                color = Color.Black.copy(alpha = 0.8f),
+                blurRadius = 4f
+            )
+        ),
+        color = Color.White,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+    )
 }
 
 private fun calculateHorizontalFisheye(
