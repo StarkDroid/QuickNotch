@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -1281,12 +1282,29 @@ private fun MinimalistRectSwitch(
 ) {
     val thumbOffset by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (checked) 16.dp else 2.dp,
-        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 600f),
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = 550f),
         label = "switchOffset"
     )
-    val trackBg = if (checked) AccentIndigo else FlatSurfaceElevated
-    val trackBorder = if (checked) AccentIndigoLight else FlatBorder
-    val thumbBg = if (checked) Color.White else TextMuted
+
+    // Deep high-contrast track with rich depth
+    val trackBg = if (checked) {
+        Brush.horizontalGradient(
+            colors = listOf(Color(0xFF3730A3), Color(0xFF4F46E5), Color(0xFF6366F1))
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(Color(0xFF07090E), Color(0xFF0C1018))
+        )
+    }
+
+    val trackBorder = if (checked) {
+        Color(0xFF6366F1)
+    } else {
+        Color(0xFF1E2638)
+    }
+
+    val thumbBg = if (checked) Color(0xFFFFFFFF) else Color(0xFF526075)
+    val thumbBorder = if (checked) Color(0x26000000) else Color(0x33FFFFFF)
 
     Box(
         modifier = modifier
@@ -1303,8 +1321,10 @@ private fun MinimalistRectSwitch(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .size(width = 16.dp, height = 14.dp)
+                .shadow(if (checked) 2.dp else 1.dp, RoundedCornerShape(3.5.dp))
                 .clip(RoundedCornerShape(3.5.dp))
                 .background(thumbBg)
+                .border(0.5.dp, thumbBorder, RoundedCornerShape(3.5.dp))
         )
     }
 }
