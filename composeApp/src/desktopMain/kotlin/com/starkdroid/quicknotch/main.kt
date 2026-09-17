@@ -23,6 +23,7 @@ fun main() = application {
     var showSettings by remember { mutableStateOf(false) }
     var isNotchVisible by remember { mutableStateOf(true) }
     var isExpanded by remember { mutableStateOf(false) }
+    var isWindowExpanded by remember { mutableStateOf(false) }
 
     val trayIcon = remember {
         val img = BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
@@ -66,24 +67,24 @@ fun main() = application {
         val baseVerticalExpandedHeight = (favorites.size * (config.baseIconSizeDp + 18) + 140).coerceIn(320, 800)
 
         // Strict overlay window dimensions:
-        // Sized so that the edge touching the screen bezel is flush with zero spacing,
-        // while allowing a modest shadow margin only on the open edges facing into the display.
+        // Sized so that the edge touching the screen bezel is flush with zero spacing.
+        // Window stays expanded until the collapse animation finishes, avoiding abrupt clipping.
         val currentWindowWidth = if (isVertical) {
-            if (isExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 6).dp
+            if (isWindowExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 6).dp
         } else {
-            if (isExpanded) (baseHorizontalExpandedWidth + 12).dp else (config.collapsedPillWidthDp + 10).dp
+            if (isWindowExpanded) (baseHorizontalExpandedWidth + 12).dp else (config.collapsedPillWidthDp + 10).dp
         }
 
         val currentWindowHeight = if (isVertical) {
-            if (isExpanded) (baseVerticalExpandedHeight + 12).dp else (config.collapsedPillWidthDp + 10).dp
+            if (isWindowExpanded) (baseVerticalExpandedHeight + 12).dp else (config.collapsedPillWidthDp + 10).dp
         } else {
-            if (isExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 4).dp
+            if (isWindowExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 4).dp
         }
 
         val availableWidth = screenWidth - insets.left - insets.right
         val availableHeight = screenHeight - insets.top - insets.bottom
 
-        val windowPosition = remember(config.position, isExpanded, bounds, insets, currentWindowWidth, currentWindowHeight) {
+        val windowPosition = remember(config.position, isWindowExpanded, bounds, insets, currentWindowWidth, currentWindowHeight) {
             val winW = currentWindowWidth.value
             val winH = currentWindowHeight.value
 
@@ -150,6 +151,7 @@ fun main() = application {
                     repository = repository,
                     isExpanded = isExpanded,
                     onExpandedChange = { isExpanded = it },
+                    onWindowExpandedChange = { isWindowExpanded = it },
                     onDragReposition = { dx, dy ->
                         overlayState.position = WindowPosition(
                             overlayState.position.x + dx.dp,

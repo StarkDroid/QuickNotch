@@ -23,13 +23,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +57,7 @@ fun FloatingNotchOverlay(
     repository: FavoritesRepository,
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    onWindowExpandedChange: (Boolean) -> Unit,
     onDragReposition: (Float, Float) -> Unit,
     onDragRepositionEnd: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -85,7 +88,6 @@ fun FloatingNotchOverlay(
         NotchPosition.BOTTOM_RIGHT
     )
 
-    // Animated dimensions matching strictly the notch size
     val targetWidth = if (isVertical) {
         if (isExpanded) config.expandedNotchHeightDp.dp else config.collapsedPillHeightDp.dp
     } else {
@@ -106,18 +108,27 @@ fun FloatingNotchOverlay(
         if (isExpanded) config.expandedNotchHeightDp.dp else config.collapsedPillHeightDp.dp
     }
 
-    // Softer spring animation for organic, fluid expansion without sudden snapping
+    // Soft spring animation for fluid organic expansion and contraction without jarring snapping
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = 220f),
         label = "notchWidth"
     )
 
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = 220f),
         label = "notchHeight"
     )
+
+    // Notify window sizing: only shrink the OS window after the collapse animation finishes
+    LaunchedEffect(isExpanded, animatedWidth, targetWidth) {
+        if (isExpanded) {
+            onWindowExpandedChange(true)
+        } else if (abs(animatedWidth.value - targetWidth.value) < 2f) {
+            onWindowExpandedChange(false)
+        }
+    }
 
     // Notch edge shape tailored to each position: contact edge has 0.dp radius to stick seamlessly to bezel
     val notchShape = when {
@@ -338,7 +349,6 @@ private fun CollapsedVerticalPill(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ExpandedHorizontalDock(
     favorites: List<AppItem>,
@@ -350,7 +360,7 @@ private fun ExpandedHorizontalDock(
     onLaunch: (AppItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    val itemPositions = remember { mutableStateMapOf<Int, Float>() }
+    val stableItemPositions = remember { mutableStateMapOf<Int, Float>() }
     var dockPointerX by remember { mutableStateOf<Float?>(null) }
 
     Row(
@@ -366,22 +376,32 @@ private fun ExpandedHorizontalDock(
             onDragEnd = onDragRepositionEnd
         )
 
-        // Center: App Icons with Fluid Fisheye Wave
+        // Center: App Icons with Fluid GPU-Accelerated Fisheye Wave
         Row(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .onPointerEvent(PointerEventType.Move) { event ->
-                    dockPointerX = event.changes.firstOrNull()?.position?.x
-                }
-                .onPointerEvent(PointerEventType.Exit) {
-                    dockPointerX = null
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            when (event.type) {
+                                PointerEventType.Move, PointerEventType.Enter -> {
+                                    val pos = event.changes.firstOrNull()?.position
+                                    dockPointerX = pos?.x
+                                }
+                                PointerEventType.Exit -> {
+                                    dockPointerX = null
+                                }
+                            }
+                        }
+                    }
                 },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = if (isBottom) Alignment.Bottom else Alignment.CenterVertically
         ) {
             favorites.forEachIndexed { index, app ->
-                val centerX = itemPositions[index]
+                val centerX = stableItemPositions[index]
                 val (scale, offsetY) = calculateHorizontalFisheye(
                     pointerX = dockPointerX,
                     centerX = centerX,
@@ -396,12 +416,11 @@ private fun ExpandedHorizontalDock(
                     scale = scale,
                     offsetY = offsetY,
                     baseSizeDp = config.baseIconSizeDp,
-                    showTooltip = config.showTooltips && (scale > 1.15f),
+                    showTooltip = config.showTooltips && (scale > 1.12f),
                     isBottom = isBottom,
                     onPositioned = { x ->
-                        // Cache steady resting slot position so neighbor expansion doesn't jitter centerX
-                        if (!itemPositions.containsKey(index) || dockPointerX == null) {
-                            itemPositions[index] = x
+                        if (!stableItemPositions.containsKey(index)) {
+                            stableItemPositions[index] = x
                         }
                     },
                     onClick = { onLaunch(app) }
@@ -427,7 +446,6 @@ private fun ExpandedHorizontalDock(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ExpandedVerticalDock(
     favorites: List<AppItem>,
@@ -439,7 +457,7 @@ private fun ExpandedVerticalDock(
     onLaunch: (AppItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    val itemPositions = remember { mutableStateMapOf<Int, Float>() }
+    val stableItemPositions = remember { mutableStateMapOf<Int, Float>() }
     var dockPointerY by remember { mutableStateOf<Float?>(null) }
 
     Column(
@@ -459,17 +477,27 @@ private fun ExpandedVerticalDock(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .onPointerEvent(PointerEventType.Move) { event ->
-                    dockPointerY = event.changes.firstOrNull()?.position?.y
-                }
-                .onPointerEvent(PointerEventType.Exit) {
-                    dockPointerY = null
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            when (event.type) {
+                                PointerEventType.Move, PointerEventType.Enter -> {
+                                    val pos = event.changes.firstOrNull()?.position
+                                    dockPointerY = pos?.y
+                                }
+                                PointerEventType.Exit -> {
+                                    dockPointerY = null
+                                }
+                            }
+                        }
+                    }
                 },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             favorites.forEachIndexed { index, app ->
-                val centerY = itemPositions[index]
+                val centerY = stableItemPositions[index]
                 val (scale, offsetX) = calculateVerticalFisheye(
                     pointerY = dockPointerY,
                     centerY = centerY,
@@ -484,11 +512,11 @@ private fun ExpandedVerticalDock(
                     scale = scale,
                     offsetX = offsetX,
                     baseSizeDp = config.baseIconSizeDp,
-                    showTooltip = config.showTooltips && (scale > 1.15f),
+                    showTooltip = config.showTooltips && (scale > 1.12f),
                     isLeft = isLeft,
                     onPositioned = { y ->
-                        if (!itemPositions.containsKey(index) || dockPointerY == null) {
-                            itemPositions[index] = y
+                        if (!stableItemPositions.containsKey(index)) {
+                            stableItemPositions[index] = y
                         }
                     },
                     onClick = { onLaunch(app) }
@@ -567,32 +595,42 @@ private fun HorizontalDockItemIcon(
     onPositioned: (Float) -> Unit,
     onClick: () -> Unit
 ) {
-    // Softer fluid spring animation to eliminate sudden snapping
+    // Smooth fluid spring animation eliminating sudden snapping
     val animatedScale by animateFloatAsState(
         targetValue = scale,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
         label = "iconScale"
     )
 
     val animatedOffsetY by animateFloatAsState(
         targetValue = offsetY,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
         label = "iconOffset"
     )
 
     Box(
         modifier = Modifier
             .padding(horizontal = 4.dp)
+            .size((baseSizeDp + 6).dp)
             .onGloballyPositioned { coordinates ->
-                val bounds = coordinates.boundsInParent()
-                onPositioned(bounds.center.x)
-            },
+                val parent = coordinates.parentLayoutCoordinates
+                if (parent != null) {
+                    val posInParent = parent.localPositionOf(coordinates, Offset.Zero)
+                    onPositioned(posInParent.x + coordinates.size.width / 2f)
+                }
+            }
+            .clickable(onClick = onClick),
         contentAlignment = if (isBottom) Alignment.BottomCenter else Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = if (isBottom) Arrangement.Bottom else Arrangement.Center,
-            modifier = Modifier.offset(y = animatedOffsetY.dp)
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = animatedScale
+                    scaleY = animatedScale
+                    translationY = animatedOffsetY * density
+                }
         ) {
             if (isBottom && showTooltip) {
                 TooltipBadge(app.name)
@@ -600,9 +638,8 @@ private fun HorizontalDockItemIcon(
 
             Box(
                 modifier = Modifier
-                    .size((baseSizeDp * animatedScale).dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onClick),
+                    .size(baseSizeDp.dp)
+                    .clip(RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (iconBitmap != null) {
@@ -637,29 +674,39 @@ private fun VerticalDockItemIcon(
 ) {
     val animatedScale by animateFloatAsState(
         targetValue = scale,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
         label = "iconScale"
     )
 
     val animatedOffsetX by animateFloatAsState(
         targetValue = offsetX,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
         label = "iconOffsetX"
     )
 
     Box(
         modifier = Modifier
             .padding(vertical = 4.dp)
+            .size((baseSizeDp + 6).dp)
             .onGloballyPositioned { coordinates ->
-                val bounds = coordinates.boundsInParent()
-                onPositioned(bounds.center.y)
-            },
+                val parent = coordinates.parentLayoutCoordinates
+                if (parent != null) {
+                    val posInParent = parent.localPositionOf(coordinates, Offset.Zero)
+                    onPositioned(posInParent.y + coordinates.size.height / 2f)
+                }
+            }
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.offset(x = animatedOffsetX.dp)
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = animatedScale
+                    scaleY = animatedScale
+                    translationX = animatedOffsetX * density
+                }
         ) {
             if (!isLeft && showTooltip) {
                 TooltipBadge(app.name)
@@ -668,9 +715,8 @@ private fun VerticalDockItemIcon(
 
             Box(
                 modifier = Modifier
-                    .size((baseSizeDp * animatedScale).dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onClick),
+                    .size(baseSizeDp.dp)
+                    .clip(RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (iconBitmap != null) {
@@ -698,7 +744,7 @@ private fun TooltipBadge(text: String) {
         text = text,
         style = AppTypography.labelSmall.copy(
             shadow = androidx.compose.ui.graphics.Shadow(
-                color = Color.Black.copy(alpha = 0.8f),
+                color = Color.Black.copy(alpha = 0.85f),
                 blurRadius = 4f
             )
         ),
@@ -730,7 +776,7 @@ private fun calculateHorizontalFisheye(
     val factor = cos(normalized) * cos(normalized)
 
     val scale = 1.0f + (peakScale - 1.0f) * factor
-    val liftOffsetY = if (isBottom) -(scale - 1.0f) * 14.0f else (scale - 1.0f) * 5.0f
+    val liftOffsetY = if (isBottom) -(scale - 1.0f) * 12.0f else (scale - 1.0f) * 4.0f
 
     return scale to liftOffsetY
 }
@@ -755,7 +801,7 @@ private fun calculateVerticalFisheye(
     val factor = cos(normalized) * cos(normalized)
 
     val scale = 1.0f + (peakScale - 1.0f) * factor
-    val liftOffsetX = if (isLeft) (scale - 1.0f) * 14.0f else -(scale - 1.0f) * 14.0f
+    val liftOffsetX = if (isLeft) (scale - 1.0f) * 12.0f else -(scale - 1.0f) * 12.0f
 
     return scale to liftOffsetX
 }
