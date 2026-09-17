@@ -150,6 +150,58 @@ fun main() = application {
                     repository = repository,
                     isExpanded = isExpanded,
                     onExpandedChange = { isExpanded = it },
+                    onDragReposition = { dx, dy ->
+                        overlayState.position = WindowPosition(
+                            overlayState.position.x + dx.dp,
+                            overlayState.position.y + dy.dp
+                        )
+                    },
+                    onDragRepositionEnd = {
+                        val currentX = overlayState.position.x.value
+                        val currentY = overlayState.position.y.value
+                        val centerWinX = currentX + currentWindowWidth.value / 2f
+                        val centerWinY = currentY + currentWindowHeight.value / 2f
+
+                        val distTop = (centerWinY - bounds.y).coerceAtLeast(0f)
+                        val distBottom = ((bounds.y + screenHeight) - centerWinY).coerceAtLeast(0f)
+                        val distLeft = (centerWinX - bounds.x).coerceAtLeast(0f)
+                        val distRight = ((bounds.x + screenWidth) - centerWinX).coerceAtLeast(0f)
+
+                        val minDist = minOf(distTop, distBottom, distLeft, distRight)
+
+                        val newPosition = when (minDist) {
+                            distTop -> {
+                                when {
+                                    centerWinX < bounds.x + screenWidth * 0.30f -> NotchPosition.TOP_LEFT
+                                    centerWinX > bounds.x + screenWidth * 0.70f -> NotchPosition.TOP_RIGHT
+                                    else -> NotchPosition.TOP_CENTER
+                                }
+                            }
+                            distBottom -> {
+                                when {
+                                    centerWinX < bounds.x + screenWidth * 0.30f -> NotchPosition.BOTTOM_LEFT
+                                    centerWinX > bounds.x + screenWidth * 0.70f -> NotchPosition.BOTTOM_RIGHT
+                                    else -> NotchPosition.BOTTOM_CENTER
+                                }
+                            }
+                            distLeft -> {
+                                when {
+                                    centerWinY < bounds.y + screenHeight * 0.30f -> NotchPosition.TOP_LEFT
+                                    centerWinY > bounds.y + screenHeight * 0.70f -> NotchPosition.BOTTOM_LEFT
+                                    else -> NotchPosition.LEFT_CENTER
+                                }
+                            }
+                            else -> {
+                                when {
+                                    centerWinY < bounds.y + screenHeight * 0.30f -> NotchPosition.TOP_RIGHT
+                                    centerWinY > bounds.y + screenHeight * 0.70f -> NotchPosition.BOTTOM_RIGHT
+                                    else -> NotchPosition.RIGHT_CENTER
+                                }
+                            }
+                        }
+
+                        repository.updateConfig { it.copy(position = newPosition) }
+                    },
                     onOpenSettings = { showSettings = true }
                 )
             }

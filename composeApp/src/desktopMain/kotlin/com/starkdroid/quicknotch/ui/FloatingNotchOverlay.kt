@@ -8,12 +8,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -22,12 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +55,8 @@ fun FloatingNotchOverlay(
     repository: FavoritesRepository,
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    onDragReposition: (Float, Float) -> Unit,
+    onDragRepositionEnd: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -103,15 +106,16 @@ fun FloatingNotchOverlay(
         if (isExpanded) config.expandedNotchHeightDp.dp else config.collapsedPillHeightDp.dp
     }
 
+    // Softer spring animation for organic, fluid expansion without sudden snapping
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 420f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
         label = "notchWidth"
     )
 
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 420f),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 260f),
         label = "notchHeight"
     )
 
@@ -203,7 +207,6 @@ fun FloatingNotchOverlay(
             modifier = Modifier
                 .width(animatedWidth)
                 .height(animatedHeight)
-                .shadow(elevation = if (isExpanded) 14.dp else 5.dp, shape = notchShape)
                 .clip(notchShape)
                 .background(
                     Brush.verticalGradient(
@@ -256,6 +259,8 @@ fun FloatingNotchOverlay(
                         config = config,
                         iconBitmaps = iconBitmaps,
                         isLeft = config.position == NotchPosition.LEFT_CENTER,
+                        onDragReposition = onDragReposition,
+                        onDragRepositionEnd = onDragRepositionEnd,
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)
@@ -270,6 +275,8 @@ fun FloatingNotchOverlay(
                         config = config,
                         iconBitmaps = iconBitmaps,
                         isBottom = isBottom,
+                        onDragReposition = onDragReposition,
+                        onDragRepositionEnd = onDragRepositionEnd,
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)
@@ -288,34 +295,18 @@ fun FloatingNotchOverlay(
 private fun CollapsedHorizontalPill(
     onOpenSettings: () -> Unit
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(AccentGreen.copy(alpha = 0.85f))
-                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
-        )
-
         Text(
             text = "QuickNotch",
             style = AppTypography.labelMedium,
             color = TextSecondary,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.4.sp
-        )
-
-        Box(
-            modifier = Modifier
-                .size(9.dp)
-                .clip(CircleShape)
-                .background(AccentIndigo.copy(alpha = 0.85f))
+            letterSpacing = 0.5.sp
         )
     }
 }
@@ -324,42 +315,26 @@ private fun CollapsedHorizontalPill(
 private fun CollapsedVerticalPill(
     onOpenSettings: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
-                .size(9.dp)
+                .size(16.dp)
                 .clip(CircleShape)
-                .background(AccentGreen.copy(alpha = 0.85f))
-                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
-        )
-
-        Box(
-            modifier = Modifier
-                .size(18.dp)
-                .clip(CircleShape)
-                .background(AccentIndigo.copy(alpha = 0.3f)),
+                .background(AccentIndigo.copy(alpha = 0.25f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Rounded.Apps,
+                imageVector = Icons.Default.DragIndicator,
                 contentDescription = null,
                 tint = AccentCyan,
                 modifier = Modifier.size(11.dp)
             )
         }
-
-        Box(
-            modifier = Modifier
-                .size(9.dp)
-                .clip(CircleShape)
-                .background(AccentIndigo.copy(alpha = 0.85f))
-        )
     }
 }
 
@@ -370,6 +345,8 @@ private fun ExpandedHorizontalDock(
     config: NotchConfig,
     iconBitmaps: Map<String, ImageBitmap>,
     isBottom: Boolean,
+    onDragReposition: (Float, Float) -> Unit,
+    onDragRepositionEnd: () -> Unit,
     onLaunch: (AppItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -383,22 +360,13 @@ private fun ExpandedHorizontalDock(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(AccentIndigo.copy(alpha = 0.2f))
-                .border(1.dp, AccentIndigo.copy(alpha = 0.4f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Apps,
-                contentDescription = "Apps",
-                tint = AccentCyan,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        // Left Reposition Drag Handle
+        RepositionHandle(
+            onDrag = onDragReposition,
+            onDragEnd = onDragRepositionEnd
+        )
 
+        // Center: App Icons with Fluid Fisheye Wave
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -428,9 +396,14 @@ private fun ExpandedHorizontalDock(
                     scale = scale,
                     offsetY = offsetY,
                     baseSizeDp = config.baseIconSizeDp,
-                    showTooltip = config.showTooltips && (scale > 1.25f),
+                    showTooltip = config.showTooltips && (scale > 1.15f),
                     isBottom = isBottom,
-                    onPositioned = { x -> itemPositions[index] = x },
+                    onPositioned = { x ->
+                        // Cache steady resting slot position so neighbor expansion doesn't jitter centerX
+                        if (!itemPositions.containsKey(index) || dockPointerX == null) {
+                            itemPositions[index] = x
+                        }
+                    },
                     onClick = { onLaunch(app) }
                 )
             }
@@ -439,16 +412,16 @@ private fun ExpandedHorizontalDock(
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(NotchCard)
-                .border(1.dp, NotchBorder, CircleShape)
+                .border(1.dp, NotchBorder, RoundedCornerShape(8.dp))
         ) {
             Icon(
                 imageVector = Icons.Default.Settings,
                 contentDescription = "Settings",
                 tint = TextPrimary,
-                modifier = Modifier.size(17.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }
@@ -461,6 +434,8 @@ private fun ExpandedVerticalDock(
     config: NotchConfig,
     iconBitmaps: Map<String, ImageBitmap>,
     isLeft: Boolean,
+    onDragReposition: (Float, Float) -> Unit,
+    onDragRepositionEnd: () -> Unit,
     onLaunch: (AppItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -474,21 +449,11 @@ private fun ExpandedVerticalDock(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(AccentIndigo.copy(alpha = 0.2f))
-                .border(1.dp, AccentIndigo.copy(alpha = 0.4f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Apps,
-                contentDescription = "Apps",
-                tint = AccentCyan,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        // Top Reposition Drag Handle
+        RepositionHandle(
+            onDrag = onDragReposition,
+            onDragEnd = onDragRepositionEnd
+        )
 
         Column(
             modifier = Modifier
@@ -519,9 +484,13 @@ private fun ExpandedVerticalDock(
                     scale = scale,
                     offsetX = offsetX,
                     baseSizeDp = config.baseIconSizeDp,
-                    showTooltip = config.showTooltips && (scale > 1.25f),
+                    showTooltip = config.showTooltips && (scale > 1.15f),
                     isLeft = isLeft,
-                    onPositioned = { y -> itemPositions[index] = y },
+                    onPositioned = { y ->
+                        if (!itemPositions.containsKey(index) || dockPointerY == null) {
+                            itemPositions[index] = y
+                        }
+                    },
                     onClick = { onLaunch(app) }
                 )
             }
@@ -530,18 +499,59 @@ private fun ExpandedVerticalDock(
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(NotchCard)
-                .border(1.dp, NotchBorder, CircleShape)
+                .border(1.dp, NotchBorder, RoundedCornerShape(8.dp))
         ) {
             Icon(
                 imageVector = Icons.Default.Settings,
                 contentDescription = "Settings",
                 tint = TextPrimary,
-                modifier = Modifier.size(17.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun RepositionHandle(
+    onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isDragging by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isDragging) AccentIndigo.copy(alpha = 0.35f) else NotchCard)
+            .border(1.dp, if (isDragging) AccentIndigoLight else NotchBorder, RoundedCornerShape(8.dp))
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { isDragging = true },
+                    onDragEnd = {
+                        isDragging = false
+                        onDragEnd()
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        onDragEnd()
+                    }
+                ) { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.x, dragAmount.y)
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.DragIndicator,
+            contentDescription = "Drag to Reposition",
+            tint = if (isDragging) Color.White else TextSecondary,
+            modifier = Modifier.size(17.dp)
+        )
     }
 }
 
@@ -557,15 +567,16 @@ private fun HorizontalDockItemIcon(
     onPositioned: (Float) -> Unit,
     onClick: () -> Unit
 ) {
+    // Softer fluid spring animation to eliminate sudden snapping
     val animatedScale by animateFloatAsState(
         targetValue = scale,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
         label = "iconScale"
     )
 
     val animatedOffsetY by animateFloatAsState(
         targetValue = offsetY,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
         label = "iconOffset"
     )
 
@@ -626,13 +637,13 @@ private fun VerticalDockItemIcon(
 ) {
     val animatedScale by animateFloatAsState(
         targetValue = scale,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
         label = "iconScale"
     )
 
     val animatedOffsetX by animateFloatAsState(
         targetValue = offsetX,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 220f),
         label = "iconOffsetX"
     )
 
@@ -719,7 +730,7 @@ private fun calculateHorizontalFisheye(
     val factor = cos(normalized) * cos(normalized)
 
     val scale = 1.0f + (peakScale - 1.0f) * factor
-    val liftOffsetY = if (isBottom) -(scale - 1.0f) * 16.0f else (scale - 1.0f) * 6.0f
+    val liftOffsetY = if (isBottom) -(scale - 1.0f) * 14.0f else (scale - 1.0f) * 5.0f
 
     return scale to liftOffsetY
 }
@@ -744,7 +755,7 @@ private fun calculateVerticalFisheye(
     val factor = cos(normalized) * cos(normalized)
 
     val scale = 1.0f + (peakScale - 1.0f) * factor
-    val liftOffsetX = if (isLeft) (scale - 1.0f) * 16.0f else -(scale - 1.0f) * 16.0f
+    val liftOffsetX = if (isLeft) (scale - 1.0f) * 14.0f else -(scale - 1.0f) * 14.0f
 
     return scale to liftOffsetX
 }
