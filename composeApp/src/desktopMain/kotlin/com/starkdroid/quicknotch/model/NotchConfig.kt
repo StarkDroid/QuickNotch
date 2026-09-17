@@ -7,10 +7,12 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class NotchPosition(val displayName: String) {
-    TOP_CENTER("Top Center (Dynamic Island)"),
-    BOTTOM_CENTER("Bottom Center (Mac Dock)"),
+    TOP_CENTER("Top Center"),
+    BOTTOM_CENTER("Bottom Center"),
     TOP_LEFT("Top Left"),
     TOP_RIGHT("Top Right"),
+    LEFT_CENTER("Left Side"),
+    RIGHT_CENTER("Right Side"),
     BOTTOM_LEFT("Bottom Left"),
     BOTTOM_RIGHT("Bottom Right")
 }
