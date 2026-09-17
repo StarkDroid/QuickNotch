@@ -65,17 +65,19 @@ fun main() = application {
         val baseHorizontalExpandedWidth = (favorites.size * (config.baseIconSizeDp + 18) + 140).coerceIn(360, 980)
         val baseVerticalExpandedHeight = (favorites.size * (config.baseIconSizeDp + 18) + 140).coerceIn(320, 800)
 
-        // Strict overlay window dimensions: strictly matches the notch size plus a subtle margin for shadow
+        // Strict overlay window dimensions:
+        // Sized so that the edge touching the screen bezel is flush with zero spacing,
+        // while allowing a modest shadow margin only on the open edges facing into the display.
         val currentWindowWidth = if (isVertical) {
-            if (isExpanded) (config.expandedNotchHeightDp + 14).dp else (config.collapsedPillHeightDp + 10).dp
+            if (isExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 6).dp
         } else {
-            if (isExpanded) (baseHorizontalExpandedWidth + 14).dp else (config.collapsedPillWidthDp + 10).dp
+            if (isExpanded) (baseHorizontalExpandedWidth + 12).dp else (config.collapsedPillWidthDp + 10).dp
         }
 
         val currentWindowHeight = if (isVertical) {
-            if (isExpanded) (baseVerticalExpandedHeight + 14).dp else (config.collapsedPillWidthDp + 10).dp
+            if (isExpanded) (baseVerticalExpandedHeight + 12).dp else (config.collapsedPillWidthDp + 10).dp
         } else {
-            if (isExpanded) (config.expandedNotchHeightDp + 14).dp else (config.collapsedPillHeightDp + 10).dp
+            if (isExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 4).dp
         }
 
         val availableWidth = screenWidth - insets.left - insets.right

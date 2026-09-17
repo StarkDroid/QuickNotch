@@ -115,18 +115,18 @@ fun FloatingNotchOverlay(
         label = "notchHeight"
     )
 
-    // Notch edge shape tailored to each position
+    // Notch edge shape tailored to each position: contact edge has 0.dp radius to stick seamlessly to bezel
     val notchShape = when {
         isVertical -> {
             if (config.position == NotchPosition.LEFT_CENTER) {
                 if (isExpanded) {
-                    RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp, topStart = 2.dp, bottomStart = 2.dp)
+                    RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp, topStart = 0.dp, bottomStart = 0.dp)
                 } else {
                     RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp, topStart = 0.dp, bottomStart = 0.dp)
                 }
             } else {
                 if (isExpanded) {
-                    RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp, topEnd = 2.dp, bottomEnd = 2.dp)
+                    RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp, topEnd = 0.dp, bottomEnd = 0.dp)
                 } else {
                     RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 0.dp, bottomEnd = 0.dp)
                 }
@@ -134,14 +134,14 @@ fun FloatingNotchOverlay(
         }
         isBottom -> {
             if (isExpanded) {
-                RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
+                RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
             } else {
                 RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
             }
         }
         else -> {
             if (isExpanded) {
-                RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp, topStart = 2.dp, topEnd = 2.dp)
+                RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp, topStart = 0.dp, topEnd = 0.dp)
             } else {
                 RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp, topStart = 0.dp, topEnd = 0.dp)
             }
@@ -152,7 +152,7 @@ fun FloatingNotchOverlay(
         config.position == NotchPosition.LEFT_CENTER -> {
             Brush.horizontalGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.08f),
+                    Color.Transparent,
                     AccentIndigo.copy(alpha = if (isExpanded) 0.5f else 0.2f),
                     Color.White.copy(alpha = 0.35f)
                 )
@@ -163,7 +163,7 @@ fun FloatingNotchOverlay(
                 colors = listOf(
                     Color.White.copy(alpha = 0.35f),
                     AccentIndigo.copy(alpha = if (isExpanded) 0.5f else 0.2f),
-                    Color.White.copy(alpha = 0.08f)
+                    Color.Transparent
                 )
             )
         }
@@ -172,14 +172,14 @@ fun FloatingNotchOverlay(
                 colors = listOf(
                     Color.White.copy(alpha = 0.35f),
                     AccentIndigo.copy(alpha = if (isExpanded) 0.5f else 0.2f),
-                    Color.White.copy(alpha = 0.08f)
+                    Color.Transparent
                 )
             )
         }
         else -> {
             Brush.verticalGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.08f),
+                    Color.Transparent,
                     AccentIndigo.copy(alpha = if (isExpanded) 0.5f else 0.2f),
                     Color.White.copy(alpha = 0.35f)
                 )
@@ -187,10 +187,17 @@ fun FloatingNotchOverlay(
         }
     }
 
-    // Outer container strictly fills the sized window
+    // Outer container aligns notch flush to the contact edge with zero spacing
+    val containerAlignment = when {
+        config.position == NotchPosition.LEFT_CENTER -> Alignment.CenterStart
+        config.position == NotchPosition.RIGHT_CENTER -> Alignment.CenterEnd
+        isBottom -> Alignment.BottomCenter
+        else -> Alignment.TopCenter
+    }
+
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = containerAlignment
     ) {
         Box(
             modifier = Modifier
