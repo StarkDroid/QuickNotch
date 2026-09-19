@@ -4,12 +4,12 @@
 
 ![QuickNotch Banner](https://raw.githubusercontent.com/StarkDroid/QuickNotch/main/banner.png)
 
-**A sleek, ultra-responsive macOS Dynamic Island & Dock floating app launcher for Windows 10 & 11.**
+**A sleek, ultra-responsive Dynamic Island & Dock floating app launcher for Windows 10/11 and macOS.**
 
 [![Build & Release](https://github.com/StarkDroid/QuickNotch/actions/workflows/release.yml/badge.svg)](https://github.com/StarkDroid/QuickNotch/actions)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.7.3-4285F4?logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/lp/compose-multiplatform/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-111111?logo=apple&logoColor=white)](https://github.com/StarkDroid/QuickNotch)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
@@ -20,15 +20,15 @@
 
 - **🏝️ Dynamic Island Aesthetic**: Elegant floating notch pinned to your top screen edge (or configurable to bottom, corners, etc.) with smooth morphing physics.
 - **🌊 Authentic macOS Dock Fisheye Magnification Wave**: Continuous mathematical cosine-squared bell curve magnification with fluid elevation and scaling as your cursor glides across docked icons.
-- **⚡ Native Win32 Shell Icon Extraction**: High-performance multi-tier cached icon extraction directly from Windows `.exe`, `.lnk` shortcuts, and system utilities.
-- **🔍 Instant Installed Apps Scanner**: Scans Start Menu shortcuts, desktop apps, system utilities, and Windows Registry (ARP) to effortlessly pin applications.
+- **⚡ Native Icon Extraction**: High-performance cached icon loading — Win32 Shell on Windows, `.icns` / Quick Look on macOS.
+- **🔍 Instant Installed Apps Scanner**: Discovers apps from the Windows Start Menu, Registry, and Desktop, or from `/Applications` and `/System/Applications` on macOS.
 - **🛠️ Standalone Customizer Settings**:
   - Customize screen edge positions (Top Center, Bottom Center, Corners).
   - Fine-tune dock magnification peak scale (1.0x - 2.5x) and wave radius.
-  - Reorder, add, or remove pinned applications with custom executable file chooser.
-  - Windows auto-start on boot toggle via native Windows Registry integration.
+  - Reorder, add, or remove pinned applications with a native file chooser.
+  - Auto-start at login (Windows Registry or macOS LaunchAgent).
   - Configurable tooltips, icon sizes, and launch behaviors.
-- **🔔 Windows System Tray Integration**: Minimal footprint background tray icon with instant controls to toggle visibility, open settings, or reset defaults.
+- **🔔 Tray / Menu Bar Integration**: Minimal footprint tray icon (Windows) or menu bar extra (macOS) with controls to toggle visibility, open settings, or reset defaults.
 
 ---
 
@@ -39,7 +39,7 @@ QuickNotch is built with modern desktop architecture principles:
 - **Language**: Kotlin 2.1.10 (Kotlin Multiplatform Desktop)
 - **UI Framework**: Jetpack Compose Multiplatform 1.7.3 (Material Design 3)
 - **Concurrency**: Kotlinx Coroutines 1.10.1 (`kotlinx-coroutines-swing`)
-- **Native Windows Interop**: JNA 5.16.0 (`jna`, `jna-platform` for Win32 Registry and Shell integration)
+- **Native Interop**: JNA 5.16.0 for Win32; Kotlin + built-in macOS tools (`open`, `sips`, `qlmanage`, LaunchAgents) on Apple platforms
 - **Data & Serialization**: Kotlinx Serialization JSON
 
 ```
@@ -52,10 +52,17 @@ QuickNotch/
 │       │   ├── NotchConfig.kt          # Notch positions & configuration parameters
 │       │   └── FavoritesRepository.kt  # Persistent settings & pinned apps storage
 │       ├── datasource/
-│       │   ├── InstalledAppsScanner.kt # Win32 Start Menu, Desktop & Registry ARP scanner
-│       │   ├── Win32ShellIconLoader.kt # Native icon extraction & monogram generator
-│       │   ├── AppLauncher.kt          # Windows process launcher & shell executor
-│       │   └── WindowsStartupManager.kt# Windows registry autostart manager
+│       │   ├── HostPlatform.kt         # Windows / macOS detection
+│       │   ├── InstalledAppsScanner.kt # Platform scanner facade
+│       │   ├── WindowsInstalledAppsScanner.kt
+│       │   ├── MacInstalledAppsScanner.kt
+│       │   ├── AppIconLoader.kt        # Shared icon API + monograms
+│       │   ├── Win32ShellIconLoader.kt
+│       │   ├── MacAppIconLoader.kt
+│       │   ├── AppLauncher.kt          # Process / `open` launcher
+│       │   ├── StartupManager.kt       # Login-item facade
+│       │   ├── WindowsStartupManager.kt
+│       │   └── MacStartupManager.kt
 │       ├── ui/
 │       │   ├── FloatingNotchOverlay.kt # Dynamic Island & Dock Fisheye Magnification wave
 │       │   └── SettingsScreen.kt       # Dedicated Material 3 settings & app manager
@@ -77,7 +84,7 @@ QuickNotch/
 ### Prerequisites
 
 - **Java Development Kit (JDK)**: JDK 17 or higher (Temurin or Oracle recommended)
-- **Operating System**: Windows 10 or Windows 11 (x64)
+- **Operating System**: Windows 10/11 (x64) or macOS 12+
 
 ### Building from Source
 
@@ -92,11 +99,11 @@ QuickNotch/
    ./gradlew run
    ```
 
-3. Build native Windows installers (`.msi` and `.exe`):
+3. Build native installers for the current OS (Windows `.msi`/`.exe`, macOS `.dmg`):
    ```bash
    ./gradlew packageDistributionForCurrentOS
    ```
-   Installers will be generated under `composeApp/build/compose/binaries/main/msi/` and `composeApp/build/compose/binaries/main/exe/`.
+   Installers will be generated under `composeApp/build/compose/binaries/main/`.
 
 ---
 

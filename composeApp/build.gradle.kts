@@ -37,13 +37,14 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.starkdroid.quicknotch.MainKt"
+        jvmArgs += listOf("-Dskiko.renderApi=SOFTWARE")
 
         nativeDistributions {
-            targetFormats(TargetFormat.Exe, TargetFormat.Msi)
+            targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
             packageName = "QuickNotch"
             vendor = "StarkDroid"
             packageVersion = project.version.toString()
-            description = "Dynamic Island & Dock floating app launcher for Windows 10 & 11"
+            description = "Dynamic Island & Dock floating app launcher for Windows and macOS"
             copyright = "© 2025 StarkDroid. All rights reserved."
             windows {
                 iconFile.set(project.file("quicknotch.ico"))
@@ -52,6 +53,11 @@ compose.desktop {
                 menuGroup = "QuickNotch"
                 shortcut = true
                 menu = true
+            }
+            macOS {
+                bundleID = "com.starkdroid.quicknotch"
+                dockName = "QuickNotch"
+                appCategory = "public.app-category.utilities"
             }
 
             buildTypes.release.proguard {

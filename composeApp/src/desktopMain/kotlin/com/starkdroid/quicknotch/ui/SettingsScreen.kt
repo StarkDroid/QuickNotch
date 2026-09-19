@@ -25,9 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.datasource.AppIconLoader
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.InstalledAppsScanner
-import com.starkdroid.quicknotch.datasource.Win32ShellIconLoader
-import com.starkdroid.quicknotch.datasource.WindowsStartupManager
+import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -915,21 +916,7 @@ private fun PinnedAppsTab(
 
                     Button(
                         onClick = {
-                            val chooser = JFileChooser()
-                            chooser.fileFilter = FileNameExtensionFilter("Executables & Shortcuts (*.exe, *.lnk)", "exe", "lnk")
-                            val ret = chooser.showOpenDialog(null)
-                            if (ret == JFileChooser.APPROVE_OPTION) {
-                                val file = chooser.selectedFile
-                                onAddFavorite(
-                                    AppItem(
-                                        id = "custom_${UUID.randomUUID()}",
-                                        name = file.nameWithoutExtension,
-                                        executablePath = file.absolutePath,
-                                        iconPath = file.absolutePath,
-                                        isCustom = true
-                                    )
-                                )
-                            }
+                            pickCustomApplication()?.let(onAddFavorite)
                         },
                         modifier = Modifier.height(44.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
@@ -975,6 +962,30 @@ private fun PinnedAppsTab(
     }
 }
 
+private fun pickCustomApplication(): AppItem? {
+    val chooser = JFileChooser()
+    if (HostPlatform.isMac) {
+        chooser.fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
+        chooser.fileFilter = object : javax.swing.filechooser.FileFilter() {
+            override fun accept(f: File): Boolean = f.isDirectory
+            override fun getDescription(): String = "Applications (.app)"
+        }
+        chooser.dialogTitle = "Choose a macOS Application"
+    } else {
+        chooser.fileFilter = FileNameExtensionFilter("Executables & Shortcuts (*.exe, *.lnk)", "exe", "lnk")
+    }
+    val ret = chooser.showOpenDialog(null)
+    if (ret != JFileChooser.APPROVE_OPTION) return null
+    val file = chooser.selectedFile ?: return null
+    return AppItem(
+        id = "custom_${UUID.randomUUID()}",
+        name = file.nameWithoutExtension,
+        executablePath = file.absolutePath,
+        iconPath = file.absolutePath,
+        isCustom = true
+    )
+}
+
 @Composable
 private fun PinnedAppRow(
     item: AppItem,
@@ -986,7 +997,7 @@ private fun PinnedAppRow(
 ) {
     var iconBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(item) {
-        iconBitmap = Win32ShellIconLoader.loadIcon(item)
+        iconBitmap = AppIconLoader.loadIcon(item)
     }
 
     Row(
@@ -1086,7 +1097,7 @@ private fun AvailableAppRow(
 ) {
     var iconBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(app) {
-        iconBitmap = Win32ShellIconLoader.loadIcon(app)
+        iconBitmap = AppIconLoader.loadIcon(app)
     }
 
     Row(
@@ -1194,11 +1205,15 @@ private fun BehaviorTab(
                     )
 
                     BehaviorSwitchRow(
-                        title = "Start on Windows Boot",
-                        subtitle = "Launch QuickNotch automatically on user sign-in",
+                        title = if (HostPlatform.isMac) "Start at Login" else "Start on Windows Boot",
+                        subtitle = if (HostPlatform.isMac) {
+                            "Launch QuickNotch automatically when you sign in to macOS"
+                        } else {
+                            "Launch QuickNotch automatically on user sign-in"
+                        },
                         checked = config.autoStartOnBoot,
                         onCheckedChange = { checked ->
-                            WindowsStartupManager.setAutoStartEnabled(checked)
+                            StartupManager.setAutoStartEnabled(checked)
                             onUpdate { it.copy(autoStartOnBoot = checked) }
                         }
                     )
@@ -1422,7 +1437,7 @@ private fun AboutDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Dynamic Island & Dock floating app launcher for Windows 10 & 11 built with Kotlin Multiplatform and Jetpack Compose Desktop.",
+                    text = "Dynamic Island & Dock floating app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.",
                     style = AppTypography.bodySmall,
                     color = TextSecondary,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -1435,7 +1450,12 @@ private fun AboutDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(vertical = 4.dp)
                 ) {
-                    listOf("Kotlin", "Compose Desktop", "Win32 JNA").forEach { tag ->
+                    val tags = if (HostPlatform.isMac) {
+                        listOf("Kotlin", "Compose Desktop", "macOS")
+                    } else {
+                        listOf("Kotlin", "Compose Desktop", "Win32 JNA")
+                    }
+                    tags.forEach { tag ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))

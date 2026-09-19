@@ -37,8 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
-import com.starkdroid.quicknotch.datasource.Win32ShellIconLoader
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -74,7 +74,7 @@ fun FloatingNotchOverlay(
         favorites.forEach { app ->
             if (!iconBitmaps.containsKey(app.id)) {
                 launch {
-                    val bmp = Win32ShellIconLoader.loadIcon(app)
+                    val bmp = AppIconLoader.loadIcon(app)
                     iconBitmaps[app.id] = bmp
                 }
             }

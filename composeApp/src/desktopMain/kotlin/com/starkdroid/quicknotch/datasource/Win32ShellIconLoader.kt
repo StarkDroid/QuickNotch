@@ -128,10 +128,10 @@ object Win32ShellIconLoader {
                         iconToImageBitmap(icon, 128)
                     }
             } else {
-                generateMonogramIcon(app.name)
+                AppIconLoader.generateMonogramIcon(app.name)
             }
         } catch (_: Throwable) {
-            generateMonogramIcon(app.name)
+            AppIconLoader.generateMonogramIcon(app.name)
         }
 
         cache[app.id] = iconBitmap
@@ -277,7 +277,7 @@ object Win32ShellIconLoader {
     }
 
     private fun iconToImageBitmap(icon: Icon?, targetSize: Int = 64): ImageBitmap {
-        if (icon == null) return generateMonogramIcon("?")
+        if (icon == null) return AppIconLoader.generateMonogramIcon("?")
         val width = icon.iconWidth.coerceAtLeast(1)
         val height = icon.iconHeight.coerceAtLeast(1)
         val bufferedImage = BufferedImage(targetSize, targetSize, BufferedImage.TYPE_INT_ARGB)
@@ -297,36 +297,4 @@ object Win32ShellIconLoader {
         return bufferedImage.toComposeImageBitmap()
     }
 
-    fun generateMonogramIcon(title: String, size: Int = 64): ImageBitmap {
-        val letter = title.trim().take(1).uppercase().ifEmpty { "A" }
-        val img = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
-        val g2d = img.createGraphics()
-        try {
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-            val hash = title.hashCode()
-            val colors = listOf(
-                java.awt.Color(99, 102, 241),
-                java.awt.Color(56, 189, 248),
-                java.awt.Color(168, 85, 247),
-                java.awt.Color(236, 72, 153),
-                java.awt.Color(34, 197, 94),
-                java.awt.Color(245, 158, 11)
-            )
-            val bg = colors[kotlin.math.abs(hash) % colors.size]
-            g2d.color = bg
-            g2d.fillRoundRect(2, 2, size - 4, size - 4, 18, 18)
-            g2d.color = java.awt.Color(255, 255, 255, 240)
-            g2d.font = java.awt.Font("Segoe UI", java.awt.Font.BOLD, (size * 0.45).toInt())
-            val fm = g2d.fontMetrics
-            val textWidth = fm.stringWidth(letter)
-            val textHeight = fm.ascent
-            val x = (size - textWidth) / 2
-            val y = ((size - fm.height) / 2) + textHeight
-            g2d.drawString(letter, x, y)
-        } finally {
-            g2d.dispose()
-        }
-        return img.toComposeImageBitmap()
-    }
 }

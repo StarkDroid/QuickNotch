@@ -6,16 +6,26 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
-import com.starkdroid.quicknotch.datasource.Win32ShellIconLoader
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchPosition
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
 import com.starkdroid.quicknotch.ui.SettingsScreen
-import java.awt.Toolkit
 import java.awt.image.BufferedImage
 
-fun main() = application {
+fun main() {
+    System.setProperty("apple.awt.application.name", "QuickNotch")
+    if (HostPlatform.isMac) {
+        System.setProperty("apple.laf.useScreenMenuBar", "true")
+        System.setProperty("apple.awt.application.appearance", "system")
+        // Metal window shadows crash on newer macOS when created off the AppKit main thread.
+        if (System.getProperty("skiko.renderApi").isNullOrBlank()) {
+            System.setProperty("skiko.renderApi", "SOFTWARE")
+        }
+    }
+
+    application {
     val repository = remember { FavoritesRepository() }
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
@@ -230,5 +240,6 @@ fun main() = application {
                 )
             }
         }
+    }
     }
 }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -23,11 +24,19 @@ class FavoritesRepository(
     }
 
     private val storageDir: File by lazy {
-        val appData = System.getenv("APPDATA")
-        val dir = if (!appData.isNullOrBlank()) {
-            File(appData, "QuickNotch")
-        } else {
-            File(System.getProperty("user.home"), ".quicknotch")
+        val dir = when {
+            HostPlatform.isMac -> File(
+                System.getProperty("user.home"),
+                "Library/Application Support/QuickNotch"
+            )
+            else -> {
+                val appData = System.getenv("APPDATA")
+                if (!appData.isNullOrBlank()) {
+                    File(appData, "QuickNotch")
+                } else {
+                    File(System.getProperty("user.home"), ".quicknotch")
+                }
+            }
         }
         if (!dir.exists()) {
             dir.mkdirs()
@@ -160,6 +169,49 @@ class FavoritesRepository(
     }
 
     private fun getDefaultFavorites(): List<AppItem> {
+        return if (HostPlatform.isMac) defaultMacFavorites() else defaultWindowsFavorites()
+    }
+
+    private fun defaultMacFavorites(): List<AppItem> {
+        val candidates = listOf(
+            Triple("Finder", "/System/Library/CoreServices/Finder.app", "Finder"),
+            Triple("Safari", "/Applications/Safari.app", "Safari"),
+            Triple("Terminal", "/System/Applications/Utilities/Terminal.app", "Terminal"),
+            Triple("Calculator", "/System/Applications/Calculator.app", "Calculator"),
+            Triple("Notes", "/System/Applications/Notes.app", "Notes"),
+            Triple("Preview", "/System/Applications/Preview.app", "Preview"),
+            Triple("System Settings", "/System/Applications/System Settings.app", "System Settings"),
+            Triple("Google Chrome", "/Applications/Google Chrome.app", "Google Chrome"),
+            Triple("Visual Studio Code", "/Applications/Visual Studio Code.app", "Code")
+        )
+        val list = mutableListOf<AppItem>()
+        for ((name, path, _) in candidates) {
+            val file = File(path)
+            if (file.exists()) {
+                list.add(
+                    AppItem(
+                        id = "default_${name.lowercase().replace(" ", "_")}",
+                        name = name,
+                        executablePath = file.absolutePath,
+                        iconPath = file.absolutePath
+                    )
+                )
+            }
+            if (list.size >= 7) break
+        }
+        if (list.isEmpty()) {
+            list.add(
+                AppItem(
+                    id = "default_finder",
+                    name = "Finder",
+                    executablePath = "/System/Library/CoreServices/Finder.app"
+                )
+            )
+        }
+        return list
+    }
+
+    private fun defaultWindowsFavorites(): List<AppItem> {
         val list = mutableListOf<AppItem>()
         val winDir = System.getenv("WINDIR") ?: "C:/Windows"
         val progFiles = System.getenv("ProgramFiles") ?: "C:/Program Files"
