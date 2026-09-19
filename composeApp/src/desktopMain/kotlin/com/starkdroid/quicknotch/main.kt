@@ -1,245 +1,170 @@
 package com.starkdroid.quicknotch
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.*
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.window.Tray
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.model.FavoritesRepository
-import com.starkdroid.quicknotch.model.NotchPosition
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
 import com.starkdroid.quicknotch.ui.SettingsScreen
+import com.starkdroid.quicknotch.ui.overlayScreenLocation
+import com.starkdroid.quicknotch.ui.overlayWindowSize
+import com.starkdroid.quicknotch.ui.snapToNotchPosition
 import java.awt.image.BufferedImage
+import kotlin.math.roundToInt
 
 fun main() {
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
         System.setProperty("apple.awt.application.appearance", "system")
-        // Metal window shadows crash on newer macOS when created off the AppKit main thread.
         if (System.getProperty("skiko.renderApi").isNullOrBlank()) {
             System.setProperty("skiko.renderApi", "SOFTWARE")
         }
     }
 
     application {
-    val repository = remember { FavoritesRepository() }
-    val config by repository.config.collectAsState()
-    val favorites by repository.favorites.collectAsState()
+        val repository = remember { FavoritesRepository() }
+        val config by repository.config.collectAsState()
+        val favorites by repository.favorites.collectAsState()
 
-    var showSettings by remember { mutableStateOf(false) }
-    var isNotchVisible by remember { mutableStateOf(true) }
-    var isExpanded by remember { mutableStateOf(false) }
-    var isWindowExpanded by remember { mutableStateOf(false) }
+        var showSettings by remember { mutableStateOf(false) }
+        var isNotchVisible by remember { mutableStateOf(true) }
+        var isExpanded by remember { mutableStateOf(false) }
+        var isWindowExpanded by remember { mutableStateOf(false) }
+        var isDragging by remember { mutableStateOf(false) }
 
-    val trayIcon = remember {
-        val img = BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
-        val g2d = img.createGraphics()
-        g2d.color = java.awt.Color(99, 102, 241)
-        g2d.fillRoundRect(2, 2, 28, 28, 8, 8)
-        g2d.dispose()
-        img.toComposeImageBitmap()
-    }
+        val trayIcon = remember {
+            val img = BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
+            val g2d = img.createGraphics()
+            g2d.color = java.awt.Color(18, 18, 18)
+            g2d.fillRoundRect(4, 10, 24, 12, 12, 12)
+            g2d.color = java.awt.Color(255, 255, 255, 40)
+            g2d.drawRoundRect(4, 10, 24, 12, 12, 12)
+            g2d.dispose()
+            img.toComposeImageBitmap()
+        }
 
-    // System Tray
-    Tray(
-        icon = androidx.compose.ui.graphics.painter.BitmapPainter(trayIcon),
-        tooltip = "QuickNotch - Dynamic Island & Dock",
-        menu = {
-            Item("Open Settings", onClick = { showSettings = true })
-            Item(
-                if (isNotchVisible) "Hide Dynamic Island" else "Show Dynamic Island",
-                onClick = { isNotchVisible = !isNotchVisible }
+        Tray(
+            icon = androidx.compose.ui.graphics.painter.BitmapPainter(trayIcon),
+            tooltip = "QuickNotch",
+            menu = {
+                Item("Settings", onClick = { showSettings = true })
+                Item(
+                    if (isNotchVisible) "Hide Notch" else "Show Notch",
+                    onClick = { isNotchVisible = !isNotchVisible }
+                )
+                Separator()
+                Item("Reset Defaults", onClick = { repository.resetToDefaults() })
+                Separator()
+                Item("Quit QuickNotch", onClick = ::exitApplication)
+            }
+        )
+
+        if (isNotchVisible) {
+            val windowSize = overlayWindowSize(config, favorites.size, isWindowExpanded)
+            val overlayState = rememberWindowState(
+                position = WindowPosition.Aligned(Alignment.TopCenter),
+                size = windowSize
             )
-            Separator()
-            Item("Reset Defaults", onClick = { repository.resetToDefaults() })
-            Separator()
-            Item("Exit QuickNotch", onClick = ::exitApplication)
-        }
-    )
 
-    // Floating Dynamic Island Overlay Window
-    if (isNotchVisible) {
-        val ge = remember { java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment() }
-        val gc = remember { ge.defaultScreenDevice.defaultConfiguration }
-        val bounds = remember(gc) { gc.bounds }
-        val insets = remember(gc) { java.awt.Toolkit.getDefaultToolkit().getScreenInsets(gc) }
+            LaunchedEffect(windowSize) {
+                overlayState.size = windowSize
+            }
 
-        val screenWidth = bounds.width
-        val screenHeight = bounds.height
+            Window(
+                onCloseRequest = ::exitApplication,
+                state = overlayState,
+                title = "QuickNotch",
+                undecorated = true,
+                transparent = true,
+                resizable = false,
+                alwaysOnTop = config.alwaysOnTop
+            ) {
+                val awtWindow = window
 
-        val isVertical = config.position == NotchPosition.LEFT_CENTER || config.position == NotchPosition.RIGHT_CENTER
+                fun placeOnEdge() {
+                    val screen = awtWindow.graphicsConfiguration.bounds
+                    val insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(awtWindow.graphicsConfiguration)
+                    val location = overlayScreenLocation(
+                        position = config.position,
+                        windowWidthPx = awtWindow.width.coerceAtLeast(1),
+                        windowHeightPx = awtWindow.height.coerceAtLeast(1),
+                        screen = screen,
+                        insets = insets,
+                        hugMenuBar = HostPlatform.isMac
+                    )
+                    awtWindow.setLocation(location.x, location.y)
+                }
 
-        val baseHorizontalExpandedWidth = (favorites.size * (config.baseIconSizeDp + 18) + 140).coerceIn(360, 980)
-        val baseVerticalExpandedHeight = (favorites.size * (config.baseIconSizeDp + 18) + 140).coerceIn(320, 800)
+                LaunchedEffect(config.position, windowSize, awtWindow.width, awtWindow.height) {
+                    if (!isDragging) placeOnEdge()
+                }
 
-        // Strict overlay window dimensions:
-        // Sized so that the edge touching the screen bezel is flush with zero spacing.
-        // Window stays expanded until the collapse animation finishes, avoiding abrupt clipping.
-        val currentWindowWidth = if (isVertical) {
-            if (isWindowExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 6).dp
-        } else {
-            if (isWindowExpanded) (baseHorizontalExpandedWidth + 12).dp else (config.collapsedPillWidthDp + 10).dp
-        }
-
-        val currentWindowHeight = if (isVertical) {
-            if (isWindowExpanded) (baseVerticalExpandedHeight + 12).dp else (config.collapsedPillWidthDp + 10).dp
-        } else {
-            if (isWindowExpanded) (config.expandedNotchHeightDp + 8).dp else (config.collapsedPillHeightDp + 4).dp
-        }
-
-        val availableWidth = screenWidth - insets.left - insets.right
-        val availableHeight = screenHeight - insets.top - insets.bottom
-
-        val windowPosition = remember(config.position, isWindowExpanded, bounds, insets, currentWindowWidth, currentWindowHeight) {
-            val winW = currentWindowWidth.value
-            val winH = currentWindowHeight.value
-
-            when (config.position) {
-                NotchPosition.TOP_CENTER -> WindowPosition(
-                    x = (bounds.x + insets.left + (availableWidth - winW) / 2).dp,
-                    y = (bounds.y + insets.top).dp
-                )
-                NotchPosition.BOTTOM_CENTER -> WindowPosition(
-                    x = (bounds.x + insets.left + (availableWidth - winW) / 2).dp,
-                    y = (bounds.y + screenHeight - insets.bottom - winH).coerceAtLeast(0f).dp
-                )
-                NotchPosition.TOP_LEFT -> WindowPosition(
-                    x = (bounds.x + insets.left + 16).dp,
-                    y = (bounds.y + insets.top).dp
-                )
-                NotchPosition.TOP_RIGHT -> WindowPosition(
-                    x = (bounds.x + screenWidth - insets.right - winW - 16).dp,
-                    y = (bounds.y + insets.top).dp
-                )
-                NotchPosition.BOTTOM_LEFT -> WindowPosition(
-                    x = (bounds.x + insets.left + 16).dp,
-                    y = (bounds.y + screenHeight - insets.bottom - winH).coerceAtLeast(0f).dp
-                )
-                NotchPosition.BOTTOM_RIGHT -> WindowPosition(
-                    x = (bounds.x + screenWidth - insets.right - winW - 16).dp,
-                    y = (bounds.y + screenHeight - insets.bottom - winH).coerceAtLeast(0f).dp
-                )
-                NotchPosition.LEFT_CENTER -> WindowPosition(
-                    x = (bounds.x + insets.left).dp,
-                    y = (bounds.y + insets.top + (availableHeight - winH) / 2).dp
-                )
-                NotchPosition.RIGHT_CENTER -> WindowPosition(
-                    x = (bounds.x + screenWidth - insets.right - winW).dp,
-                    y = (bounds.y + insets.top + (availableHeight - winH) / 2).dp
-                )
+                QuickNotchTheme(darkTheme = config.themeDark) {
+                    FloatingNotchOverlay(
+                        repository = repository,
+                        isExpanded = isExpanded,
+                        onExpandedChange = { isExpanded = it },
+                        onWindowExpandedChange = { isWindowExpanded = it },
+                        onDragReposition = { dx, dy ->
+                            isDragging = true
+                            awtWindow.setLocation(
+                                awtWindow.x + dx.roundToInt(),
+                                awtWindow.y + dy.roundToInt()
+                            )
+                        },
+                        onDragRepositionEnd = {
+                            val screen = awtWindow.graphicsConfiguration.bounds
+                            val snapped = snapToNotchPosition(
+                                centerX = awtWindow.x + awtWindow.width / 2,
+                                centerY = awtWindow.y + awtWindow.height / 2,
+                                screen = screen
+                            )
+                            isDragging = false
+                            if (snapped != config.position) {
+                                repository.updateConfig { it.copy(position = snapped) }
+                            } else {
+                                placeOnEdge()
+                            }
+                        },
+                        onOpenSettings = { showSettings = true }
+                    )
+                }
             }
         }
 
-        val overlayState = rememberWindowState(
-            position = windowPosition,
-            size = DpSize(currentWindowWidth, currentWindowHeight)
-        )
-
-        LaunchedEffect(windowPosition) {
-            overlayState.position = windowPosition
-        }
-
-        LaunchedEffect(currentWindowWidth, currentWindowHeight) {
-            overlayState.size = DpSize(currentWindowWidth, currentWindowHeight)
-        }
-
-        Window(
-            onCloseRequest = ::exitApplication,
-            state = overlayState,
-            title = "QuickNotch",
-            undecorated = true,
-            transparent = true,
-            resizable = false,
-            alwaysOnTop = config.alwaysOnTop
-        ) {
-            QuickNotchTheme(darkTheme = config.themeDark) {
-                FloatingNotchOverlay(
-                    repository = repository,
-                    isExpanded = isExpanded,
-                    onExpandedChange = { isExpanded = it },
-                    onWindowExpandedChange = { isWindowExpanded = it },
-                    onDragReposition = { dx, dy ->
-                        overlayState.position = WindowPosition(
-                            overlayState.position.x + dx.dp,
-                            overlayState.position.y + dy.dp
-                        )
-                    },
-                    onDragRepositionEnd = {
-                        val currentX = overlayState.position.x.value
-                        val currentY = overlayState.position.y.value
-                        val centerWinX = currentX + currentWindowWidth.value / 2f
-                        val centerWinY = currentY + currentWindowHeight.value / 2f
-
-                        val distTop = (centerWinY - bounds.y).coerceAtLeast(0f)
-                        val distBottom = ((bounds.y + screenHeight) - centerWinY).coerceAtLeast(0f)
-                        val distLeft = (centerWinX - bounds.x).coerceAtLeast(0f)
-                        val distRight = ((bounds.x + screenWidth) - centerWinX).coerceAtLeast(0f)
-
-                        val minDist = minOf(distTop, distBottom, distLeft, distRight)
-
-                        val newPosition = when (minDist) {
-                            distTop -> {
-                                when {
-                                    centerWinX < bounds.x + screenWidth * 0.30f -> NotchPosition.TOP_LEFT
-                                    centerWinX > bounds.x + screenWidth * 0.70f -> NotchPosition.TOP_RIGHT
-                                    else -> NotchPosition.TOP_CENTER
-                                }
-                            }
-                            distBottom -> {
-                                when {
-                                    centerWinX < bounds.x + screenWidth * 0.30f -> NotchPosition.BOTTOM_LEFT
-                                    centerWinX > bounds.x + screenWidth * 0.70f -> NotchPosition.BOTTOM_RIGHT
-                                    else -> NotchPosition.BOTTOM_CENTER
-                                }
-                            }
-                            distLeft -> {
-                                when {
-                                    centerWinY < bounds.y + screenHeight * 0.30f -> NotchPosition.TOP_LEFT
-                                    centerWinY > bounds.y + screenHeight * 0.70f -> NotchPosition.BOTTOM_LEFT
-                                    else -> NotchPosition.LEFT_CENTER
-                                }
-                            }
-                            else -> {
-                                when {
-                                    centerWinY < bounds.y + screenHeight * 0.30f -> NotchPosition.TOP_RIGHT
-                                    centerWinY > bounds.y + screenHeight * 0.70f -> NotchPosition.BOTTOM_RIGHT
-                                    else -> NotchPosition.RIGHT_CENTER
-                                }
-                            }
-                        }
-
-                        repository.updateConfig { it.copy(position = newPosition) }
-                    },
-                    onOpenSettings = { showSettings = true }
-                )
+        if (showSettings) {
+            val settingsState = rememberWindowState(
+                position = WindowPosition.Aligned(Alignment.Center),
+                size = DpSize(880.dp, 660.dp)
+            )
+            Window(
+                onCloseRequest = { showSettings = false },
+                state = settingsState,
+                title = "QuickNotch Settings",
+                resizable = true
+            ) {
+                QuickNotchTheme(darkTheme = true) {
+                    SettingsScreen(
+                        repository = repository,
+                        onClose = { showSettings = false }
+                    )
+                }
             }
         }
-    }
-
-    // Settings Window
-    if (showSettings) {
-        val settingsState = rememberWindowState(
-            position = WindowPosition.Aligned(Alignment.Center),
-            size = DpSize(880.dp, 660.dp)
-        )
-
-        Window(
-            onCloseRequest = { showSettings = false },
-            state = settingsState,
-            title = "QuickNotch Settings",
-            resizable = true
-        ) {
-            QuickNotchTheme(darkTheme = true) {
-                SettingsScreen(
-                    repository = repository,
-                    onClose = { showSettings = false }
-                )
-            }
-        }
-    }
     }
 }
