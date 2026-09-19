@@ -4,43 +4,59 @@
 
 ![QuickNotch Banner](https://raw.githubusercontent.com/StarkDroid/QuickNotch/main/banner.png)
 
-**A sleek, ultra-responsive Dynamic Island & Dock floating app launcher for Windows 10/11 and macOS.**
+**A Dynamic Island–style floating dock that pins apps so you can launch them from anywhere on Windows and macOS.**
 
 [![Build & Release](https://github.com/StarkDroid/QuickNotch/actions/workflows/release.yml/badge.svg)](https://github.com/StarkDroid/QuickNotch/actions)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.7.3-4285F4?logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/lp/compose-multiplatform/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-111111?logo=apple&logoColor=white)](https://github.com/StarkDroid/QuickNotch)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://microsoft.com/windows)
+[![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
 
 ---
 
-## ✨ Features
+## What it does
 
-- **🏝️ Dynamic Island Aesthetic**: Elegant floating notch pinned to your top screen edge (or configurable to bottom, corners, etc.) with smooth morphing physics.
-- **🌊 Authentic macOS Dock Fisheye Magnification Wave**: Continuous mathematical cosine-squared bell curve magnification with fluid elevation and scaling as your cursor glides across docked icons.
-- **⚡ Native Icon Extraction**: High-performance cached icon loading — Win32 Shell on Windows, `.icns` / Quick Look on macOS.
-- **🔍 Instant Installed Apps Scanner**: Discovers apps from the Windows Start Menu, Registry, and Desktop, or from `/Applications` and `/System/Applications` on macOS.
-- **🛠️ Standalone Customizer Settings**:
-  - Customize screen edge positions (Top Center, Bottom Center, Corners).
-  - Fine-tune dock magnification peak scale (1.0x - 2.5x) and wave radius.
-  - Reorder, add, or remove pinned applications with a native file chooser.
-  - Auto-start at login (Windows Registry or macOS LaunchAgent).
-  - Configurable tooltips, icon sizes, and launch behaviors.
-- **🔔 Tray / Menu Bar Integration**: Minimal footprint tray icon (Windows) or menu bar extra (macOS) with controls to toggle visibility, open settings, or reset defaults.
+QuickNotch lives as a small pill on a screen edge. Hover it to expand a dock of pinned apps, click an icon to launch, then keep working. The same Jetpack Compose UI runs on both platforms; only scanning, icons, launch, and login items differ.
 
 ---
 
-## 🏗️ Architecture & Tech Stack
+## Features
 
-QuickNotch is built with modern desktop architecture principles:
+- **Floating notch** — Collapsed pill that morphs into a dock, flush to top, bottom, left, or right (including corners).
+- **Dock fisheye wave** — Cosine-squared magnification and lift as the cursor moves across icons.
+- **Pin any app** — Search installed apps or browse for a custom executable / `.app` bundle. Reorder and remove from Settings.
+- **Native icons**
+  - Windows: Win32 Shell jumbo / extra-large icons from `.exe` and `.lnk` files.
+  - macOS: `.icns` via `sips`, with Quick Look (`qlmanage`) as fallback.
+- **Installed-app discovery**
+  - Windows: Start Menu, Desktop, system tools, and Registry uninstall entries.
+  - macOS: `/Applications`, `/System/Applications`, Utilities, and `~/Applications`.
+- **Launch from anywhere**
+  - Windows: `cmd` / UWP AppsFolder / Desktop browse.
+  - macOS: `open` for bundles, files, and URLs.
+- **Start at login** — Windows Run registry key, or a macOS LaunchAgent (`com.starkdroid.quicknotch`).
+- **Tray / menu bar** — Show or hide the notch, open Settings, reset defaults, quit.
+- **Settings** — Position grid, magnification, icon size, notch geometry, always-on-top, collapse-on-launch, labels.
 
-- **Language**: Kotlin 2.1.10 (Kotlin Multiplatform Desktop)
-- **UI Framework**: Jetpack Compose Multiplatform 1.7.3 (Material Design 3)
-- **Concurrency**: Kotlinx Coroutines 1.10.1 (`kotlinx-coroutines-swing`)
-- **Native Interop**: JNA 5.16.0 for Win32; Kotlin + built-in macOS tools (`open`, `sips`, `qlmanage`, LaunchAgents) on Apple platforms
-- **Data & Serialization**: Kotlinx Serialization JSON
+Pinned apps and config are stored as JSON:
+
+| Platform | Location |
+| :--- | :--- |
+| Windows | `%APPDATA%\QuickNotch\` |
+| macOS | `~/Library/Application Support/QuickNotch/` |
+
+---
+
+## Architecture
+
+- **Language**: Kotlin 2.1.10 (Compose Multiplatform Desktop JVM)
+- **UI**: Jetpack Compose 1.7.3 (Material 3) on both platforms — no SwiftUI or WinUI
+- **Concurrency**: Kotlinx Coroutines (`kotlinx-coroutines-swing`)
+- **Native**: JNA 5.16.0 for Win32; Kotlin + built-in macOS tools (`open`, `sips`, `qlmanage`, LaunchAgents)
+- **Persistence**: Kotlinx Serialization JSON
 
 ```
 QuickNotch/
@@ -48,65 +64,72 @@ QuickNotch/
 │   ├── build.gradle.kts
 │   └── src/desktopMain/kotlin/com/starkdroid/quicknotch/
 │       ├── model/
-│       │   ├── AppItem.kt              # App item data entity & serialization
-│       │   ├── NotchConfig.kt          # Notch positions & configuration parameters
-│       │   └── FavoritesRepository.kt  # Persistent settings & pinned apps storage
+│       │   ├── AppItem.kt
+│       │   ├── NotchConfig.kt
+│       │   └── FavoritesRepository.kt
 │       ├── datasource/
-│       │   ├── HostPlatform.kt         # Windows / macOS detection
-│       │   ├── InstalledAppsScanner.kt # Platform scanner facade
+│       │   ├── HostPlatform.kt
+│       │   ├── InstalledAppsScanner.kt          # facade
 │       │   ├── WindowsInstalledAppsScanner.kt
 │       │   ├── MacInstalledAppsScanner.kt
-│       │   ├── AppIconLoader.kt        # Shared icon API + monograms
+│       │   ├── AppIconLoader.kt
 │       │   ├── Win32ShellIconLoader.kt
 │       │   ├── MacAppIconLoader.kt
-│       │   ├── AppLauncher.kt          # Process / `open` launcher
-│       │   ├── StartupManager.kt       # Login-item facade
+│       │   ├── AppLauncher.kt
+│       │   ├── StartupManager.kt                # facade
 │       │   ├── WindowsStartupManager.kt
 │       │   └── MacStartupManager.kt
 │       ├── ui/
-│       │   ├── FloatingNotchOverlay.kt # Dynamic Island & Dock Fisheye Magnification wave
-│       │   └── SettingsScreen.kt       # Dedicated Material 3 settings & app manager
+│       │   ├── FloatingNotchOverlay.kt
+│       │   ├── SettingsScreen.kt
+│       │   └── NoiseGenerator.kt
 │       ├── theme/
-│       │   ├── Color.kt                # Modern dark Apple / Fluent color palette
-│       │   ├── Typography.kt           # Clean typography scale
-│       │   └── Theme.kt                # Compose Material 3 theme wrapper
-│       └── main.kt                     # Application entry point, tray & window overlay
-├── gradle/
-│   └── libs.versions.toml              # Version catalog
-├── settings.gradle.kts
-└── build.gradle.kts
+│       └── main.kt                              # tray + overlay + settings windows
+├── gradle/libs.versions.toml
+└── …
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting started
 
 ### Prerequisites
 
-- **Java Development Kit (JDK)**: JDK 17 or higher (Temurin or Oracle recommended)
-- **Operating System**: Windows 10/11 (x64) or macOS 12+
+- **JDK 17+** (Eclipse Temurin or Oracle recommended; Homebrew OpenJDK 17 also works)
+- **Windows 10/11 (x64)** or **macOS 12+** (Apple Silicon and Intel)
 
-### Building from Source
+### Run from source
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/StarkDroid/QuickNotch.git
-   cd QuickNotch
-   ```
+```bash
+git clone https://github.com/StarkDroid/QuickNotch.git
+cd QuickNotch
+./gradlew :composeApp:run
+```
 
-2. Run the application in development mode:
-   ```bash
-   ./gradlew run
-   ```
+On first launch you get a default pin set (Explorer / Terminal / browsers on Windows; Finder, Safari, Terminal, Calculator, and similar on macOS). Hover the pill, or use the tray / menu bar extra to open Settings.
 
-3. Build native installers for the current OS (Windows `.msi`/`.exe`, macOS `.dmg`):
-   ```bash
-   ./gradlew packageDistributionForCurrentOS
-   ```
-   Installers will be generated under `composeApp/build/compose/binaries/main/`.
+### Package for the current OS
+
+```bash
+./gradlew :composeApp:packageDistributionForCurrentOS
+```
+
+Outputs land under `composeApp/build/compose/binaries/main/`:
+
+| OS | Formats |
+| :--- | :--- |
+| Windows | `.msi`, `.exe` |
+| macOS | `.dmg`, plus `app/QuickNotch.app` from `createDistributable` |
+
+```bash
+./gradlew :composeApp:createDistributable
+open composeApp/build/compose/binaries/main/app/QuickNotch.app   # macOS
+```
+
+On newer macOS releases, Skiko’s Metal backend can crash when creating transparent overlay windows. The desktop package currently sets `-Dskiko.renderApi=SOFTWARE` so the notch stays stable.
 
 ---
 
-## 📜 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
