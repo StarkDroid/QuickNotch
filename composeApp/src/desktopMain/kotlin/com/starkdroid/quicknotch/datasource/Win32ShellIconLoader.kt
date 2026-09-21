@@ -140,8 +140,9 @@ object Win32ShellIconLoader {
             AppIconLoader.generateMonogramIcon(app.name)
         }
 
-        cache[app.id] = iconBitmap
-        iconBitmap
+        val sized = iconBitmap.downscaleForCache()
+        cache[app.id] = sized
+        sized
     }
 
     private fun cleanPath(raw: String): File? {

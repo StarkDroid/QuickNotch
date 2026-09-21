@@ -39,7 +39,7 @@ object MacAppIconLoader {
     suspend fun loadIcon(app: AppItem): ImageBitmap = withContext(Dispatchers.IO) {
         cache[app.id]?.let { return@withContext it }
 
-        val bitmap = try {
+        val raw = try {
             val icns = findIcnsFile(app)
             parseIcnsPng(icns)
                 ?: icns?.let { convertWithSips(it) }
@@ -48,6 +48,7 @@ object MacAppIconLoader {
         } catch (_: Throwable) {
             AppIconLoader.generateMonogramIcon(app.name)
         }
+        val bitmap = raw.downscaleForCache()
 
         cache[app.id] = bitmap
         bitmap
@@ -77,10 +78,13 @@ object MacAppIconLoader {
     }
 
     /**
-     * Reads the largest PNG embedded in an `.icns` archive and decodes it with
+     * Decodes a PNG representation embedded in an `.icns` archive with
      * [ImageIO], avoiding a sub-process per app. Modern macOS icons store every
-     * scale as a bare PNG chunk; legacy archives may keep JPEG2000 data instead,
-     * in which case this returns null and [convertWithSips] takes over.
+     * scale as a bare PNG chunk; we take the smallest one that still covers the
+     * cache cap (decoding a 1024px PNG just to draw it at 38dp is the waste that
+     * made scrolling stutter) and fall back to the largest if the archive only
+     * ships smaller sizes. Legacy JPEG2000-only archives return null so
+     * [convertWithSips] can take over.
      */
     private fun parseIcnsPng(icns: File?): ImageBitmap? {
         if (icns == null || !icns.isFile) return null
@@ -95,9 +99,16 @@ object MacAppIconLoader {
             (bytes[2].toInt() and 0xFF) != 0x6E || (bytes[3].toInt() and 0xFF) != 0x73
         ) return null
 
+        // Chunks appear in no particular order, so scan once and remember both
+        // the smallest chunk that meets the cap and the largest overall.
+        var idealSize = Int.MAX_VALUE
+        var idealStart = -1
+        var idealEnd = -1
+        var fallbackSize = -1
+        var fallbackStart = -1
+        var fallbackEnd = -1
+
         var offset = 8
-        var bestSize = -1
-        var bestData: ByteArray? = null
         while (offset + 8 <= bytes.size) {
             val type = String(bytes, offset, 4, Charsets.US_ASCII)
             val length = ((bytes[offset + 4].toInt() and 0xFF) shl 24) or
@@ -107,21 +118,34 @@ object MacAppIconLoader {
             if (length < 8 || offset + length > bytes.size) break
 
             val size = ICNS_PNG_SIZES[type]
-            if (size != null && size > bestSize && length > 12 &&
+            val isPng = length > 12 &&
                 (bytes[offset + 8].toInt() and 0xFF) == 0x89 &&
                 (bytes[offset + 9].toInt() and 0xFF) == 0x50 &&
                 (bytes[offset + 10].toInt() and 0xFF) == 0x4E &&
                 (bytes[offset + 11].toInt() and 0xFF) == 0x47
-            ) {
-                bestSize = size
-                bestData = bytes.copyOfRange(offset + 8, offset + length)
+            if (size != null && isPng) {
+                val start = offset + 8
+                val end = offset + length
+                if (size >= AppIconLoader.cachedIconMaxPx && size < idealSize) {
+                    idealSize = size
+                    idealStart = start
+                    idealEnd = end
+                }
+                if (size > fallbackSize) {
+                    fallbackSize = size
+                    fallbackStart = start
+                    fallbackEnd = end
+                }
             }
             offset += length
         }
 
-        val buffered = bestData?.let { data ->
-            runCatching { ImageIO.read(ByteArrayInputStream(data)) }.getOrNull()
-        }
+        val start = if (idealStart >= 0) idealStart else fallbackStart
+        val end = if (idealStart >= 0) idealEnd else fallbackEnd
+        if (start < 0 || end < 0) return null
+
+        val data = bytes.copyOfRange(start, end)
+        val buffered = runCatching { ImageIO.read(ByteArrayInputStream(data)) }.getOrNull()
         return buffered?.toComposeImageBitmap()
     }
 

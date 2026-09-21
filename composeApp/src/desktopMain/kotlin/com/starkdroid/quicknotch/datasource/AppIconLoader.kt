@@ -1,6 +1,7 @@
 package com.starkdroid.quicknotch.datasource
 
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.starkdroid.quicknotch.model.AppItem
 import kotlinx.coroutines.sync.Semaphore
@@ -8,8 +9,16 @@ import kotlinx.coroutines.sync.withPermit
 import java.awt.Font
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 object AppIconLoader {
+    // Cached bitmaps are capped to this edge length. Both the dock and the
+    // settings rows draw far smaller, and on the software renderer a row that
+    // samples a full-resolution (up to 1024px) icon pays that resample cost
+    // every single frame — the main cause of scroll jank once icons loaded.
+    internal const val cachedIconMaxPx = 128
+
     // Scanning a full installed-apps list fires one load per row at once; a
     // little backpressure keeps dozens of native calls (or sips/quicklook
     // processes) from piling up and timing out.
@@ -66,4 +75,42 @@ object AppIconLoader {
         }
         return img.toComposeImageBitmap()
     }
+}
+
+/**
+ * Shrinks a freshly decoded icon to at most [AppIconLoader.cachedIconMaxPx]
+ * before it is cached and handed to the UI. Halving progressively keeps small
+ * sizes sharp (a single jump from 1024px aliases badly).
+ */
+internal fun ImageBitmap.downscaleForCache(): ImageBitmap {
+    if (width <= AppIconLoader.cachedIconMaxPx && height <= AppIconLoader.cachedIconMaxPx) return this
+
+    var awt = toAwtImage()
+    while (max(awt.width, awt.height) > AppIconLoader.cachedIconMaxPx * 2) {
+        awt = awt.scaleBilinear(awt.width / 2, awt.height / 2)
+    }
+    val longEdge = max(awt.width, awt.height)
+    if (longEdge > AppIconLoader.cachedIconMaxPx) {
+        val ratio = AppIconLoader.cachedIconMaxPx.toFloat() / longEdge
+        awt = awt.scaleBilinear(
+            (awt.width * ratio).roundToInt().coerceAtLeast(1),
+            (awt.height * ratio).roundToInt().coerceAtLeast(1)
+        )
+    }
+    return awt.toComposeImageBitmap()
+}
+
+private fun BufferedImage.scaleBilinear(w: Int, h: Int): BufferedImage {
+    val out = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+    val g = out.createGraphics()
+    try {
+        g.setRenderingHint(
+            RenderingHints.KEY_INTERPOLATION,
+            RenderingHints.VALUE_INTERPOLATION_BILINEAR
+        )
+        g.drawImage(this, 0, 0, w, h, null)
+    } finally {
+        g.dispose()
+    }
+    return out
 }
