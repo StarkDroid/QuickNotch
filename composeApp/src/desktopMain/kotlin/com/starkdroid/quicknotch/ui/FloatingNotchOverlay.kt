@@ -1,6 +1,7 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
@@ -87,7 +88,6 @@ private val IslandFill = Color(0xFF0A0A0A)
 private val IslandStroke = Color.White.copy(alpha = 0.14f)
 private val ControlIdle = Color.White.copy(alpha = 0.28f)
 private val ControlActive = Color.White.copy(alpha = 0.92f)
-private val IconPlaceholder = Color(0xFF2C2C2E)
 
 // ── Motion ───────────────────────────────────────────────────────────────────
 // Near-critically-damped springs mirror AppKit's default view animation: a
@@ -122,6 +122,13 @@ private const val FisheyeRadiusFactor = 1.5f
 /** Cross-axis travel of a fully magnified icon, in dp. */
 private val IconLift = 8.dp
 
+/**
+ * How long to wait after the window starts growing before the dock content is
+ * revealed, so the notch reads as "open first, icons second" instead of the
+ * content racing the resize and being drawn mid-grow (the source of the jank).
+ */
+private const val DockRevealDelayMs = 180L
+
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -141,6 +148,12 @@ fun FloatingNotchOverlay(
 
     val iconBitmaps = remember { mutableStateMapOf<String, ImageBitmap>() }
     LoadFavoriteIcons(favorites, iconBitmaps)
+
+    // The dock content is revealed *after* the window has grown, and hidden
+    // *before* it shrinks. Drawing a full dock (icons, fisheye layout passes)
+    // while the native window is mid-resize is what used to drop frames; the
+    // short reveal delay below roughly covers the size spring's settle time.
+    var showDock by remember { mutableStateOf(false) }
 
     // Collapse is debounced so a cursor briefly clipping the edge does not
     // immediately retract the dock.
@@ -163,7 +176,10 @@ fun FloatingNotchOverlay(
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
             onWindowExpandedChange(true)
+            delay(DockRevealDelayMs)
+            showDock = true
         } else {
+            showDock = false
             delay(300)
             onWindowExpandedChange(false)
         }
@@ -198,7 +214,7 @@ fun FloatingNotchOverlay(
             ) {
                 CollapsedIsland(vertical = config.position.isVertical)
             }
-            AnimatedVisibility(visible = isExpanded, enter = ContentEnter, exit = ContentExit) {
+            AnimatedVisibility(visible = showDock, enter = ContentEnter, exit = ContentExit) {
                 Dock(
                     favorites = favorites,
                     config = config,
@@ -391,16 +407,27 @@ private fun DockIcon(
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (iconBitmap != null) {
-            Image(
-                bitmap = iconBitmap,
-                contentDescription = app.name,
-                contentScale = ContentScale.Fit,
-                filterQuality = FilterQuality.High,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Box(Modifier.fillMaxSize().background(IconPlaceholder))
+        Crossfade(
+            targetState = iconBitmap,
+            animationSpec = tween(220),
+            label = "dockIconFade"
+        ) { bitmap ->
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = app.name,
+                    contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.High,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Shimmer while the icon loads in the background, so a cold dock
+                // never flashes a wall of empty grey squares.
+                ShimmerBox(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(11.dp)
+                )
+            }
         }
     }
 }
