@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +67,10 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isScanning by remember { mutableStateOf(false) }
 
+    // Generated once; a static tiled shader keeps scrolling cheap on the
+    // software renderer instead of re-sampling noise every frame.
+    val noiseBrush = remember { NoiseGenerator.getNoiseBrush() }
+
     LaunchedEffect(Unit) {
         isScanning = true
         scannedApps = InstalledAppsScanner.scanAllInstalledApps()
@@ -76,7 +81,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FlatBg)
-            .background(NoiseGenerator.getNoiseBrush())
+            .background(noiseBrush)
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -150,9 +155,8 @@ fun SettingsScreen(
                             repository.updateConfig {
                                 it.copy(
                                     dockScaleFactor = 1.35f,
-                                    dockMagnificationRadius = 130f,
                                     baseIconSizeDp = 38,
-                                    collapsedPillWidthDp = 160,
+                                    collapsedPillWidthDp = 150,
                                     collapsedPillHeightDp = 30,
                                     expandedNotchHeightDp = 78
                                 )
@@ -310,7 +314,7 @@ private fun DockSizingTab(
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Click an edge or corner on the 3×3 grid to position the notch or dock",
+                            text = "Choose which screen edge the notch anchors to",
                             style = AppTypography.bodySmall,
                             color = TextSecondary,
                             fontSize = 12.sp
@@ -346,7 +350,7 @@ private fun DockSizingTab(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    Minimalist3x3PositionGrid(
+                    EdgePositionSelector(
                         selectedPosition = config.position,
                         onSelectPosition = { pos -> onUpdate { it.copy(position = pos) } }
                     )
@@ -369,7 +373,7 @@ private fun DockSizingTab(
                         color = TextPrimary
                     )
                     Text(
-                        text = "Cursor glide wave effect and magnification curve",
+                        text = "Icons magnify precisely under the cursor; the wave radius is derived from icon size automatically",
                         style = AppTypography.bodySmall,
                         color = TextSecondary,
                         fontSize = 12.sp
@@ -383,16 +387,6 @@ private fun DockSizingTab(
                         value = config.dockScaleFactor.coerceIn(1.10f, 1.45f),
                         valueRange = 1.10f..1.45f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockScaleFactor = it) } }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    MinimalistSliderRow(
-                        title = "Magnification Wave Radius",
-                        valueLabel = "${config.dockMagnificationRadius.coerceIn(90f, 160f).toInt()} px",
-                        value = config.dockMagnificationRadius.coerceIn(90f, 160f),
-                        valueRange = 90f..160f,
-                        onValueChange = { onUpdate { cfg -> cfg.copy(dockMagnificationRadius = it) } }
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -485,214 +479,67 @@ private fun DockSizingTab(
     }
 }
 
-private enum class PositionCellType {
-    TOP_LEFT, TOP_CENTER, TOP_RIGHT,
-    LEFT_CENTER, CENTER_DISABLED, RIGHT_CENTER,
-    BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT
-}
-
+/**
+ * A miniature screen showing the four supported edge anchors. Only edge centres
+ * are selectable — corners and free-form placement were removed so the notch
+ * always sits perfectly centred on one side and never has to be dragged.
+ */
 @Composable
-private fun Minimalist3x3PositionGrid(
+private fun EdgePositionSelector(
     selectedPosition: NotchPosition,
     onSelectPosition: (NotchPosition) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
+            .size(width = 132.dp, height = 92.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(FlatCard)
             .border(1.dp, FlatBorder, RoundedCornerShape(10.dp))
-            .padding(6.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            // Row 1: Top-Left, Top-Center, Top-Right
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.TOP_LEFT,
-                    onClick = { onSelectPosition(NotchPosition.TOP_LEFT) },
-                    positionType = PositionCellType.TOP_LEFT
-                )
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.TOP_CENTER,
-                    onClick = { onSelectPosition(NotchPosition.TOP_CENTER) },
-                    positionType = PositionCellType.TOP_CENTER
-                )
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.TOP_RIGHT,
-                    onClick = { onSelectPosition(NotchPosition.TOP_RIGHT) },
-                    positionType = PositionCellType.TOP_RIGHT
-                )
-            }
-
-            // Row 2: Left-Center, Center (Screen), Right-Center
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.LEFT_CENTER,
-                    onClick = { onSelectPosition(NotchPosition.LEFT_CENTER) },
-                    positionType = PositionCellType.LEFT_CENTER
-                )
-                PositionGridCell(
-                    isSelected = false,
-                    onClick = {},
-                    positionType = PositionCellType.CENTER_DISABLED
-                )
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.RIGHT_CENTER,
-                    onClick = { onSelectPosition(NotchPosition.RIGHT_CENTER) },
-                    positionType = PositionCellType.RIGHT_CENTER
-                )
-            }
-
-            // Row 3: Bottom-Left, Bottom-Center, Bottom-Right
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.BOTTOM_LEFT,
-                    onClick = { onSelectPosition(NotchPosition.BOTTOM_LEFT) },
-                    positionType = PositionCellType.BOTTOM_LEFT
-                )
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.BOTTOM_CENTER,
-                    onClick = { onSelectPosition(NotchPosition.BOTTOM_CENTER) },
-                    positionType = PositionCellType.BOTTOM_CENTER
-                )
-                PositionGridCell(
-                    isSelected = selectedPosition == NotchPosition.BOTTOM_RIGHT,
-                    onClick = { onSelectPosition(NotchPosition.BOTTOM_RIGHT) },
-                    positionType = PositionCellType.BOTTOM_RIGHT
-                )
-            }
-        }
+        EdgeAnchor(Alignment.TopCenter, NotchPosition.TOP_CENTER, true, selectedPosition, onSelectPosition)
+        EdgeAnchor(Alignment.BottomCenter, NotchPosition.BOTTOM_CENTER, true, selectedPosition, onSelectPosition)
+        EdgeAnchor(Alignment.CenterStart, NotchPosition.LEFT_CENTER, false, selectedPosition, onSelectPosition)
+        EdgeAnchor(Alignment.CenterEnd, NotchPosition.RIGHT_CENTER, false, selectedPosition, onSelectPosition)
     }
 }
 
 @Composable
-private fun PositionGridCell(
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    positionType: PositionCellType,
-    modifier: Modifier = Modifier
+private fun BoxScope.EdgeAnchor(
+    alignment: Alignment,
+    position: NotchPosition,
+    horizontal: Boolean,
+    selectedPosition: NotchPosition,
+    onSelectPosition: (NotchPosition) -> Unit
 ) {
-    val isCenter = positionType == PositionCellType.CENTER_DISABLED
-    val borderColor = when {
-        isSelected -> AccentIndigoLight
-        isCenter -> FlatBorder.copy(alpha = 0.35f)
-        else -> FlatBorder
-    }
-    val bgColor = when {
-        isSelected -> AccentIndigo.copy(alpha = 0.22f)
-        isCenter -> Color(0xFF0E111B)
-        else -> FlatSurfaceElevated
-    }
-
-    val indicatorColor = if (isSelected) AccentCyan else TextMuted.copy(alpha = 0.45f)
-
+    val isSelected = selectedPosition == position
     Box(
-        modifier = modifier
-            .size(width = 46.dp, height = 36.dp)
+        modifier = Modifier
+            .align(alignment)
+            .padding(9.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(bgColor)
-            .border(if (isSelected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(6.dp))
-            .then(if (!isCenter) Modifier.clickable(onClick = onClick) else Modifier),
+            .background(if (isSelected) AccentIndigo.copy(alpha = 0.26f) else FlatSurfaceElevated)
+            .border(
+                if (isSelected) 1.5.dp else 1.dp,
+                if (isSelected) AccentIndigoLight else FlatBorder,
+                RoundedCornerShape(6.dp)
+            )
+            .clickable { onSelectPosition(position) }
+            .padding(
+                horizontal = if (horizontal) 11.dp else 5.dp,
+                vertical = if (horizontal) 5.dp else 11.dp
+            ),
         contentAlignment = Alignment.Center
     ) {
-        when (positionType) {
-            PositionCellType.TOP_LEFT -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 5.dp, top = 4.dp)
-                        .width(12.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp))
-                        .background(indicatorColor)
+        Box(
+            modifier = Modifier
+                .size(
+                    width = if (horizontal) 20.dp else 4.dp,
+                    height = if (horizontal) 4.dp else 20.dp
                 )
-            }
-            PositionCellType.TOP_CENTER -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 4.dp)
-                        .width(18.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-            PositionCellType.TOP_RIGHT -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 5.dp, top = 4.dp)
-                        .width(12.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-            PositionCellType.LEFT_CENTER -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 4.dp)
-                        .width(4.dp)
-                        .height(16.dp)
-                        .clip(RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-            PositionCellType.CENTER_DISABLED -> {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(TextMuted.copy(alpha = 0.25f))
-                )
-            }
-            PositionCellType.RIGHT_CENTER -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp)
-                        .width(4.dp)
-                        .height(16.dp)
-                        .clip(RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-            PositionCellType.BOTTOM_LEFT -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 5.dp, bottom = 4.dp)
-                        .width(12.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-            PositionCellType.BOTTOM_CENTER -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 4.dp)
-                        .width(18.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-            PositionCellType.BOTTOM_RIGHT -> {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 5.dp, bottom = 4.dp)
-                        .width(12.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                        .background(indicatorColor)
-                )
-            }
-        }
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (isSelected) AccentCyan else TextMuted.copy(alpha = 0.45f))
+        )
     }
 }
 
@@ -773,6 +620,11 @@ private fun PinnedAppsTab(
     val filteredApps = remember(scannedApps, searchQuery) {
         if (searchQuery.isBlank()) scannedApps else scannedApps.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
+    // Precomputed once per favorites change so each row's "already pinned" check
+    // is O(1) during scrolling instead of rescanning the list.
+    val pinnedPaths = remember(favorites) {
+        favorites.mapTo(HashSet()) { it.executablePath.lowercase() }
+    }
 
     Row(
         modifier = Modifier
@@ -847,7 +699,7 @@ private fun PinnedAppsTab(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        itemsIndexed(favorites) { index, item ->
+                        itemsIndexed(favorites, key = { _, item -> item.id }) { index, item ->
                             PinnedAppRow(
                                 item = item,
                                 canMoveUp = index > 0,
@@ -945,13 +797,12 @@ private fun PinnedAppsTab(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        items(filteredApps.size) { i ->
-                            val app = filteredApps[i]
-                            val isAlreadyPinned = favorites.any { it.executablePath.equals(app.executablePath, ignoreCase = true) }
-
+                        // Stable keys let LazyColumn recycle rows without
+                        // discarding their (already loaded) icon state on scroll.
+                        items(filteredApps, key = { it.executablePath }) { app ->
                             AvailableAppRow(
                                 app = app,
-                                isPinned = isAlreadyPinned,
+                                isPinned = app.executablePath.lowercase() in pinnedPaths,
                                 onAdd = { onAddFavorite(app) }
                             )
                         }
@@ -960,6 +811,23 @@ private fun PinnedAppsTab(
             }
         }
     }
+}
+
+/**
+ * Resolves an app icon with no visible pop-in while scrolling: the shared
+ * in-memory cache is read synchronously on first composition, and only a cold
+ * miss falls back to a background load. Combined with stable LazyColumn keys,
+ * rows keep their icons when recycled, so the list stays smooth.
+ */
+@Composable
+private fun rememberAppIcon(app: AppItem): ImageBitmap? {
+    var iconBitmap by remember(app.id) { mutableStateOf(AppIconLoader.getCachedIcon(app.id)) }
+    LaunchedEffect(app.id) {
+        if (iconBitmap == null) {
+            iconBitmap = AppIconLoader.loadIcon(app)
+        }
+    }
+    return iconBitmap
 }
 
 private fun pickCustomApplication(): AppItem? {
@@ -995,10 +863,7 @@ private fun PinnedAppRow(
     onMoveDown: () -> Unit,
     onRemove: () -> Unit
 ) {
-    var iconBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(item) {
-        iconBitmap = AppIconLoader.loadIcon(item)
-    }
+    val iconBitmap = rememberAppIcon(item)
 
     Row(
         modifier = Modifier
@@ -1095,10 +960,7 @@ private fun AvailableAppRow(
     isPinned: Boolean,
     onAdd: () -> Unit
 ) {
-    var iconBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(app) {
-        iconBitmap = AppIconLoader.loadIcon(app)
-    }
+    val iconBitmap = rememberAppIcon(app)
 
     Row(
         modifier = Modifier
