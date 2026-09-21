@@ -10,8 +10,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -77,7 +76,9 @@ import com.starkdroid.quicknotch.model.NotchPosition
 import com.starkdroid.quicknotch.theme.TextPrimary
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -107,13 +108,16 @@ private fun iconSpring() = spring(
     visibilityThreshold = 0.001f
 )
 
-private val ContentEnter = fadeIn(tween(160)) + scaleIn(
-    initialScale = 0.96f,
-    animationSpec = tween(240, easing = FastOutSlowInEasing)
-)
-private val ContentExit = fadeOut(tween(90)) + scaleOut(
-    targetScale = 0.98f,
-    animationSpec = tween(120)
+// The dock reveal is a pure layer animation (alpha + scale) over an
+// always-composed, always-expanded-size dock — nothing is measured or laid out
+// while the window is growing, which is what removed the open-time frame drops.
+private val DockFadeIn = tween<Float>(170, easing = FastOutSlowInEasing)
+private val DockFadeOut = tween<Float>(90)
+
+private fun dockRevealSpring() = spring(
+    dampingRatio = 0.9f,
+    stiffness = 300f,
+    visibilityThreshold = 0.001f
 )
 
 /** Distance from an icon centre (in multiples of icon size) the wave reaches. */
@@ -123,11 +127,12 @@ private const val FisheyeRadiusFactor = 1.5f
 private val IconLift = 8.dp
 
 /**
- * How long to wait after the window starts growing before the dock content is
- * revealed, so the notch reads as "open first, icons second" instead of the
- * content racing the resize and being drawn mid-grow (the source of the jank).
+ * Hard ceiling on how long the choreography waits for the size spring to settle
+ * (in either direction) before acting anyway, so an interrupted animation can
+ * never leave the notch stuck. Comfortably past the spring's settle time, and
+ * past the dock fade that can delay the collapse spring starting.
  */
-private const val DockRevealDelayMs = 180L
+private const val IslandSettleTimeoutMs = 650L
 
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
@@ -149,10 +154,6 @@ fun FloatingNotchOverlay(
     val iconBitmaps = remember { mutableStateMapOf<String, ImageBitmap>() }
     LoadFavoriteIcons(favorites, iconBitmaps)
 
-    // The dock content is revealed *after* the window has grown, and hidden
-    // *before* it shrinks. Drawing a full dock (icons, fisheye layout passes)
-    // while the native window is mid-resize is what used to drop frames; the
-    // short reveal delay below roughly covers the size spring's settle time.
     var showDock by remember { mutableStateOf(false) }
 
     // Collapse is debounced so a cursor briefly clipping the edge does not
@@ -170,26 +171,52 @@ fun FloatingNotchOverlay(
         }
     }
 
-    // The window footprint leads the content while expanding and trails it while
-    // collapsing, so the resized native window never clips the animation. The
-    // collapse delay comfortably exceeds the size spring's settle time.
+    val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
+
+    // The dock is never composited away or re-measured — it lives in the
+    // window-sized root so it is permanently laid out at the expanded
+    // footprint. Reveal is then just an alpha+scale layer animation, which is
+    // why the open no longer drops frames: the grow spring, the native resize
+    // and the dock's first draw are fully decoupled.
+    val dockAlpha by animateFloatAsState(if (showDock) 1f else 0f, if (showDock) DockFadeIn else DockFadeOut, label = "dockAlpha")
+    val dockScale by animateFloatAsState(if (showDock) 1f else 0.97f, dockRevealSpring(), label = "dockScale")
+
+    // The island keeps the dock as its *sibling*, so the fading dock is not
+    // clipped by the shrinking pill; the pill holds its expanded size until the
+    // dock fade is done, then contracts.
+    val islandExpanded = isExpanded || dockAlpha > 0.01f
+    val targetSize = metrics.sizeFor(islandExpanded)
+    val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
+    val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
+    val shape = notchShape(config.position, islandExpanded)
+
+    // Open: grow the native window first, hold the dock hidden until the size
+    // spring has actually settled, then fade it in. Close: fade the dock out,
+    // let the island spring back, then shrink the window. Waiting on the spring
+    // itself (with a timeout) rather than fixed delays keeps the window from
+    // ever resizing while content is being drawn or measured, and guarantees
+    // the notch never gets stuck open-but-empty.
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
             onWindowExpandedChange(true)
-            delay(DockRevealDelayMs)
-            showDock = true
+            val expanded = metrics.sizeFor(true)
+            withTimeoutOrNull(IslandSettleTimeoutMs) {
+                snapshotFlow {
+                    animatedWidth >= expanded.width - 1.dp && animatedHeight >= expanded.height - 1.dp
+                }.first { settled -> settled }
+            }
+            if (isExpanded) showDock = true
         } else {
             showDock = false
-            delay(300)
+            val collapsed = metrics.sizeFor(false)
+            withTimeoutOrNull(IslandSettleTimeoutMs) {
+                snapshotFlow {
+                    animatedWidth <= collapsed.width + 1.dp && animatedHeight <= collapsed.height + 1.dp
+                }.first { settled -> settled }
+            }
             onWindowExpandedChange(false)
         }
     }
-
-    val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
-    val targetSize = metrics.sizeFor(isExpanded)
-    val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
-    val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
-    val shape = notchShape(config.position, isExpanded)
 
     Box(
         modifier = modifier
@@ -198,6 +225,8 @@ fun FloatingNotchOverlay(
             .onPointerEvent(PointerEventType.Exit) { setHovered(false) },
         contentAlignment = containerAlignment(config.position)
     ) {
+        // Island background + collapsed pill: the only thing that actually
+        // resizes. The dock is a sibling, not a child, so its layout is stable.
         Box(
             modifier = Modifier
                 .width(animatedWidth)
@@ -214,21 +243,36 @@ fun FloatingNotchOverlay(
             ) {
                 CollapsedIsland(vertical = config.position.isVertical)
             }
-            AnimatedVisibility(visible = showDock, enter = ContentEnter, exit = ContentExit) {
-                Dock(
-                    favorites = favorites,
-                    config = config,
-                    iconBitmaps = iconBitmaps,
-                    density = density,
-                    onLaunch = { app ->
-                        scope.launch {
-                            AppLauncher.launch(app)
-                            if (config.hideOnAppLaunch) onExpandedChange(false)
-                        }
-                    },
-                    onOpenSettings = onOpenSettings
-                )
-            }
+        }
+
+        // The dock stays composed permanently (with input gated off while hidden) so
+        // its first measure/layout never coincides with the open animation; all
+        // the reveal does is fade a layer. Alpha 0 also skips the draw entirely.
+        Box(
+            modifier = Modifier
+                .size(metrics.expanded.width, metrics.expanded.height)
+                .clip(notchShape(config.position, expanded = true))
+                .graphicsLayer {
+                    alpha = dockAlpha
+                    scaleX = dockScale
+                    scaleY = dockScale
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Dock(
+                favorites = favorites,
+                config = config,
+                iconBitmaps = iconBitmaps,
+                density = density,
+                interactive = showDock,
+                onLaunch = { app ->
+                    scope.launch {
+                        AppLauncher.launch(app)
+                        if (config.hideOnAppLaunch) onExpandedChange(false)
+                    }
+                },
+                onOpenSettings = onOpenSettings
+            )
         }
     }
 }
@@ -256,6 +300,7 @@ private fun Dock(
     config: NotchConfig,
     iconBitmaps: Map<String, ImageBitmap>,
     density: Density,
+    interactive: Boolean,
     onLaunch: (AppItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -267,6 +312,9 @@ private fun Dock(
     // space, so the fisheye tracks the cursor with exact accuracy.
     val centers = remember { mutableStateMapOf<Int, Float>() }
     val pointer = remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(interactive) {
+        if (!interactive) pointer.value = null
+    }
     val radiusPx = with(density) { config.baseIconSizeDp.dp.toPx() * FisheyeRadiusFactor }
     val liftPx = with(density) { IconLift.toPx() }
 
@@ -289,12 +337,21 @@ private fun Dock(
         }
     }
 
-    val pointerModifier = Modifier
-        .onPointerEvent(PointerEventType.Move) { change ->
-            pointer.value = change.changes.firstOrNull()?.position
-                ?.let { if (vertical) it.y else it.x }
-        }
-        .onPointerEvent(PointerEventType.Exit) { pointer.value = null }
+    // The dock lives in the tree even while hidden, so pointer tracking and icon
+    // clicks must be gated explicitly: an invisible dock must not swallow events
+    // meant for the collapsed pill or launch apps from under the cursor.
+    val pointerModifier = if (interactive) {
+        Modifier
+            .onPointerEvent(PointerEventType.Move) { change ->
+                pointer.value = change.changes.firstOrNull()?.position
+                    ?.let { if (vertical) it.y else it.x }
+            }
+            .onPointerEvent(PointerEventType.Exit) { pointer.value = null }
+    } else {
+        // Hidden dock: no tracking, and child clickables are disabled below,
+        // so events fall through untouched.
+        Modifier
+    }
 
     val icons: @Composable () -> Unit = {
         favorites.forEachIndexed { index, app ->
@@ -309,11 +366,12 @@ private fun Dock(
                 vertical = vertical,
                 towardStart = towardStart,
                 baseSizeDp = config.baseIconSizeDp,
+                enabled = interactive,
                 onPositioned = { centers[index] = it },
                 onClick = { onLaunch(app) }
             )
         }
-        SettingsButton(onClick = onOpenSettings)
+        SettingsButton(onClick = onOpenSettings, enabled = interactive)
     }
 
     if (vertical) {
@@ -371,12 +429,13 @@ private fun DockIcon(
     vertical: Boolean,
     towardStart: Boolean,
     baseSizeDp: Int,
+    enabled: Boolean,
     onPositioned: (Float) -> Unit,
     onClick: () -> Unit
 ) {
     // Reading the pointer here (not in the dock body) keeps recomposition local
     // to each icon as the cursor glides across the dock.
-    val targetScale = fisheyeScale(pointer.value, center, radiusPx, peakScale)
+    val targetScale = if (enabled) fisheyeScale(pointer.value, center, radiusPx, peakScale) else 1f
     val animatedScale by animateFloatAsState(targetScale, iconSpring(), label = "dockScale")
     val interaction = remember { MutableInteractionSource() }
     val liftSign = if (towardStart) 1f else -1f
@@ -402,6 +461,7 @@ private fun DockIcon(
             .clickable(
                 interactionSource = interaction,
                 indication = null,
+                enabled = enabled,
                 role = Role.Button,
                 onClick = onClick
             ),
@@ -433,21 +493,26 @@ private fun DockIcon(
 }
 
 @Composable
-private fun SettingsButton(onClick: () -> Unit) {
+private fun SettingsButton(onClick: () -> Unit, enabled: Boolean) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     Box(
         modifier = Modifier
             .padding(start = 6.dp)
             .size(22.dp)
-            .hoverable(interaction)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+            .then(if (enabled) Modifier.hoverable(interaction) else Modifier)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Outlined.Settings,
             contentDescription = "Settings",
-            tint = if (hovered) ControlActive else ControlIdle,
+            tint = if (hovered && enabled) ControlActive else ControlIdle,
             modifier = Modifier.size(15.dp)
         )
     }
