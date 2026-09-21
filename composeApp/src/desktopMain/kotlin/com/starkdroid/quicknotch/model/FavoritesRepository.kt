@@ -21,6 +21,9 @@ class FavoritesRepository(
         prettyPrint = true
         ignoreUnknownKeys = true
         encodeDefaults = true
+        // Legacy configs may reference removed notch positions (e.g. corners);
+        // coerce them to the default instead of discarding the whole config.
+        coerceInputValues = true
     }
 
     private val storageDir: File by lazy {
@@ -110,13 +113,6 @@ class FavoritesRepository(
         }
     }
 
-    fun setConfig(newConfig: NotchConfig) {
-        _config.value = newConfig
-        scope.launch(Dispatchers.IO) {
-            saveConfigDirect(newConfig)
-        }
-    }
-
     fun addFavorite(item: AppItem) {
         val current = _favorites.value.toMutableList()
         if (current.none { it.id == item.id || it.executablePath.equals(item.executablePath, ignoreCase = true) }) {
@@ -147,13 +143,6 @@ class FavoritesRepository(
             scope.launch(Dispatchers.IO) {
                 saveFavoritesDirect(current)
             }
-        }
-    }
-
-    fun setFavorites(list: List<AppItem>) {
-        _favorites.value = list
-        scope.launch(Dispatchers.IO) {
-            saveFavoritesDirect(list)
         }
     }
 
