@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Everything is prerendered static HTML, so there is nothing to exclude from the
+# single marketing page.
+
+Sitemap: https://quicknotch.app/sitemap.xml

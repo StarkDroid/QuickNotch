@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="light" />
+		<meta name="theme-color" content="#f7f9fc" />
+
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icon-192.png" />
+		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+
+		%sveltekit.head%
+
+		<!--
+			Set the JS flag before first paint so scroll-reveal initial states never
+			flash. With JS disabled the flag is absent and all content renders
+			normally, which keeps the prerendered HTML fully readable and crawlable.
+		-->
+		<script>
+			document.documentElement.classList.add('js');
+			try {
+				if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+					document.documentElement.classList.add('reduced-motion');
+				}
+			} catch (e) {}
+		</script>
+		<style>
+			html {
+				background: #f7f9fc;
+				color-scheme: light;
+			}
+		</style>
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
