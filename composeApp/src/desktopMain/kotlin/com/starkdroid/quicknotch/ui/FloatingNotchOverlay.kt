@@ -93,6 +93,7 @@ import kotlin.math.cos
 private val IslandFill = Color(0xFF0A0A0A)
 private val IslandStroke = Color.White.copy(alpha = 0.14f)
 private val IslandBubbleFill = Color(0xF21C1C1E)
+private val BubbleShadow = Color(0x66000000)
 private val ControlIdle = Color.White.copy(alpha = 0.28f)
 private val ControlActive = Color.White.copy(alpha = 0.92f)
 
@@ -567,10 +568,9 @@ private fun DockLabelBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = DockLayout.LabelBubbleReserve - DockLayout.BubbleGap * 2)
-                .shadow(10.dp, RoundedCornerShape(9.dp))
+                .shadow(6.dp, RoundedCornerShape(9.dp), ambientColor = BubbleShadow, spotColor = BubbleShadow)
                 .clip(RoundedCornerShape(9.dp))
                 .background(IslandBubbleFill)
-                .border(0.5.dp, IslandStroke, RoundedCornerShape(9.dp))
                 .padding(horizontal = 10.dp, vertical = 5.dp)
         ) {
             Text(
