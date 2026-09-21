@@ -38,40 +38,24 @@ enum class NotchStyle(
     FLOATING_PILL("Floating Pill", 14, true),
 
     /** A slim, unobtrusive bar that expands into the full dock on hover. */
-    DRAG_HANDLE("Drag Handle", 10, true);
-
-    companion object {
-        fun of(name: String?): NotchStyle =
-            entries.firstOrNull { it.name == name } ?: DYNAMIC_ISLAND
-    }
+    DRAG_HANDLE("Drag Handle", 10, true)
 }
 
 /**
- * The body's material. Kept deliberately cheap: every surface is a statically
- * cached gradient / solid brush plus a hairline border, so none of them add
- * per-frame shader work on the software renderer. "Glass" reads as frosted
- * glass through translucency, gradient sheen and grain — a real-time blur of
- * the desktop behind a borderless transparent window is not available from
- * Compose without a costly native screen-capture loop.
+ * The body's material. Both entries resolve to statically cached brushes, so
+ * neither adds per-frame shader work on the software renderer. [BLUR] fakes
+ * frosted glassmorphism with a translucent base plus a pre-blurred seamless
+ * "frost" texture (see `NoiseGenerator.getFrostBrush`) — an actual real-time
+ * blur of the pixels behind a borderless window would need a native
+ * screen-capture loop and macOS screen-recording permission.
  */
 @Serializable
 enum class NotchSurface(val displayName: String) {
-    /** Opaque near-black fill with a faint rim — the default. */
+    /** Fully opaque black — the default. */
     SOLID("Solid"),
 
-    /** Translucent dark fill, soft top sheen and grain — frosted glass. */
-    GLASS("Glass"),
-
-    /** Pure #000000 with a whisper-thin rim; vanishes into OLED panels. */
-    AMOLED("AMOLED Black"),
-
-    /** Cooler, brighter translucency with a stronger specular edge. */
-    LIQUID_GLASS("Liquid Glass");
-
-    companion object {
-        fun of(name: String?): NotchSurface =
-            entries.firstOrNull { it.name == name } ?: SOLID
-    }
+    /** Translucent, gaussian-frosted glass. */
+    BLUR("Blur")
 }
 
 /**

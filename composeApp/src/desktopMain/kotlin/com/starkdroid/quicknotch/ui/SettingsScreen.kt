@@ -55,7 +55,6 @@ private val FlatSurface = Color(0xFF131722)
 private val FlatSurfaceElevated = Color(0xFF181E2E)
 private val FlatSurfaceSelected = Color(0xFF1B2236)
 private val FlatBorder = Color(0xFF22283A)
-private val FlatBorderActive = Color(0xFF6366F1)
 private val FlatCard = Color(0xFF121622)
 
 @Composable
@@ -382,72 +381,35 @@ private fun DockSizingTab(
             }
         }
 
-        // Section 1b: Notch silhouette
+        // Section 1b: Appearance — silhouette and material, side by side
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = FlatSurface),
                 border = BorderStroke(1.dp, FlatBorder),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Notch Style",
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    AppearanceDropdown(
+                        label = "Notch Style",
+                        options = NotchStyle.entries.toList(),
+                        selected = config.style,
+                        optionLabel = { it.displayName },
+                        onSelect = { style -> onUpdate { it.copy(style = style) } },
+                        modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = "How the body meets the screen edge",
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
+                    AppearanceDropdown(
+                        label = "Surface Theme",
+                        options = NotchSurface.entries.toList(),
+                        selected = config.surface,
+                        optionLabel = { it.displayName },
+                        onSelect = { surface -> onUpdate { it.copy(surface = surface) } },
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NotchStyle.entries.forEach { style ->
-                            StyleOption(
-                                style = style,
-                                selected = config.style == style,
-                                modifier = Modifier.weight(1f),
-                                onClick = { onUpdate { it.copy(style = style) } }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section 1c: Body material
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Surface Theme",
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "Glass and liquid glass are simulated (translucency, sheen, grain) to stay smooth",
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NotchSurface.entries.forEach { surface ->
-                            SurfaceOption(
-                                surface = surface,
-                                selected = config.surface == surface,
-                                modifier = Modifier.weight(1f),
-                                onClick = { onUpdate { it.copy(surface = surface) } }
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -637,138 +599,94 @@ private fun BoxScope.EdgeAnchor(
     }
 }
 
+/**
+ * A minimal, flat selection dropdown (label above, current value, popup menu)
+ * shared by the style and surface pickers. Popup rows are plain composables, so
+ * opening it costs one small popup — no preview textures are ever rendered.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StyleOption(
-    style: NotchStyle,
-    selected: Boolean,
-    onClick: () -> Unit,
+private fun <T> AppearanceDropdown(
+    label: String,
+    options: List<T>,
+    selected: T,
+    optionLabel: (T) -> String,
+    onSelect: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) FlatSurfaceSelected else FlatCard)
-            .border(
-                1.dp,
-                if (selected) FlatBorderActive else FlatBorder,
-                RoundedCornerShape(10.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        StyleGlyph(style = style)
-        Spacer(modifier = Modifier.height(10.dp))
+    var expanded by remember { mutableStateOf(false) }
+    Column(modifier = modifier) {
         Text(
-            text = style.displayName,
-            style = AppTypography.labelSmall,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) Color.White else TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            text = label,
+            style = AppTypography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary
         )
-    }
-}
-
-/** Miniature of each silhouette anchored to a faux screen edge (the top line). */
-@Composable
-private fun ColumnScope.StyleGlyph(style: NotchStyle) {
-    Box(
-        modifier = Modifier
-            .width(64.dp)
-            .height(34.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(FlatBg),
-        contentAlignment = Alignment.TopCenter
-    ) {
+        Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(1.5.dp)
-                .background(Color.White.copy(alpha = 0.10f))
-        )
-        val bodyHeight = when (style) {
-            NotchStyle.DYNAMIC_ISLAND -> 15.dp
-            NotchStyle.FLOATING_PILL -> 13.dp
-            NotchStyle.DRAG_HANDLE -> 5.dp
-        }
-        val bodyWidth = when (style) {
-            NotchStyle.DYNAMIC_ISLAND -> 46.dp
-            NotchStyle.FLOATING_PILL -> 40.dp
-            NotchStyle.DRAG_HANDLE -> 26.dp
-        }
-        val shape = when (style) {
-            NotchStyle.DYNAMIC_ISLAND -> RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)
-            NotchStyle.FLOATING_PILL, NotchStyle.DRAG_HANDLE -> RoundedCornerShape(percent = 50)
-        }
-        val topGap = if (style == NotchStyle.DYNAMIC_ISLAND) 0.dp else 5.dp
-        Box(
-            modifier = Modifier
-                .padding(top = topGap)
-                .size(width = bodyWidth, height = bodyHeight)
-                .clip(shape)
-                .background(IslandSurface.styleFor(NotchSurface.SOLID).fill)
-                .border(0.5.dp, IslandSurface.styleFor(NotchSurface.SOLID).border, shape)
-        )
-    }
-}
-
-@Composable
-private fun SurfaceOption(
-    surface: NotchSurface,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) FlatSurfaceSelected else FlatCard)
-            .border(
-                1.dp,
-                if (selected) FlatBorderActive else FlatBorder,
-                RoundedCornerShape(10.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        SurfaceSwatch(surface = surface)
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = surface.displayName,
-            style = AppTypography.labelSmall,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) Color.White else TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-/** Live preview chip painting the actual cached surface brush over a checker. */
-@Composable
-private fun ColumnScope.SurfaceSwatch(surface: NotchSurface) {
-    val style = IslandSurface.styleFor(surface)
-    val noise = remember { NoiseGenerator.getNoiseBrush() }
-    Box(
-        modifier = Modifier
-            .size(width = 64.dp, height = 34.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(FlatBg)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp)
-                .clip(RoundedCornerShape(percent = 50))
-                .islandSurface(surface, noise)
-                .border(
-                    style.borderWidth.dp,
-                    style.border,
-                    RoundedCornerShape(percent = 50)
+                .clip(RoundedCornerShape(8.dp))
+                .background(FlatCard)
+                .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 9.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = optionLabel(selected),
+                    style = AppTypography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-        )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(FlatSurfaceElevated)
+            ) {
+                options.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelect(option)
+                                expanded = false
+                            }
+                            .background(if (option == selected) FlatSurfaceSelected else Color.Transparent)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = optionLabel(option),
+                            style = AppTypography.labelSmall,
+                            color = if (option == selected) AccentIndigoLight else TextSecondary
+                        )
+                        if (option == selected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = AccentIndigoLight,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

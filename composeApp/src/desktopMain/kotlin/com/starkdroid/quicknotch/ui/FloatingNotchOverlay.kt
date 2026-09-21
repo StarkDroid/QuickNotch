@@ -185,7 +185,7 @@ fun FloatingNotchOverlay(
     // Cached once per surface choice; the grain reuses the shared tiled noise
     // shader, so neither is rebuilt while the island animates.
     val surface = remember(config.surface) { IslandSurface.styleFor(config.surface) }
-    val noiseBrush = remember { NoiseGenerator.getNoiseBrush() }
+    val frostBrush = remember { NoiseGenerator.getFrostBrush() }
 
     // The dock is never composited away or re-measured — it lives in the
     // window-sized root so it is permanently laid out at the expanded
@@ -248,7 +248,7 @@ fun FloatingNotchOverlay(
                 .width(animatedWidth)
                 .height(animatedHeight)
                 .clip(shape)
-                .islandSurface(config.surface, noiseBrush)
+                .islandSurface(config.surface, frostBrush)
                 .border(surface.borderWidth.dp, surface.border, shape),
             contentAlignment = Alignment.Center
         ) {
@@ -656,16 +656,14 @@ private fun CollapsedIsland(
     }
 }
 
-// Glyph colours brighten slightly over the translucent glass surfaces so they
-// stay legible, and stay near-white on the opaque ones.
+// Glyph colours brighten slightly over the translucent BLUR surface so they
+// stay legible, and stay near-white on the opaque one.
 private fun handleTint(surface: NotchSurface): Color =
-    if (surface == NotchSurface.GLASS || surface == NotchSurface.LIQUID_GLASS)
-        Color.White.copy(alpha = 0.42f)
+    if (surface == NotchSurface.BLUR) Color.White.copy(alpha = 0.42f)
     else Color.White.copy(alpha = 0.30f)
 
 private fun islandTint(surface: NotchSurface): Color =
-    if (surface == NotchSurface.GLASS || surface == NotchSurface.LIQUID_GLASS)
-        Color.White.copy(alpha = 0.72f)
+    if (surface == NotchSurface.BLUR) Color.White.copy(alpha = 0.72f)
     else Color.White
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
