@@ -55,6 +55,7 @@ compose.desktop {
                 menu = true
             }
             macOS {
+                iconFile.set(project.file("quicknotch.icns"))
                 bundleID = "com.starkdroid.quicknotch"
                 dockName = "QuickNotch"
                 appCategory = "public.app-category.utilities"
