@@ -143,7 +143,7 @@ private fun NotchOverlayWindow(
     ) {
         val awtWindow = window
 
-        LaunchedEffect(config.position, targetSize) {
+        LaunchedEffect(config.position, config.style, targetSize) {
             val graphicsConfiguration = awtWindow.graphicsConfiguration
             val insets = Toolkit.getDefaultToolkit().getScreenInsets(graphicsConfiguration)
             // Window size is expressed in the same AWT units overlayScreenLocation
@@ -154,7 +154,8 @@ private fun NotchOverlayWindow(
                 windowHeightPx = targetSize.height.value.roundToInt(),
                 screen = graphicsConfiguration.bounds,
                 insets = insets,
-                hugMenuBar = HostPlatform.isMac
+                hugMenuBar = HostPlatform.isMac,
+                edgeGapPx = metrics.edgeGapDp
             )
             overlayState.size = targetSize
             overlayState.position = WindowPosition.Absolute(location.x.dp, location.y.dp)

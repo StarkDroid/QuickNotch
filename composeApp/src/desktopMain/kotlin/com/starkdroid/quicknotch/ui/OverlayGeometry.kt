@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchPosition
+import com.starkdroid.quicknotch.model.NotchStyle
 import java.awt.Insets
 import java.awt.Point
 import java.awt.Rectangle
@@ -36,6 +37,9 @@ internal object DockLayout {
     /** Gap between the notch's inner border and the floating bubble. */
     val BubbleGap: Dp = 6.dp
 
+    /** Collapsed cross-axis thickness (dp) of the slim drag-handle style. */
+    const val DragHandleHeightDp: Int = 8
+
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
 }
@@ -46,23 +50,27 @@ internal object DockLayout {
  */
 @Immutable
 data class NotchMetrics(
+    /** Native window footprint when collapsed (the island; no bubble). */
     val collapsed: DpSize,
+    /** Native window footprint when expanded (island + any bubble gutter). */
     val expanded: DpSize,
+    /** Visible island when expanded — excludes the bubble gutter. */
+    val island: DpSize,
+    /** Visible island when collapsed. */
+    val islandCollapsed: DpSize,
+    /** Box the dock fills: island plus any bubble gutter. */
+    val dockArea: DpSize,
+    /** Distance from the dock box's outer edge to the island's inner border. */
+    val bubbleInset: Dp = 0.dp,
     /**
-     * The visible island when expanded. Equals [expanded] except for side docks
-     * with tooltips on, where the window is wider than the island so a label
-     * bubble can float in the reserved gutter outside the notch.
+     * How far the window is floated off the anchored screen edge (points). The
+     * gap is applied to the window *position*, not the footprint, so the island
+     * hugs the window edge and the gap stays ordinary click-through desktop.
      */
-    val island: DpSize = expanded,
-    /**
-     * Distance from the anchored edge to the island's inner border when
-     * expanded. The side-dock bubble offsets by this much so it sits just
-     * outside the notch; 0 when no bubble is reserved.
-     */
-    val bubbleInset: Dp = 0.dp
+    val edgeGapDp: Int = 0
 ) {
     fun sizeFor(isExpanded: Boolean): DpSize = if (isExpanded) expanded else collapsed
-    fun islandFor(isExpanded: Boolean): DpSize = if (isExpanded) island else collapsed
+    fun islandFor(isExpanded: Boolean): DpSize = if (isExpanded) island else islandCollapsed
 }
 
 /**
@@ -75,41 +83,51 @@ data class NotchMetrics(
 fun computeNotchMetrics(config: NotchConfig, favoriteCount: Int): NotchMetrics {
     val base = config.baseIconSizeDp.dp
     val count = favoriteCount.coerceAtLeast(0)
+    val vertical = config.position.isVertical
 
     val alongExpanded = DockLayout.ContentPadding +
         DockLayout.iconSlot(base) * count +
         DockLayout.SettingsButton +
         DockLayout.AlongSafety
     val alongCollapsed = config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin
+
     val islandDepth = config.expandedNotchHeightDp.dp + DockLayout.ExpandedDepthMargin
     val bubbleReserve =
-        if (config.position.isVertical && config.showTooltips) DockLayout.LabelBubbleReserve
-        else 0.dp
-    val depthExpanded = islandDepth + bubbleReserve
-    val depthCollapsed = config.collapsedPillHeightDp.dp + DockLayout.CollapsedMargin
+        if (vertical && config.showTooltips) DockLayout.LabelBubbleReserve else 0.dp
+    val dockDepth = islandDepth + bubbleReserve
 
-    return if (config.position.isVertical) {
-        NotchMetrics(
-            collapsed = DpSize(depthCollapsed, alongCollapsed),
-            expanded = DpSize(depthExpanded, alongExpanded),
-            island = DpSize(islandDepth, alongExpanded),
-            bubbleInset = if (bubbleReserve > 0.dp) islandDepth else 0.dp
-        )
-    } else {
-        NotchMetrics(
-            collapsed = DpSize(alongCollapsed, depthCollapsed),
-            expanded = DpSize(alongExpanded, depthExpanded),
-            island = DpSize(alongExpanded, depthExpanded),
-            bubbleInset = 0.dp
-        )
-    }
+    // A drag handle collapses to a slim, unobtrusive bar rather than the taller
+    // pill, so it recedes into the edge when idle.
+    val collapsedHeightDp =
+        if (config.style == NotchStyle.DRAG_HANDLE) DockLayout.DragHandleHeightDp
+        else config.collapsedPillHeightDp
+    val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
+
+    val islandExpanded =
+        if (vertical) DpSize(islandDepth, alongExpanded) else DpSize(alongExpanded, islandDepth)
+    val islandCollapsed =
+        if (vertical) DpSize(islandCollapsedDepth, alongCollapsed) else DpSize(alongCollapsed, islandCollapsedDepth)
+    val dockArea =
+        if (vertical) DpSize(dockDepth, alongExpanded) else DpSize(alongExpanded, dockDepth)
+
+    return NotchMetrics(
+        collapsed = islandCollapsed,
+        expanded = dockArea,
+        island = islandExpanded,
+        islandCollapsed = islandCollapsed,
+        dockArea = dockArea,
+        bubbleInset = if (bubbleReserve > 0.dp) islandDepth else 0.dp,
+        edgeGapDp = config.style.edgeGapDp
+    )
 }
 
 /**
  * Computes the top-left screen coordinate (in AWT points) that anchors the
  * overlay window to the chosen edge, centred along that edge. On macOS a top
  * notch hugs the very top of the panel ([hugMenuBar]) so it reads as a real
- * Dynamic Island rather than floating below the menu bar.
+ * Dynamic Island. [edgeGapPx] floats capsule styles off the edge by insetting
+ * the anchored coordinate, leaving the gap as ordinary desktop (click-through)
+ * rather than dead window area.
  */
 fun overlayScreenLocation(
     position: NotchPosition,
@@ -117,7 +135,8 @@ fun overlayScreenLocation(
     windowHeightPx: Int,
     screen: Rectangle,
     insets: Insets,
-    hugMenuBar: Boolean
+    hugMenuBar: Boolean,
+    edgeGapPx: Int = 0
 ): Point {
     val left = screen.x + insets.left
     val top = screen.y + if (hugMenuBar && position == NotchPosition.TOP_CENTER) 0 else insets.top
@@ -128,9 +147,9 @@ fun overlayScreenLocation(
     val centerY = top + ((bottom - top) - windowHeightPx) / 2
 
     return when (position) {
-        NotchPosition.TOP_CENTER -> Point(centerX, top)
-        NotchPosition.BOTTOM_CENTER -> Point(centerX, bottom - windowHeightPx)
-        NotchPosition.LEFT_CENTER -> Point(left, centerY)
-        NotchPosition.RIGHT_CENTER -> Point(right - windowWidthPx, centerY)
+        NotchPosition.TOP_CENTER -> Point(centerX, top + edgeGapPx)
+        NotchPosition.BOTTOM_CENTER -> Point(centerX, bottom - edgeGapPx - windowHeightPx)
+        NotchPosition.LEFT_CENTER -> Point(left + edgeGapPx, centerY)
+        NotchPosition.RIGHT_CENTER -> Point(right - edgeGapPx - windowWidthPx, centerY)
     }
 }

@@ -78,6 +78,8 @@ import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchPosition
+import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.TextPrimary
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -90,8 +92,6 @@ import kotlin.math.cos
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
-private val IslandFill = Color(0xFF0A0A0A)
-private val IslandStroke = Color.White.copy(alpha = 0.14f)
 private val IslandBubbleFill = Color(0xF21C1C1E)
 private val BubbleShadow = Color(0x66000000)
 private val ControlIdle = Color.White.copy(alpha = 0.28f)
@@ -182,6 +182,10 @@ fun FloatingNotchOverlay(
     }
 
     val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
+    // Cached once per surface choice; the grain reuses the shared tiled noise
+    // shader, so neither is rebuilt while the island animates.
+    val surface = remember(config.surface) { IslandSurface.styleFor(config.surface) }
+    val noiseBrush = remember { NoiseGenerator.getNoiseBrush() }
 
     // The dock is never composited away or re-measured — it lives in the
     // window-sized root so it is permanently laid out at the expanded
@@ -200,7 +204,7 @@ fun FloatingNotchOverlay(
     val targetSize = metrics.islandFor(islandExpanded)
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
-    val shape = notchShape(config.position, islandExpanded)
+    val shape = notchShape(config.position, islandExpanded, config.style)
 
     // Open: grow the native window first, hold the dock hidden until the size
     // spring has actually settled, then fade it in. Close: fade the dock out,
@@ -244,8 +248,8 @@ fun FloatingNotchOverlay(
                 .width(animatedWidth)
                 .height(animatedHeight)
                 .clip(shape)
-                .background(IslandFill)
-                .border(0.5.dp, IslandStroke, shape),
+                .islandSurface(config.surface, noiseBrush)
+                .border(surface.borderWidth.dp, surface.border, shape),
             contentAlignment = Alignment.Center
         ) {
             AnimatedVisibility(
@@ -253,7 +257,11 @@ fun FloatingNotchOverlay(
                 enter = fadeIn(tween(120)),
                 exit = fadeOut(tween(80))
             ) {
-                CollapsedIsland(vertical = config.position.isVertical)
+                CollapsedIsland(
+                    vertical = config.position.isVertical,
+                    style = config.style,
+                    surface = config.surface
+                )
             }
         }
 
@@ -262,8 +270,7 @@ fun FloatingNotchOverlay(
         // the reveal does is fade a layer. Alpha 0 also skips the draw entirely.
         Box(
             modifier = Modifier
-                .size(metrics.expanded.width, metrics.expanded.height)
-                .clip(notchShape(config.position, expanded = true))
+                .size(metrics.dockArea.width, metrics.dockArea.height)
                 .graphicsLayer {
                     alpha = dockAlpha
                     scaleX = dockScale
@@ -613,24 +620,53 @@ private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
 }
 
 @Composable
-private fun CollapsedIsland(vertical: Boolean) {
+private fun CollapsedIsland(
+    vertical: Boolean,
+    style: NotchStyle,
+    surface: NotchSurface
+) {
+    val rotated = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
-        ) {
-            Box(Modifier.size(5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+        if (style == NotchStyle.DRAG_HANDLE) {
+            // A single slim grabber line — the whole point of the handle is to
+            // stay out of the way until it is pulled open.
             Box(
-                Modifier
-                    .size(width = 18.dp, height = 5.dp)
+                modifier = rotated
+                    .size(width = 36.dp, height = 4.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.16f))
+                    .background(handleTint(surface))
             )
-            Box(Modifier.size(5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = rotated
+            ) {
+                val dot = islandTint(surface)
+                Box(Modifier.size(5.dp).clip(CircleShape).background(dot.copy(alpha = 0.28f)))
+                Box(
+                    Modifier
+                        .size(width = 18.dp, height = 5.dp)
+                        .clip(CircleShape)
+                        .background(dot.copy(alpha = 0.16f))
+                )
+                Box(Modifier.size(5.dp).clip(CircleShape).background(dot.copy(alpha = 0.28f)))
+            }
         }
     }
 }
+
+// Glyph colours brighten slightly over the translucent glass surfaces so they
+// stay legible, and stay near-white on the opaque ones.
+private fun handleTint(surface: NotchSurface): Color =
+    if (surface == NotchSurface.GLASS || surface == NotchSurface.LIQUID_GLASS)
+        Color.White.copy(alpha = 0.42f)
+    else Color.White.copy(alpha = 0.30f)
+
+private fun islandTint(surface: NotchSurface): Color =
+    if (surface == NotchSurface.GLASS || surface == NotchSurface.LIQUID_GLASS)
+        Color.White.copy(alpha = 0.72f)
+    else Color.White
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
 
@@ -666,7 +702,13 @@ private fun containerAlignment(position: NotchPosition): Alignment = when (posit
  * touching the screen edge stay square so the notch reads as flush with the
  * display, like the hardware Dynamic Island.
  */
-private fun notchShape(position: NotchPosition, expanded: Boolean): CornerBasedShape {
+private fun notchShape(position: NotchPosition, expanded: Boolean, style: NotchStyle): CornerBasedShape {
+    if (style.capsule) {
+        // Round all four corners; a generous radius clamps to a stadium at the
+        // slim collapsed height and a soft pill when expanded.
+        val corner = if (expanded) 18.dp else 14.dp
+        return RoundedCornerShape(corner)
+    }
     val corner = if (expanded) 18.dp else 13.dp
     return when (position) {
         NotchPosition.TOP_CENTER -> RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
