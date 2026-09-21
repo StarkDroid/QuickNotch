@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
@@ -26,6 +27,7 @@ import com.starkdroid.quicknotch.ui.computeNotchMetrics
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
 import java.awt.Toolkit
 import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
 import kotlin.math.roundToInt
 
 fun main() {
@@ -50,9 +52,9 @@ fun main() {
         var isExpanded by remember { mutableStateOf(false) }
         var isWindowExpanded by remember { mutableStateOf(false) }
 
-        val trayIcon = remember { createTrayIcon() }
+        val appIcon = remember { loadQuickNotchIcon() }
         Tray(
-            icon = BitmapPainter(trayIcon),
+            icon = BitmapPainter(appIcon),
             tooltip = "QuickNotch",
             menu = {
                 Item("Settings", onClick = { showSettings = true })
@@ -70,6 +72,7 @@ fun main() {
         if (isNotchVisible) {
             NotchOverlayWindow(
                 repository = repository,
+                appIcon = appIcon,
                 isExpanded = isExpanded,
                 isWindowExpanded = isWindowExpanded,
                 onExpandedChange = { isExpanded = it },
@@ -87,6 +90,7 @@ fun main() {
                 onCloseRequest = { showSettings = false },
                 state = settingsState,
                 title = "QuickNotch Settings",
+                icon = BitmapPainter(appIcon),
                 resizable = true
             ) {
                 QuickNotchTheme(darkTheme = true) {
@@ -110,6 +114,7 @@ fun main() {
 @Composable
 private fun NotchOverlayWindow(
     repository: FavoritesRepository,
+    appIcon: ImageBitmap,
     isExpanded: Boolean,
     isWindowExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
@@ -130,6 +135,7 @@ private fun NotchOverlayWindow(
         onCloseRequest = { },
         state = overlayState,
         title = "QuickNotch",
+        icon = BitmapPainter(appIcon),
         undecorated = true,
         transparent = true,
         resizable = false,
@@ -166,11 +172,38 @@ private fun NotchOverlayWindow(
     }
 }
 
-private fun createTrayIcon() = BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB).apply {
+/**
+ * Loads the brand-mark icon shared by the tray and every window: the indigo
+ * rounded square with the white notch pill — the exact logo the site header
+ * shows next to "QuickNotch". Rendered from [quicknotch-icon.svg] into a taskbar
+ * and system-tray PNG kept under desktopMain resources; falls back to a
+ * hand-drawn equivalent if the resource is missing at runtime.
+ */
+private fun loadQuickNotchIcon(): ImageBitmap {
+    return try {
+        ClassLoader.getSystemResourceAsStream("quicknotch-tray.png")?.use {
+            ImageIO.read(it)?.toComposeImageBitmap()
+        } ?: createFallbackIcon()
+    } catch (_: Throwable) {
+        createFallbackIcon()
+    }
+}
+
+private fun createFallbackIcon(): ImageBitmap = BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB).apply {
     val graphics = createGraphics()
-    graphics.color = java.awt.Color(18, 18, 18)
-    graphics.fillRoundRect(4, 10, 24, 12, 12, 12)
-    graphics.color = java.awt.Color(255, 255, 255, 40)
-    graphics.drawRoundRect(4, 10, 24, 12, 12, 12)
+    graphics.setRenderingHint(
+        java.awt.RenderingHints.KEY_ANTIALIASING,
+        java.awt.RenderingHints.VALUE_ANTIALIAS_ON
+    )
+    graphics.color = java.awt.Color(99, 102, 241)
+    graphics.fillRoundRect(0, 0, 32, 32, 10, 10)
+    graphics.translate(6, 6)
+    graphics.scale(20.0 / 24.0, 20.0 / 24.0)
+    graphics.color = java.awt.Color.WHITE
+    graphics.stroke = java.awt.BasicStroke(1.7f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND)
+    graphics.drawRoundRect(3, 8, 18, 8, 8, 8)
+    graphics.fillOval(6, 11, 3, 3)
+    graphics.fillRoundRect(10, 11, 5, 3, 2, 2)
+    graphics.fillOval(17, 11, 3, 3)
     graphics.dispose()
 }.toComposeImageBitmap()
