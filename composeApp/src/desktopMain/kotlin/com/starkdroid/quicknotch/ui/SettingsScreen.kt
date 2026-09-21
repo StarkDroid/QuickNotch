@@ -41,6 +41,7 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchPosition
 import com.starkdroid.quicknotch.theme.*
+import kotlinx.coroutines.delay
 import java.io.File
 import java.util.UUID
 import javax.swing.JFileChooser
@@ -78,9 +79,22 @@ fun SettingsScreen(
     val noiseBrush = remember { NoiseGenerator.getNoiseBrush() }
 
     LaunchedEffect(Unit) {
-        isScanning = true
+        // With a warm cache the scan returns without suspending, so skip the
+        // spinner entirely instead of flashing it for a frame.
+        if (InstalledAppsScanner.isScanPending) isScanning = true
         scannedApps = InstalledAppsScanner.scanAllInstalledApps()
         isScanning = false
+    }
+
+    // Warm the shared icon cache in the background as soon as the scan lands, so
+    // a row scrolling into view reads a ready bitmap synchronously instead of
+    // starting a load (and visibly popping) mid-scroll. Deliberately sequential:
+    // each item holds at most one of the loader's permits, so loads demanded by
+    // rows the user is actually looking at always jump ahead of the backlog.
+    LaunchedEffect(scannedApps) {
+        if (scannedApps.isEmpty()) return@LaunchedEffect
+        delay(350)
+        scannedApps.forEach { app -> AppIconLoader.loadIcon(app) }
     }
 
     Box(
@@ -705,7 +719,7 @@ private fun PinnedAppsTab(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        itemsIndexed(favorites, key = { _, item -> item.id }) { index, item ->
+                        itemsIndexed(favorites, key = { _, item -> item.id }, contentType = { _, _ -> "pinnedRow" }) { index, item ->
                             PinnedAppRow(
                                 item = item,
                                 canMoveUp = index > 0,
@@ -844,7 +858,7 @@ private fun PinnedAppsTab(
                     ) {
                         // Stable keys let LazyColumn recycle rows without
                         // discarding their (already loaded) icon state on scroll.
-                        items(filteredApps, key = { it.executablePath }) { app ->
+                        items(filteredApps, key = { it.executablePath }, contentType = { "availableRow" }) { app ->
                             AvailableAppRow(
                                 app = app,
                                 isPinned = app.executablePath.lowercase() in pinnedPaths,
@@ -928,22 +942,24 @@ private fun PinnedAppRow(
                     .background(FlatSurfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
-                Crossfade(
-                    targetState = iconBitmap,
-                    animationSpec = tween(220),
-                    label = "pinnedIconFade"
-                ) { bitmap ->
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = item.name,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    } else {
-                        ShimmerBox(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = RoundedCornerShape(7.dp)
-                        )
+                key(item.id) {
+                    Crossfade(
+                        targetState = iconBitmap,
+                        animationSpec = tween(220),
+                        label = "pinnedIconFade"
+                    ) { bitmap ->
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = item.name,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        } else {
+                            ShimmerBox(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = RoundedCornerShape(7.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1034,22 +1050,27 @@ private fun AvailableAppRow(
                     .background(FlatSurfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
-                Crossfade(
-                    targetState = iconBitmap,
-                    animationSpec = tween(220),
-                    label = "availableIconFade"
-                ) { bitmap ->
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = app.name,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    } else {
-                        ShimmerBox(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = RoundedCornerShape(6.dp)
-                        )
+                // key() on the app id: LazyColumn reuses slots while scrolling, and
+                // without this the Crossfade would animate from the *previous*
+                // row's icon into the new one — visible as scroll jitter.
+                key(app.id) {
+                    Crossfade(
+                        targetState = iconBitmap,
+                        animationSpec = tween(220),
+                        label = "availableIconFade"
+                    ) { bitmap ->
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = app.name,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            ShimmerBox(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                        }
                     }
                 }
             }

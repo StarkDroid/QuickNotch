@@ -6,34 +6,60 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 
 private val ShimmerBase = Color(0xFF262830)
 private val ShimmerHighlight = Color(0xFF3A3F4C)
 
 /**
- * A lightweight skeleton placeholder that sweeps a soft highlight across its
- * bounds while real content (e.g. an app icon) loads. Animates only the band
- * position, so it stays cheap enough for the software renderer; the animation
- * stops as soon as this composable leaves the tree.
+ * Paints a slowly sweeping highlight over the modified content (used as an
+ * icon skeleton while the real bitmap loads in the background).
+ *
+ * The animated value is read inside [drawWithContent] on purpose: the state
+ * only invalidates the draw phase of this node, so a list of shimmering rows
+ * never recomposes while the user scrolls or while icons trickle in.
+ */
+@Composable
+fun Modifier.shimmer(
+    baseColor: Color = ShimmerBase,
+    highlightColor: Color = ShimmerHighlight
+): Modifier {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val progress = transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
+        label = "shimmerProgress"
+    )
+    return drawWithContent {
+        val bandStart = size.width * (progress.value - 1f)
+        val brush = Brush.linearGradient(
+            colors = listOf(baseColor, highlightColor, baseColor),
+            start = Offset(bandStart, 0f),
+            end = Offset(bandStart + size.width, 0f),
+            tileMode = TileMode.Clamp
+        )
+        drawRect(brush)
+        drawContent()
+    }
+}
+
+/**
+ * A standalone skeleton slot (icon-sized box) that shimmers. Prefer
+ * [Modifier.shimmer] when the placeholder already has a parent box to paint.
+ * The shimmer band already paints the base colour across the whole slot, so no
+ * separate background is applied (it would cover the band via drawContent).
  */
 @Composable
 fun ShimmerBox(
@@ -42,28 +68,9 @@ fun ShimmerBox(
     baseColor: Color = ShimmerBase,
     highlightColor: Color = ShimmerHighlight
 ) {
-    var sizePx by remember { mutableStateOf(IntSize.Zero) }
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val progress by transition.animateFloat(
-        initialValue = -1f,
-        targetValue = 2f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
-        label = "shimmerProgress"
-    )
-    val brush = if (sizePx.width > 0) {
-        Brush.linearGradient(
-            colors = listOf(baseColor, highlightColor, baseColor),
-            start = Offset(sizePx.width * (progress - 1f), 0f),
-            end = Offset(sizePx.width * progress, 0f),
-            tileMode = TileMode.Clamp
-        )
-    } else {
-        SolidColor(baseColor)
-    }
     Box(
         modifier = modifier
-            .onSizeChanged { sizePx = it }
             .clip(shape)
-            .background(brush)
+            .shimmer(baseColor, highlightColor)
     )
 }

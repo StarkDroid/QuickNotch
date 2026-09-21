@@ -12,6 +12,9 @@ object InstalledAppsScanner {
     private var cached: List<AppItem>? = null
     private val scanMutex = Mutex()
 
+    /** True until the first (uncached) scan completes; lets UI skip the spinner. */
+    val isScanPending: Boolean get() = cached == null
+
     suspend fun scanAllInstalledApps(): List<AppItem> {
         cached?.let { return it }
         return scanMutex.withLock {
