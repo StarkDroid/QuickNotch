@@ -40,6 +40,8 @@ import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchPosition
+import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.*
 import kotlinx.coroutines.delay
 import java.io.File
@@ -174,6 +176,8 @@ fun SettingsScreen(
                         onResetDefaults = {
                             repository.updateConfig {
                                 it.copy(
+                                    style = NotchStyle.DYNAMIC_ISLAND,
+                                    surface = NotchSurface.SOLID,
                                     dockScaleFactor = 1.35f,
                                     baseIconSizeDp = 38,
                                     collapsedPillWidthDp = 150,
@@ -378,6 +382,76 @@ private fun DockSizingTab(
             }
         }
 
+        // Section 1b: Notch silhouette
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = FlatSurface),
+                border = BorderStroke(1.dp, FlatBorder),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Notch Style",
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "How the body meets the screen edge",
+                        style = AppTypography.bodySmall,
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NotchStyle.entries.forEach { style ->
+                            StyleOption(
+                                style = style,
+                                selected = config.style == style,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onUpdate { it.copy(style = style) } }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 1c: Body material
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = FlatSurface),
+                border = BorderStroke(1.dp, FlatBorder),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Surface Theme",
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Glass and liquid glass are simulated (translucency, sheen, grain) to stay smooth",
+                        style = AppTypography.bodySmall,
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NotchSurface.entries.forEach { surface ->
+                            SurfaceOption(
+                                surface = surface,
+                                selected = config.surface == surface,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onUpdate { it.copy(surface = surface) } }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Section 2: Icon Fish-eye Magnification
         item {
             Card(
@@ -559,6 +633,141 @@ private fun BoxScope.EdgeAnchor(
                 )
                 .clip(RoundedCornerShape(2.dp))
                 .background(if (isSelected) AccentCyan else TextMuted.copy(alpha = 0.45f))
+        )
+    }
+}
+
+@Composable
+private fun StyleOption(
+    style: NotchStyle,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) FlatSurfaceSelected else FlatCard)
+            .border(
+                1.dp,
+                if (selected) FlatBorderActive else FlatBorder,
+                RoundedCornerShape(10.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        StyleGlyph(style = style)
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = style.displayName,
+            style = AppTypography.labelSmall,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) Color.White else TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Miniature of each silhouette anchored to a faux screen edge (the top line). */
+@Composable
+private fun ColumnScope.StyleGlyph(style: NotchStyle) {
+    Box(
+        modifier = Modifier
+            .width(64.dp)
+            .height(34.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(FlatBg),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.5.dp)
+                .background(Color.White.copy(alpha = 0.10f))
+        )
+        val bodyHeight = when (style) {
+            NotchStyle.DYNAMIC_ISLAND -> 15.dp
+            NotchStyle.FLOATING_PILL -> 13.dp
+            NotchStyle.DRAG_HANDLE -> 5.dp
+        }
+        val bodyWidth = when (style) {
+            NotchStyle.DYNAMIC_ISLAND -> 46.dp
+            NotchStyle.FLOATING_PILL -> 40.dp
+            NotchStyle.DRAG_HANDLE -> 26.dp
+        }
+        val shape = when (style) {
+            NotchStyle.DYNAMIC_ISLAND -> RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)
+            NotchStyle.FLOATING_PILL, NotchStyle.DRAG_HANDLE -> RoundedCornerShape(percent = 50)
+        }
+        val topGap = if (style == NotchStyle.DYNAMIC_ISLAND) 0.dp else 5.dp
+        Box(
+            modifier = Modifier
+                .padding(top = topGap)
+                .size(width = bodyWidth, height = bodyHeight)
+                .clip(shape)
+                .background(IslandSurface.styleFor(NotchSurface.SOLID).fill)
+                .border(0.5.dp, IslandSurface.styleFor(NotchSurface.SOLID).border, shape)
+        )
+    }
+}
+
+@Composable
+private fun SurfaceOption(
+    surface: NotchSurface,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) FlatSurfaceSelected else FlatCard)
+            .border(
+                1.dp,
+                if (selected) FlatBorderActive else FlatBorder,
+                RoundedCornerShape(10.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        SurfaceSwatch(surface = surface)
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = surface.displayName,
+            style = AppTypography.labelSmall,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) Color.White else TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Live preview chip painting the actual cached surface brush over a checker. */
+@Composable
+private fun ColumnScope.SurfaceSwatch(surface: NotchSurface) {
+    val style = IslandSurface.styleFor(surface)
+    val noise = remember { NoiseGenerator.getNoiseBrush() }
+    Box(
+        modifier = Modifier
+            .size(width = 64.dp, height = 34.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(FlatBg)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .islandSurface(surface, noise)
+                .border(
+                    style.borderWidth.dp,
+                    style.border,
+                    RoundedCornerShape(percent = 50)
+                )
         )
     }
 }
