@@ -2,6 +2,7 @@ package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -14,13 +15,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
@@ -35,7 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,12 +53,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -62,6 +63,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
@@ -78,23 +81,48 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 
+// ── Palette ──────────────────────────────────────────────────────────────────
+
 private val IslandFill = Color(0xFF0A0A0A)
 private val IslandStroke = Color.White.copy(alpha = 0.14f)
 private val ControlIdle = Color.White.copy(alpha = 0.28f)
 private val ControlActive = Color.White.copy(alpha = 0.92f)
+private val IconPlaceholder = Color(0xFF2C2C2E)
 
-private val NotchMotion = tween<androidx.compose.ui.unit.Dp>(
-    durationMillis = 240,
-    easing = FastOutSlowInEasing
+// ── Motion ───────────────────────────────────────────────────────────────────
+// Near-critically-damped springs mirror AppKit's default view animation: a
+// fast, confident response that settles without a rubbery bounce, so the notch
+// never overshoots its window footprint (which would clip) yet still feels
+// organic rather than linear.
+
+private fun notchSizeSpring() = spring(
+    dampingRatio = 0.9f,
+    stiffness = 340f,
+    visibilityThreshold = Dp.VisibilityThreshold
 )
-private val ContentEnter = fadeIn(tween(140)) + scaleIn(
-    initialScale = 0.97f,
-    animationSpec = tween(220, easing = FastOutSlowInEasing)
+
+private fun iconSpring() = spring(
+    dampingRatio = 0.8f,
+    stiffness = 1000f,
+    visibilityThreshold = 0.001f
+)
+
+private val ContentEnter = fadeIn(tween(160)) + scaleIn(
+    initialScale = 0.96f,
+    animationSpec = tween(240, easing = FastOutSlowInEasing)
 )
 private val ContentExit = fadeOut(tween(90)) + scaleOut(
     targetScale = 0.98f,
     animationSpec = tween(120)
 )
+
+/** Distance from an icon centre (in multiples of icon size) the wave reaches. */
+private const val FisheyeRadiusFactor = 1.5f
+
+/** Cross-axis travel of a fully magnified icon, in dp. */
+private val IconLift = 8.dp
+
+// ── Overlay ──────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -103,81 +131,21 @@ fun FloatingNotchOverlay(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit,
-    onDragReposition: (Float, Float) -> Unit,
-    onDragRepositionEnd: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
-    val density = LocalDensity.current.density
+    val density = LocalDensity.current
 
-    var collapseJob by remember { mutableStateOf<Job?>(null) }
-    var dragging by remember { mutableStateOf(false) }
     val iconBitmaps = remember { mutableStateMapOf<String, ImageBitmap>() }
+    LoadFavoriteIcons(favorites, iconBitmaps)
 
-    LaunchedEffect(favorites) {
-        favorites.forEach { app ->
-            if (!iconBitmaps.containsKey(app.id)) {
-                launch {
-                    iconBitmaps[app.id] = AppIconLoader.loadIcon(app)
-                }
-            }
-        }
-    }
-
-    val isVertical = config.position.isVertical
-    val isBottom = config.position.isBottom
-    val alongExpanded = (favorites.size * (config.baseIconSizeDp + 14) + 88).coerceIn(300, 900).dp
-    val targetWidth = if (isVertical) {
-        if (isExpanded) config.expandedNotchHeightDp.dp else config.collapsedPillHeightDp.dp
-    } else {
-        if (isExpanded) alongExpanded else config.collapsedPillWidthDp.dp
-    }
-    val targetHeight = if (isVertical) {
-        if (isExpanded) alongExpanded else config.collapsedPillWidthDp.dp
-    } else {
-        if (isExpanded) config.expandedNotchHeightDp.dp else config.collapsedPillHeightDp.dp
-    }
-
-    val animatedWidth by animateDpAsState(targetWidth, NotchMotion, label = "notchWidth")
-    val animatedHeight by animateDpAsState(targetHeight, NotchMotion, label = "notchHeight")
-
-    LaunchedEffect(isExpanded) {
-        if (isExpanded) {
-            onWindowExpandedChange(true)
-        } else {
-            delay(250)
-            onWindowExpandedChange(false)
-        }
-    }
-
-    val corner = if (isExpanded) 18.dp else 13.dp
-    val notchShape = when {
-        isVertical && config.position == NotchPosition.LEFT_CENTER ->
-            RoundedCornerShape(topEnd = corner, bottomEnd = corner)
-        isVertical -> RoundedCornerShape(topStart = corner, bottomStart = corner)
-        isBottom -> RoundedCornerShape(topStart = corner, topEnd = corner)
-        else -> RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
-    }
-
-    val containerAlignment = when {
-        isVertical && config.position == NotchPosition.LEFT_CENTER -> Alignment.CenterStart
-        isVertical -> Alignment.CenterEnd
-        isBottom -> Alignment.BottomCenter
-        else -> Alignment.TopCenter
-    }
-
-    val transformOrigin = when {
-        isVertical && config.position == NotchPosition.LEFT_CENTER -> TransformOrigin(0f, 0.5f)
-        isVertical -> TransformOrigin(1f, 0.5f)
-        isBottom -> TransformOrigin(0.5f, 1f)
-        else -> TransformOrigin(0.5f, 0f)
-    }
-
+    // Collapse is debounced so a cursor briefly clipping the edge does not
+    // immediately retract the dock.
+    var collapseJob by remember { mutableStateOf<Job?>(null) }
     fun setHovered(hovered: Boolean) {
-        if (dragging) return
         collapseJob?.cancel()
         if (hovered) {
             onExpandedChange(true)
@@ -189,33 +157,38 @@ fun FloatingNotchOverlay(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = containerAlignment) {
+    // The window footprint leads the content while expanding and trails it while
+    // collapsing, so the resized native window never clips the animation. The
+    // collapse delay comfortably exceeds the size spring's settle time.
+    LaunchedEffect(isExpanded) {
+        if (isExpanded) {
+            onWindowExpandedChange(true)
+        } else {
+            delay(300)
+            onWindowExpandedChange(false)
+        }
+    }
+
+    val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
+    val targetSize = metrics.sizeFor(isExpanded)
+    val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
+    val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
+    val shape = notchShape(config.position, isExpanded)
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .onPointerEvent(PointerEventType.Enter) { setHovered(true) }
+            .onPointerEvent(PointerEventType.Exit) { setHovered(false) },
+        contentAlignment = containerAlignment(config.position)
+    ) {
         Box(
             modifier = Modifier
                 .width(animatedWidth)
                 .height(animatedHeight)
-                .graphicsLayer { this.transformOrigin = transformOrigin }
-                .clip(notchShape)
+                .clip(shape)
                 .background(IslandFill)
-                .border(0.5.dp, IslandStroke, notchShape)
-                .onPointerEvent(PointerEventType.Enter) { setHovered(true) }
-                .onPointerEvent(PointerEventType.Exit) { setHovered(false) }
-                .pointerInput(density) {
-                    detectDragGestures(
-                        onDragStart = { dragging = true },
-                        onDragEnd = {
-                            dragging = false
-                            onDragRepositionEnd()
-                        },
-                        onDragCancel = {
-                            dragging = false
-                            onDragRepositionEnd()
-                        }
-                    ) { change, dragAmount ->
-                        change.consume()
-                        onDragReposition(dragAmount.x / density, dragAmount.y / density)
-                    }
-                },
+                .border(0.5.dp, IslandStroke, shape),
             contentAlignment = Alignment.Center
         ) {
             AnimatedVisibility(
@@ -223,250 +196,191 @@ fun FloatingNotchOverlay(
                 enter = fadeIn(tween(120)),
                 exit = fadeOut(tween(80))
             ) {
-                CollapsedIsland(vertical = isVertical)
+                CollapsedIsland(vertical = config.position.isVertical)
             }
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = ContentEnter,
-                exit = ContentExit
-            ) {
-                if (isVertical) {
-                    ExpandedVerticalDock(
-                        favorites = favorites,
-                        config = config,
-                        iconBitmaps = iconBitmaps,
-                        isLeft = config.position == NotchPosition.LEFT_CENTER,
-                        onLaunch = { app ->
-                            scope.launch {
-                                AppLauncher.launch(app)
-                                if (config.hideOnAppLaunch) onExpandedChange(false)
-                            }
-                        },
-                        onOpenSettings = onOpenSettings
-                    )
-                } else {
-                    ExpandedHorizontalDock(
-                        favorites = favorites,
-                        config = config,
-                        iconBitmaps = iconBitmaps,
-                        isBottom = isBottom,
-                        onLaunch = { app ->
-                            scope.launch {
-                                AppLauncher.launch(app)
-                                if (config.hideOnAppLaunch) onExpandedChange(false)
-                            }
-                        },
-                        onOpenSettings = onOpenSettings
-                    )
-                }
+            AnimatedVisibility(visible = isExpanded, enter = ContentEnter, exit = ContentExit) {
+                Dock(
+                    favorites = favorites,
+                    config = config,
+                    iconBitmaps = iconBitmaps,
+                    density = density,
+                    onLaunch = { app ->
+                        scope.launch {
+                            AppLauncher.launch(app)
+                            if (config.hideOnAppLaunch) onExpandedChange(false)
+                        }
+                    },
+                    onOpenSettings = onOpenSettings
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CollapsedIsland(vertical: Boolean) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+private fun LoadFavoriteIcons(
+    favorites: List<AppItem>,
+    iconBitmaps: MutableMap<String, ImageBitmap>
+) {
+    LaunchedEffect(favorites) {
+        favorites.forEach { app ->
+            if (app.id !in iconBitmaps) {
+                launch { iconBitmaps[app.id] = AppIconLoader.loadIcon(app) }
+            }
+        }
+    }
+}
+
+// ── Dock ─────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun Dock(
+    favorites: List<AppItem>,
+    config: NotchConfig,
+    iconBitmaps: Map<String, ImageBitmap>,
+    density: Density,
+    onLaunch: (AppItem) -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    val vertical = config.position.isVertical
+    val towardStart = config.position == NotchPosition.LEFT_CENTER ||
+        config.position == NotchPosition.TOP_CENTER
+
+    // Pointer position and icon centres share the icon container's local pixel
+    // space, so the fisheye tracks the cursor with exact accuracy.
+    val centers = remember { mutableStateMapOf<Int, Float>() }
+    val pointer = remember { mutableStateOf<Float?>(null) }
+    val radiusPx = with(density) { config.baseIconSizeDp.dp.toPx() * FisheyeRadiusFactor }
+    val liftPx = with(density) { IconLift.toPx() }
+
+    // Held as State (not delegated) so only the label reads it: crossing between
+    // icons recomposes the label alone, never the whole dock.
+    val closestName: State<String?> = remember(favorites, radiusPx) {
+        derivedStateOf {
+            val p = pointer.value ?: return@derivedStateOf null
+            var bestDistance = radiusPx
+            var name: String? = null
+            favorites.forEachIndexed { index, app ->
+                val center = centers[index] ?: return@forEachIndexed
+                val distance = abs(p - center)
+                if (distance < bestDistance) {
+                    bestDistance = distance
+                    name = app.name
+                }
+            }
+            name
+        }
+    }
+
+    val pointerModifier = Modifier
+        .onPointerEvent(PointerEventType.Move) { change ->
+            pointer.value = change.changes.firstOrNull()?.position
+                ?.let { if (vertical) it.y else it.x }
+        }
+        .onPointerEvent(PointerEventType.Exit) { pointer.value = null }
+
+    val icons: @Composable () -> Unit = {
+        favorites.forEachIndexed { index, app ->
+            DockIcon(
+                app = app,
+                iconBitmap = iconBitmaps[app.id],
+                center = centers[index],
+                pointer = pointer,
+                radiusPx = radiusPx,
+                peakScale = config.dockScaleFactor,
+                liftPx = liftPx,
+                vertical = vertical,
+                towardStart = towardStart,
+                baseSizeDp = config.baseIconSizeDp,
+                onPositioned = { centers[index] = it },
+                onClick = { onLaunch(app) }
+            )
+        }
+        SettingsButton(onClick = onOpenSettings)
+    }
+
+    if (vertical) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.fillMaxSize().padding(dockPadding(config.position)),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
+            horizontalArrangement = if (towardStart) Arrangement.Start else Arrangement.End
         ) {
-            Box(Modifier.size(5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
-            Box(Modifier.size(width = 18.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)))
-            Box(Modifier.size(5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+            if (!towardStart && config.showTooltips) DockLabel(closestName)
+            Column(
+                modifier = pointerModifier,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) { icons() }
+            if (towardStart && config.showTooltips) DockLabel(closestName)
         }
-    }
-}
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun ExpandedHorizontalDock(
-    favorites: List<AppItem>,
-    config: NotchConfig,
-    iconBitmaps: Map<String, ImageBitmap>,
-    isBottom: Boolean,
-    onLaunch: (AppItem) -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    val centers = remember { mutableStateMapOf<Int, Float>() }
-    var pointerX by remember { mutableStateOf<Float?>(null) }
-    val closestName = remember(pointerX, centers.toMap(), favorites, config) {
-        var best = 1.08f
-        var name: String? = null
-        favorites.forEachIndexed { index, app ->
-            val scale = dockScale(pointerX, centers[index], config.dockMagnificationRadius, config.dockScaleFactor)
-            if (scale > best) {
-                best = scale
-                name = app.name
-            }
-        }
-        name
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(
-                start = 10.dp,
-                end = 8.dp,
-                top = if (isBottom) 10.dp else 6.dp,
-                bottom = if (isBottom) 6.dp else 10.dp
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = if (isBottom) Arrangement.Bottom else Arrangement.Top
-    ) {
-        if (!isBottom && config.showTooltips) {
-            DockLabel(closestName)
-        }
-        Row(
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .onPointerEvent(PointerEventType.Move, PointerEventPass.Main) {
-                    pointerX = it.changes.firstOrNull()?.position?.x
-                }
-                .onPointerEvent(PointerEventType.Exit, PointerEventPass.Main) {
-                    pointerX = null
-                },
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            favorites.forEachIndexed { index, app ->
-                val center = centers[index]
-                val scale = dockScale(pointerX, center, config.dockMagnificationRadius, config.dockScaleFactor)
-                DockIcon(
-                    app = app,
-                    iconBitmap = iconBitmaps[app.id],
-                    scale = scale,
-                    lift = if (isBottom) -(scale - 1f) * 10f else (scale - 1f) * 8f,
-                    liftVertical = false,
-                    baseSizeDp = config.baseIconSizeDp,
-                    onPositioned = { centers[index] = it },
-                    onClick = { onLaunch(app) }
-                )
-            }
-            QuietIconButton(onClick = onOpenSettings)
-        }
-        if (isBottom && config.showTooltips) {
-            DockLabel(closestName)
-        }
-    }
-}
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun ExpandedVerticalDock(
-    favorites: List<AppItem>,
-    config: NotchConfig,
-    iconBitmaps: Map<String, ImageBitmap>,
-    isLeft: Boolean,
-    onLaunch: (AppItem) -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    val centers = remember { mutableStateMapOf<Int, Float>() }
-    var pointerY by remember { mutableStateOf<Float?>(null) }
-    val closestName = remember(pointerY, centers.toMap(), favorites, config) {
-        var best = 1.08f
-        var name: String? = null
-        favorites.forEachIndexed { index, app ->
-            val scale = dockScale(pointerY, centers[index], config.dockMagnificationRadius, config.dockScaleFactor)
-            if (scale > best) {
-                best = scale
-                name = app.name
-            }
-        }
-        name
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (isLeft) Arrangement.Start else Arrangement.End
-    ) {
-        if (!isLeft && config.showTooltips) {
-            DockLabel(closestName)
-        }
+    } else {
         Column(
-            modifier = Modifier
-                .onPointerEvent(PointerEventType.Move, PointerEventPass.Main) {
-                    pointerY = it.changes.firstOrNull()?.position?.y
-                }
-                .onPointerEvent(PointerEventType.Exit, PointerEventPass.Main) {
-                    pointerY = null
-                },
+            modifier = Modifier.fillMaxSize().padding(dockPadding(config.position)),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = if (towardStart) Arrangement.Top else Arrangement.Bottom
         ) {
-            favorites.forEachIndexed { index, app ->
-                val center = centers[index]
-                val scale = dockScale(pointerY, center, config.dockMagnificationRadius, config.dockScaleFactor)
-                DockIcon(
-                    app = app,
-                    iconBitmap = iconBitmaps[app.id],
-                    scale = scale,
-                    lift = if (isLeft) (scale - 1f) * 8f else -(scale - 1f) * 8f,
-                    liftVertical = true,
-                    baseSizeDp = config.baseIconSizeDp,
-                    onPositioned = { centers[index] = it },
-                    onClick = { onLaunch(app) }
-                )
-            }
-            QuietIconButton(onClick = onOpenSettings)
-        }
-        if (isLeft && config.showTooltips) {
-            DockLabel(closestName)
+            if (towardStart && config.showTooltips) DockLabel(closestName)
+            Row(
+                modifier = pointerModifier,
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) { icons() }
+            if (!towardStart && config.showTooltips) DockLabel(closestName)
         }
     }
+}
+
+/**
+ * Insets the dock away from the anchored screen edge so icons never touch the
+ * display border, and leaves extra room on the inner edge for the
+ * magnification lift.
+ */
+private fun dockPadding(position: NotchPosition): PaddingValues = when (position) {
+    NotchPosition.TOP_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 12.dp)
+    NotchPosition.BOTTOM_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 6.dp)
+    NotchPosition.LEFT_CENTER -> PaddingValues(start = 6.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
+    NotchPosition.RIGHT_CENTER -> PaddingValues(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp)
 }
 
 @Composable
 private fun DockIcon(
     app: AppItem,
     iconBitmap: ImageBitmap?,
-    scale: Float,
-    lift: Float,
-    liftVertical: Boolean,
+    center: Float?,
+    pointer: State<Float?>,
+    radiusPx: Float,
+    peakScale: Float,
+    liftPx: Float,
+    vertical: Boolean,
+    towardStart: Boolean,
     baseSizeDp: Int,
     onPositioned: (Float) -> Unit,
     onClick: () -> Unit
 ) {
-    val hovering = scale > 1.02f
-    val animatedScale by animateFloatAsState(
-        targetValue = scale,
-        animationSpec = if (hovering) {
-            tween(durationMillis = 16)
-        } else {
-            spring(dampingRatio = 0.9f, stiffness = 700f)
-        },
-        label = "dockScale"
-    )
-    val animatedLift by animateFloatAsState(
-        targetValue = lift,
-        animationSpec = if (hovering) tween(16) else spring(dampingRatio = 0.9f, stiffness = 700f),
-        label = "dockLift"
-    )
+    // Reading the pointer here (not in the dock body) keeps recomposition local
+    // to each icon as the cursor glides across the dock.
+    val targetScale = fisheyeScale(pointer.value, center, radiusPx, peakScale)
+    val animatedScale by animateFloatAsState(targetScale, iconSpring(), label = "dockScale")
     val interaction = remember { MutableInteractionSource() }
+    val liftSign = if (towardStart) 1f else -1f
 
     Box(
         modifier = Modifier
-            .padding(4.dp)
+            .padding(DockLayout.IconPadding)
             .size(baseSizeDp.dp)
             .onGloballyPositioned { coordinates ->
-                val pos = coordinates.positionInParent()
+                val position = coordinates.positionInParent()
                 onPositioned(
-                    if (liftVertical) pos.y + coordinates.size.height / 2f
-                    else pos.x + coordinates.size.width / 2f
+                    if (vertical) position.y + coordinates.size.height / 2f
+                    else position.x + coordinates.size.width / 2f
                 )
             }
             .graphicsLayer {
                 scaleX = animatedScale
                 scaleY = animatedScale
-                if (liftVertical) translationX = animatedLift * density else translationY = animatedLift * density
+                val lift = (animatedScale - 1f) * liftPx * liftSign
+                if (vertical) translationX = lift else translationY = lift
             }
             .clip(RoundedCornerShape(11.dp))
             .clickable(
@@ -486,13 +400,13 @@ private fun DockIcon(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(Modifier.fillMaxSize().background(Color(0xFF2C2C2E)))
+            Box(Modifier.fillMaxSize().background(IconPlaceholder))
         }
     }
 }
 
 @Composable
-private fun QuietIconButton(onClick: () -> Unit) {
+private fun SettingsButton(onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     Box(
@@ -500,11 +414,7 @@ private fun QuietIconButton(onClick: () -> Unit) {
             .padding(start = 6.dp)
             .size(22.dp)
             .hoverable(interaction)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            ),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -517,13 +427,13 @@ private fun QuietIconButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun DockLabel(text: String?) {
+private fun DockLabel(nameState: State<String?>) {
     Box(
         modifier = Modifier.height(16.dp).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = text.orEmpty(),
+            text = nameState.value.orEmpty(),
             color = TextPrimary.copy(alpha = 0.9f),
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
@@ -533,16 +443,66 @@ private fun DockLabel(text: String?) {
     }
 }
 
-private fun dockScale(
+@Composable
+private fun CollapsedIsland(vertical: Boolean) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
+        ) {
+            Box(Modifier.size(5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+            Box(
+                Modifier
+                    .size(width = 18.dp, height = 5.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.16f))
+            )
+            Box(Modifier.size(5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+        }
+    }
+}
+
+// ── Geometry helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Cosine-squared falloff that peaks at [peakScale] when the cursor is exactly
+ * over an icon's centre and eases back to 1.0 at [radiusPx]. Because the peak
+ * sits on the centre and the radius scales with icon size, the magnified icon
+ * always lines up with the true cursor position.
+ */
+private fun fisheyeScale(
     pointer: Float?,
     center: Float?,
-    radius: Float,
+    radiusPx: Float,
     peakScale: Float
 ): Float {
-    if (pointer == null || center == null) return 1f
+    if (pointer == null || center == null || radiusPx <= 0f) return 1f
     val distance = abs(pointer - center)
-    if (distance >= radius) return 1f
-    val normalized = (distance / radius) * (PI.toFloat() / 2f)
+    if (distance >= radiusPx) return 1f
+    val normalized = (distance / radiusPx) * (PI.toFloat() / 2f)
     val factor = cos(normalized) * cos(normalized)
     return 1f + (peakScale - 1f) * factor
+}
+
+private fun containerAlignment(position: NotchPosition): Alignment = when (position) {
+    NotchPosition.TOP_CENTER -> Alignment.TopCenter
+    NotchPosition.BOTTOM_CENTER -> Alignment.BottomCenter
+    NotchPosition.LEFT_CENTER -> Alignment.CenterStart
+    NotchPosition.RIGHT_CENTER -> Alignment.CenterEnd
+}
+
+/**
+ * Rounds only the two corners facing away from the anchored edge; the corners
+ * touching the screen edge stay square so the notch reads as flush with the
+ * display, like the hardware Dynamic Island.
+ */
+private fun notchShape(position: NotchPosition, expanded: Boolean): CornerBasedShape {
+    val corner = if (expanded) 18.dp else 13.dp
+    return when (position) {
+        NotchPosition.TOP_CENTER -> RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
+        NotchPosition.BOTTOM_CENTER -> RoundedCornerShape(topStart = corner, topEnd = corner)
+        NotchPosition.LEFT_CENTER -> RoundedCornerShape(topEnd = corner, bottomEnd = corner)
+        NotchPosition.RIGHT_CENTER -> RoundedCornerShape(topStart = corner, bottomStart = corner)
+    }
 }

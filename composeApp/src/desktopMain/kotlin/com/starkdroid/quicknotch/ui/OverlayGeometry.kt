@@ -1,5 +1,7 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -8,36 +10,74 @@ import java.awt.Insets
 import java.awt.Point
 import java.awt.Rectangle
 
-val NotchPosition.isVertical: Boolean
-    get() = this == NotchPosition.LEFT_CENTER || this == NotchPosition.RIGHT_CENTER
+/**
+ * Static layout constants shared by the dock renderer and the window sizer so
+ * the overlay window always matches the rendered content pixel-for-pixel.
+ *
+ * Along the dock axis every icon occupies `baseIconSize + 2 * IconPadding`.
+ * [AlongSafety] absorbs the fisheye magnification of the end icons so they
+ * never clip against the window edge, keeping the expanded footprint tight.
+ */
+internal object DockLayout {
+    val IconPadding: Dp = 4.dp
+    val SettingsButton: Dp = 28.dp
+    val ContentPadding: Dp = 16.dp
+    val AlongSafety: Dp = 8.dp
+    val ExpandedDepthMargin: Dp = 6.dp
+    val CollapsedMargin: Dp = 4.dp
 
-val NotchPosition.isBottom: Boolean
-    get() = this == NotchPosition.BOTTOM_CENTER ||
-        this == NotchPosition.BOTTOM_LEFT ||
-        this == NotchPosition.BOTTOM_RIGHT
+    /** Width of a single icon slot along the dock axis. */
+    fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
+}
 
-val NotchPosition.isTop: Boolean
-    get() = this == NotchPosition.TOP_CENTER ||
-        this == NotchPosition.TOP_LEFT ||
-        this == NotchPosition.TOP_RIGHT
+/**
+ * The window footprint (in dp, already oriented for the active screen edge) for
+ * both the collapsed pill and the expanded dock.
+ */
+@Immutable
+data class NotchMetrics(
+    val collapsed: DpSize,
+    val expanded: DpSize
+) {
+    fun sizeFor(isExpanded: Boolean): DpSize = if (isExpanded) expanded else collapsed
+}
 
-fun overlayWindowSize(
-    config: NotchConfig,
-    favoriteCount: Int,
-    expanded: Boolean
-): DpSize {
-    val along = (favoriteCount * (config.baseIconSizeDp + 14) + 88).coerceIn(300, 900)
-    // Extra depth leaves room for dock magnification without clipping.
-    val depthExpanded = (config.expandedNotchHeightDp + 22).dp
-    val depthCollapsed = (config.collapsedPillHeightDp + 6).dp
-    val alongCollapsed = (config.collapsedPillWidthDp + 6).dp
+/**
+ * Derives the overlay window footprint from configuration and pin count. The
+ * expanded "along" length hugs the actual dock content instead of a fixed
+ * minimum, which removes the dead space that used to flank the icons.
+ */
+fun computeNotchMetrics(config: NotchConfig, favoriteCount: Int): NotchMetrics {
+    val base = config.baseIconSizeDp.dp
+    val count = favoriteCount.coerceAtLeast(0)
+
+    val alongExpanded = DockLayout.ContentPadding +
+        DockLayout.iconSlot(base) * count +
+        DockLayout.SettingsButton +
+        DockLayout.AlongSafety
+    val alongCollapsed = config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin
+    val depthExpanded = config.expandedNotchHeightDp.dp + DockLayout.ExpandedDepthMargin
+    val depthCollapsed = config.collapsedPillHeightDp.dp + DockLayout.CollapsedMargin
+
     return if (config.position.isVertical) {
-        if (expanded) DpSize(depthExpanded, along.dp) else DpSize(depthCollapsed, alongCollapsed)
+        NotchMetrics(
+            collapsed = DpSize(depthCollapsed, alongCollapsed),
+            expanded = DpSize(depthExpanded, alongExpanded)
+        )
     } else {
-        if (expanded) DpSize(along.dp, depthExpanded) else DpSize(alongCollapsed, depthCollapsed)
+        NotchMetrics(
+            collapsed = DpSize(alongCollapsed, depthCollapsed),
+            expanded = DpSize(alongExpanded, depthExpanded)
+        )
     }
 }
 
+/**
+ * Computes the top-left screen coordinate (in AWT points) that anchors the
+ * overlay window to the chosen edge, centred along that edge. On macOS a top
+ * notch hugs the very top of the panel ([hugMenuBar]) so it reads as a real
+ * Dynamic Island rather than floating below the menu bar.
+ */
 fun overlayScreenLocation(
     position: NotchPosition,
     windowWidthPx: Int,
@@ -46,65 +86,18 @@ fun overlayScreenLocation(
     insets: Insets,
     hugMenuBar: Boolean
 ): Point {
-    val topInset = if (hugMenuBar && position.isTop) 0 else insets.top
     val left = screen.x + insets.left
-    val top = screen.y + topInset
+    val top = screen.y + if (hugMenuBar && position == NotchPosition.TOP_CENTER) 0 else insets.top
     val right = screen.x + screen.width - insets.right
     val bottom = screen.y + screen.height - insets.bottom
-    val availableWidth = (right - left).coerceAtLeast(windowWidthPx)
-    val availableHeight = (bottom - top).coerceAtLeast(windowHeightPx)
 
-    val xCenter = left + (availableWidth - windowWidthPx) / 2
-    val yCenter = top + (availableHeight - windowHeightPx) / 2
-    val cornerPad = 16
+    val centerX = left + ((right - left) - windowWidthPx) / 2
+    val centerY = top + ((bottom - top) - windowHeightPx) / 2
 
     return when (position) {
-        NotchPosition.TOP_CENTER -> Point(xCenter, top)
-        NotchPosition.BOTTOM_CENTER -> Point(xCenter, bottom - windowHeightPx)
-        NotchPosition.TOP_LEFT -> Point(left + cornerPad, top)
-        NotchPosition.TOP_RIGHT -> Point(right - windowWidthPx - cornerPad, top)
-        NotchPosition.BOTTOM_LEFT -> Point(left + cornerPad, bottom - windowHeightPx)
-        NotchPosition.BOTTOM_RIGHT -> Point(right - windowWidthPx - cornerPad, bottom - windowHeightPx)
-        NotchPosition.LEFT_CENTER -> Point(left, yCenter)
-        NotchPosition.RIGHT_CENTER -> Point(right - windowWidthPx, yCenter)
-    }
-}
-
-fun snapToNotchPosition(
-    centerX: Int,
-    centerY: Int,
-    screen: Rectangle
-): NotchPosition {
-    val distTop = (centerY - screen.y).coerceAtLeast(0)
-    val distBottom = (screen.y + screen.height - centerY).coerceAtLeast(0)
-    val distLeft = (centerX - screen.x).coerceAtLeast(0)
-    val distRight = (screen.x + screen.width - centerX).coerceAtLeast(0)
-    val minDist = minOf(distTop, distBottom, distLeft, distRight)
-    val leftBand = screen.x + screen.width * 0.30f
-    val rightBand = screen.x + screen.width * 0.70f
-    val topBand = screen.y + screen.height * 0.30f
-    val bottomBand = screen.y + screen.height * 0.70f
-
-    return when (minDist) {
-        distTop -> when {
-            centerX < leftBand -> NotchPosition.TOP_LEFT
-            centerX > rightBand -> NotchPosition.TOP_RIGHT
-            else -> NotchPosition.TOP_CENTER
-        }
-        distBottom -> when {
-            centerX < leftBand -> NotchPosition.BOTTOM_LEFT
-            centerX > rightBand -> NotchPosition.BOTTOM_RIGHT
-            else -> NotchPosition.BOTTOM_CENTER
-        }
-        distLeft -> when {
-            centerY < topBand -> NotchPosition.TOP_LEFT
-            centerY > bottomBand -> NotchPosition.BOTTOM_LEFT
-            else -> NotchPosition.LEFT_CENTER
-        }
-        else -> when {
-            centerY < topBand -> NotchPosition.TOP_RIGHT
-            centerY > bottomBand -> NotchPosition.BOTTOM_RIGHT
-            else -> NotchPosition.RIGHT_CENTER
-        }
+        NotchPosition.TOP_CENTER -> Point(centerX, top)
+        NotchPosition.BOTTOM_CENTER -> Point(centerX, bottom - windowHeightPx)
+        NotchPosition.LEFT_CENTER -> Point(left, centerY)
+        NotchPosition.RIGHT_CENTER -> Point(right - windowWidthPx, centerY)
     }
 }
