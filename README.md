@@ -25,8 +25,8 @@ QuickNotch lives as a small pill on a screen edge. Hover it to expand a dock of 
 
 ## Features
 
-- **Floating notch** — Collapsed pill that morphs into a dock, flush to top, bottom, left, or right (including corners).
-- **Dock fisheye wave** — Cosine-squared magnification and lift as the cursor moves across icons.
+- **Floating notch** — Collapsed pill that morphs into a dock, anchored to the centre of the top, bottom, left, or right screen edge. No dragging: pick one of four fixed edges and it stays perfectly still.
+- **Dock fisheye wave** — Cosine-squared magnification and lift that track the cursor exactly; the wave radius is derived from icon size automatically.
 - **Pin any app** — Search installed apps or browse for a custom executable / `.app` bundle. Reorder and remove from Settings.
 - **Native icons**
   - Windows: Win32 Shell jumbo / extra-large icons from `.exe` and `.lnk` files.
@@ -39,7 +39,7 @@ QuickNotch lives as a small pill on a screen edge. Hover it to expand a dock of 
   - macOS: `open` for bundles, files, and URLs.
 - **Start at login** — Windows Run registry key, or a macOS LaunchAgent (`com.starkdroid.quicknotch`).
 - **Tray / menu bar** — Show or hide the notch, open Settings, reset defaults, quit.
-- **Settings** — Position grid, magnification, icon size, notch geometry, always-on-top, collapse-on-launch, labels.
+- **Settings** — Screen-edge anchor, magnification, icon size, notch geometry, always-on-top, collapse-on-launch, labels.
 
 Pinned apps and config are stored as JSON:
 
@@ -80,12 +80,14 @@ QuickNotch/
 │       │   ├── WindowsStartupManager.kt
 │       │   └── MacStartupManager.kt
 │       ├── ui/
-│       │   ├── FloatingNotchOverlay.kt
+│       │   ├── FloatingNotchOverlay.kt          # notch + fisheye dock
+│       │   ├── OverlayGeometry.kt               # footprint metrics + edge placement
 │       │   ├── SettingsScreen.kt
 │       │   └── NoiseGenerator.kt
 │       ├── theme/
 │       └── main.kt                              # tray + overlay + settings windows
 ├── gradle/libs.versions.toml
+├── web/                                         # SvelteKit marketing site (prerendered, static)
 └── …
 ```
 
@@ -127,6 +129,24 @@ open composeApp/build/compose/binaries/main/app/QuickNotch.app   # macOS
 ```
 
 On newer macOS releases, Skiko’s Metal backend can crash when creating transparent overlay windows. The desktop package currently sets `-Dskiko.renderApi=SOFTWARE` so the notch stays stable.
+
+---
+
+## Marketing site
+
+The landing page lives in `web/` as a separate SvelteKit workspace. It is built
+independently of the Gradle build and produces a fully static, prerendered site
+with scroll-driven animation (GSAP, Three.js, Lenis).
+
+```bash
+cd web
+npm install
+npm run dev      # dev server
+npm run build    # static output in web/build/
+```
+
+See [`web/README.md`](web/README.md) for the architecture, performance budget,
+SEO setup and conventions.
 
 ---
 
