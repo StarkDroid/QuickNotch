@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -125,6 +126,9 @@ private const val FisheyeRadiusFactor = 1.5f
 
 /** Cross-axis travel of a fully magnified icon, in dp. */
 private val IconLift = 8.dp
+
+/** Label font size as a fraction of the expanded dock height (≈11sp at 78dp). */
+private const val DockLabelFontSizeFactor = 0.145f
 
 /**
  * Hard ceiling on how long the choreography waits for the size spring to settle
@@ -380,27 +384,31 @@ private fun Dock(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (towardStart) Arrangement.Start else Arrangement.End
         ) {
-            if (!towardStart && config.showTooltips) DockLabel(closestName)
+            if (!towardStart && config.showTooltips) DockLabel(closestName, config)
             Column(
                 modifier = pointerModifier,
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) { icons() }
-            if (towardStart && config.showTooltips) DockLabel(closestName)
+            if (towardStart && config.showTooltips) DockLabel(closestName, config)
         }
     } else {
+        // Centred along the depth axis instead of pinned to the anchored edge:
+        // that removes the dead strip that used to pile up under the icons
+        // (labels off) or above the label (labels on), and keeps the label's
+        // descenders clear of the window border.
         Column(
             modifier = Modifier.fillMaxSize().padding(dockPadding(config.position)),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = if (towardStart) Arrangement.Top else Arrangement.Bottom
+            verticalArrangement = Arrangement.Center
         ) {
-            if (towardStart && config.showTooltips) DockLabel(closestName)
+            if (towardStart && config.showTooltips) DockLabel(closestName, config)
             Row(
                 modifier = pointerModifier,
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) { icons() }
-            if (!towardStart && config.showTooltips) DockLabel(closestName)
+            if (!towardStart && config.showTooltips) DockLabel(closestName, config)
         }
     }
 }
@@ -411,8 +419,8 @@ private fun Dock(
  * magnification lift.
  */
 private fun dockPadding(position: NotchPosition): PaddingValues = when (position) {
-    NotchPosition.TOP_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 12.dp)
-    NotchPosition.BOTTOM_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 6.dp)
+    NotchPosition.TOP_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp)
+    NotchPosition.BOTTOM_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 8.dp)
     NotchPosition.LEFT_CENTER -> PaddingValues(start = 6.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
     NotchPosition.RIGHT_CENTER -> PaddingValues(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp)
 }
@@ -519,15 +527,26 @@ private fun SettingsButton(onClick: () -> Unit, enabled: Boolean) {
 }
 
 @Composable
-private fun DockLabel(nameState: State<String?>) {
+private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
+    // Font scales with the expanded dock height so the label keeps its
+    // proportion as the dock grows.
+    val labelSize = (config.expandedNotchHeightDp * DockLabelFontSizeFactor).sp
+    val lineHeight = (labelSize.value * 1.15f).sp
+    // The slot is always as tall as one line even with no name showing, so the
+    // icons never shift when the label appears; the snug line height plus the
+    // vertical padding guarantee descenders clear the window border.
+    val slotHeight = with(LocalDensity.current) { lineHeight.toDp() }
     Box(
-        modifier = Modifier.height(16.dp).padding(horizontal = 8.dp),
+        modifier = Modifier
+            .heightIn(min = slotHeight)
+            .padding(horizontal = 8.dp, vertical = 1.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = nameState.value.orEmpty(),
             color = TextPrimary.copy(alpha = 0.9f),
-            fontSize = 11.sp,
+            fontSize = labelSize,
+            lineHeight = lineHeight,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
