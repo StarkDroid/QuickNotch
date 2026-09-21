@@ -3,11 +3,20 @@ package com.starkdroid.quicknotch.datasource
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.starkdroid.quicknotch.model.AppItem
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.awt.Font
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 
 object AppIconLoader {
+    // Scanning a full installed-apps list fires one load per row at once; a
+    // little backpressure keeps dozens of native calls (or sips/quicklook
+    // processes) from piling up and timing out.
+    private val iconLoadGate = Semaphore(
+        permits = minOf(8, maxOf(4, Runtime.getRuntime().availableProcessors() / 2))
+    )
+
     fun getCachedIcon(id: String): ImageBitmap? {
         return if (HostPlatform.isMac) {
             MacAppIconLoader.getCachedIcon(id)
@@ -16,8 +25,8 @@ object AppIconLoader {
         }
     }
 
-    suspend fun loadIcon(app: AppItem): ImageBitmap {
-        return if (HostPlatform.isMac) {
+    suspend fun loadIcon(app: AppItem): ImageBitmap = iconLoadGate.withPermit {
+        if (HostPlatform.isMac) {
             MacAppIconLoader.loadIcon(app)
         } else {
             Win32ShellIconLoader.loadIcon(app)

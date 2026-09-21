@@ -30,6 +30,8 @@ object Win32ShellIconLoader {
     private const val SHIL_EXTRALARGE = 2  // 48x48
     private const val SHIL_LARGE = 0       // 32x32
     private const val SHGFI_SYSICONINDEX = 0x000004000
+    private const val SHGFI_ICON = 0x000000100
+    private const val SHGFI_SMALLICON = 0x000000001
     private const val ILD_TRANSPARENT = 0x00000001
     private const val DI_NORMAL = 0x0003
 
@@ -115,14 +117,18 @@ object Win32ShellIconLoader {
         if (cached != null) return@withContext cached
 
         val iconBitmap = try {
-            val file = cleanPath(app.iconPath ?: app.executablePath)
+            // Registry DisplayIcon strings are frequently junk ("%SystemRoot%\...")
+            // or stale, so always fall back to the executable's own file.
+            val file = app.iconPath?.let { cleanPath(it) } ?: cleanPath(app.executablePath)
             if (file != null) {
                 // 1. Try Windows Shell ImageList (256x256 Jumbo, then 48x48 Extra Large)
                 extractShellImageListIcon(file.absolutePath, SHIL_JUMBO)
                     ?: extractShellImageListIcon(file.absolutePath, SHIL_EXTRALARGE)
-                    // 2. Try User32 PrivateExtractIcons (128x128)
+                    // 2. Classic SHGetFileInfo + SHGFI_ICON (32x32, honours app overrides)
+                    ?: extractShellIcon(file.absolutePath)
+                    // 3. Try User32 PrivateExtractIcons (128x128)
                     ?: extractPrivateIcon(file.absolutePath, 128)
-                    // 3. Fallback to Java Swing system icon rendered at 128x128
+                    // 4. Fallback to Java Swing system icon rendered at 128x128
                     ?: run {
                         val icon = fsv.getSystemIcon(file)
                         iconToImageBitmap(icon, 128)
@@ -203,6 +209,29 @@ object Win32ShellIconLoader {
                     User32Extra.INSTANCE.DestroyIcon(hIcon)
                 }
             } else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Direct SHGetFileInfoW + SHGFI_ICON extraction. This resolves the shell
+     * overlay/association icon the same way Explorer does and is a good middle
+     * ground when the system image list is unavailable.
+     */
+    private fun extractShellIcon(filePath: String): ImageBitmap? {
+        return try {
+            val sfi = SHFILEINFOW()
+            val flags = SHGFI_ICON // SHGFI_LARGEICON == 0, so this is already 32x32
+            val ret = Shell32Extra.INSTANCE.SHGetFileInfoW(filePath, 0, sfi, sfi.size(), flags)
+            val hIcon = sfi.hIcon
+            if (ret == null || hIcon == null) return null
+            try {
+                val bImg = hIconToBufferedImage(hIcon)
+                bImg?.toComposeImageBitmap()
+            } finally {
+                User32Extra.INSTANCE.DestroyIcon(hIcon)
+            }
         } catch (_: Throwable) {
             null
         }

@@ -5,14 +5,19 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.starkdroid.quicknotch.model.AppItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 
 /**
- * Loads macOS application icons from `.icns` resources or Quick Look previews.
- * Uses built-in `sips` / `qlmanage` so the rest of the app stays in Kotlin.
+ * Loads macOS application icons in-process from the `.icns` packed into each app
+ * bundle, so refreshing a full list never spawns dozens of `sips`/`qlmanage`
+ * sub-processes (those used to time out under concurrency and fall back to
+ * monograms). The large representations inside a modern `.icns` are bare PNG
+ * chunks that [ImageIO] can decode directly; the shell utilities remain only as
+ * a last resort for legacy JPEG2000-only archives or bundles without any `.icns`.
  */
 object MacAppIconLoader {
     private val cache = ConcurrentHashMap<String, ImageBitmap>()
@@ -22,6 +27,13 @@ object MacAppIconLoader {
         dir
     }
 
+    /** ICNS chunk type -> pixel size for the PNG representations an archive can hold. */
+    private val ICNS_PNG_SIZES = mapOf(
+        "ic04" to 16, "icp4" to 16, "ic05" to 32, "icp5" to 32, "icp6" to 64,
+        "ic11" to 64, "ic07" to 128, "ic08" to 256, "ic12" to 256,
+        "ic09" to 512, "ic13" to 512, "ic10" to 1024, "ic14" to 1024
+    )
+
     fun getCachedIcon(id: String): ImageBitmap? = cache[id]
 
     suspend fun loadIcon(app: AppItem): ImageBitmap = withContext(Dispatchers.IO) {
@@ -29,9 +41,10 @@ object MacAppIconLoader {
 
         val bitmap = try {
             val icns = findIcnsFile(app)
-            val fromIcns = icns?.let { convertWithSips(it) }
-            fromIcns ?: previewWithQuickLook(File(app.iconPath ?: app.executablePath))
-            ?: AppIconLoader.generateMonogramIcon(app.name)
+            parseIcnsPng(icns)
+                ?: icns?.let { convertWithSips(it) }
+                ?: previewWithQuickLook(File(app.iconPath ?: app.executablePath))
+                ?: AppIconLoader.generateMonogramIcon(app.name)
         } catch (_: Throwable) {
             AppIconLoader.generateMonogramIcon(app.name)
         }
@@ -63,8 +76,59 @@ object MacAppIconLoader {
             ?.maxByOrNull { it.length() }
     }
 
+    /**
+     * Reads the largest PNG embedded in an `.icns` archive and decodes it with
+     * [ImageIO], avoiding a sub-process per app. Modern macOS icons store every
+     * scale as a bare PNG chunk; legacy archives may keep JPEG2000 data instead,
+     * in which case this returns null and [convertWithSips] takes over.
+     */
+    private fun parseIcnsPng(icns: File?): ImageBitmap? {
+        if (icns == null || !icns.isFile) return null
+
+        val bytes = try {
+            icns.readBytes()
+        } catch (_: Throwable) {
+            return null
+        }
+        if (bytes.size < 8 ||
+            (bytes[0].toInt() and 0xFF) != 0x69 || (bytes[1].toInt() and 0xFF) != 0x63 ||
+            (bytes[2].toInt() and 0xFF) != 0x6E || (bytes[3].toInt() and 0xFF) != 0x73
+        ) return null
+
+        var offset = 8
+        var bestSize = -1
+        var bestData: ByteArray? = null
+        while (offset + 8 <= bytes.size) {
+            val type = String(bytes, offset, 4, Charsets.US_ASCII)
+            val length = ((bytes[offset + 4].toInt() and 0xFF) shl 24) or
+                ((bytes[offset + 5].toInt() and 0xFF) shl 16) or
+                ((bytes[offset + 6].toInt() and 0xFF) shl 8) or
+                (bytes[offset + 7].toInt() and 0xFF)
+            if (length < 8 || offset + length > bytes.size) break
+
+            val size = ICNS_PNG_SIZES[type]
+            if (size != null && size > bestSize && length > 12 &&
+                (bytes[offset + 8].toInt() and 0xFF) == 0x89 &&
+                (bytes[offset + 9].toInt() and 0xFF) == 0x50 &&
+                (bytes[offset + 10].toInt() and 0xFF) == 0x4E &&
+                (bytes[offset + 11].toInt() and 0xFF) == 0x47
+            ) {
+                bestSize = size
+                bestData = bytes.copyOfRange(offset + 8, offset + length)
+            }
+            offset += length
+        }
+
+        val buffered = bestData?.let { data ->
+            runCatching { ImageIO.read(ByteArrayInputStream(data)) }.getOrNull()
+        }
+        return buffered?.toComposeImageBitmap()
+    }
+
     private fun convertWithSips(icns: File, size: Int = 128): ImageBitmap? {
-        val out = File(iconCacheDir, "${icns.nameWithoutExtension}-${icns.lastModified()}-$size.png")
+        // Include the source path: many apps ship an identical "AppIcon.icns"
+        // with the same timestamp, which used to collide on one cache entry.
+        val out = File(iconCacheDir, "${icns.absolutePath.hashCode()}-${icns.name}-${icns.lastModified()}-$size.png")
         if (out.isFile && out.length() > 0) {
             return ImageIO.read(out)?.toComposeImageBitmap()
         }
