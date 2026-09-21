@@ -1,5 +1,7 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -11,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,9 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -735,36 +741,75 @@ private fun PinnedAppsTab(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        placeholder = { Text("Search installed apps...", color = TextMuted, fontSize = 12.sp) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { onSearchQueryChange("") }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextMuted, modifier = Modifier.size(14.dp))
-                                }
-                            }
-                        },
-                        singleLine = true,
+                    // Hand-rolled compact search field: Material's OutlinedTextField
+                    // enforces a 56dp minimum height, so pinning it to 44dp clipped
+                    // the placeholder. BasicTextField has no such floor.
+                    val searchFocus = remember { FocusRequester() }
+                    Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = FlatSurfaceElevated,
-                            unfocusedContainerColor = FlatCard,
-                            focusedBorderColor = AccentIndigo,
-                            unfocusedBorderColor = FlatBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    )
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(FlatCard)
+                            .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+                            .clickable { searchFocus.requestFocus() }
+                            .padding(horizontal = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = onSearchQueryChange,
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(color = TextPrimary, fontSize = 13.sp),
+                            cursorBrush = SolidColor(AccentIndigo),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .focusRequester(searchFocus),
+                            decorationBox = { innerTextField ->
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = "Search installed apps...",
+                                                color = TextMuted,
+                                                fontSize = 12.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                    if (searchQuery.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = { onSearchQueryChange("") },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = "Clear",
+                                                tint = TextMuted,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
 
                     Button(
                         onClick = {
@@ -883,14 +928,23 @@ private fun PinnedAppRow(
                     .background(FlatSurfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
-                if (iconBitmap != null) {
-                    Image(
-                        bitmap = iconBitmap!!,
-                        contentDescription = item.name,
-                        modifier = Modifier.size(30.dp)
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(AccentIndigo.copy(alpha = 0.3f)))
+                Crossfade(
+                    targetState = iconBitmap,
+                    animationSpec = tween(220),
+                    label = "pinnedIconFade"
+                ) { bitmap ->
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = item.name,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    } else {
+                        ShimmerBox(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(7.dp)
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(10.dp))
@@ -980,14 +1034,23 @@ private fun AvailableAppRow(
                     .background(FlatSurfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
-                if (iconBitmap != null) {
-                    Image(
-                        bitmap = iconBitmap!!,
-                        contentDescription = app.name,
-                        modifier = Modifier.size(24.dp)
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(AccentIndigo.copy(alpha = 0.3f)))
+                Crossfade(
+                    targetState = iconBitmap,
+                    animationSpec = tween(220),
+                    label = "availableIconFade"
+                ) { bitmap ->
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = app.name,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        ShimmerBox(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(9.dp))
