@@ -10,6 +10,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -88,6 +92,7 @@ import kotlin.math.cos
 
 private val IslandFill = Color(0xFF0A0A0A)
 private val IslandStroke = Color.White.copy(alpha = 0.14f)
+private val IslandBubbleFill = Color(0xF21C1C1E)
 private val ControlIdle = Color.White.copy(alpha = 0.28f)
 private val ControlActive = Color.White.copy(alpha = 0.92f)
 
@@ -187,9 +192,11 @@ fun FloatingNotchOverlay(
 
     // The island keeps the dock as its *sibling*, so the fading dock is not
     // clipped by the shrinking pill; the pill holds its expanded size until the
-    // dock fade is done, then contracts.
+    // dock fade is done, then contracts. The island animates its own (possibly
+    // narrower than the window) footprint — for side docks the window carries
+    // the extra label-bubble gutter on the inner side.
     val islandExpanded = isExpanded || dockAlpha > 0.01f
-    val targetSize = metrics.sizeFor(islandExpanded)
+    val targetSize = metrics.islandFor(islandExpanded)
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(config.position, islandExpanded)
@@ -203,16 +210,16 @@ fun FloatingNotchOverlay(
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
             onWindowExpandedChange(true)
-            val expanded = metrics.sizeFor(true)
+            val island = metrics.islandFor(true)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
-                    animatedWidth >= expanded.width - 1.dp && animatedHeight >= expanded.height - 1.dp
+                    animatedWidth >= island.width - 1.dp && animatedHeight >= island.height - 1.dp
                 }.first { settled -> settled }
             }
             if (isExpanded) showDock = true
         } else {
             showDock = false
-            val collapsed = metrics.sizeFor(false)
+            val collapsed = metrics.islandFor(false)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
                     animatedWidth <= collapsed.width + 1.dp && animatedHeight <= collapsed.height + 1.dp
@@ -269,6 +276,7 @@ fun FloatingNotchOverlay(
                 iconBitmaps = iconBitmaps,
                 density = density,
                 interactive = showDock,
+                bubbleInset = metrics.bubbleInset,
                 onLaunch = { app ->
                     scope.launch {
                         AppLauncher.launch(app)
@@ -305,6 +313,7 @@ private fun Dock(
     iconBitmaps: Map<String, ImageBitmap>,
     density: Density,
     interactive: Boolean,
+    bubbleInset: Dp,
     onLaunch: (AppItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -379,18 +388,32 @@ private fun Dock(
     }
 
     if (vertical) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(dockPadding(config.position)),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (towardStart) Arrangement.Start else Arrangement.End
-        ) {
-            if (!towardStart && config.showTooltips) DockLabel(closestName, config)
+        // Side docks have no room for an inline label inside the narrow
+        // island, so the icons keep their edge-aligned column and the name
+        // surfaces as a bubble floating in the gutter just outside the
+        // island's inner border.
+        Box(modifier = Modifier.fillMaxSize()) {
             Column(
-                modifier = pointerModifier,
+                modifier = Modifier
+                    .align(if (towardStart) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(dockPadding(config.position))
+                    .then(pointerModifier),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) { icons() }
-            if (towardStart && config.showTooltips) DockLabel(closestName, config)
+
+            if (config.showTooltips && bubbleInset > 0.dp) {
+                DockLabelBubble(
+                    nameState = closestName,
+                    config = config,
+                    modifier = Modifier
+                        .align(if (towardStart) Alignment.CenterStart else Alignment.CenterEnd)
+                        .padding(
+                            start = if (towardStart) bubbleInset + DockLayout.BubbleGap else 0.dp,
+                            end = if (towardStart) 0.dp else bubbleInset + DockLayout.BubbleGap
+                        )
+                )
+            }
         }
     } else {
         // Centred along the depth axis instead of pinned to the anchored edge:
@@ -527,9 +550,44 @@ private fun SettingsButton(onClick: () -> Unit, enabled: Boolean) {
 }
 
 @Composable
+private fun DockLabelBubble(
+    nameState: State<String?>,
+    config: NotchConfig,
+    modifier: Modifier = Modifier
+) {
+    val name by nameState
+    val visible = !name.isNullOrBlank()
+    val labelSize = (config.expandedNotchHeightDp * DockLabelFontSizeFactor).sp
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(110)) + scaleIn(initialScale = 0.88f, animationSpec = tween(150, easing = FastOutSlowInEasing)),
+        exit = fadeOut(tween(80)) + scaleOut(targetScale = 0.9f, animationSpec = tween(90)),
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = DockLayout.LabelBubbleReserve - DockLayout.BubbleGap * 2)
+                .shadow(10.dp, RoundedCornerShape(9.dp))
+                .clip(RoundedCornerShape(9.dp))
+                .background(IslandBubbleFill)
+                .border(0.5.dp, IslandStroke, RoundedCornerShape(9.dp))
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Text(
+                text = name.orEmpty(),
+                color = TextPrimary.copy(alpha = 0.95f),
+                fontSize = labelSize,
+                lineHeight = (labelSize.value * 1.15f).sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
-    // Font scales with the expanded dock height so the label keeps its
-    // proportion as the dock grows.
     val labelSize = (config.expandedNotchHeightDp * DockLabelFontSizeFactor).sp
     val lineHeight = (labelSize.value * 1.15f).sp
     // The slot is always as tall as one line even with no name showing, so the
