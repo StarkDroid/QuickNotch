@@ -182,10 +182,9 @@ fun FloatingNotchOverlay(
     }
 
     val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
-    // Cached once per surface choice; the grain reuses the shared tiled noise
-    // shader, so neither is rebuilt while the island animates.
+    // Cached once per surface choice; the brushes are built at class load,
+    // so nothing here allocates while the island animates.
     val surface = remember(config.surface) { IslandSurface.styleFor(config.surface) }
-    val frostBrush = remember { NoiseGenerator.getFrostBrush() }
 
     // The dock is never composited away or re-measured — it lives in the
     // window-sized root so it is permanently laid out at the expanded
@@ -248,7 +247,7 @@ fun FloatingNotchOverlay(
                 .width(animatedWidth)
                 .height(animatedHeight)
                 .clip(shape)
-                .islandSurface(config.surface, frostBrush)
+                .islandSurface(config.surface)
                 .border(surface.borderWidth.dp, surface.border, shape),
             contentAlignment = Alignment.Center
         ) {

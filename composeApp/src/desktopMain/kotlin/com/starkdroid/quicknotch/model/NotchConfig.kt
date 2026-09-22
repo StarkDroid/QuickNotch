@@ -43,18 +43,18 @@ enum class NotchStyle(
 
 /**
  * The body's material. Both entries resolve to statically cached brushes, so
- * neither adds per-frame shader work on the software renderer. [BLUR] fakes
- * frosted glassmorphism with a translucent base plus a pre-blurred seamless
- * "frost" texture (see `NoiseGenerator.getFrostBrush`) — an actual real-time
- * blur of the pixels behind a borderless window would need a native
- * screen-capture loop and macOS screen-recording permission.
+ * neither adds per-frame shader work on the software renderer. [BLUR] is a
+ * deliberately texture-free translucent glass: a tinted body that lets the
+ * desktop bleed through the transparent window plus a smooth light sheen. A
+ * literal blur of the pixels behind a borderless window is unreachable from
+ * Compose without a native screen-capture loop.
  */
 @Serializable
 enum class NotchSurface(val displayName: String) {
     /** Fully opaque black — the default. */
     SOLID("Solid"),
 
-    /** Translucent, gaussian-frosted glass. */
+    /** Translucent, smooth glass. */
     BLUR("Blur")
 }
 
