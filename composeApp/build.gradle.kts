@@ -34,6 +34,10 @@ kotlin {
     }
 }
 
+compose.resources {
+    packageOfResClass = "com.starkdroid.quicknotch.generated.resources"
+}
+
 compose.desktop {
     application {
         mainClass = "com.starkdroid.quicknotch.MainKt"

@@ -36,6 +36,7 @@ import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.InstalledAppsScanner
 import com.starkdroid.quicknotch.datasource.StartupManager
+import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -44,6 +45,8 @@ import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.*
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import java.io.File
 import java.util.UUID
 import javax.swing.JFileChooser
@@ -66,7 +69,11 @@ fun SettingsScreen(
     val favorites by repository.favorites.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Dock & Sizing", "Pinned Apps", "Behavior")
+    val tabs = listOf(
+        stringResource(Res.string.tab_dock_sizing),
+        stringResource(Res.string.tab_pinned_apps),
+        stringResource(Res.string.tab_behavior)
+    )
     val tabIcons = listOf(Icons.Default.Tune, Icons.Default.Apps, Icons.Default.ToggleOn)
 
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -224,31 +231,23 @@ private fun SettingsTopBar(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
+            Image(
+                painter = painterResource(Res.drawable.quicknotch_icon),
+                contentDescription = stringResource(Res.string.app_name),
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(FlatSurfaceElevated)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Widgets,
-                    contentDescription = "QuickNotch",
-                    tint = AccentIndigoLight,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "QuickNotch",
+                    text = stringResource(Res.string.app_name),
                     style = AppTypography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "Dynamic Island & Floating Dock Customizer",
+                    text = stringResource(Res.string.settings_tagline),
                     style = AppTypography.bodySmall,
                     color = TextSecondary,
                     fontSize = 12.sp
@@ -266,7 +265,7 @@ private fun SettingsTopBar(
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
-                contentDescription = "About",
+                contentDescription = stringResource(Res.string.about),
                 tint = TextSecondary,
                 modifier = Modifier.size(16.dp)
             )
@@ -293,7 +292,7 @@ private fun DockSizingTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Dock Layout & Sizing",
+                    text = stringResource(Res.string.dock_sizing_header),
                     style = AppTypography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = TextSecondary
@@ -309,7 +308,7 @@ private fun DockSizingTab(
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Reset Defaults", style = AppTypography.labelSmall, color = AccentRed)
+                    Text(stringResource(Res.string.reset_defaults), style = AppTypography.labelSmall, color = AccentRed)
                 }
             }
         }
@@ -330,14 +329,14 @@ private fun DockSizingTab(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Screen Edge Positioning",
+                            text = stringResource(Res.string.screen_edge_positioning),
                             style = AppTypography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Choose which screen edge the notch anchors to",
+                            text = stringResource(Res.string.screen_edge_positioning_desc),
                             style = AppTypography.bodySmall,
                             color = TextSecondary,
                             fontSize = 12.sp
@@ -361,7 +360,7 @@ private fun DockSizingTab(
                                 )
                                 Spacer(modifier = Modifier.width(7.dp))
                                 Text(
-                                    text = config.position.displayName,
+                                    text = config.position.label(),
                                     style = AppTypography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = TextPrimary,
@@ -395,18 +394,18 @@ private fun DockSizingTab(
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     AppearanceDropdown(
-                        label = "Notch Style",
+                        label = stringResource(Res.string.notch_style),
                         options = NotchStyle.entries.toList(),
                         selected = config.style,
-                        optionLabel = { it.displayName },
+                        optionLabel = { it.label() },
                         onSelect = { style -> onUpdate { it.copy(style = style) } },
                         modifier = Modifier.weight(1f)
                     )
                     AppearanceDropdown(
-                        label = "Surface Theme",
+                        label = stringResource(Res.string.surface_theme),
                         options = NotchSurface.entries.toList(),
                         selected = config.surface,
-                        optionLabel = { it.displayName },
+                        optionLabel = { it.label() },
                         onSelect = { surface -> onUpdate { it.copy(surface = surface) } },
                         modifier = Modifier.weight(1f)
                     )
@@ -423,13 +422,13 @@ private fun DockSizingTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Icon Fish-eye Magnification",
+                        text = stringResource(Res.string.fisheye_title),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
                     )
                     Text(
-                        text = "Icons magnify precisely under the cursor; the wave radius is derived from icon size automatically",
+                        text = stringResource(Res.string.fisheye_desc),
                         style = AppTypography.bodySmall,
                         color = TextSecondary,
                         fontSize = 12.sp
@@ -438,8 +437,11 @@ private fun DockSizingTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     MinimalistSliderRow(
-                        title = "Magnification Peak Scale",
-                        valueLabel = "${String.format("%.2f", config.dockScaleFactor.coerceIn(1.10f, 1.45f))}x",
+                        title = stringResource(Res.string.peak_scale_title),
+                        valueLabel = stringResource(
+                            Res.string.value_scale,
+                            String.format("%.2f", config.dockScaleFactor.coerceIn(1.10f, 1.45f))
+                        ),
                         value = config.dockScaleFactor.coerceIn(1.10f, 1.45f),
                         valueRange = 1.10f..1.45f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(dockScaleFactor = it) } }
@@ -448,8 +450,11 @@ private fun DockSizingTab(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     MinimalistSliderRow(
-                        title = "Base Icon Size",
-                        valueLabel = "${config.baseIconSizeDp.coerceIn(32, 44)} dp",
+                        title = stringResource(Res.string.base_icon_size_title),
+                        valueLabel = stringResource(
+                            Res.string.value_dp,
+                            config.baseIconSizeDp.coerceIn(32, 44).toString()
+                        ),
                         value = config.baseIconSizeDp.toFloat().coerceIn(32f, 44f),
                         valueRange = 32f..44f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(baseIconSizeDp = it.toInt()) } }
@@ -466,13 +471,13 @@ private fun DockSizingTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Show App Labels",
+                                text = stringResource(Res.string.show_labels_title),
                                 style = AppTypography.bodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "Display app name labels when hovering over icons",
+                                text = stringResource(Res.string.show_labels_desc),
                                 style = AppTypography.labelSmall,
                                 color = TextSecondary,
                                 fontSize = 11.sp
@@ -498,13 +503,13 @@ private fun DockSizingTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Notch Geometry",
+                        text = stringResource(Res.string.geometry_title),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
                     )
                     Text(
-                        text = "Collapsed pill and expanded dock dimensions",
+                        text = stringResource(Res.string.geometry_desc),
                         style = AppTypography.bodySmall,
                         color = TextSecondary,
                         fontSize = 12.sp
@@ -513,8 +518,11 @@ private fun DockSizingTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     MinimalistSliderRow(
-                        title = "Collapsed Pill Width",
-                        valueLabel = "${config.collapsedPillWidthDp.coerceIn(140, 190)} dp",
+                        title = stringResource(Res.string.collapsed_width_title),
+                        valueLabel = stringResource(
+                            Res.string.value_dp,
+                            config.collapsedPillWidthDp.coerceIn(140, 190).toString()
+                        ),
                         value = config.collapsedPillWidthDp.toFloat().coerceIn(140f, 190f),
                         valueRange = 140f..190f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(collapsedPillWidthDp = it.toInt()) } }
@@ -523,8 +531,11 @@ private fun DockSizingTab(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     MinimalistSliderRow(
-                        title = "Expanded Dock Height",
-                        valueLabel = "${config.expandedNotchHeightDp.coerceIn(70, 86)} dp",
+                        title = stringResource(Res.string.expanded_height_title),
+                        valueLabel = stringResource(
+                            Res.string.value_dp,
+                            config.expandedNotchHeightDp.coerceIn(70, 86).toString()
+                        ),
                         value = config.expandedNotchHeightDp.toFloat().coerceIn(70f, 86f),
                         valueRange = 70f..86f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(expandedNotchHeightDp = it.toInt()) } }
@@ -534,6 +545,35 @@ private fun DockSizingTab(
         }
     }
 }
+
+// Enum labels resolve from composeResources at the UI layer, keeping the model
+// enums free of user-facing text.
+@Composable
+internal fun NotchPosition.label(): String = stringResource(
+    when (this) {
+        NotchPosition.TOP_CENTER -> Res.string.edge_top_center
+        NotchPosition.RIGHT_CENTER -> Res.string.edge_right_center
+        NotchPosition.BOTTOM_CENTER -> Res.string.edge_bottom_center
+        NotchPosition.LEFT_CENTER -> Res.string.edge_left_center
+    }
+)
+
+@Composable
+internal fun NotchStyle.label(): String = stringResource(
+    when (this) {
+        NotchStyle.DYNAMIC_ISLAND -> Res.string.style_dynamic_island
+        NotchStyle.FLOATING_PILL -> Res.string.style_floating_pill
+        NotchStyle.DRAG_HANDLE -> Res.string.style_drag_handle
+    }
+)
+
+@Composable
+internal fun NotchSurface.label(): String = stringResource(
+    when (this) {
+        NotchSurface.SOLID -> Res.string.surface_solid
+        NotchSurface.TRANSLUCENT -> Res.string.surface_translucent
+    }
+)
 
 /**
  * A miniature screen showing the four supported edge anchors. Only edge centres
@@ -610,7 +650,7 @@ private fun <T> AppearanceDropdown(
     label: String,
     options: List<T>,
     selected: T,
-    optionLabel: (T) -> String,
+    optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -772,6 +812,11 @@ private fun PinnedAppsTab(
     val pinnedPaths = remember(favorites) {
         favorites.mapTo(HashSet()) { it.executablePath.lowercase() }
     }
+    // Swing's file chooser is not a composable surface, so its strings are
+    // resolved here and captured as plain values.
+    val pickMacTitle = stringResource(Res.string.pick_mac_title)
+    val pickMacFilter = stringResource(Res.string.pick_mac_filter)
+    val pickWindowsFilter = stringResource(Res.string.pick_win_filter)
 
     Row(
         modifier = Modifier
@@ -796,7 +841,7 @@ private fun PinnedAppsTab(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Pinned Items",
+                            text = stringResource(Res.string.pinned_items),
                             style = AppTypography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
@@ -823,7 +868,7 @@ private fun PinnedAppsTab(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, tint = AccentRed, modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Reset", style = AppTypography.labelSmall, color = AccentRed)
+                        Text(stringResource(Res.string.reset), style = AppTypography.labelSmall, color = AccentRed)
                     }
                 }
 
@@ -835,7 +880,7 @@ private fun PinnedAppsTab(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No apps pinned.\nAdd apps from the list on the right.",
+                            text = stringResource(Res.string.no_apps_pinned),
                             style = AppTypography.bodySmall,
                             color = TextMuted,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -872,7 +917,7 @@ private fun PinnedAppsTab(
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Text(
-                    text = "Add Applications",
+                    text = stringResource(Res.string.add_applications),
                     style = AppTypography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
@@ -924,7 +969,7 @@ private fun PinnedAppsTab(
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (searchQuery.isEmpty()) {
                                             Text(
-                                                text = "Search installed apps...",
+                                                text = stringResource(Res.string.search_hint),
                                                 color = TextMuted,
                                                 fontSize = 12.sp,
                                                 maxLines = 1,
@@ -941,7 +986,7 @@ private fun PinnedAppsTab(
                                         ) {
                                             Icon(
                                                 Icons.Default.Close,
-                                                contentDescription = "Clear",
+                                                contentDescription = stringResource(Res.string.clear),
                                                 tint = TextMuted,
                                                 modifier = Modifier.size(14.dp)
                                             )
@@ -954,7 +999,11 @@ private fun PinnedAppsTab(
 
                     Button(
                         onClick = {
-                            pickCustomApplication()?.let(onAddFavorite)
+                            pickCustomApplication(
+                                macDialogTitle = pickMacTitle,
+                                macFilterDescription = pickMacFilter,
+                                windowsFilterDescription = pickWindowsFilter
+                            )?.let(onAddFavorite)
                         },
                         modifier = Modifier.height(44.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
@@ -964,7 +1013,7 @@ private fun PinnedAppsTab(
                     ) {
                         Icon(Icons.Default.FolderOpen, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Browse", color = TextPrimary, style = AppTypography.labelMedium)
+                        Text(stringResource(Res.string.browse), color = TextPrimary, style = AppTypography.labelMedium)
                     }
                 }
 
@@ -976,7 +1025,7 @@ private fun PinnedAppsTab(
                     }
                 } else if (filteredApps.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No matching applications found", style = AppTypography.bodySmall, color = TextMuted)
+                        Text(stringResource(Res.string.no_matches), style = AppTypography.bodySmall, color = TextMuted)
                     }
                 } else {
                     LazyColumn(
@@ -1016,17 +1065,21 @@ private fun rememberAppIcon(app: AppItem): ImageBitmap? {
     return iconBitmap
 }
 
-private fun pickCustomApplication(): AppItem? {
+private fun pickCustomApplication(
+    macDialogTitle: String,
+    macFilterDescription: String,
+    windowsFilterDescription: String
+): AppItem? {
     val chooser = JFileChooser()
     if (HostPlatform.isMac) {
         chooser.fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
         chooser.fileFilter = object : javax.swing.filechooser.FileFilter() {
             override fun accept(f: File): Boolean = f.isDirectory
-            override fun getDescription(): String = "Applications (.app)"
+            override fun getDescription(): String = macFilterDescription
         }
-        chooser.dialogTitle = "Choose a macOS Application"
+        chooser.dialogTitle = macDialogTitle
     } else {
-        chooser.fileFilter = FileNameExtensionFilter("Executables & Shortcuts (*.exe, *.lnk)", "exe", "lnk")
+        chooser.fileFilter = FileNameExtensionFilter(windowsFilterDescription, "exe", "lnk")
     }
     val ret = chooser.showOpenDialog(null)
     if (ret != JFileChooser.APPROVE_OPTION) return null
@@ -1119,7 +1172,7 @@ private fun PinnedAppRow(
             ) {
                 Icon(
                     Icons.Default.ArrowUpward,
-                    "Move Up",
+                    stringResource(Res.string.move_up),
                     tint = if (canMoveUp) TextSecondary else TextMuted.copy(alpha = 0.3f),
                     modifier = Modifier.size(15.dp)
                 )
@@ -1131,7 +1184,7 @@ private fun PinnedAppRow(
             ) {
                 Icon(
                     Icons.Default.ArrowDownward,
-                    "Move Down",
+                    stringResource(Res.string.move_down),
                     tint = if (canMoveDown) TextSecondary else TextMuted.copy(alpha = 0.3f),
                     modifier = Modifier.size(15.dp)
                 )
@@ -1142,7 +1195,7 @@ private fun PinnedAppRow(
             ) {
                 Icon(
                     Icons.Default.Delete,
-                    "Remove",
+                    stringResource(Res.string.remove),
                     tint = AccentRed.copy(alpha = 0.85f),
                     modifier = Modifier.size(15.dp)
                 )
@@ -1230,7 +1283,7 @@ private fun AvailableAppRow(
                     .border(1.dp, AccentGreen.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
-                Text("Pinned", style = AppTypography.labelSmall, color = AccentGreen, fontSize = 11.sp)
+                Text(stringResource(Res.string.pinned_badge), style = AppTypography.labelSmall, color = AccentGreen, fontSize = 11.sp)
             }
         } else {
             Button(
@@ -1241,9 +1294,9 @@ private fun AvailableAppRow(
                 shape = RoundedCornerShape(5.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
             ) {
-                Icon(Icons.Default.Add, "Add", tint = AccentCyan, modifier = Modifier.size(13.dp))
+                Icon(Icons.Default.Add, stringResource(Res.string.add), tint = AccentCyan, modifier = Modifier.size(13.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("Add", color = AccentCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
+                Text(stringResource(Res.string.add), color = AccentCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
             }
         }
     }
@@ -1271,19 +1324,21 @@ private fun BehaviorTab(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        text = "System & Startup Behaviors",
+                        text = stringResource(Res.string.behavior_header),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
                     )
 
                     BehaviorSwitchRow(
-                        title = if (HostPlatform.isMac) "Start at Login" else "Start on Windows Boot",
-                        subtitle = if (HostPlatform.isMac) {
-                            "Launch QuickNotch automatically when you sign in to macOS"
-                        } else {
-                            "Launch QuickNotch automatically on user sign-in"
-                        },
+                        title = stringResource(
+                            if (HostPlatform.isMac) Res.string.autostart_title_mac
+                            else Res.string.autostart_title_windows
+                        ),
+                        subtitle = stringResource(
+                            if (HostPlatform.isMac) Res.string.autostart_desc_mac
+                            else Res.string.autostart_desc_windows
+                        ),
                         checked = config.autoStartOnBoot,
                         onCheckedChange = { checked ->
                             StartupManager.setAutoStartEnabled(checked)
@@ -1294,8 +1349,8 @@ private fun BehaviorTab(
                     HorizontalDivider(color = FlatBorder)
 
                     BehaviorSwitchRow(
-                        title = "Always on Top",
-                        subtitle = "Keep the floating notch and dock above other windows",
+                        title = stringResource(Res.string.always_on_top_title),
+                        subtitle = stringResource(Res.string.always_on_top_desc),
                         checked = config.alwaysOnTop,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(alwaysOnTop = checked) }
@@ -1305,19 +1360,8 @@ private fun BehaviorTab(
                     HorizontalDivider(color = FlatBorder)
 
                     BehaviorSwitchRow(
-                        title = "Show App Labels",
-                        subtitle = "Display app name labels when hovering over icons in the notch",
-                        checked = config.showTooltips,
-                        onCheckedChange = { checked ->
-                            onUpdate { it.copy(showTooltips = checked) }
-                        }
-                    )
-
-                    HorizontalDivider(color = FlatBorder)
-
-                    BehaviorSwitchRow(
-                        title = "Collapse on Launch",
-                        subtitle = "Automatically collapse dock back into pill after launching an app",
+                        title = stringResource(Res.string.collapse_on_launch_title),
+                        subtitle = stringResource(Res.string.collapse_on_launch_desc),
                         checked = config.hideOnAppLaunch,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(hideOnAppLaunch = checked) }
@@ -1446,7 +1490,7 @@ private fun AboutDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "About QuickNotch",
+                        text = stringResource(Res.string.about_header),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
@@ -1457,7 +1501,7 @@ private fun AboutDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = stringResource(Res.string.close),
                             tint = TextMuted,
                             modifier = Modifier.size(16.dp)
                         )
@@ -1466,26 +1510,18 @@ private fun AboutDialog(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                Box(
+                Image(
+                    painter = painterResource(Res.drawable.quicknotch_icon),
+                    contentDescription = stringResource(Res.string.app_name),
                     modifier = Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(FlatSurfaceElevated)
-                        .border(1.dp, FlatBorder, RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Widgets,
-                        contentDescription = "QuickNotch",
-                        tint = AccentIndigoLight,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "QuickNotch Desktop",
+                    text = stringResource(Res.string.about_product_name),
                     style = AppTypography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -1500,7 +1536,7 @@ private fun AboutDialog(
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "Version 1.0.0",
+                        text = stringResource(Res.string.about_version, stringResource(Res.string.app_version)),
                         style = AppTypography.labelSmall,
                         color = AccentCyan,
                         fontSize = 11.sp
@@ -1510,7 +1546,7 @@ private fun AboutDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Dynamic Island & Dock floating app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.",
+                    text = stringResource(Res.string.about_description),
                     style = AppTypography.bodySmall,
                     color = TextSecondary,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -1524,9 +1560,17 @@ private fun AboutDialog(
                     modifier = Modifier.padding(vertical = 4.dp)
                 ) {
                     val tags = if (HostPlatform.isMac) {
-                        listOf("Kotlin", "Compose Desktop", "macOS")
+                        listOf(
+                            stringResource(Res.string.about_tag_kotlin),
+                            stringResource(Res.string.about_tag_compose),
+                            stringResource(Res.string.about_tag_macos)
+                        )
                     } else {
-                        listOf("Kotlin", "Compose Desktop", "Win32 JNA")
+                        listOf(
+                            stringResource(Res.string.about_tag_kotlin),
+                            stringResource(Res.string.about_tag_compose),
+                            stringResource(Res.string.about_tag_windows)
+                        )
                     }
                     tags.forEach { tag ->
                         Box(
@@ -1544,7 +1588,7 @@ private fun AboutDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "© 2025 StarkDroid. All rights reserved.",
+                    text = stringResource(Res.string.about_copyright),
                     style = AppTypography.labelSmall,
                     color = TextMuted,
                     fontSize = 11.sp

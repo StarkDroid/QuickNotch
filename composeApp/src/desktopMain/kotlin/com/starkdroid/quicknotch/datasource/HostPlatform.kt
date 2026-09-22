@@ -7,10 +7,4 @@ object HostPlatform {
         osName.contains("mac", ignoreCase = true) || osName.contains("darwin", ignoreCase = true)
 
     val isWindows: Boolean = osName.contains("win", ignoreCase = true)
-
-    val displayName: String = when {
-        isMac -> "macOS"
-        isWindows -> "Windows"
-        else -> osName.ifBlank { "Desktop" }
-    }
 }

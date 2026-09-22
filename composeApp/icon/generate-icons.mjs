@@ -6,6 +6,7 @@
  *   composeApp/quicknotch.ico                       Windows taskbar/tray + installers
  *   composeApp/quicknotch.icns                      macOS Dock/Finder (via `iconutil`)
  *   composeApp/src/desktopMain/resources/quicknotch-tray.png   runtime tray icon
+ *   composeApp/src/commonMain/composeResources/drawable/quicknotch_icon.png   settings UI
  *
  * Requires `sharp` (already present in web/node_modules) and, for the .icns step,
  * macOS `iconutil`. Regenerate with:
@@ -107,5 +108,13 @@ console.log(`  built ${iconset}`);
 await mkdir(resourcesDir, { recursive: true });
 await writeFile(join(resourcesDir, 'quicknotch-tray.png'), pngs.get(32));
 console.log('  wrote composeApp/src/desktopMain/resources/quicknotch-tray.png');
+
+// --- Settings UI header icon --------------------------------------------------
+// 128px stays crisp at 2x for the settings header and about-dialog marks; it
+// lives in composeResources so the UI loads it through generated Res accessors.
+const drawableDir = join(root, 'composeApp', 'src', 'commonMain', 'composeResources', 'drawable');
+await mkdir(drawableDir, { recursive: true });
+await writeFile(join(drawableDir, 'quicknotch_icon.png'), pngs.get(128));
+console.log('  wrote composeApp/src/commonMain/composeResources/drawable/quicknotch_icon.png');
 
 console.log('\nNext:  iconutil -c icns <iconset> -o composeApp/quicknotch.icns');

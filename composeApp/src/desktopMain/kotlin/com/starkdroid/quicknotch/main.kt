@@ -19,6 +19,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.datasource.HostPlatform
+import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
@@ -29,6 +30,7 @@ import java.awt.Toolkit
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 import kotlin.math.roundToInt
+import org.jetbrains.compose.resources.stringResource
 
 fun main() {
     System.setProperty("apple.awt.application.name", "QuickNotch")
@@ -55,17 +57,18 @@ fun main() {
         val appIcon = remember { loadQuickNotchIcon() }
         Tray(
             icon = BitmapPainter(appIcon),
-            tooltip = "QuickNotch",
+            tooltip = stringResource(Res.string.app_name),
             menu = {
-                Item("Settings", onClick = { showSettings = true })
+                Item(stringResource(Res.string.menu_settings), onClick = { showSettings = true })
                 Item(
-                    if (isNotchVisible) "Hide Notch" else "Show Notch",
+                    if (isNotchVisible) stringResource(Res.string.menu_hide_notch)
+                    else stringResource(Res.string.menu_show_notch),
                     onClick = { isNotchVisible = !isNotchVisible }
                 )
                 Separator()
-                Item("Reset Defaults", onClick = { repository.resetToDefaults() })
+                Item(stringResource(Res.string.reset_defaults), onClick = { repository.resetToDefaults() })
                 Separator()
-                Item("Quit QuickNotch", onClick = ::exitApplication)
+                Item(stringResource(Res.string.menu_quit), onClick = ::exitApplication)
             }
         )
 

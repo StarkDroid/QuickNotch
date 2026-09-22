@@ -6,14 +6,15 @@ import kotlinx.serialization.Serializable
 /**
  * The four screen-edge anchors the notch can occupy. Corners and free-form
  * dragging are intentionally unsupported: a fixed, centred anchor keeps the
- * overlay perfectly still while it expands and collapses.
+ * overlay perfectly still while it expands and collapses. User-facing labels
+ * live in `composeResources/values/strings.xml`.
  */
 @Serializable
-enum class NotchPosition(val displayName: String) {
-    TOP_CENTER("Top Center"),
-    RIGHT_CENTER("Right Center"),
-    BOTTOM_CENTER("Bottom Center"),
-    LEFT_CENTER("Left Center");
+enum class NotchPosition {
+    TOP_CENTER,
+    RIGHT_CENTER,
+    BOTTOM_CENTER,
+    LEFT_CENTER;
 
     /** True when the notch grows along the vertical axis (left / right edges). */
     val isVertical: Boolean
@@ -26,20 +27,19 @@ enum class NotchPosition(val displayName: String) {
  */
 @Serializable
 enum class NotchStyle(
-    val displayName: String,
     /** Transparent gap between the anchored screen edge and the body (points). */
     val edgeGapDp: Int,
     /** Round every corner into a capsule, vs. keeping the edge side square. */
     val capsule: Boolean
 ) {
     /** Flush to the edge, inner corners rounded — the Dynamic-Island default. */
-    DYNAMIC_ISLAND("Dynamic Island", 0, false),
+    DYNAMIC_ISLAND(0, false),
 
     /** Detached stadium-shaped pill floating a few points off the edge. */
-    FLOATING_PILL("Floating Pill", 14, true),
+    FLOATING_PILL(14, true),
 
     /** A slim, unobtrusive bar that expands into the full dock on hover. */
-    DRAG_HANDLE("Drag Handle", 10, true)
+    DRAG_HANDLE(10, true)
 }
 
 /**
@@ -51,13 +51,13 @@ enum class NotchStyle(
  * without a native screen-capture loop.
  */
 @Serializable
-enum class NotchSurface(val displayName: String) {
+enum class NotchSurface {
     /** Fully opaque black — the default. */
-    SOLID("Solid"),
+    SOLID,
 
     /** Translucent, smooth glass. (Serialised as the former name "BLUR".) */
     @SerialName("BLUR")
-    TRANSLUCENT("Translucent")
+    TRANSLUCENT
 }
 
 /**

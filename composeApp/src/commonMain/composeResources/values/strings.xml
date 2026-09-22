@@ -1,0 +1,95 @@
+<resources>
+    <!-- App / header -->
+    <string name="app_name">QuickNotch</string>
+    <string name="settings_tagline">Dynamic Island &amp; Floating Dock Customizer</string>
+    <string name="about">About</string>
+    <string name="close">Close</string>
+    <string name="clear">Clear</string>
+
+    <!-- Tray menu -->
+    <string name="menu_settings">Settings</string>
+    <string name="menu_hide_notch">Hide Notch</string>
+    <string name="menu_show_notch">Show Notch</string>
+    <string name="reset_defaults">Reset Defaults</string>
+    <string name="menu_quit">Quit QuickNotch</string>
+
+    <!-- Tabs -->
+    <string name="tab_dock_sizing">Dock &amp; Sizing</string>
+    <string name="tab_pinned_apps">Pinned Apps</string>
+    <string name="tab_behavior">Behavior</string>
+
+    <!-- Enum labels: screen edge -->
+    <string name="edge_top_center">Top Center</string>
+    <string name="edge_right_center">Right Center</string>
+    <string name="edge_bottom_center">Bottom Center</string>
+    <string name="edge_left_center">Left Center</string>
+
+    <!-- Enum labels: notch style -->
+    <string name="style_dynamic_island">Dynamic Island</string>
+    <string name="style_floating_pill">Floating Pill</string>
+    <string name="style_drag_handle">Drag Handle</string>
+
+    <!-- Enum labels: surface -->
+    <string name="surface_solid">Solid</string>
+    <string name="surface_translucent">Translucent</string>
+
+    <!-- Dock & Sizing tab -->
+    <string name="dock_sizing_header">Dock Layout &amp; Sizing</string>
+    <string name="reset">Reset</string>
+    <string name="screen_edge_positioning">Screen Edge Positioning</string>
+    <string name="screen_edge_positioning_desc">Choose which screen edge the notch anchors to</string>
+    <string name="notch_style">Notch Style</string>
+    <string name="surface_theme">Surface Theme</string>
+    <string name="fisheye_title">Icon Fish-eye Magnification</string>
+    <string name="fisheye_desc">Icons magnify precisely under the cursor; the wave radius is derived from icon size automatically</string>
+    <string name="peak_scale_title">Magnification Peak Scale</string>
+    <string name="base_icon_size_title">Base Icon Size</string>
+    <string name="show_labels_title">Show App Labels</string>
+    <string name="show_labels_desc">Display app name labels when hovering over icons</string>
+    <string name="geometry_title">Notch Geometry</string>
+    <string name="geometry_desc">Collapsed pill and expanded dock dimensions</string>
+    <string name="collapsed_width_title">Collapsed Pill Width</string>
+    <string name="expanded_height_title">Expanded Dock Height</string>
+    <string name="value_dp">%1$s dp</string>
+    <string name="value_scale">%1$sx</string>
+
+    <!-- Pinned apps tab -->
+    <string name="pinned_items">Pinned Items</string>
+    <string name="no_apps_pinned">No apps pinned.
+Add apps from the list on the right.</string>
+    <string name="add_applications">Add Applications</string>
+    <string name="search_hint">Search installed apps...</string>
+    <string name="browse">Browse</string>
+    <string name="no_matches">No matching applications found</string>
+    <string name="pick_mac_title">Choose a macOS Application</string>
+    <string name="pick_mac_filter">Applications (.app)</string>
+    <string name="pick_win_filter">Executables &amp; Shortcuts (*.exe, *.lnk)</string>
+    <string name="move_up">Move Up</string>
+    <string name="move_down">Move Down</string>
+    <string name="remove">Remove</string>
+    <string name="pinned_badge">Pinned</string>
+    <string name="add">Add</string>
+
+    <!-- Behavior tab -->
+    <string name="behavior_header">System &amp; Startup Behaviors</string>
+    <string name="autostart_title_mac">Start at Login</string>
+    <string name="autostart_title_windows">Start on Windows Boot</string>
+    <string name="autostart_desc_mac">Launch QuickNotch automatically when you sign in to macOS</string>
+    <string name="autostart_desc_windows">Launch QuickNotch automatically on user sign-in</string>
+    <string name="always_on_top_title">Always on Top</string>
+    <string name="always_on_top_desc">Keep the floating notch and dock above other windows</string>
+    <string name="collapse_on_launch_title">Collapse on Launch</string>
+    <string name="collapse_on_launch_desc">Automatically collapse dock back into pill after launching an app</string>
+
+    <!-- About dialog -->
+    <string name="about_header">About QuickNotch</string>
+    <string name="about_product_name">QuickNotch Desktop</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="app_version">1.0.0</string>
+    <string name="about_description">Dynamic Island &amp; Dock floating app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.</string>
+    <string name="about_tag_kotlin">Kotlin</string>
+    <string name="about_tag_compose">Compose Desktop</string>
+    <string name="about_tag_macos">macOS</string>
+    <string name="about_tag_windows">Win32 JNA</string>
+    <string name="about_copyright">© 2025 StarkDroid. All rights reserved.</string>
+</resources>
