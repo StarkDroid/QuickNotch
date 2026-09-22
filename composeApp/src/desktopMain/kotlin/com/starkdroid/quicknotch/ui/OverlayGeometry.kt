@@ -41,6 +41,14 @@ internal object DockLayout {
 
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
+
+    /**
+     * Along-axis footprint of the now-playing page when it is live. Sized so
+     * the vinyl, metadata and transport controls fit without clipping inside
+     * the expanded dock; the apps page is narrower, so the window widens to
+     * this whenever the music page is active.
+     */
+    val NowPlayingWidth: Dp = 356.dp
 }
 
 /**
@@ -73,20 +81,32 @@ data class NotchMetrics(
 }
 
 /**
- * Derives the overlay window footprint from configuration and pin count. The
- * expanded "along" length hugs the actual dock content instead of a fixed
- * minimum, which removes the dead space that used to flank the icons. For
- * left / right docks with tooltips on, the cross axis also grows by
+ * Derives the overlay window footprint from configuration, pin count and
+ * whether the now-playing live activity is currently on. The expanded "along"
+ * length hugs the actual widget content instead of a fixed minimum, which
+ * removes the dead space that used to flank the icons. When the now-playing
+ * page is live it is wider than the apps page, so the window widens to that
+ * page — the apps page keeps its own (narrower) layout, centred. For left /
+ * right docks with tooltips on, the cross axis also grows by
  * [DockLayout.LabelBubbleReserve] so the label can bubble out of the notch.
  */
-fun computeNotchMetrics(config: NotchConfig, favoriteCount: Int): NotchMetrics {
+fun computeNotchMetrics(
+    config: NotchConfig,
+    favoriteCount: Int,
+    musicActive: Boolean = false
+): NotchMetrics {
     val base = config.baseIconSizeDp.dp
     val count = favoriteCount.coerceAtLeast(0)
     val vertical = config.position.isVertical
 
-    val alongExpanded = DockLayout.ContentPadding +
-        DockLayout.iconSlot(base) * count +
-        DockLayout.AlongSafety
+    val appsAlong =
+        if (config.widgets.pinnedAppsEnabled) {
+            DockLayout.ContentPadding +
+                DockLayout.iconSlot(base) * count +
+                DockLayout.AlongSafety
+        } else 0.dp
+    val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
+    val alongExpanded = maxOf(appsAlong, musicAlong)
     val alongCollapsed = config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin
 
     val islandDepth = config.expandedNotchHeightDp.dp + DockLayout.ExpandedDepthMargin

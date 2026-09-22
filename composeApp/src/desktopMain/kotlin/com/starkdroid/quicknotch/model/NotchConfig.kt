@@ -61,6 +61,17 @@ enum class NotchSurface {
 }
 
 /**
+ * Per-widget enable flags, edited from the Widgets tab. Defaults keep the
+ * historical behaviour (pinned apps always present); a media page additionally
+ * requires a live session and a capsule-friendly [NotchStyle].
+ */
+@Serializable
+data class WidgetsConfig(
+    val pinnedAppsEnabled: Boolean = true,
+    val nowPlayingEnabled: Boolean = true
+)
+
+/**
  * Persistent configuration for the floating notch and its dock.
  *
  * The fisheye magnification radius is no longer user-tunable: it is derived
@@ -72,6 +83,7 @@ data class NotchConfig(
     val position: NotchPosition = NotchPosition.TOP_CENTER,
     val style: NotchStyle = NotchStyle.DYNAMIC_ISLAND,
     val surface: NotchSurface = NotchSurface.SOLID,
+    val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,
     val baseIconSizeDp: Int = 38,
     val collapsedPillWidthDp: Int = 150,
