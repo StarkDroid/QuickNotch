@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.ImageBitmap
@@ -20,11 +21,14 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.MediaController
+import com.starkdroid.quicknotch.media.MediaControllerFactory
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
 import com.starkdroid.quicknotch.ui.SettingsScreen
 import com.starkdroid.quicknotch.ui.computeNotchMetrics
+import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
 import java.awt.Toolkit
 import java.awt.image.BufferedImage
@@ -49,6 +53,16 @@ fun main() {
         val config by repository.config.collectAsState()
         val favorites by repository.favorites.collectAsState()
 
+        // One system-wide media feed for the whole app: the tray, the overlay
+        // and the settings window all observe the same session.
+        val media = remember { MediaControllerFactory.create() }
+        val liveSession by media.session.collectAsState()
+        DisposableEffect(Unit) {
+            media.start()
+            onDispose { media.stop() }
+        }
+
+        val musicLive = isMusicLive(config, liveSession)
         var showSettings by remember { mutableStateOf(false) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
@@ -75,6 +89,8 @@ fun main() {
         if (isNotchVisible) {
             NotchOverlayWindow(
                 repository = repository,
+                media = media,
+                musicLive = musicLive,
                 appIcon = appIcon,
                 isExpanded = isExpanded,
                 isWindowExpanded = isWindowExpanded,
@@ -96,7 +112,11 @@ fun main() {
                 resizable = true
             ) {
                 QuickNotchTheme(darkTheme = true) {
-                    SettingsScreen(repository = repository, onClose = { showSettings = false })
+                    SettingsScreen(
+                        repository = repository,
+                        media = media,
+                        onClose = { showSettings = false }
+                    )
                 }
             }
         }
@@ -116,6 +136,8 @@ fun main() {
 @Composable
 private fun NotchOverlayWindow(
     repository: FavoritesRepository,
+    media: MediaController,
+    musicLive: Boolean,
     appIcon: ImageBitmap,
     isExpanded: Boolean,
     isWindowExpanded: Boolean,
@@ -124,7 +146,9 @@ private fun NotchOverlayWindow(
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
-    val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
+    val metrics = remember(config, favorites.size, musicLive) {
+        computeNotchMetrics(config, favorites.size, musicLive)
+    }
     val targetSize = metrics.sizeFor(isWindowExpanded)
 
     val overlayState = rememberWindowState(
@@ -165,6 +189,7 @@ private fun NotchOverlayWindow(
         QuickNotchTheme(darkTheme = config.themeDark) {
             FloatingNotchOverlay(
                 repository = repository,
+                media = media,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
                 onWindowExpandedChange = onWindowExpandedChange

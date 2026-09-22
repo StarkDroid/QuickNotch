@@ -1,7 +1,12 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,6 +33,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,6 +43,8 @@ import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.InstalledAppsScanner
 import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.MediaController
+import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -63,15 +71,17 @@ private val FlatCard = Color(0xFF121622)
 @Composable
 fun SettingsScreen(
     repository: FavoritesRepository,
+    media: MediaController,
     onClose: () -> Unit
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
+    val liveSession by media.session.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(
         stringResource(Res.string.tab_dock_sizing),
-        stringResource(Res.string.tab_pinned_apps),
+        stringResource(Res.string.tab_widgets),
         stringResource(Res.string.tab_behavior)
     )
     val tabIcons = listOf(Icons.Default.Tune, Icons.Default.Apps, Icons.Default.ToggleOn)
@@ -193,16 +203,20 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    1 -> PinnedAppsTab(
+                    1 -> WidgetsTab(
+                        config = config,
                         favorites = favorites,
                         scannedApps = scannedApps,
                         searchQuery = searchQuery,
                         isScanning = isScanning,
+                        liveSession = liveSession,
+                        media = media,
                         onSearchQueryChange = { searchQuery = it },
                         onAddFavorite = { repository.addFavorite(it) },
                         onRemoveFavorite = { repository.removeFavorite(it) },
                         onMoveUp = { i -> if (i > 0) repository.reorderFavorites(i, i - 1) },
                         onMoveDown = { i -> if (i < favorites.size - 1) repository.reorderFavorites(i, i + 1) },
+                        onUpdate = { repository.updateConfig(it) },
                         onResetDefaults = { repository.resetToDefaults() }
                     )
                     2 -> BehaviorTab(
@@ -791,6 +805,236 @@ private fun MinimalistSliderRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WidgetsTab(
+    config: NotchConfig,
+    favorites: List<AppItem>,
+    scannedApps: List<AppItem>,
+    searchQuery: String,
+    isScanning: Boolean,
+    liveSession: MediaSession?,
+    media: MediaController,
+    onSearchQueryChange: (String) -> Unit,
+    onAddFavorite: (AppItem) -> Unit,
+    onRemoveFavorite: (String) -> Unit,
+    onMoveUp: (Int) -> Unit,
+    onMoveDown: (Int) -> Unit,
+    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
+    onResetDefaults: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = stringResource(Res.string.widgets_header),
+                    style = AppTypography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextSecondary
+                )
+                Text(
+                    text = stringResource(Res.string.widgets_header_desc),
+                    style = AppTypography.bodySmall,
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            item(key = "pinnedApps") {
+                WidgetAccordion(
+                    icon = Icons.Default.Apps,
+                    title = stringResource(Res.string.widget_apps_title),
+                    subtitle = stringResource(Res.string.widget_apps_desc),
+                    enabled = config.widgets.pinnedAppsEnabled,
+                    onToggleEnabled = { enabled ->
+                        onUpdate { it.copy(widgets = it.widgets.copy(pinnedAppsEnabled = enabled)) }
+                    }
+                ) {
+                    PinnedAppsTab(
+                        favorites = favorites,
+                        scannedApps = scannedApps,
+                        searchQuery = searchQuery,
+                        isScanning = isScanning,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onAddFavorite = onAddFavorite,
+                        onRemoveFavorite = onRemoveFavorite,
+                        onMoveUp = onMoveUp,
+                        onMoveDown = onMoveDown,
+                        onResetDefaults = onResetDefaults,
+                        fixedHeight = true
+                    )
+                }
+            }
+            item(key = "nowPlaying") {
+                WidgetAccordion(
+                    icon = Icons.Default.MusicNote,
+                    title = stringResource(Res.string.widget_music_title),
+                    subtitle = stringResource(Res.string.widget_music_desc),
+                    enabled = config.widgets.nowPlayingEnabled,
+                    onToggleEnabled = { enabled ->
+                        onUpdate { it.copy(widgets = it.widgets.copy(nowPlayingEnabled = enabled)) }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
+                            .padding(bottom = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        NowPlayingStatus(config = config, liveSession = liveSession)
+
+                        Text(
+                            text = stringResource(Res.string.widget_scroll_hint),
+                            style = AppTypography.bodySmall,
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+
+                        if (!isStyleEligibleForLiveActivity(config)) {
+                            Text(
+                                text = stringResource(Res.string.widget_style_warning),
+                                style = AppTypography.bodySmall,
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WidgetAccordion(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    enabled: Boolean,
+    onToggleEnabled: (Boolean) -> Unit,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = FlatSurface),
+        border = BorderStroke(1.dp, FlatBorder),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(FlatSurfaceElevated)
+                        .border(1.dp, FlatBorder, RoundedCornerShape(9.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = AccentIndigoLight,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = subtitle,
+                        style = AppTypography.bodySmall,
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+                MinimalistRectSwitch(checked = enabled, onCheckedChange = onToggleEnabled)
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(tween(160)),
+                exit = shrinkVertically() + fadeOut(tween(120))
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) { content() }
+            }
+        }
+    }
+}
+
+/**
+ * The widget's live status pill: a green dot when a media session is actively
+ * feeding the notch, otherwise the rendered state the user can compare against.
+ */
+@Composable
+private fun NowPlayingStatus(
+    config: NotchConfig,
+    liveSession: MediaSession?
+) {
+    val live = isMusicLive(config, liveSession)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(FlatCard)
+            .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(if (live) AccentGreen else TextMuted.copy(alpha = 0.4f))
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = if (live && liveSession != null) {
+                stringResource(Res.string.widget_now_playing, liveSession.title, liveSession.artist.ifBlank { "—" })
+            } else {
+                stringResource(Res.string.widget_no_session)
+            },
+            style = AppTypography.bodySmall,
+            color = if (live) TextPrimary else TextSecondary,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 private fun PinnedAppsTab(
     favorites: List<AppItem>,
@@ -802,7 +1046,8 @@ private fun PinnedAppsTab(
     onRemoveFavorite: (String) -> Unit,
     onMoveUp: (Int) -> Unit,
     onMoveDown: (Int) -> Unit,
-    onResetDefaults: () -> Unit
+    onResetDefaults: () -> Unit,
+    fixedHeight: Boolean = false
 ) {
     val filteredApps = remember(scannedApps, searchQuery) {
         if (searchQuery.isBlank()) scannedApps else scannedApps.filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -818,10 +1063,14 @@ private fun PinnedAppsTab(
     val pickMacFilter = stringResource(Res.string.pick_mac_filter)
     val pickWindowsFilter = stringResource(Res.string.pick_win_filter)
 
+    // Embedded in the widgets accordion the content gets a fixed height so the
+    // inner LazyColumns are never measured against an unbounded constraint.
     Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 16.dp),
+        modifier = (if (fixedHeight) {
+            Modifier.fillMaxWidth().height(430.dp)
+        } else {
+            Modifier.fillMaxSize()
+        }).padding(bottom = if (fixedHeight) 0.dp else 16.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Left Column: Current Pinned Apps

@@ -15,7 +15,7 @@
 
     <!-- Tabs -->
     <string name="tab_dock_sizing">Dock &amp; Sizing</string>
-    <string name="tab_pinned_apps">Pinned Apps</string>
+    <string name="tab_widgets">Widgets</string>
     <string name="tab_behavior">Behavior</string>
 
     <!-- Enum labels: screen edge -->
@@ -69,6 +69,22 @@ Add apps from the list on the right.</string>
     <string name="remove">Remove</string>
     <string name="pinned_badge">Pinned</string>
     <string name="add">Add</string>
+
+    <!-- Widgets tab -->
+    <string name="widgets_header">Widgets</string>
+    <string name="widgets_header_desc">Enable widgets and tune them. Open the notch and scroll the wheel to flip between the active ones.</string>
+    <string name="widget_apps_title">Pinned Apps</string>
+    <string name="widget_apps_desc">Quick-launch applications in the notch dock</string>
+    <string name="widget_music_title">Now Playing</string>
+    <string name="widget_music_desc">Live music activity on the notch from any app</string>
+    <string name="widget_now_playing">Now playing: %1$s — %2$s</string>
+    <string name="widget_no_session">No active media session</string>
+    <string name="widget_style_warning">Live activity appears only on the Dynamic Island and Floating Pill styles.</string>
+    <string name="widget_scroll_hint">Scroll the mouse wheel over the open notch to switch between enabled widgets.</string>
+    <string name="music_play">Play</string>
+    <string name="music_pause">Pause</string>
+    <string name="music_previous">Previous track</string>
+    <string name="music_next">Next track</string>
 
     <!-- Behavior tab -->
     <string name="behavior_header">System &amp; Startup Behaviors</string>

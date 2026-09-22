@@ -3,9 +3,14 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,13 +21,19 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -32,6 +43,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +58,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,8 +74,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -69,6 +91,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.MediaController
+import com.starkdroid.quicknotch.media.MediaSession
+import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -84,11 +110,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
+import org.jetbrains.compose.resources.stringResource
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
 private val IslandBubbleFill = Color(0xF21C1C1E)
 private val BubbleShadow = Color(0x66000000)
+private val LiveAccent = Color(0xFF38BDF8)
+private val VinylDiscFill = Color(0xFF14161C)
+private val VinylRing = Color(0xFF343A45)
 
 // ── Motion ───────────────────────────────────────────────────────────────────
 // Near-critically-damped springs mirror AppKit's default view animation: a
@@ -105,6 +136,12 @@ private fun notchSizeSpring() = spring(
 private fun iconSpring() = spring(
     dampingRatio = 0.8f,
     stiffness = 1000f,
+    visibilityThreshold = 0.001f
+)
+
+private fun pageSpring() = spring(
+    dampingRatio = 0.9f,
+    stiffness = 900f,
     visibilityThreshold = 0.001f
 )
 
@@ -143,6 +180,7 @@ private const val IslandSettleTimeoutMs = 650L
 @Composable
 fun FloatingNotchOverlay(
     repository: FavoritesRepository,
+    media: MediaController,
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit,
@@ -155,6 +193,20 @@ fun FloatingNotchOverlay(
 
     val iconBitmaps = remember { mutableStateMapOf<String, ImageBitmap>() }
     LoadFavoriteIcons(favorites, iconBitmaps)
+
+    val liveSession by media.session.collectAsState()
+    val musicLive = isMusicLive(config, liveSession)
+
+    // Position interpolation clock. The media bridge samples once per second;
+    // advancing a local clock between samples lets the vinyl and the progress
+    // strip move at frame time instead of stepping once per heartbeat.
+    var nowMs by remember { mutableStateOf(System.nanoTime() / 1_000_000) }
+    LaunchedEffect(musicLive, liveSession?.state) {
+        while (musicLive && liveSession?.state == PlaybackState.PLAYING) {
+            delay(250)
+            nowMs = System.nanoTime() / 1_000_000
+        }
+    }
 
     var showDock by remember { mutableStateOf(false) }
 
@@ -173,16 +225,50 @@ fun FloatingNotchOverlay(
         }
     }
 
-    val metrics = remember(config, favorites.size) { computeNotchMetrics(config, favorites.size) }
+    // Expanded content is a set of always-composed, always-expanded widget
+    // pages; the wheel moves between them. The set is derived only from things
+    // that rarely change, and a page entering/leaving mid-expansion clamps the
+    // index instead of jittering.
+    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive) {
+        buildList {
+            if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
+            if (musicLive) add(WidgetPage.Music)
+        }
+    }
+    var pageIndex by remember { mutableStateOf(0) }
+    LaunchedEffect(pages.size) {
+        if (pageIndex >= pages.size) pageIndex = (pages.size - 1).coerceAtLeast(0)
+    }
+    val pagePosition by animateFloatAsState(pageIndex.toFloat(), pageSpring(), label = "pagePosition")
+
+    val scrollThresholdPx = with(density) { 30.dp.toPx() }
+    var scrollAccum by remember { mutableFloatStateOf(0f) }
+    fun handlePageScroll(event: PointerEvent) {
+        if (!showDock || pages.size <= 1) return
+        val delta = event.changes.fold(0f) { acc, change -> acc + change.scrollDelta.y }
+        if (delta == 0f) return
+        scrollAccum += delta
+        while (abs(scrollAccum) >= scrollThresholdPx) {
+            val step = if (scrollAccum > 0) 1 else -1
+            scrollAccum -= step * scrollThresholdPx
+            val next = (pageIndex + step).coerceIn(0, pages.size - 1)
+            if (next != pageIndex) {
+                pageIndex = next
+                scrollAccum = 0f
+            }
+        }
+    }
+
+    val metrics = remember(config, favorites.size, musicLive) {
+        computeNotchMetrics(config, favorites.size, musicLive)
+    }
     // Cached once per surface choice; the brushes are built at class load,
     // so nothing here allocates while the island animates.
     val surface = remember(config.surface) { IslandSurface.styleFor(config.surface) }
 
-    // The dock is never composited away or re-measured — it lives in the
-    // window-sized root so it is permanently laid out at the expanded
-    // footprint. Reveal is then just an alpha+scale layer animation, which is
-    // why the open no longer drops frames: the grow spring, the native resize
-    // and the dock's first draw are fully decoupled.
+    // The dock stays composed permanently (with input gated off while hidden) so
+    // its first measure/layout never coincides with the open animation; all
+    // the reveal does is fade a layer. Alpha 0 also skips the draw entirely.
     val dockAlpha by animateFloatAsState(if (showDock) 1f else 0f, if (showDock) DockFadeIn else DockFadeOut, label = "dockAlpha")
     val dockScale by animateFloatAsState(if (showDock) 1f else 0.97f, dockRevealSpring(), label = "dockScale")
 
@@ -251,7 +337,17 @@ fun FloatingNotchOverlay(
                 CollapsedIsland(
                     vertical = config.position.isVertical,
                     style = config.style,
-                    surface = config.surface
+                    surface = config.surface,
+                    media = if (musicLive) liveSession else null
+                )
+            }
+            // Live progress hugs the pill's inner border (the edge facing the
+            // nearest screen centre), thinning while the pill itself is thin.
+            val liveNow = if (musicLive) liveSession else null
+            if (!isExpanded && liveNow != null) {
+                LiveProgressStrip(
+                    position = config.position,
+                    fraction = liveNow.progressFraction(nowMs)
                 )
             }
         }
@@ -266,13 +362,21 @@ fun FloatingNotchOverlay(
                     alpha = dockAlpha
                     scaleX = dockScale
                     scaleY = dockScale
+                }
+                .onPointerEvent(PointerEventType.Scroll) { event ->
+                    handlePageScroll(event)
                 },
             contentAlignment = Alignment.Center
         ) {
-            Dock(
+            WidgetPages(
+                pages = pages,
+                pagePosition = pagePosition,
                 favorites = favorites,
                 config = config,
                 iconBitmaps = iconBitmaps,
+                session = liveSession,
+                media = media,
+                nowMs = nowMs,
                 density = density,
                 interactive = showDock,
                 bubbleInset = metrics.bubbleInset,
@@ -585,7 +689,8 @@ private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
 private fun CollapsedIsland(
     vertical: Boolean,
     style: NotchStyle,
-    surface: NotchSurface
+    surface: NotchSurface,
+    media: MediaSession?
 ) {
     val rotated = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -598,6 +703,25 @@ private fun CollapsedIsland(
                     .clip(CircleShape)
                     .background(handleTint(surface))
             )
+        } else if (media != null) {
+            // Collapsed live activity: a thin disc and the track title replace
+            // the idle glyphs while something is actually playing.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = rotated
+            ) {
+                MiniDisc(art = media.artwork, size = 17.dp)
+                Text(
+                    text = media.title,
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 94.dp)
+                )
+            }
         } else {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -617,6 +741,433 @@ private fun CollapsedIsland(
         }
     }
 }
+
+/**
+ * Progress bar drawn against the pill's "inner" border — the edge nearest the
+ * screen centre, i.e. the one opposite the anchored screen edge — growing toward
+ * the playhead as the track advances. Hidden behind the expanding island once
+ * the dock opens (the expanded page shows its own progress control).
+ */
+@Composable
+private fun BoxScope.LiveProgressStrip(
+    position: NotchPosition,
+    fraction: Float
+) {
+    val (alignment, horizontal) = when (position) {
+        NotchPosition.TOP_CENTER -> Alignment.BottomCenter to true
+        NotchPosition.BOTTOM_CENTER -> Alignment.TopCenter to true
+        NotchPosition.LEFT_CENTER -> Alignment.CenterEnd to false
+        NotchPosition.RIGHT_CENTER -> Alignment.CenterStart to false
+    }
+    val settlePadding = 2.dp
+    Box(
+        modifier = Modifier
+            .align(alignment)
+            .padding(
+                horizontal = if (horizontal) 0.dp else settlePadding,
+                vertical = if (horizontal) settlePadding else 0.dp
+            )
+            .then(
+                if (horizontal) {
+                    Modifier
+                        .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                        .height(2.5.dp)
+                } else {
+                    Modifier
+                        .fillMaxHeight(fraction.coerceIn(0f, 1f))
+                        .width(2.5.dp)
+                }
+            )
+            .clip(RoundedCornerShape(2.dp))
+            .background(LiveAccent.copy(alpha = 0.95f))
+    )
+}
+
+@Composable
+private fun MiniDisc(art: ImageBitmap?, size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(VinylDiscFill)
+            .border(1.dp, VinylRing.copy(alpha = 0.8f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (art != null) {
+            Image(
+                bitmap = art,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.size(size * 0.58f)
+            )
+        }
+    }
+}
+
+// ── Widget pages ─────────────────────────────────────────────────────────────
+
+private enum class WidgetPage { Apps, Music }
+
+/**
+ * Renders every active widget page as an always-composed sibling so the pager
+ * never measures the music page while the window is animating. Inactive pages
+ * are pushed aside with a small alpha+slide layer transform (never a
+ * subtraction/recomposition), and only the page under the pointer receives
+ * input.
+ */
+@Composable
+private fun WidgetPages(
+    pages: List<WidgetPage>,
+    pagePosition: Float,
+    favorites: List<AppItem>,
+    config: NotchConfig,
+    iconBitmaps: Map<String, ImageBitmap>,
+    session: MediaSession?,
+    media: MediaController,
+    nowMs: Long,
+    density: Density,
+    interactive: Boolean,
+    bubbleInset: Dp,
+    onLaunch: (AppItem) -> Unit
+) {
+    Box(Modifier.fillMaxSize()) {
+        pages.forEachIndexed { index, page ->
+            val relative = index - pagePosition
+            val isActive = abs(relative) < 0.5f
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = (1f - abs(relative)).coerceIn(0f, 1f)
+                        val slide = 0.35f * relative * (if (config.position.isVertical) size.width else size.height)
+                        if (config.position.isVertical) translationX = slide else translationY = slide
+                    }
+            ) {
+                when (page) {
+                    WidgetPage.Apps -> Dock(
+                        favorites = favorites,
+                        config = config,
+                        iconBitmaps = iconBitmaps,
+                        density = density,
+                        interactive = interactive && isActive,
+                        bubbleInset = bubbleInset,
+                        onLaunch = onLaunch
+                    )
+                    WidgetPage.Music -> if (session != null) {
+                        MusicPage(
+                            session = session,
+                            media = media,
+                            nowMs = nowMs,
+                            interactive = interactive && isActive,
+                            vertical = config.position.isVertical
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicPage(
+    session: MediaSession,
+    media: MediaController,
+    nowMs: Long,
+    interactive: Boolean,
+    vertical: Boolean
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { if (vertical) rotationZ = 90f },
+        contentAlignment = Alignment.Center
+    ) {
+        MusicContent(
+            session = session,
+            media = media,
+            nowMs = nowMs,
+            interactive = interactive
+        )
+    }
+}
+
+@Composable
+private fun MusicContent(
+    session: MediaSession,
+    media: MediaController,
+    nowMs: Long,
+    interactive: Boolean
+) {
+    val playing = session.state == PlaybackState.PLAYING
+    val duration = session.durationMs.coerceAtLeast(0L)
+    val elapsed = session.displayedPositionMs(nowMs).coerceAtLeast(0L)
+        .coerceAtMost(if (duration > 0L) duration else Long.MAX_VALUE)
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        VinylDisc(art = session.artwork, playing = playing, size = 64.dp)
+
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(
+                text = session.title,
+                color = Color.White.copy(alpha = 0.95f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (session.artist.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = session.artist,
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(9.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TrackTimeLabel(elapsed)
+                TrackProgress(
+                    fraction = session.progressFraction(nowMs),
+                    durationMs = duration,
+                    seekable = media.supportsSeek,
+                    enabled = interactive,
+                    onSeek = media::seekTo,
+                    modifier = Modifier.weight(1f)
+                )
+                TrackTimeLabel(duration)
+            }
+        }
+
+        TransportControls(
+            state = session.state,
+            enabled = interactive,
+            media = media
+        )
+    }
+}
+
+@Composable
+private fun TrackTimeLabel(ms: Long) {
+    Text(
+        text = formatMs(ms),
+        color = Color.White.copy(alpha = 0.5f),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Medium
+    )
+}
+
+/**
+ * A playhead line with the elapsed fill in the live accent. Dragging or
+ * tapping (when the backend supports seeking) retargets the OS player; on
+ * macOS the strip is display-only, matching MediaRemote's limitations.
+ */
+@Composable
+private fun TrackProgress(
+    fraction: Float,
+    durationMs: Long,
+    seekable: Boolean,
+    enabled: Boolean,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val canSeek = seekable && enabled
+    val barHeight = 3.dp
+    Box(
+        modifier = modifier
+            .height(16.dp)
+            .then(
+                if (canSeek) {
+                    Modifier.pointerInput(durationMs) {
+                        detectTapGestures { position ->
+                            val ratio = (position.x / size.width.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            onSeek((durationMs.toFloat() * ratio).roundToInt().toLong())
+                        }
+                    }.pointerInput(durationMs) {
+                        detectDragGestures { change, _ ->
+                            val ratio = (change.position.x / size.width.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            onSeek((durationMs.toFloat() * ratio).roundToInt().toLong())
+                        }
+                    }
+                } else Modifier
+            ),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(barHeight)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.14f))
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .height(barHeight)
+                .clip(CircleShape)
+                .background(LiveAccent)
+        )
+    }
+}
+
+@Composable
+private fun TransportControls(
+    state: PlaybackState,
+    enabled: Boolean,
+    media: MediaController
+) {
+    val tint = TextPrimary.copy(alpha = if (enabled) 0.9f else 0.3f)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        IconButton(
+            onClick = { media.previous() },
+            enabled = enabled,
+            modifier = Modifier.size(30.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.SkipPrevious,
+                contentDescription = stringResource(Res.string.music_previous),
+                tint = tint,
+                modifier = Modifier.size(19.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(LiveAccent.copy(alpha = if (enabled) 0.92f else 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(
+                onClick = { media.playPause() },
+                enabled = enabled,
+                modifier = Modifier.size(34.dp)
+            ) {
+                Icon(
+                    imageVector = if (state == PlaybackState.PLAYING) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = stringResource(
+                        if (state == PlaybackState.PLAYING) Res.string.music_pause else Res.string.music_play
+                    ),
+                    tint = Color.Black.copy(alpha = 0.85f),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        IconButton(
+            onClick = { media.next() },
+            enabled = enabled,
+            modifier = Modifier.size(30.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.SkipNext,
+                contentDescription = stringResource(Res.string.music_next),
+                tint = tint,
+                modifier = Modifier.size(19.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The spinning record the live activity is named after: the track's album art
+ * clipped to a disc that rotates while playing (frozen at its current angle
+ * when paused, rather than letting an infinite animation drive it).
+ */
+@Composable
+private fun VinylDisc(
+    art: ImageBitmap?,
+    playing: Boolean,
+    size: Dp
+) {
+    val rotation by rememberInfiniteTransition(label = "vinyl").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 12000, easing = LinearEasing), RepeatMode.Restart),
+        label = "vinylAngle"
+    )
+    var frozenAngle by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(playing) { if (!playing) frozenAngle = rotation }
+    val angle = if (playing) rotation else frozenAngle
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .graphicsLayer { rotationZ = angle },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(VinylDiscFill)
+                .border(1.dp, VinylRing, CircleShape)
+        )
+        if (art != null) {
+            Image(
+                bitmap = art,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.size(size * 0.45f)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(size * 0.22f)
+                .clip(CircleShape)
+                .background(Color(0xFF07080C))
+                .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+        )
+    }
+}
+
+private fun formatMs(ms: Long): String {
+    val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "%d:%02d".format(minutes, seconds)
+}
+
+/**
+ * A widget only renders when its feature is enabled and its conditions hold:
+ * the now-playing page needs a live session and a capsule-friendly style
+ * (the drag handle is deliberately excluded from every live-activity surface,
+ * both collapsed and expanded).
+ */
+internal fun isStyleEligibleForLiveActivity(config: NotchConfig): Boolean =
+    config.style != NotchStyle.DRAG_HANDLE
+
+internal fun isMusicLive(config: NotchConfig, session: MediaSession?): Boolean =
+    config.widgets.nowPlayingEnabled &&
+        isStyleEligibleForLiveActivity(config) &&
+        session?.isActive == true
 
 // Glyph colours brighten slightly over the translucent surface so they
 // stay legible, and stay near-white on the opaque one.
