@@ -1,10 +1,12 @@
 package com.starkdroid.quicknotch.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 /**
  * Represents an application item that can be pinned to the Dynamic Island / Dock.
  */
+@Immutable
 @Serializable
 data class AppItem(
     val id: String,

@@ -1,5 +1,6 @@
 package com.starkdroid.quicknotch.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -65,6 +66,7 @@ enum class NotchSurface {
  * historical behaviour (pinned apps always present); a media page additionally
  * requires a live session and a capsule-friendly [NotchStyle].
  */
+@Immutable
 @Serializable
 data class WidgetsConfig(
     val pinnedAppsEnabled: Boolean = true,
@@ -79,6 +81,7 @@ data class WidgetsConfig(
  * from [baseIconSizeDp] so the wave always tracks the cursor with icon-level
  * precision (see `fisheyeRadiusPx`).
  */
+@Immutable
 @Serializable
 data class NotchConfig(
     val position: NotchPosition = NotchPosition.TOP_CENTER,

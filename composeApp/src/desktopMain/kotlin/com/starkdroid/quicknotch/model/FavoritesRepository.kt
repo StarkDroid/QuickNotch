@@ -1,21 +1,28 @@
 package com.starkdroid.quicknotch.model
 
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
  * Manages persistent storage of QuickNotch settings and pinned applications.
+ *
+ * In-memory state is the source of truth for the UI (each setter publishes the
+ * new value immediately); writes are handed to a single background writer that
+ * coalesces them, so dragging a slider persists exactly one final value instead
+ * of one file write per tick, and config/favorites never interleave.
  */
 class FavoritesRepository(
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
     private val json = Json {
         prettyPrint = true
@@ -55,6 +62,47 @@ class FavoritesRepository(
 
     private val _favorites = MutableStateFlow(loadFavorites())
     val favorites: StateFlow<List<AppItem>> = _favorites.asStateFlow()
+
+    // ── Coalescing persistence ────────────────────────────────────────────────
+    // Setters record the latest value of each kind under a plain lock (guarding
+    // only the tiny assignments, never file IO) and wake the writer. The writer
+    // drains the pending snapshots sequentially, so rapid changes — e.g. slider
+    // drags at frame rate — fold into a single disk write and concurrent
+    // writes to the same file can never interleave (no torn JSON).
+    private sealed interface PersistRequest {
+        data class Config(val value: NotchConfig) : PersistRequest
+        data class Favorites(val value: List<AppItem>) : PersistRequest
+    }
+
+    private val persistLock = Any()
+    private var pendingConfig: NotchConfig? = null
+    private var pendingFavorites: List<AppItem>? = null
+    private val persistWake = Channel<Unit>(Channel.CONFLATED)
+
+    init {
+        scope.launch {
+            for (wakeSignal in persistWake) {
+                val configToSave = synchronized(persistLock) {
+                    pendingConfig.also { pendingConfig = null }
+                }
+                val favoritesToSave = synchronized(persistLock) {
+                    pendingFavorites.also { pendingFavorites = null }
+                }
+                if (configToSave != null) saveConfigDirect(configToSave)
+                if (favoritesToSave != null) saveFavoritesDirect(favoritesToSave)
+            }
+        }
+    }
+
+    private fun persist(request: PersistRequest) {
+        synchronized(persistLock) {
+            when (request) {
+                is PersistRequest.Config -> pendingConfig = request.value
+                is PersistRequest.Favorites -> pendingFavorites = request.value
+            }
+        }
+        persistWake.trySend(Unit)
+    }
 
     private fun loadConfig(): NotchConfig {
         return try {
@@ -108,9 +156,7 @@ class FavoritesRepository(
     fun updateConfig(transform: (NotchConfig) -> NotchConfig) {
         val updated = transform(_config.value)
         _config.value = updated
-        scope.launch(Dispatchers.IO) {
-            saveConfigDirect(updated)
-        }
+        persist(PersistRequest.Config(updated))
     }
 
     fun addFavorite(item: AppItem) {
@@ -118,9 +164,7 @@ class FavoritesRepository(
         if (current.none { it.id == item.id || it.executablePath.equals(item.executablePath, ignoreCase = true) }) {
             current.add(item)
             _favorites.value = current
-            scope.launch(Dispatchers.IO) {
-                saveFavoritesDirect(current)
-            }
+            persist(PersistRequest.Favorites(current))
         }
     }
 
@@ -128,9 +172,7 @@ class FavoritesRepository(
         val current = _favorites.value.toMutableList()
         if (current.removeAll { it.id == id }) {
             _favorites.value = current
-            scope.launch(Dispatchers.IO) {
-                saveFavoritesDirect(current)
-            }
+            persist(PersistRequest.Favorites(current))
         }
     }
 
@@ -140,9 +182,7 @@ class FavoritesRepository(
             val item = current.removeAt(fromIndex)
             current.add(toIndex, item)
             _favorites.value = current
-            scope.launch(Dispatchers.IO) {
-                saveFavoritesDirect(current)
-            }
+            persist(PersistRequest.Favorites(current))
         }
     }
 
@@ -151,10 +191,8 @@ class FavoritesRepository(
         _favorites.value = defaults
         val defaultCfg = NotchConfig()
         _config.value = defaultCfg
-        scope.launch(Dispatchers.IO) {
-            saveFavoritesDirect(defaults)
-            saveConfigDirect(defaultCfg)
-        }
+        persist(PersistRequest.Favorites(defaults))
+        persist(PersistRequest.Config(defaultCfg))
     }
 
     private fun getDefaultFavorites(): List<AppItem> {

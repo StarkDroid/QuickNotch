@@ -46,15 +46,19 @@ object MacInstalledAppsScanner {
     }
 
     private fun addBundle(bundle: File, map: MutableMap<String, AppItem>) {
-        val displayName = readPlistString(bundle, "CFBundleDisplayName")
-            ?: readPlistString(bundle, "CFBundleName")
+        // Read the plist once and share it across every key we need, instead of
+        // re-reading the whole file per key (DisplayName / Name / IconFile /
+        // Identifier) for every bundle in the scan.
+        val plistText = readPlistText(bundle)
+        val displayName = plistString(plistText, "CFBundleDisplayName")
+            ?: plistString(plistText, "CFBundleName")
             ?: bundle.nameWithoutExtension
         val key = displayName.trim().lowercase()
         if (key.isBlank() || map.containsKey(key)) return
         if (IGNORED_TERMS.any { displayName.contains(it, ignoreCase = true) }) return
 
-        val iconFile = findBundleIcns(bundle)
-        val bundleId = readPlistString(bundle, "CFBundleIdentifier") ?: bundle.nameWithoutExtension
+        val iconFile = findBundleIcns(bundle, plistText)
+        val bundleId = plistString(plistText, "CFBundleIdentifier") ?: bundle.nameWithoutExtension
         map[key] = AppItem(
             id = "mac_" + bundleId.lowercase().replace(Regex("[^a-z0-9._-]+"), "_"),
             name = displayName.trim(),
@@ -63,9 +67,9 @@ object MacInstalledAppsScanner {
         )
     }
 
-    private fun findBundleIcns(bundle: File): File? {
+    private fun findBundleIcns(bundle: File, plistText: String?): File? {
         val resources = File(bundle, "Contents/Resources")
-        val iconFileName = readPlistString(bundle, "CFBundleIconFile")
+        val iconFileName = plistString(plistText, "CFBundleIconFile")
         if (!iconFileName.isNullOrBlank()) {
             val named = if (iconFileName.endsWith(".icns", ignoreCase = true)) iconFileName else "$iconFileName.icns"
             val candidate = File(resources, named)
@@ -76,9 +80,9 @@ object MacInstalledAppsScanner {
             ?.maxByOrNull { it.length() }
     }
 
-    fun readBundleInfo(bundle: File, key: String): String? = readPlistString(bundle, key)
+    fun readBundleInfo(bundle: File, key: String): String? = plistString(readPlistText(bundle), key)
 
-    private fun readPlistString(bundle: File, key: String): String? {
+    private fun readPlistText(bundle: File): String? {
         val plist = File(bundle, "Contents/Info.plist")
         if (!plist.isFile) return null
         return try {
@@ -86,11 +90,15 @@ object MacInstalledAppsScanner {
             val header = bytes.decodeToString(0, minOf(bytes.size, 64))
             val isXml = header.contains("<?xml") || header.contains("<plist") || header.contains("plist")
             if (!isXml) return null
-            val text = bytes.decodeToString()
-            val regex = Regex("<key>\\s*${Regex.escape(key)}\\s*</key>\\s*<string>([^<]+)</string>", RegexOption.IGNORE_CASE)
-            regex.find(text)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+            bytes.decodeToString()
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun plistString(plistText: String?, key: String): String? {
+        if (plistText == null) return null
+        val regex = Regex("<key>\\s*${Regex.escape(key)}\\s*</key>\\s*<string>([^<]+)</string>", RegexOption.IGNORE_CASE)
+        return regex.find(plistText)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
     }
 }
