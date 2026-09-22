@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Tray
@@ -27,11 +28,13 @@ import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
+import com.starkdroid.quicknotch.ui.OverlayPager
 import com.starkdroid.quicknotch.ui.SettingsScreen
 import com.starkdroid.quicknotch.ui.computeNotchMetrics
 import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
 import java.awt.Toolkit
+import java.awt.event.MouseWheelListener
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 import kotlin.math.roundToInt
@@ -180,6 +183,26 @@ private fun NotchOverlayWindow(
     ) {
         val awtWindow = window
 
+        // Shared widget-pager state; on Windows the wheel listener below drives
+        // it straight from AWT because the unfocused overlay window never sees
+        // scroll through Compose's pointer pipeline (which macOS' trackpad does).
+        val density = LocalDensity.current
+        val pager = remember { OverlayPager(with(density) { 30.dp.toPx() }) }
+
+        // Windows: one wheel notch on the whole overlay window maps onto one
+        // pager step through AWT (the layer that actually receives
+        // WM_MOUSEWHEEL) — independent of what is under the cursor or window
+        // focus. macOS keeps its Compose-path handling inside the overlay.
+        if (HostPlatform.isWindows) {
+            DisposableEffect(awtWindow, pager) {
+                val listener = MouseWheelListener { event ->
+                    pager.consumeWheel(event.preciseWheelRotation.toFloat() * pager.stepPx)
+                }
+                awtWindow.addMouseWheelListener(listener)
+                onDispose { awtWindow.removeMouseWheelListener(listener) }
+            }
+        }
+
         LaunchedEffect(config.position, config.style, targetSize) {
             val graphicsConfiguration = awtWindow.graphicsConfiguration
             val insets = Toolkit.getDefaultToolkit().getScreenInsets(graphicsConfiguration)
@@ -205,7 +228,8 @@ private fun NotchOverlayWindow(
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
                 onWindowExpandedChange = onWindowExpandedChange,
-                volumePercent = volumePercent
+                volumePercent = volumePercent,
+                pager = pager
             )
         }
     }

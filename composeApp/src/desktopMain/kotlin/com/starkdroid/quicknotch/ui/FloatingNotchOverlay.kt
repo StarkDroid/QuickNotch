@@ -104,6 +104,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
@@ -191,7 +192,7 @@ private const val IslandSettleTimeoutMs = 650L
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun FloatingNotchOverlay(
+internal fun FloatingNotchOverlay(
     repository: FavoritesRepository,
     media: MediaController,
     isExpanded: Boolean,
@@ -199,7 +200,9 @@ fun FloatingNotchOverlay(
     onWindowExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     /** System master-volume percentage (0-100); null hides the volume chip. */
-    volumePercent: Int? = null
+    volumePercent: Int? = null,
+    /** Shared widget-pager state (also driven by the Windows AWT wheel listener). */
+    pager: OverlayPager
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
@@ -223,7 +226,7 @@ fun FloatingNotchOverlay(
         }
     }
 
-    var showDock by remember { mutableStateOf(false) }
+    var showDock by pager.dockVisible
 
     // Collapse is debounced so a cursor briefly clipping the edge does not
     // immediately retract the dock.
@@ -250,29 +253,29 @@ fun FloatingNotchOverlay(
             if (musicLive) add(WidgetPage.Music)
         }
     }
-    var pageIndex by remember { mutableStateOf(0) }
+    // Page switching is owned by a shared [OverlayPager]: the overlay renders
+    // from it, and (on Windows) an AWT-level wheel listener in `Main` drives it
+    // from outside the Compose pointer pipeline. One wheel notch = one page.
+    var pageIndex by pager.pageIndex
     LaunchedEffect(pages.size) {
-        if (pageIndex >= pages.size) pageIndex = (pages.size - 1).coerceAtLeast(0)
-    }
-    val pagePosition by animateFloatAsState(pageIndex.toFloat(), pageSpring(), label = "pagePosition")
-
-    val scrollThresholdPx = with(density) { 30.dp.toPx() }
-    var scrollAccum by remember { mutableFloatStateOf(0f) }
-    fun handlePageScroll(event: PointerEvent) {
-        if (!showDock || pages.size <= 1) return
-        val delta = event.changes.fold(0f) { acc, change -> acc + change.scrollDelta.y }
-        if (delta == 0f) return
-        scrollAccum += delta
-        while (abs(scrollAccum) >= scrollThresholdPx) {
-            val step = if (scrollAccum > 0) 1 else -1
-            scrollAccum -= step * scrollThresholdPx
-            val next = (pageIndex + step).coerceIn(0, pages.size - 1)
-            if (next != pageIndex) {
-                pageIndex = next
-                scrollAccum = 0f
-            }
+        pager.pageCount = pages.size
+        if (pager.pageIndex.value >= pages.size) {
+            pager.pageIndex.value = (pages.size - 1).coerceAtLeast(0)
         }
+        pager.resetAccum()
     }
+    val pagePosition by animateFloatAsState(pager.pageIndex.value.toFloat(), pageSpring(), label = "pagePosition")
+
+    // Wheel events reach the Compose pointer pipeline on macOS (trackpad and
+    // mouse alike), and the dock box fills the expanded window, so this one
+    // handler covers the whole notch there. Windows receives no scroll through
+    // that pipeline on its unfocused overlay window — AWT does — so the Compose
+    // handler is skipped on Windows to avoid every notch being counted twice.
+    val composeScrollModifier =
+        if (HostPlatform.isWindows) Modifier
+        else Modifier.onPointerEvent(PointerEventType.Scroll) { event ->
+            pager.consumeWheel(event.changes.fold(0f) { acc, change -> acc + change.scrollDelta.y })
+        }
 
     val metrics = remember(config, favorites.size, musicLive) {
         computeNotchMetrics(config, favorites.size, musicLive)
@@ -372,15 +375,12 @@ fun FloatingNotchOverlay(
         // its first measure/layout never coincides with the open animation; all
         // the reveal does is fade a layer. Alpha 0 also skips the draw entirely.
         Box(
-            modifier = Modifier
+            modifier = composeScrollModifier
                 .size(metrics.dockArea.width, metrics.dockArea.height)
                 .graphicsLayer {
                     alpha = dockAlpha
                     scaleX = dockScale
                     scaleY = dockScale
-                }
-                .onPointerEvent(PointerEventType.Scroll) { event ->
-                    handlePageScroll(event)
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -737,6 +737,7 @@ private fun CollapsedIsland(
                     text = media.title,
                     color = Color.White.copy(alpha = 0.92f),
                     fontSize = 11.sp,
+                    lineHeight = 13.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = if (vertical) Modifier.widthIn(max = 170.dp) else Modifier.weight(1f)
                 )
@@ -759,6 +760,7 @@ private fun CollapsedIsland(
                             text = "$volumePercent%",
                             color = Color.White.copy(alpha = 0.92f),
                             fontSize = 11.sp,
+                            lineHeight = 13.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1
                         )
@@ -1035,13 +1037,19 @@ private fun MarqueeText(
     color: Color,
     fontSize: TextUnit,
     fontWeight: FontWeight,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lineHeight: TextUnit = TextUnit.Unspecified
 ) {
     val measurer = rememberTextMeasurer()
-    val measured = remember(text, color, fontSize, fontWeight, measurer) {
+    val measured = remember(text, color, fontSize, fontWeight, lineHeight, measurer) {
         measurer.measure(
             AnnotatedString(text),
-            style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight)
+            style = TextStyle(
+                color = color,
+                fontSize = fontSize,
+                fontWeight = fontWeight,
+                lineHeight = lineHeight
+            )
         )
     }
     val fullWidthPx = measured.size.width
@@ -1076,7 +1084,12 @@ private fun MarqueeText(
         }
         Text(
             text = AnnotatedString(text),
-            style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight),
+            style = TextStyle(
+                color = color,
+                fontSize = fontSize,
+                fontWeight = fontWeight,
+                lineHeight = lineHeight
+            ),
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Clip,
