@@ -45,6 +45,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -194,7 +197,9 @@ fun FloatingNotchOverlay(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** System master-volume percentage (0-100); null hides the volume chip. */
+    volumePercent: Int? = null
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
@@ -349,8 +354,7 @@ fun FloatingNotchOverlay(
                     style = config.style,
                     surface = config.surface,
                     media = if (musicLive) liveSession else null,
-                    showPlayPause = config.widgets.musicShowPlayPause,
-                    onPlayPause = { media.playPause() }
+                    volumePercent = volumePercent
                 )
             }
             // Live progress hugs the pill's inner border (the edge facing the
@@ -703,8 +707,7 @@ private fun CollapsedIsland(
     style: NotchStyle,
     surface: NotchSurface,
     media: MediaSession?,
-    showPlayPause: Boolean,
-    onPlayPause: () -> Unit
+    volumePercent: Int?
 ) {
     val rotated = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -719,8 +722,9 @@ private fun CollapsedIsland(
             )
         } else if (media != null) {
             // Collapsed live activity: the disc hugs the left end, the title
-            // sits centred (marqueed when long) and an optional play/pause
-            // button caps the right, replacing the idle glyphs while playing.
+            // sits centred (marqueed when long) and the system volume degree
+            // caps the right. The pill is not interactive, so there is no
+            // transport control here; play/pause lives in the expanded page.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -736,27 +740,27 @@ private fun CollapsedIsland(
                     fontWeight = FontWeight.Medium,
                     modifier = if (vertical) Modifier.widthIn(max = 170.dp) else Modifier.weight(1f)
                 )
-                if (showPlayPause) {
-                    IconButton(
-                        onClick = onPlayPause,
-                        enabled = true,
-                        modifier = Modifier.size(24.dp)
+                if (volumePercent != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = if (media.state == PlaybackState.PLAYING) {
-                                Icons.Default.Pause
-                            } else {
-                                Icons.Default.PlayArrow
+                            imageVector = when {
+                                volumePercent <= 0 -> Icons.AutoMirrored.Filled.VolumeOff
+                                volumePercent < 50 -> Icons.AutoMirrored.Filled.VolumeDown
+                                else -> Icons.AutoMirrored.Filled.VolumeUp
                             },
-                            contentDescription = stringResource(
-                                if (media.state == PlaybackState.PLAYING) {
-                                    Res.string.music_pause
-                                } else {
-                                    Res.string.music_play
-                                }
-                            ),
+                            contentDescription = stringResource(Res.string.music_volume),
                             tint = Color.White.copy(alpha = 0.95f),
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "$volumePercent%",
+                            color = Color.White.copy(alpha = 0.92f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
                         )
                     }
                 }

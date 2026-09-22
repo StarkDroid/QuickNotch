@@ -140,15 +140,6 @@ internal fun WidgetsTab(
                     ) {
                         NowPlayingStatus(config = config, liveSession = liveSession)
 
-                        BehaviorSwitchRow(
-                            title = stringResource(Res.string.widget_music_play_pause),
-                            subtitle = stringResource(Res.string.widget_music_play_pause_desc),
-                            checked = config.widgets.musicShowPlayPause,
-                            onCheckedChange = { enabled ->
-                                onUpdate { it.copy(widgets = it.widgets.copy(musicShowPlayPause = enabled)) }
-                            }
-                        )
-
                         Text(
                             text = stringResource(Res.string.widget_scroll_hint),
                             style = AppTypography.bodySmall,

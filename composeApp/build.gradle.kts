@@ -43,10 +43,11 @@ kotlin {
 //    The MediaRemote framework is dlopen'd at runtime, so no private headers
 //    are required to build. Only built on macOS hosts; on other hosts the
 //    resource is simply absent and the Mac controller stays silent.
-//  • Windows: a PowerShell SMTC bridge — no compilation, just a copy. It runs
-//    on Windows PowerShell 5.1, the engine the app launches at runtime.
+//  • Windows: PowerShell bridges — no compilation, just a copy. `smtc.ps1`
+//    reads the SMTC session and `volume.ps1` reads the master volume; both
+//    run on Windows PowerShell 5.1, the engine the app launches at runtime.
 val syncWindowsBridge by tasks.registering(Copy::class) {
-    from("native/windows/smtc.ps1")
+    from("native/windows")
     into("src/desktopMain/resources/windows")
 }
 val compileMacNowPlayingBridge by tasks.registering(Exec::class) {

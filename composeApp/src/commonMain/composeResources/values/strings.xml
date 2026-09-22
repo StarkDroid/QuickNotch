@@ -77,14 +77,13 @@ Add apps from the list on the right.</string>
     <string name="widget_apps_desc">Quick-launch applications in the notch dock</string>
     <string name="widget_music_title">Now Playing</string>
     <string name="widget_music_desc">Live music activity on the notch from any app</string>
-    <string name="widget_music_play_pause">Play/pause button</string>
-    <string name="widget_music_play_pause_desc">Show an inline play/pause control on the music widget</string>
     <string name="widget_now_playing">Now playing: %1$s — %2$s</string>
     <string name="widget_no_session">No active media session</string>
     <string name="widget_style_warning">Live activity appears only on the Dynamic Island and Floating Pill styles.</string>
     <string name="widget_scroll_hint">Scroll the mouse wheel over the open notch to switch between enabled widgets.</string>
     <string name="music_play">Play</string>
     <string name="music_pause">Pause</string>
+    <string name="music_volume">System volume</string>
     <string name="music_previous">Previous track</string>
     <string name="music_next">Next track</string>
 

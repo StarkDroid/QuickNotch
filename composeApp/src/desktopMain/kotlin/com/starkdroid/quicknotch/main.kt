@@ -23,6 +23,7 @@ import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
+import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
@@ -57,9 +58,18 @@ fun main() {
         // and the settings window all observe the same session.
         val media = remember { MediaControllerFactory.create() }
         val liveSession by media.session.collectAsState()
+
+        // Master volume drives the collapsed music pill's percentage chip; it
+        // is polled separately from the session feed (SMTC/MediaRemote carry
+        // no volume) and simply stays hidden whenever a query fails.
+        val volumePercent by SystemVolume.percent.collectAsState()
         DisposableEffect(Unit) {
             media.start()
-            onDispose { media.stop() }
+            SystemVolume.start()
+            onDispose {
+                media.stop()
+                SystemVolume.stop()
+            }
         }
 
         val musicLive = isMusicLive(config, liveSession)
@@ -94,6 +104,7 @@ fun main() {
                 appIcon = appIcon,
                 isExpanded = isExpanded,
                 isWindowExpanded = isWindowExpanded,
+                volumePercent = volumePercent,
                 onExpandedChange = { isExpanded = it },
                 onWindowExpandedChange = { isWindowExpanded = it }
             )
@@ -141,6 +152,7 @@ private fun NotchOverlayWindow(
     appIcon: ImageBitmap,
     isExpanded: Boolean,
     isWindowExpanded: Boolean,
+    volumePercent: Int?,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit
 ) {
@@ -192,7 +204,8 @@ private fun NotchOverlayWindow(
                 media = media,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
-                onWindowExpandedChange = onWindowExpandedChange
+                onWindowExpandedChange = onWindowExpandedChange,
+                volumePercent = volumePercent
             )
         }
     }
