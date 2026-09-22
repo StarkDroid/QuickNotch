@@ -49,6 +49,12 @@ internal object DockLayout {
      * this whenever the music page is active.
      */
     val NowPlayingWidth: Dp = 356.dp
+
+    /**
+     * Collapsed pill length once a live session is showing, wide enough for
+     * art + marquee title + play/pause in the island's slim cross-section.
+     */
+    val LiveCollapsedWidth: Dp = 236.dp
 }
 
 /**
@@ -107,7 +113,10 @@ fun computeNotchMetrics(
         } else 0.dp
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
     val alongExpanded = maxOf(appsAlong, musicAlong)
-    val alongCollapsed = config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin
+    val alongCollapsed = maxOf(
+        config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin,
+        if (musicActive) DockLayout.LiveCollapsedWidth else 0.dp
+    )
 
     val islandDepth = config.expandedNotchHeightDp.dp + DockLayout.ExpandedDepthMargin
     val bubbleReserve =

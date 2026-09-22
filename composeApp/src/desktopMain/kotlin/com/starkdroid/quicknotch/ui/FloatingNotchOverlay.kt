@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,6 +60,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -80,13 +83,20 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
@@ -338,7 +348,9 @@ fun FloatingNotchOverlay(
                     vertical = config.position.isVertical,
                     style = config.style,
                     surface = config.surface,
-                    media = if (musicLive) liveSession else null
+                    media = if (musicLive) liveSession else null,
+                    showPlayPause = config.widgets.musicShowPlayPause,
+                    onPlayPause = { media.playPause() }
                 )
             }
             // Live progress hugs the pill's inner border (the edge facing the
@@ -690,7 +702,9 @@ private fun CollapsedIsland(
     vertical: Boolean,
     style: NotchStyle,
     surface: NotchSurface,
-    media: MediaSession?
+    media: MediaSession?,
+    showPlayPause: Boolean,
+    onPlayPause: () -> Unit
 ) {
     val rotated = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -704,23 +718,56 @@ private fun CollapsedIsland(
                     .background(handleTint(surface))
             )
         } else if (media != null) {
-            // Collapsed live activity: a thin disc and the track title replace
-            // the idle glyphs while something is actually playing.
+            // Collapsed live activity: the disc hugs the left end, the title
+            // sits centred (marqueed when long) and an optional play/pause
+            // button caps the right, replacing the idle glyphs while playing.
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = rotated
+                    .then(if (vertical) Modifier.widthIn(max = 210.dp) else Modifier.fillMaxWidth())
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
-                MiniDisc(art = media.artwork, size = 17.dp)
-                Text(
+                MiniDisc(art = media.artwork, size = 20.dp)
+                MarqueeText(
                     text = media.title,
                     color = Color.White.copy(alpha = 0.92f),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 94.dp)
+                    modifier = if (vertical) Modifier.widthIn(max = 170.dp) else Modifier.weight(1f)
                 )
+                if (showPlayPause) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(LiveAccent.copy(alpha = 0.9f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IconButton(
+                            onClick = onPlayPause,
+                            enabled = true,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (media.state == PlaybackState.PLAYING) {
+                                    Icons.Default.Pause
+                                } else {
+                                    Icons.Default.PlayArrow
+                                },
+                                contentDescription = stringResource(
+                                    if (media.state == PlaybackState.PLAYING) {
+                                        Res.string.music_pause
+                                    } else {
+                                        Res.string.music_play
+                                    }
+                                ),
+                                tint = Color.Black.copy(alpha = 0.85f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
             }
         } else {
             Row(
@@ -898,6 +945,12 @@ private fun MusicPage(
     }
 }
 
+/**
+ * Art pinned to the left end of the strip, the title held in the middle with
+ * the artist under it, and a progress/timestamps row all sharing one vertical
+ * centreline. Every transport control stays visible here; collapsing the
+ * play/pause only affects the slim collapsed pill.
+ */
 @Composable
 private fun MusicContent(
     session: MediaSession,
@@ -913,20 +966,22 @@ private fun MusicContent(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        VinylDisc(art = session.artwork, playing = playing, size = 64.dp)
+        VinylDisc(art = session.artwork, playing = playing, size = 56.dp)
 
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-            Text(
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            MarqueeText(
                 text = session.title,
                 color = Color.White.copy(alpha = 0.95f),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = FontWeight.SemiBold
             )
             if (session.artist.isNotBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
@@ -935,10 +990,11 @@ private fun MusicContent(
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
             }
-            Spacer(modifier = Modifier.height(9.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -960,6 +1016,68 @@ private fun MusicContent(
             state = session.state,
             enabled = interactive,
             media = media
+        )
+    }
+}
+
+/**
+ * A single-line label that marquees when its text is wider than the available
+ * space: centred normally, then slowly scrolling right-to-left with a small
+ * gap before the loop. The rate scales with the overflow so short titles crawl
+ * and long ones glide.
+ */
+@Composable
+private fun MarqueeText(
+    text: String,
+    color: Color,
+    fontSize: TextUnit,
+    fontWeight: FontWeight,
+    modifier: Modifier = Modifier
+) {
+    val measurer = rememberTextMeasurer()
+    val measured = remember(text, color, fontSize, fontWeight, measurer) {
+        measurer.measure(
+            AnnotatedString(text),
+            style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight)
+        )
+    }
+    val fullWidthPx = measured.size.width
+
+    var viewportPx by remember { mutableIntStateOf(0) }
+    val overflowPx = (fullWidthPx - viewportPx).coerceAtLeast(0)
+    val needsMarquee = overflowPx > 0
+    val gapPx = 48
+
+    // Scroll rate keeps a roughly constant pixel speed regardless of length.
+    val travelPx = overflowPx + gapPx
+    val durationMs = (travelPx * 1000 / 30).coerceIn(2500, 20000)
+    val transition = rememberInfiniteTransition(label = "titleMarquee")
+    val scrollX by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = -travelPx.toFloat(),
+        animationSpec = infiniteRepeatable(tween(durationMs, easing = LinearEasing), RepeatMode.Restart),
+        label = "titleScrollX"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            .onSizeChanged { viewportPx = it.width },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        val offsetX = if (needsMarquee) {
+            scrollX // centred start; scrolls once text overflows
+        } else {
+            ((viewportPx - fullWidthPx) / 2).coerceAtLeast(0).toFloat()
+        }
+        Text(
+            text = AnnotatedString(text),
+            style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier.offset { IntOffset(offsetX.roundToInt(), 0) }
         )
     }
 }
@@ -1134,8 +1252,8 @@ private fun VinylDisc(
             Icon(
                 imageVector = Icons.Default.MusicNote,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.4f),
-                modifier = Modifier.size(size * 0.45f)
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(size * 0.5f)
             )
         }
         Box(
