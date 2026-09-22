@@ -16,9 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,9 +32,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -94,8 +89,6 @@ import kotlin.math.cos
 
 private val IslandBubbleFill = Color(0xF21C1C1E)
 private val BubbleShadow = Color(0x66000000)
-private val ControlIdle = Color.White.copy(alpha = 0.28f)
-private val ControlActive = Color.White.copy(alpha = 0.92f)
 
 // ── Motion ───────────────────────────────────────────────────────────────────
 // Near-critically-damped springs mirror AppKit's default view animation: a
@@ -153,7 +146,6 @@ fun FloatingNotchOverlay(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val config by repository.config.collectAsState()
@@ -289,8 +281,7 @@ fun FloatingNotchOverlay(
                         AppLauncher.launch(app)
                         if (config.hideOnAppLaunch) onExpandedChange(false)
                     }
-                },
-                onOpenSettings = onOpenSettings
+                }
             )
         }
     }
@@ -321,8 +312,7 @@ private fun Dock(
     density: Density,
     interactive: Boolean,
     bubbleInset: Dp,
-    onLaunch: (AppItem) -> Unit,
-    onOpenSettings: () -> Unit
+    onLaunch: (AppItem) -> Unit
 ) {
     val vertical = config.position.isVertical
     val towardStart = config.position == NotchPosition.LEFT_CENTER ||
@@ -391,7 +381,6 @@ private fun Dock(
                 onClick = { onLaunch(app) }
             )
         }
-        SettingsButton(onClick = onOpenSettings, enabled = interactive)
     }
 
     if (vertical) {
@@ -531,32 +520,6 @@ private fun DockIcon(
 }
 
 @Composable
-private fun SettingsButton(onClick: () -> Unit, enabled: Boolean) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    Box(
-        modifier = Modifier
-            .padding(start = 6.dp)
-            .size(22.dp)
-            .then(if (enabled) Modifier.hoverable(interaction) else Modifier)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                enabled = enabled,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Settings,
-            contentDescription = "Settings",
-            tint = if (hovered && enabled) ControlActive else ControlIdle,
-            modifier = Modifier.size(15.dp)
-        )
-    }
-}
-
-@Composable
 private fun DockLabelBubble(
     nameState: State<String?>,
     config: NotchConfig,
@@ -655,14 +618,14 @@ private fun CollapsedIsland(
     }
 }
 
-// Glyph colours brighten slightly over the translucent BLUR surface so they
+// Glyph colours brighten slightly over the translucent surface so they
 // stay legible, and stay near-white on the opaque one.
 private fun handleTint(surface: NotchSurface): Color =
-    if (surface == NotchSurface.BLUR) Color.White.copy(alpha = 0.42f)
+    if (surface == NotchSurface.TRANSLUCENT) Color.White.copy(alpha = 0.42f)
     else Color.White.copy(alpha = 0.30f)
 
 private fun islandTint(surface: NotchSurface): Color =
-    if (surface == NotchSurface.BLUR) Color.White.copy(alpha = 0.72f)
+    if (surface == NotchSurface.TRANSLUCENT) Color.White.copy(alpha = 0.72f)
     else Color.White
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────

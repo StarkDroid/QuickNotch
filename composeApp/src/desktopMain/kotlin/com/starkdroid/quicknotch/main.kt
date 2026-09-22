@@ -76,8 +76,7 @@ fun main() {
                 isExpanded = isExpanded,
                 isWindowExpanded = isWindowExpanded,
                 onExpandedChange = { isExpanded = it },
-                onWindowExpandedChange = { isWindowExpanded = it },
-                onOpenSettings = { showSettings = true }
+                onWindowExpandedChange = { isWindowExpanded = it }
             )
         }
 
@@ -118,8 +117,7 @@ private fun NotchOverlayWindow(
     isExpanded: Boolean,
     isWindowExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
-    onWindowExpandedChange: (Boolean) -> Unit,
-    onOpenSettings: () -> Unit
+    onWindowExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
@@ -166,8 +164,7 @@ private fun NotchOverlayWindow(
                 repository = repository,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
-                onWindowExpandedChange = onWindowExpandedChange,
-                onOpenSettings = onOpenSettings
+                onWindowExpandedChange = onWindowExpandedChange
             )
         }
     }

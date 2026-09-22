@@ -21,7 +21,6 @@ import java.awt.Rectangle
  */
 internal object DockLayout {
     val IconPadding: Dp = 4.dp
-    val SettingsButton: Dp = 28.dp
     val ContentPadding: Dp = 16.dp
     val AlongSafety: Dp = 8.dp
     val ExpandedDepthMargin: Dp = 6.dp
@@ -87,7 +86,6 @@ fun computeNotchMetrics(config: NotchConfig, favoriteCount: Int): NotchMetrics {
 
     val alongExpanded = DockLayout.ContentPadding +
         DockLayout.iconSlot(base) * count +
-        DockLayout.SettingsButton +
         DockLayout.AlongSafety
     val alongCollapsed = config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin
 

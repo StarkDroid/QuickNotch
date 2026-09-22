@@ -14,12 +14,12 @@ import com.starkdroid.quicknotch.model.NotchSurface
  * repainted by the software renderer every animation frame, so nothing here may
  * depend on size, time or per-pixel texture.
  *
- * [NotchSurface.BLUR] is deliberately texture-free: a mottled or grainy overlay
- * reads as paper, not glass. It instead composes two perfectly smooth gradients
- * — a translucent tinted body that lets the real desktop bleed through the
- * transparent window, plus a soft diagonal light sheen — which is what reads
- * visually as glass. A literal gaussian blur of the pixels behind a borderless
- * transparent window is not reachable from Compose without a native
+ * [NotchSurface.TRANSLUCENT] is deliberately texture-free: a mottled or grainy
+ * overlay reads as paper, not glass. It instead composes two perfectly smooth
+ * gradients — a translucent tinted body that lets the real desktop bleed
+ * through the transparent window, plus a soft diagonal light sheen — which is
+ * what reads visually as glass. A literal gaussian blur of the pixels behind a
+ * borderless transparent window is not reachable from Compose without a native
  * screen-capture loop (which would also recapture the island itself).
  */
 internal object IslandSurface {
@@ -40,7 +40,7 @@ internal object IslandSurface {
                 borderWidth = 0.5f
             )
 
-            NotchSurface.BLUR -> Style(
+            NotchSurface.TRANSLUCENT -> Style(
                 fill = Brush.verticalGradient(
                     0f to Color(0xC01C2637),
                     0.55f to Color(0xAB101723),

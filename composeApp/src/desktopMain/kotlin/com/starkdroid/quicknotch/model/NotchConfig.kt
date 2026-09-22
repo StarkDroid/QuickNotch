@@ -1,5 +1,6 @@
 package com.starkdroid.quicknotch.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -43,19 +44,20 @@ enum class NotchStyle(
 
 /**
  * The body's material. Both entries resolve to statically cached brushes, so
- * neither adds per-frame shader work on the software renderer. [BLUR] is a
- * deliberately texture-free translucent glass: a tinted body that lets the
- * desktop bleed through the transparent window plus a smooth light sheen. A
- * literal blur of the pixels behind a borderless window is unreachable from
- * Compose without a native screen-capture loop.
+ * neither adds per-frame shader work on the software renderer. [TRANSLUCENT]
+ * is a deliberately texture-free glass: a tinted body that lets the desktop
+ * bleed through the transparent window plus a smooth light sheen. A literal
+ * blur of the pixels behind a borderless window is unreachable from Compose
+ * without a native screen-capture loop.
  */
 @Serializable
 enum class NotchSurface(val displayName: String) {
     /** Fully opaque black — the default. */
     SOLID("Solid"),
 
-    /** Translucent, smooth glass. */
-    BLUR("Blur")
+    /** Translucent, smooth glass. (Serialised as the former name "BLUR".) */
+    @SerialName("BLUR")
+    TRANSLUCENT("Translucent")
 }
 
 /**
