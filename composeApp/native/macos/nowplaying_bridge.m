@@ -15,8 +15,10 @@
 //    {"state":"playing|paused|stopped|none","src":"…","title":"…",
 //     "artist":"…","album":"…","pos":12345,"dur":234567,"art":"…","id":"…"}
 //
-//  `art` is never emitted from this route (artwork is not exposed through
-//  MRNowPlayingRequest), so the UI shows the placeholder vinyl.
+//  `art` is emitted from `kMRMediaRemoteNowPlayingInfoArtworkData` when the
+//  entitled context provides it; most sources don't, so when the playing client
+//  is the system Music app the script also pulls the cover via Music's own
+//  AppleScript interface. Other sources fall back to the placeholder vinyl.
 //
 //  Usage:
 //    nowplaying-bridge            — poll every 2s, stream until killed
@@ -62,6 +64,12 @@ static NSString *const kJxaScript = @
     "  var artistV = info.valueForKey('kMRMediaRemoteNowPlayingInfoArtist');\n"
     "  var albumV = info.valueForKey('kMRMediaRemoteNowPlayingInfoAlbum');\n"
     "  var name = client ? ('' + client.displayName.js) : '';\n"
+    "  var art = null;\n"
+    "  try {\n"
+    "    var artData = info.valueForKey('kMRMediaRemoteNowPlayingInfoArtworkData');\n"
+    "    if (artData && artData.length && artData.length > 16)\n"
+    "      art = artData.base64EncodedStringWithOptions(0).js;\n"
+    "  } catch (e) {}\n"
     "  return JSON.stringify({\n"
     "    state: (rate > 0 ? 'playing' : 'paused'),\n"
     "    src: name,\n"
@@ -70,6 +78,7 @@ static NSString *const kJxaScript = @
     "    album: albumV ? ('' + albumV.js) : '',\n"
     "    pos: Math.round(pos * 1000),\n"
     "    dur: Math.round(dur * 1000),\n"
+    "    art: art,\n"
     "    id: title + '|' + (artistV ? artistV.js : '') + '|' + (albumV ? albumV.js : '')\n"
     "  });\n"
     "}\n";
@@ -93,7 +102,8 @@ static NSString *JxaPath(void) {
                                                attributes:nil
                                                     error:nil];
     NSString *path = [dir stringByAppendingPathComponent:@"nowplaying.jxa"];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+    NSString *existing = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
+    if (existing == nil || ![existing isEqualToString:kJxaScript]) {
         [kJxaScript writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
     }
     return path;
@@ -112,6 +122,82 @@ static dispatch_queue_t getEmitQueue(void) {
 }
 
 static NSString *lastEmittedKey;
+
+// ── Album art for the Music app ──────────────────────────────────────────────
+// MediaRemote rarely exposes artwork bytes through MRNowPlayingRequest, but the
+// system Music app hands out the cover through its own scripting interface.
+// This dumps `artwork 1 of current track` to a temp file from a plain
+// AppleScript process (no MediaRemote at all), and the result is cached per
+// content id so a track change is the only thing that refetches it.
+static NSString *const kJxaArtScript =
+    @"tell application \"Music\" to set artData to data of artwork 1 of current track\n"
+    @"set f to open for access (POSIX file \"/tmp/quicknotch-art.bin\") with write permission\n"
+    @"write artData to f\n"
+    @"close access f\n";
+
+static NSString *artContentId;
+static NSString *artCacheB64;
+
+/** The `"id":"…"` value of a snapshot line (so art caches per track). */
+static NSString *ContentIdFromLine(NSString *line) {
+    NSRange r = [line rangeOfString:@"\"id\":\""];
+    if (r.location == NSNotFound) return @"";
+    NSUInteger start = r.location + r.length;
+    NSUInteger i = start;
+    while (i < line.length) {
+        unichar c = [line characterAtIndex:i];
+        if (c == '"' && !(i > start && [line characterAtIndex:i - 1] == '\\')) break;
+        i++;
+    }
+    if (i >= line.length || i <= start) return @"";
+    return [line substringWithRange:NSMakeRange(start, i - start)];
+}
+
+/** Runs one plain AppleScript, bounded by a 4s deadline, returns base64 art. */
+static NSString *RunMusicArtScript(void) {
+    NSTask *task = [[NSTask alloc] init];
+    task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/osascript"];
+    task.arguments = @[ @"-e", kJxaArtScript ];
+    NSPipe *devNull = [NSPipe pipe];
+    task.standardOutput = devNull;
+    task.standardError = devNull;
+    NSError *err = nil;
+    if (![task launchAndReturnError:&err]) return nil;
+    dispatch_queue_t q = dispatch_queue_create("quicknotch.artd", NULL);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC), q, ^{
+        if (task.isRunning) [task terminate];
+    });
+    [task waitUntilExit];
+    if (task.terminationStatus != 0) return nil;
+    NSData *data = [NSData dataWithContentsOfFile:@"/tmp/quicknotch-art.bin"];
+    if (data.length < 16) return nil;
+    return [data base64EncodedStringWithOptions:0];
+}
+
+/**
+ * Fills in missing artwork on the fly. Only refetches when the content id
+ * moves; a negative result is also cached so non-Music sources never spin up
+ * an osascript per poll.
+ */
+static void AttachMusicArt(NSString **line) {
+    if (![*line containsString:@"\"art\":null"]) return;
+    NSString *idKey = ContentIdFromLine(*line);
+    if (!idKey.length) return;
+    if ([idKey isEqualToString:artContentId]) {
+        if (artCacheB64) {
+            *line = [*line stringByReplacingOccurrencesOfString:@"\"art\":null"
+                                                     withString:[NSString stringWithFormat:@"\"art\":\"%@\"", artCacheB64]];
+        }
+        return;
+    }
+    NSString *art = RunMusicArtScript();
+    artContentId = idKey;
+    artCacheB64 = art;
+    if (art) {
+        *line = [*line stringByReplacingOccurrencesOfString:@"\"art\":null"
+                                                 withString:[NSString stringWithFormat:@"\"art\":\"%@\"", art]];
+    }
+}
 
 // Runs `osascript -l JavaScript <jxa> <args…>`, captures stdout, and calls
 // the block on the serial emit queue (nil on failure). Enforces a 5s
@@ -178,6 +264,7 @@ static void Poll(void) {
             if (t.length && [t characterAtIndex:0] == '{') { line = t; break; }
         }
         if (!line) return;
+        AttachMusicArt(&line);
         // De-dup: re-emit only when the snapshot actually changed (position is
         // interpolated client-side, so purely temporal moves are skipped).
         if ([line isEqualToString:lastEmittedKey]) return;
