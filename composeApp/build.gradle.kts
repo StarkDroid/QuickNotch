@@ -44,7 +44,7 @@ kotlin {
 //    are required to build. Only built on macOS hosts; on other hosts the
 //    resource is simply absent and the Mac controller stays silent.
 //  • Windows: a PowerShell SMTC bridge — no compilation, just a copy. It runs
-//    on both Windows PowerShell 5.1 and PowerShell (Core) 7.
+//    on Windows PowerShell 5.1, the engine the app launches at runtime.
 val syncWindowsBridge by tasks.registering(Copy::class) {
     from("native/windows/smtc.ps1")
     into("src/desktopMain/resources/windows")

@@ -10,8 +10,10 @@ import java.util.concurrent.TimeUnit
  * media session every well-behaved player registers with (Start-menu media
  * keys, volume flyout, notifications). Reaching WinRT from the JVM would mean
  * COM vtable plumbing, so we bridge through PowerShell's supported WinRT type
- * activation; the whole script is a plain text resource, no compilation step,
- * and it works on both Windows PowerShell 5.1 and PowerShell 7.
+ * activation; the whole script is a plain text resource, no compilation step.
+ * It runs under Windows PowerShell 5.1 (the engine we launch, whose WinRT
+ * projection is the one that exposes System Media Transport Controls);
+ * PowerShell 7 dropped that projection, so `pwsh` is not used.
  *
  * One-shot poll per second: the script prints a single JSON line, identical in
  * shape to the macOS bridge, so [MediaControllerBase] decodes both. Commands
