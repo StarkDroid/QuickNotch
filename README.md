@@ -128,7 +128,7 @@ Outputs land under `composeApp/build/compose/binaries/main/`:
 open composeApp/build/compose/binaries/main/app/QuickNotch.app   # macOS
 ```
 
-On newer macOS releases, Skiko’s Metal backend can crash when creating transparent overlay windows. The desktop package currently sets `-Dskiko.renderApi=SOFTWARE` so the notch stays stable.
+On newer macOS releases, Skiko's Metal backend can crash when creating transparent overlay windows, so `main()` forces `-Dskiko.renderApi=SOFTWARE` at runtime on macOS only to keep the notch stable. Other platforms keep Skiko's default GPU renderer (DIRECT3D on Windows) — forcing the software pipeline app-wide is what made the full-size Settings window lag while the notch stayed smooth.
 
 ---
 

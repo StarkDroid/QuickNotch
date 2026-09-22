@@ -83,7 +83,14 @@ compose.resources {
 compose.desktop {
     application {
         mainClass = "com.starkdroid.quicknotch.MainKt"
-        jvmArgs += listOf("-Dskiko.renderApi=SOFTWARE")
+
+        // Renderer selection is platform-specific and handled in `main()`:
+        // macOS forces SOFTWARE at runtime because Skiko's Metal backend can
+        // crash on transparent overlay windows. Everywhere else we keep Skiko's
+        // default GPU renderer (DIRECT3D on Windows). A global SOFTWARE override
+        // here made the full-size Settings window rasterize on the CPU every
+        // frame — that is what made settings interactions laggy while the small
+        // notch overlay stayed smooth.
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)

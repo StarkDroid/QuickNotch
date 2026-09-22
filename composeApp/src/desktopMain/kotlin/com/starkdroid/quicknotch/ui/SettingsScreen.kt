@@ -92,10 +92,6 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isScanning by remember { mutableStateOf(false) }
 
-    // Generated once; a static tiled shader keeps scrolling cheap on the
-    // software renderer instead of re-sampling noise every frame.
-    val noiseBrush = remember { NoiseGenerator.getNoiseBrush() }
-
     LaunchedEffect(Unit) {
         // With a warm cache the scan returns without suspending, so skip the
         // spinner entirely instead of flashing it for a frame.
@@ -119,7 +115,6 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FlatBg)
-            .background(noiseBrush)
     ) {
         Scaffold(
             containerColor = Color.Transparent,
