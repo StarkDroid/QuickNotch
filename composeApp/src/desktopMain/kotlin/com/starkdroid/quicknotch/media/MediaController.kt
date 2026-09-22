@@ -92,6 +92,7 @@ internal abstract class MediaControllerBase : MediaController {
 
         _session.value = MediaSession(
             source = snapshot.source,
+            sourceId = snapshot.sourceId,
             title = snapshot.title,
             artist = snapshot.artist,
             album = snapshot.album,

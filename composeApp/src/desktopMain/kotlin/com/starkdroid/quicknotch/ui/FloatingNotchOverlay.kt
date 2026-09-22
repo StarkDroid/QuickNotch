@@ -737,35 +737,27 @@ private fun CollapsedIsland(
                     modifier = if (vertical) Modifier.widthIn(max = 170.dp) else Modifier.weight(1f)
                 )
                 if (showPlayPause) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(LiveAccent.copy(alpha = 0.9f)),
-                        contentAlignment = Alignment.Center
+                    IconButton(
+                        onClick = onPlayPause,
+                        enabled = true,
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        IconButton(
-                            onClick = onPlayPause,
-                            enabled = true,
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (media.state == PlaybackState.PLAYING) {
-                                    Icons.Default.Pause
+                        Icon(
+                            imageVector = if (media.state == PlaybackState.PLAYING) {
+                                Icons.Default.Pause
+                            } else {
+                                Icons.Default.PlayArrow
+                            },
+                            contentDescription = stringResource(
+                                if (media.state == PlaybackState.PLAYING) {
+                                    Res.string.music_pause
                                 } else {
-                                    Icons.Default.PlayArrow
-                                },
-                                contentDescription = stringResource(
-                                    if (media.state == PlaybackState.PLAYING) {
-                                        Res.string.music_pause
-                                    } else {
-                                        Res.string.music_play
-                                    }
-                                ),
-                                tint = Color.Black.copy(alpha = 0.85f),
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
+                                    Res.string.music_play
+                                }
+                            ),
+                            tint = Color.White.copy(alpha = 0.95f),
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                 }
             }
@@ -970,7 +962,14 @@ private fun MusicContent(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        VinylDisc(art = session.artwork, playing = playing, size = 56.dp)
+        VinylDisc(
+            art = session.artwork,
+            playing = playing,
+            size = 56.dp,
+            onClick = {
+                AppLauncher.openMediaProvider(session.sourceId, session.source)
+            }
+        )
 
         Column(
             modifier = Modifier.weight(1f),
@@ -1214,7 +1213,8 @@ private fun TransportControls(
 private fun VinylDisc(
     art: ImageBitmap?,
     playing: Boolean,
-    size: Dp
+    size: Dp,
+    onClick: (() -> Unit)? = null
 ) {
     val rotation by rememberInfiniteTransition(label = "vinyl").animateFloat(
         initialValue = 0f,
@@ -1229,7 +1229,15 @@ private fun VinylDisc(
     Box(
         modifier = Modifier
             .size(size)
-            .graphicsLayer { rotationZ = angle },
+            .graphicsLayer { rotationZ = angle }
+            .clip(CircleShape)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button) { onClick() }
+                } else {
+                    Modifier
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Box(

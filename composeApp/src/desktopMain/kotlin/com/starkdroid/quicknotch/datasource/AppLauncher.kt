@@ -97,6 +97,25 @@ object AppLauncher {
         builder.start()
     }
 
+    /**
+     * Brings a media provider forward by launch identifier (bundle id on macOS,
+     * e.g. `com.apple.Music`) or app name — used when the user clicks a now-playing
+     * album art.
+     */
+    fun openMediaProvider(sourceId: String, sourceName: String) {
+        runCatching {
+            if (HostPlatform.isMac) {
+                if (sourceId.isNotBlank()) {
+                    ProcessBuilder("open", "-b", sourceId).start()
+                } else if (sourceName.isNotBlank()) {
+                    ProcessBuilder("open", "-a", sourceName).start()
+                }
+            } else if (HostPlatform.isWindows && sourceName.isNotBlank()) {
+                ProcessBuilder("cmd.exe", "/c", "start", "", sourceName).start()
+            }
+        }
+    }
+
     private fun browse(url: String) {
         if (HostPlatform.isMac) {
             ProcessBuilder("open", url).start()

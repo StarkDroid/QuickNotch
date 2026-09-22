@@ -19,6 +19,8 @@ enum class PlaybackState { PLAYING, PAUSED, STOPPED, NONE }
 @Immutable
 data class MediaSession(
     val source: String,
+    /** Launch identifier for the owning app (bundle id on macOS); blank when unknown. */
+    val sourceId: String,
     val title: String,
     val artist: String,
     val album: String,
@@ -58,6 +60,7 @@ data class MediaSession(
 internal data class MediaSnapshot(
     @kotlinx.serialization.SerialName("state") val state: String = "none",
     @kotlinx.serialization.SerialName("src") val source: String = "",
+    @kotlinx.serialization.SerialName("srcId") val sourceId: String = "",
     @kotlinx.serialization.SerialName("title") val title: String = "",
     @kotlinx.serialization.SerialName("artist") val artist: String = "",
     @kotlinx.serialization.SerialName("album") val album: String = "",
