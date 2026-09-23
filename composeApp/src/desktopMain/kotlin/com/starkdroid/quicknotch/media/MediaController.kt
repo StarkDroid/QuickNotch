@@ -73,6 +73,11 @@ internal abstract class MediaControllerBase : MediaController {
     private var artworkKey: String? = null
     private var artworkCache: ImageBitmap? = null
 
+    /** Raw `pos`/`id` of the last published PLAYING sample, used to detect
+     *  bridges whose timeline position is pinned instead of advancing. */
+    private var previousPlayingRawPosition: Long? = null
+    private var previousPlayingRawId: String? = null
+
     protected fun publish(jsonLine: String) {
         val snapshot = runCatching {
             MediaJson.parser.decodeFromString(MediaSnapshot.serializer(), jsonLine)
@@ -86,9 +91,41 @@ internal abstract class MediaControllerBase : MediaController {
         }
 
         if (state == PlaybackState.NONE || snapshot.title.isBlank()) {
+            previousPlayingRawPosition = null
+            previousPlayingRawId = null
             _session.value = null
             return
         }
+
+        // Browsers (Chrome/Edge) register with SMTC but do not pump timeline
+        // position updates while a track plays: `Position` stays pinned at its
+        // last change (the play-start offset) for the whole track, so every
+        // poll re-delivers the same raw value. Snapping the playhead to it each
+        // second resets the progress bar to ~0 and the extrapolation clock with
+        // it. When a playing sample repeats the previous playing sample's raw
+        // position for the same content, treat it as that pinned value and
+        // keep advancing from where the previous sample extrapolated to —
+        // players that genuinely advance (Spotify, Music, foobar) and seeks
+        // (which do update `Position`) never match and keep their raw value.
+        val sampledAt = System.nanoTime() / 1_000_000
+        val positionMs = if (
+            state == PlaybackState.PLAYING &&
+            snapshot.positionMs == previousPlayingRawPosition &&
+            snapshot.contentId == previousPlayingRawId
+        ) {
+            val previous = _session.value
+            if (previous != null && previous.state == PlaybackState.PLAYING) {
+                previous.positionMs + (sampledAt - previous.sampledAt)
+            } else {
+                snapshot.positionMs
+            }
+        } else {
+            snapshot.positionMs
+        }
+        previousPlayingRawPosition =
+            if (state == PlaybackState.PLAYING) snapshot.positionMs else null
+        previousPlayingRawId =
+            if (state == PlaybackState.PLAYING) snapshot.contentId else null
 
         _session.value = MediaSession(
             source = snapshot.source,
@@ -97,9 +134,9 @@ internal abstract class MediaControllerBase : MediaController {
             artist = snapshot.artist,
             album = snapshot.album,
             state = state,
-            positionMs = snapshot.positionMs,
+            positionMs = positionMs,
             durationMs = snapshot.durationMs,
-            sampledAt = System.nanoTime() / 1_000_000,
+            sampledAt = sampledAt,
             artwork = decodeArtwork(snapshot),
             contentId = snapshot.contentId,
             canSeek = supportsSeek
