@@ -19,13 +19,13 @@
 
 ## What it does
 
-QuickNotch lives as a small pill on a screen edge. Hover it to expand a dock of pinned apps, click an icon to launch, then keep working. The same Jetpack Compose UI runs on both platforms; only scanning, icons, launch, and login items differ.
+QuickNotch lives as a small pill at the top-centre of the screen. Hover it to expand a dock of pinned apps, click an icon to launch, then keep working. The same Jetpack Compose UI runs on both platforms; only scanning, icons, launch, and login items differ.
 
 ---
 
 ## Features
 
-- **Floating notch** — Collapsed pill that morphs into a dock, anchored to the centre of the top, bottom, left, or right screen edge. No dragging: pick one of four fixed edges and it stays perfectly still.
+- **Floating notch** — Collapsed pill that morphs into a dock, anchored to the top-centre of the screen. It stays perfectly still while it expands and collapses (on macOS it hugs the menu bar like a Dynamic Island).
 - **Dock fisheye wave** — Cosine-squared magnification and lift that track the cursor exactly; the wave radius is derived from icon size automatically.
 - **Pin any app** — Search installed apps or browse for a custom executable / `.app` bundle. Reorder and remove from Settings.
 - **Native icons**
@@ -39,7 +39,7 @@ QuickNotch lives as a small pill on a screen edge. Hover it to expand a dock of 
   - macOS: `open` for bundles, files, and URLs.
 - **Start at login** — Windows Run registry key, or a macOS LaunchAgent (`com.starkdroid.quicknotch`).
 - **Tray / menu bar** — Show or hide the notch, open Settings, reset defaults, quit.
-- **Settings** — Screen-edge anchor, magnification, icon size, notch geometry, always-on-top, collapse-on-launch, labels.
+- **Settings** — Magnification, icon size, notch geometry, always-on-top, collapse-on-launch, labels.
 
 Pinned apps and config are stored as JSON:
 
@@ -81,7 +81,7 @@ QuickNotch/
 │       │   └── MacStartupManager.kt
 │       ├── ui/
 │       │   ├── FloatingNotchOverlay.kt          # notch + fisheye dock
-│       │   ├── OverlayGeometry.kt               # footprint metrics + edge placement
+│       │   ├── OverlayGeometry.kt               # footprint metrics + top-centre placement
 │       │   ├── SettingsScreen.kt
 │       │   └── NoiseGenerator.kt
 │       ├── theme/

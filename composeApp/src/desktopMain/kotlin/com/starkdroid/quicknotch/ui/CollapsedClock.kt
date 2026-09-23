@@ -1,7 +1,6 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -55,7 +54,6 @@ internal fun formatClockTime(clock24Hour: Boolean, now: LocalDateTime = LocalDat
 @Composable
 internal fun IdleClockRow(
     clock: ClockPrefs,
-    vertical: Boolean,
     tint: Color,
     modifier: Modifier = Modifier
 ) {
@@ -71,56 +69,23 @@ internal fun IdleClockRow(
         }
     }
 
-    if (vertical) {
-        // Side docks stack the date above the time so the two lines read as a
-        // compact column hanging along the pill's long axis (the whole block is
-        // rotated into place by the caller via the [modifier]).
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = modifier
-                .then(Modifier.widthIn(max = 190.dp))
-                .padding(horizontal = 10.dp, vertical = 1.dp)
-        ) {
-            if (clock.showDate) {
-                Text(
-                    text = formatClockDate(clock.dateFormat, now),
-                    color = tint.copy(alpha = 0.92f),
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
-                )
-            }
-            if (clock.showTime) {
-                Text(
-                    text = formatClockTime(clock.clock24Hour, now),
-                    color = tint,
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-            }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .then(Modifier.widthIn(max = 190.dp))
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        if (clock.showDate) {
+            Text(
+                text = formatClockDate(clock.dateFormat, now),
+                color = tint.copy(alpha = 0.92f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
         }
-    } else {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = modifier
-                .then(Modifier.widthIn(max = 190.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-        ) {
-            if (clock.showDate) {
-                Text(
-                    text = formatClockDate(clock.dateFormat, now),
-                    color = tint.copy(alpha = 0.92f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
-                )
-            }
-            if (clock.showDate && clock.showTime) {
+        if (clock.showDate && clock.showTime) {
                 Text(
                     text = "\u00B7",
                     color = tint.copy(alpha = 0.45f),
@@ -138,5 +103,4 @@ internal fun IdleClockRow(
                 )
             }
         }
-    }
 }

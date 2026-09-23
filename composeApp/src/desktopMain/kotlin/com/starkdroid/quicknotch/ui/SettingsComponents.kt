@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -44,9 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.starkdroid.quicknotch.model.NotchPosition
-import com.starkdroid.quicknotch.theme.AccentCyan
-import com.starkdroid.quicknotch.theme.AccentIndigo
 import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.TextMuted
@@ -60,70 +56,6 @@ internal val FlatSurfaceElevated = Color(0xFF181E2E)
 internal val FlatSurfaceSelected = Color(0xFF1B2236)
 internal val FlatBorder = Color(0xFF22283A)
 internal val FlatCard = Color(0xFF121622)
-
-/**
- * A miniature screen showing the four supported edge anchors. Only edge centres
- * are selectable — corners and free-form placement were removed so the notch
- * always sits perfectly centred on one side and never has to be dragged.
- */
-@Composable
-internal fun EdgePositionSelector(
-    selectedPosition: NotchPosition,
-    onSelectPosition: (NotchPosition) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .size(width = 132.dp, height = 92.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(FlatCard)
-            .border(1.dp, FlatBorder, RoundedCornerShape(10.dp))
-    ) {
-        EdgeAnchor(Alignment.TopCenter, NotchPosition.TOP_CENTER, true, selectedPosition, onSelectPosition)
-        EdgeAnchor(Alignment.BottomCenter, NotchPosition.BOTTOM_CENTER, true, selectedPosition, onSelectPosition)
-        EdgeAnchor(Alignment.CenterStart, NotchPosition.LEFT_CENTER, false, selectedPosition, onSelectPosition)
-        EdgeAnchor(Alignment.CenterEnd, NotchPosition.RIGHT_CENTER, false, selectedPosition, onSelectPosition)
-    }
-}
-
-@Composable
-internal fun BoxScope.EdgeAnchor(
-    alignment: Alignment,
-    position: NotchPosition,
-    horizontal: Boolean,
-    selectedPosition: NotchPosition,
-    onSelectPosition: (NotchPosition) -> Unit
-) {
-    val isSelected = selectedPosition == position
-    Box(
-        modifier = Modifier
-            .align(alignment)
-            .padding(9.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isSelected) AccentIndigo.copy(alpha = 0.26f) else FlatSurfaceElevated)
-            .border(
-                if (isSelected) 1.5.dp else 1.dp,
-                if (isSelected) AccentIndigoLight else FlatBorder,
-                RoundedCornerShape(6.dp)
-            )
-            .clickable { onSelectPosition(position) }
-            .padding(
-                horizontal = if (horizontal) 11.dp else 5.dp,
-                vertical = if (horizontal) 5.dp else 11.dp
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(
-                    width = if (horizontal) 20.dp else 4.dp,
-                    height = if (horizontal) 4.dp else 20.dp
-                )
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isSelected) AccentCyan else TextMuted.copy(alpha = 0.45f))
-        )
-    }
-}
 
 /**
  * A minimal, flat selection dropdown (label above, current value, popup menu)

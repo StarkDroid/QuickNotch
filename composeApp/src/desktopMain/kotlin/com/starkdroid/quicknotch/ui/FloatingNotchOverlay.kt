@@ -15,8 +15,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,7 +29,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,8 +37,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,7 +71,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -120,7 +114,6 @@ import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
-import com.starkdroid.quicknotch.model.NotchPosition
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.TextPrimary
@@ -138,8 +131,6 @@ import org.jetbrains.compose.resources.stringResource
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
-private val IslandBubbleFill = Color(0xF21C1C1E)
-private val BubbleShadow = Color(0x66000000)
 private val LiveAccent = Color(0xFF38BDF8)
 private val VinylDiscFill = Color(0xFF14161C)
 private val VinylRing = Color(0xFF343A45)
@@ -189,9 +180,8 @@ private val IconLift = 8.dp
 /**
  * Extra hover tolerance around the island footprint (the collapsed pill or the
  * expanded dock). The hover hit area is the island plus this glow — never the
- * whole native window — so a side dock's transparent label-bubble gutter is
- * not part of the hit target and the notch retracts as soon as the cursor
- * leaves the visible island.
+ * whole native window — so the notch retracts as soon as the cursor leaves the
+ * visible island instead of staying glued open.
  */
 private val HoverGlow = 10.dp
 
@@ -400,14 +390,13 @@ internal fun FloatingNotchOverlay(
 
     // The island keeps the dock as its *sibling*, so the fading dock is not
     // clipped by the shrinking pill; the pill holds its expanded size until the
-    // dock fade is done, then contracts. The island animates its own (possibly
-    // narrower than the window) footprint — for side docks the window carries
-    // the extra label-bubble gutter on the inner side.
+    // dock fade is done, then contracts. For a top-centred notch the island
+    // footprint matches the window, so no extra gutter is needed.
     val islandExpanded = isExpanded || dockAlpha > 0.01f
     val targetSize = metrics.islandFor(islandExpanded)
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
-    val shape = notchShape(config.position, islandExpanded, config.style)
+    val shape = notchShape(islandExpanded, config.style)
 
     // Open: grow the native window first, hold the dock hidden until the size
     // spring has actually settled, then fade it in. Close: fade the dock out,
@@ -439,7 +428,7 @@ internal fun FloatingNotchOverlay(
 
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = containerAlignment(config.position)
+        contentAlignment = Alignment.TopCenter
     ) {
         // Island background + collapsed pill: the only thing that actually
         // resizes. The dock is a sibling, not a child, so its layout is stable.
@@ -458,7 +447,6 @@ internal fun FloatingNotchOverlay(
                 exit = fadeOut(tween(80))
             ) {
                 CollapsedIsland(
-                    vertical = config.position.isVertical,
                     style = config.style,
                     surface = config.surface,
                     media = if (musicLive) liveSession else null,
@@ -477,10 +465,7 @@ internal fun FloatingNotchOverlay(
             // nearest screen centre), thinning while the pill itself is thin.
             val liveNow = if (musicLive) liveSession else null
             if (!isExpanded && liveNow != null) {
-                LiveProgressStrip(
-                    position = config.position,
-                    fraction = liveNow.progressFraction(nowMs)
-                )
+                LiveProgressStrip(fraction = liveNow.progressFraction(nowMs))
             }
         }
 
@@ -508,8 +493,6 @@ internal fun FloatingNotchOverlay(
                 nowMs = nowMs,
                 density = density,
                 interactive = showDock,
-                bubbleInset = metrics.bubbleInset,
-                islandDepth = if (config.position.isVertical) metrics.island.width else metrics.island.height,
                 onLaunch = { app ->
                     scope.launch {
                         AppLauncher.launch(app)
@@ -520,15 +503,11 @@ internal fun FloatingNotchOverlay(
         }
 
         // Hover target is the island footprint plus a small glow — never the
-        // whole native window. A side dock's expanded window carries a wide
-        // transparent label-bubble gutter on the inner side; with the entire
-        // window as the hit target the cursor had to cross that invisible dead
-        // zone before the Exit fired, so side docks stayed glued open until the
-        // cursor had travelled almost half the screen. Because the zone hugs the
-        // visible island (the dock icons live inside it when open), the notch
-        // retracts the moment the cursor leaves the island. Top/bottom docks are
-        // unchanged: their window IS the island, so a wider zone just gets
-        // clipped by the window.
+        // whole native window (the notch is top-centred, so the window and the
+        // island coincide). With the entire window as the hit target, the notch
+        // stayed glued open until the cursor had travelled far past the visible
+        // island; hugging the island means the notch retracts the moment the
+        // cursor leaves it.
         //
         // This box must stay the LAST sibling (topmost z-order): when siblings
         // overlap, hit testing only considers the highest-z pointer-eligible one.
@@ -541,14 +520,7 @@ internal fun FloatingNotchOverlay(
         val glow = HoverGlow
         Box(
             modifier = Modifier
-                .then(
-                    when (config.position) {
-                        NotchPosition.TOP_CENTER -> Modifier.size(animatedWidth + glow * 2, animatedHeight + glow)
-                        NotchPosition.BOTTOM_CENTER -> Modifier.size(animatedWidth + glow * 2, animatedHeight + glow)
-                        NotchPosition.LEFT_CENTER -> Modifier.size(animatedWidth + glow, animatedHeight + glow * 2)
-                        NotchPosition.RIGHT_CENTER -> Modifier.size(animatedWidth + glow, animatedHeight + glow * 2)
-                    }
-                )
+                .size(animatedWidth + glow * 2, animatedHeight + glow)
                 .onGloballyPositioned { hoverCoordinates = it }
                 .sharingHover { setHovered(it) }
         ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
@@ -579,14 +551,8 @@ private fun Dock(
     iconBitmaps: Map<String, ImageBitmap>,
     density: Density,
     interactive: Boolean,
-    bubbleInset: Dp,
-    islandDepth: Dp,
     onLaunch: (AppItem) -> Unit
 ) {
-    val vertical = config.position.isVertical
-    val towardStart = config.position == NotchPosition.LEFT_CENTER ||
-        config.position == NotchPosition.TOP_CENTER
-
     // Pointer position and icon centres share the icon container's local pixel
     // space, so the fisheye tracks the cursor with exact accuracy.
     val centers = remember { mutableStateMapOf<Int, Float>() }
@@ -622,8 +588,7 @@ private fun Dock(
     val pointerModifier = if (interactive) {
         Modifier
             .onPointerEvent(PointerEventType.Move) { change ->
-                pointer.value = change.changes.firstOrNull()?.position
-                    ?.let { if (vertical) it.y else it.x }
+                pointer.value = change.changes.firstOrNull()?.position?.x
             }
             .onPointerEvent(PointerEventType.Exit) { pointer.value = null }
     } else {
@@ -642,8 +607,6 @@ private fun Dock(
                 radiusPx = radiusPx,
                 peakScale = config.dockScaleFactor,
                 liftPx = liftPx,
-                vertical = vertical,
-                towardStart = towardStart,
                 baseSizeDp = config.baseIconSizeDp,
                 enabled = interactive,
                 onPositioned = { centers[index] = it },
@@ -652,71 +615,31 @@ private fun Dock(
         }
     }
 
-    if (vertical) {
-        // Side docks have no room for an inline label inside the narrow
-        // island, so the icons keep their column and the name surfaces as a
-        // bubble floating in the gutter just outside the island's inner border.
-        // The column is centred across the island's cross-section: pinning it to
-        // the screen edge left a ~36dp dead strip between the notch's visible
-        // inner border and the icons, which read as extra padding.
-        Box(modifier = Modifier.fillMaxSize()) {
-            val iconSlot = config.baseIconSizeDp.dp + DockLayout.IconPadding * 2
-            val crossPad = ((islandDepth - iconSlot) / 2).coerceAtLeast(0.dp)
-            Column(
-                modifier = Modifier
-                    .align(if (towardStart) Alignment.CenterStart else Alignment.CenterEnd)
-                    .offset(x = if (towardStart) crossPad else -crossPad)
-                    .padding(top = 8.dp, bottom = 8.dp)
-                    .then(pointerModifier),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) { icons() }
-
-            if (config.showTooltips && bubbleInset > 0.dp) {
-                DockLabelBubble(
-                    nameState = closestName,
-                    config = config,
-                    modifier = Modifier
-                        .align(if (towardStart) Alignment.CenterStart else Alignment.CenterEnd)
-                        .padding(
-                            start = if (towardStart) bubbleInset + DockLayout.BubbleGap else 0.dp,
-                            end = if (towardStart) 0.dp else bubbleInset + DockLayout.BubbleGap
-                        )
-                )
-            }
-        }
-    } else {
-        // Centred along the depth axis instead of pinned to the anchored edge:
-        // that removes the dead strip that used to pile up under the icons
-        // (labels off) or above the label (labels on), and keeps the label's
-        // descenders clear of the window border.
-        Column(
-            modifier = Modifier.fillMaxSize().padding(dockPadding(config.position)),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (towardStart && config.showTooltips) DockLabel(closestName, config)
-            Row(
-                modifier = pointerModifier,
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) { icons() }
-            if (!towardStart && config.showTooltips) DockLabel(closestName, config)
-        }
+    // Centred along the depth axis instead of pinned to the anchored edge:
+    // that removes the dead strip that used to pile up under the icons
+    // (labels off) or above the label (labels on), and keeps the label's
+    // descenders clear of the window border.
+    Column(
+        modifier = Modifier.fillMaxSize().padding(dockPadding()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (config.showTooltips) DockLabel(closestName, config)
+        Row(
+            modifier = pointerModifier,
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) { icons() }
     }
 }
 
 /**
- * Insets the dock away from the anchored screen edge so icons never touch the
+ * Insets the dock away from the top screen edge so icons never touch the
  * display border, and leaves extra room on the inner edge for the
  * magnification lift.
  */
-private fun dockPadding(position: NotchPosition): PaddingValues = when (position) {
-    NotchPosition.TOP_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp)
-    NotchPosition.BOTTOM_CENTER -> PaddingValues(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 8.dp)
-    NotchPosition.LEFT_CENTER -> PaddingValues(start = 6.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
-    NotchPosition.RIGHT_CENTER -> PaddingValues(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp)
-}
+private fun dockPadding(): PaddingValues =
+    PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp)
 
 @Composable
 private fun DockIcon(
@@ -727,8 +650,6 @@ private fun DockIcon(
     radiusPx: Float,
     peakScale: Float,
     liftPx: Float,
-    vertical: Boolean,
-    towardStart: Boolean,
     baseSizeDp: Int,
     enabled: Boolean,
     onPositioned: (Float) -> Unit,
@@ -739,7 +660,6 @@ private fun DockIcon(
     val targetScale = if (enabled) fisheyeScale(pointer.value, center, radiusPx, peakScale) else 1f
     val animatedScale by animateFloatAsState(targetScale, iconSpring(), label = "dockScale")
     val interaction = remember { MutableInteractionSource() }
-    val liftSign = if (towardStart) 1f else -1f
 
     Box(
         modifier = Modifier
@@ -747,16 +667,14 @@ private fun DockIcon(
             .size(baseSizeDp.dp)
             .onGloballyPositioned { coordinates ->
                 val position = coordinates.positionInParent()
-                onPositioned(
-                    if (vertical) position.y + coordinates.size.height / 2f
-                    else position.x + coordinates.size.width / 2f
-                )
+                onPositioned(position.x + coordinates.size.width / 2f)
             }
             .graphicsLayer {
                 scaleX = animatedScale
                 scaleY = animatedScale
-                val lift = (animatedScale - 1f) * liftPx * liftSign
-                if (vertical) translationX = lift else translationY = lift
+                // Magnified icons lift toward the screen centre (down for a
+                // top-centred notch).
+                translationY = (animatedScale - 1f) * liftPx
             }
             .clip(RoundedCornerShape(11.dp))
             .clickable(
@@ -794,42 +712,6 @@ private fun DockIcon(
 }
 
 @Composable
-private fun DockLabelBubble(
-    nameState: State<String?>,
-    config: NotchConfig,
-    modifier: Modifier = Modifier
-) {
-    val name by nameState
-    val visible = !name.isNullOrBlank()
-    val labelSize = (config.expandedNotchHeightDp * DockLabelFontSizeFactor).sp
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(110)) + scaleIn(initialScale = 0.88f, animationSpec = tween(150, easing = FastOutSlowInEasing)),
-        exit = fadeOut(tween(80)) + scaleOut(targetScale = 0.9f, animationSpec = tween(90)),
-        modifier = modifier
-    ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = DockLayout.LabelBubbleReserve - DockLayout.BubbleGap * 2)
-                .shadow(6.dp, RoundedCornerShape(9.dp), ambientColor = BubbleShadow, spotColor = BubbleShadow)
-                .clip(RoundedCornerShape(9.dp))
-                .background(IslandBubbleFill)
-                .padding(horizontal = 10.dp, vertical = 5.dp)
-        ) {
-            Text(
-                text = name.orEmpty(),
-                color = TextPrimary.copy(alpha = 0.95f),
-                fontSize = labelSize,
-                lineHeight = (labelSize.value * 1.15f).sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
 private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
     val labelSize = (config.expandedNotchHeightDp * DockLabelFontSizeFactor).sp
     val lineHeight = (labelSize.value * 1.15f).sp
@@ -857,28 +739,18 @@ private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
 
 @Composable
 private fun CollapsedIsland(
-    vertical: Boolean,
     style: NotchStyle,
     surface: NotchSurface,
     media: MediaSession?,
     volumePercent: Int?,
     clock: ClockPrefs
 ) {
-    // Side docks rotate the collapsed content into the pill's long axis. The
-    // transform must be applied *after* the child lays out at its natural
-    // width: without unbounded measurement the 34dp cross-section of a left/
-    // right pill would squeeze every un-rotated child into a clipped stub
-    // (dots collapsed into a sliver, clock text cut to fragments).
-    val rotated = if (vertical) Modifier
-        .graphicsLayer { rotationZ = 90f }
-        .wrapContentWidth(unbounded = true)
-    else Modifier
     Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
         if (style == NotchStyle.DRAG_HANDLE) {
             // A single slim grabber line — the whole point of the handle is to
             // stay out of the way until it is pulled open.
             Box(
-                modifier = rotated
+                modifier = Modifier
                     .size(width = 36.dp, height = 4.dp)
                     .clip(CircleShape)
                     .background(handleTint(surface))
@@ -891,8 +763,8 @@ private fun CollapsedIsland(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = rotated
-                    .then(if (vertical) Modifier.widthIn(max = 210.dp) else Modifier.fillMaxWidth())
+                modifier = Modifier
+                    .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 MiniDisc(art = media.artwork, size = 20.dp)
@@ -902,7 +774,7 @@ private fun CollapsedIsland(
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    modifier = if (vertical) Modifier.widthIn(max = 170.dp) else Modifier.weight(1f)
+                    modifier = Modifier.weight(1f)
                 )
                 if (volumePercent != null) {
                     Row(
@@ -936,15 +808,12 @@ private fun CollapsedIsland(
             // usually fits; the pill clips rather than stretching.
             IdleClockRow(
                 clock = clock,
-                vertical = vertical,
-                tint = islandTint(surface),
-                modifier = rotated
+                tint = islandTint(surface)
             )
         } else {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = rotated
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 val dot = islandTint(surface)
                 Box(Modifier.size(5.dp).clip(CircleShape).background(dot.copy(alpha = 0.28f)))
@@ -961,41 +830,22 @@ private fun CollapsedIsland(
 }
 
 /**
- * Progress bar drawn against the pill's "inner" border — the edge nearest the
- * screen centre, i.e. the one opposite the anchored screen edge — growing toward
+ * Progress bar drawn against the pill's "inner" border — for a top-centred
+ * notch that is the bottom edge (nearest the screen centre) — growing toward
  * the playhead as the track advances. Hidden behind the expanding island once
  * the dock opens (the expanded page shows its own progress control).
  */
 @Composable
 private fun BoxScope.LiveProgressStrip(
-    position: NotchPosition,
     fraction: Float
 ) {
-    val (alignment, horizontal) = when (position) {
-        NotchPosition.TOP_CENTER -> Alignment.BottomCenter to true
-        NotchPosition.BOTTOM_CENTER -> Alignment.TopCenter to true
-        NotchPosition.LEFT_CENTER -> Alignment.CenterEnd to false
-        NotchPosition.RIGHT_CENTER -> Alignment.CenterStart to false
-    }
     val settlePadding = 2.dp
     Box(
         modifier = Modifier
-            .align(alignment)
-            .padding(
-                horizontal = if (horizontal) 0.dp else settlePadding,
-                vertical = if (horizontal) settlePadding else 0.dp
-            )
-            .then(
-                if (horizontal) {
-                    Modifier
-                        .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                        .height(2.5.dp)
-                } else {
-                    Modifier
-                        .fillMaxHeight(fraction.coerceIn(0f, 1f))
-                        .width(2.5.dp)
-                }
-            )
+            .align(Alignment.BottomCenter)
+            .padding(vertical = settlePadding)
+            .fillMaxWidth(fraction.coerceIn(0f, 1f))
+            .height(2.5.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(LiveAccent.copy(alpha = 0.95f))
     )
@@ -1052,8 +902,6 @@ private fun WidgetPages(
     nowMs: Long,
     density: Density,
     interactive: Boolean,
-    bubbleInset: Dp,
-    islandDepth: Dp,
     onLaunch: (AppItem) -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -1065,8 +913,7 @@ private fun WidgetPages(
                     .fillMaxSize()
                     .graphicsLayer {
                         alpha = (1f - abs(relative)).coerceIn(0f, 1f)
-                        val slide = 0.35f * relative * (if (config.position.isVertical) size.width else size.height)
-                        if (config.position.isVertical) translationX = slide else translationY = slide
+                        translationY = 0.35f * relative * size.height
                     }
             ) {
                 when (page) {
@@ -1076,8 +923,6 @@ private fun WidgetPages(
                         iconBitmaps = iconBitmaps,
                         density = density,
                         interactive = interactive && isActive,
-                        bubbleInset = bubbleInset,
-                        islandDepth = islandDepth,
                         onLaunch = onLaunch
                     )
                     WidgetPage.Music -> if (session != null) {
@@ -1085,8 +930,7 @@ private fun WidgetPages(
                             session = session,
                             media = media,
                             nowMs = nowMs,
-                            interactive = interactive && isActive,
-                            vertical = config.position.isVertical
+                            interactive = interactive && isActive
                         )
                     }
                 }
@@ -1100,13 +944,10 @@ private fun MusicPage(
     session: MediaSession,
     media: MediaController,
     nowMs: Long,
-    interactive: Boolean,
-    vertical: Boolean
+    interactive: Boolean
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer { if (vertical) rotationZ = 90f },
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         MusicContent(
@@ -1519,19 +1360,12 @@ private fun fisheyeScale(
     return 1f + (peakScale - 1f) * factor
 }
 
-private fun containerAlignment(position: NotchPosition): Alignment = when (position) {
-    NotchPosition.TOP_CENTER -> Alignment.TopCenter
-    NotchPosition.BOTTOM_CENTER -> Alignment.BottomCenter
-    NotchPosition.LEFT_CENTER -> Alignment.CenterStart
-    NotchPosition.RIGHT_CENTER -> Alignment.CenterEnd
-}
-
 /**
  * Rounds only the two corners facing away from the anchored edge; the corners
  * touching the screen edge stay square so the notch reads as flush with the
  * display, like the hardware Dynamic Island.
  */
-private fun notchShape(position: NotchPosition, expanded: Boolean, style: NotchStyle): CornerBasedShape {
+private fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape {
     if (style.capsule) {
         // Round all four corners; a generous radius clamps to a stadium at the
         // slim collapsed height and a soft pill when expanded.
@@ -1539,10 +1373,5 @@ private fun notchShape(position: NotchPosition, expanded: Boolean, style: NotchS
         return RoundedCornerShape(corner)
     }
     val corner = if (expanded) 18.dp else 13.dp
-    return when (position) {
-        NotchPosition.TOP_CENTER -> RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
-        NotchPosition.BOTTOM_CENTER -> RoundedCornerShape(topStart = corner, topEnd = corner)
-        NotchPosition.LEFT_CENTER -> RoundedCornerShape(topEnd = corner, bottomEnd = corner)
-        NotchPosition.RIGHT_CENTER -> RoundedCornerShape(topStart = corner, bottomStart = corner)
-    }
+    return RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
 }

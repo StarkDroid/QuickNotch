@@ -139,14 +139,14 @@ fun main() {
 }
 
 /**
- * Hosts the transparent overlay window and pins it to the configured screen edge.
+ * Hosts the transparent overlay window and pins it to the top of the screen.
  *
  * Size and position are both written to [androidx.compose.ui.window.WindowState]
  * within a single effect so Compose applies them atomically in one pass — this is
  * what keeps the notch perfectly still (no shift, no flash) while it grows and
- * shrinks. The effect re-runs only when the edge or the target footprint changes,
- * never in response to the window's own live dimensions, so there is no feedback
- * loop and no second corrective placement.
+ * shrinks. The effect re-runs only when the style or the target footprint
+ * changes, never in response to the window's own live dimensions, so there is
+ * no feedback loop and no second corrective placement.
  */
 @Composable
 private fun NotchOverlayWindow(
@@ -204,11 +204,11 @@ private fun NotchOverlayWindow(
             }
         }
 
-        LaunchedEffect(config.position, config.style, targetSize) {
+        LaunchedEffect(config.style, targetSize) {
             // Absolute placement is only honoured once the AWT window is mapped:
             // an assignment made earlier is silently dropped and the window keeps
             // its aligned placeholder position (top-centre) instead of hugging
-            // the chosen edge. Wait for the window to show, give it a frame to
+            // the screen edge. Wait for the window to show, give it a frame to
             // finish its initial layout, then pin it to the edge atomically.
             while (!awtWindow.isShowing) delay(10)
             delay(100)
@@ -217,7 +217,6 @@ private fun NotchOverlayWindow(
             // Window size is expressed in the same AWT units overlayScreenLocation
             // works in, and Compose maps DpSize onto those units 1:1.
             val location = overlayScreenLocation(
-                position = config.position,
                 windowWidthPx = targetSize.width.value.roundToInt(),
                 windowHeightPx = targetSize.height.value.roundToInt(),
                 screen = graphicsConfiguration.bounds,

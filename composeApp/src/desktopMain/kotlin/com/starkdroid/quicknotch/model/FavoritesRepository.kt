@@ -28,8 +28,9 @@ class FavoritesRepository(
         prettyPrint = true
         ignoreUnknownKeys = true
         encodeDefaults = true
-        // Legacy configs may reference removed notch positions (e.g. corners);
-        // coerce them to the default instead of discarding the whole config.
+        // Legacy configs may reference removed fields (e.g. the old screen-edge
+        // position); ignore unknown keys and coerce surviving enums to their
+        // defaults instead of discarding the whole config.
         coerceInputValues = true
     }
 

@@ -18,12 +18,6 @@
     <string name="tab_widgets">Widgets</string>
     <string name="tab_behavior">Behavior</string>
 
-    <!-- Enum labels: screen edge -->
-    <string name="edge_top_center">Top Center</string>
-    <string name="edge_right_center">Right Center</string>
-    <string name="edge_bottom_center">Bottom Center</string>
-    <string name="edge_left_center">Left Center</string>
-
     <!-- Enum labels: notch style -->
     <string name="style_dynamic_island">Dynamic Island</string>
     <string name="style_floating_pill">Floating Pill</string>
@@ -36,8 +30,6 @@
     <!-- Dock & Sizing tab -->
     <string name="dock_sizing_header">Dock Layout &amp; Sizing</string>
     <string name="reset">Reset</string>
-    <string name="screen_edge_positioning">Screen Edge Positioning</string>
-    <string name="screen_edge_positioning_desc">Choose which screen edge the notch anchors to</string>
     <string name="notch_style">Notch Style</string>
     <string name="surface_theme">Surface Theme</string>
     <string name="fisheye_title">Icon Fish-eye Magnification</string>

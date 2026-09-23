@@ -27,7 +27,6 @@ import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
-import com.starkdroid.quicknotch.model.NotchPosition
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.*
@@ -255,16 +254,6 @@ private fun SettingsTopBar(
 
 // Enum labels resolve from composeResources at the UI layer, keeping the model
 // enums free of user-facing text.
-@Composable
-internal fun NotchPosition.label(): String = stringResource(
-    when (this) {
-        NotchPosition.TOP_CENTER -> Res.string.edge_top_center
-        NotchPosition.RIGHT_CENTER -> Res.string.edge_right_center
-        NotchPosition.BOTTOM_CENTER -> Res.string.edge_bottom_center
-        NotchPosition.LEFT_CENTER -> Res.string.edge_left_center
-    }
-)
-
 @Composable
 internal fun NotchStyle.label(): String = stringResource(
     when (this) {

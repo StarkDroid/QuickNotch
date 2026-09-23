@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -38,8 +36,6 @@ import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
-import com.starkdroid.quicknotch.theme.AccentCyan
-import com.starkdroid.quicknotch.theme.AccentIndigo
 import com.starkdroid.quicknotch.theme.AccentRed
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.TextPrimary
@@ -87,74 +83,7 @@ internal fun DockSizingTab(
             }
         }
 
-        // Section 1: Minimalist 3x3 Screen Edge Positioning Grid
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(Res.string.screen_edge_positioning),
-                            style = AppTypography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = stringResource(Res.string.screen_edge_positioning_desc),
-                            style = AppTypography.bodySmall,
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(FlatSurfaceElevated)
-                                .border(1.dp, AccentIndigo.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(AccentCyan)
-                                )
-                                Spacer(modifier = Modifier.width(7.dp))
-                                Text(
-                                    text = config.position.label(),
-                                    style = AppTypography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TextPrimary,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    EdgePositionSelector(
-                        selectedPosition = config.position,
-                        onSelectPosition = { pos -> onUpdate { it.copy(position = pos) } }
-                    )
-                }
-            }
-        }
-
-        // Section 1b: Appearance — silhouette and material, side by side
+        // Section 1: Appearance — silhouette and material, side by side
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = FlatSurface),

@@ -5,24 +5,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The four screen-edge anchors the notch can occupy. Corners and free-form
- * dragging are intentionally unsupported: a fixed, centred anchor keeps the
- * overlay perfectly still while it expands and collapses. User-facing labels
- * live in `composeResources/values/strings.xml`.
- */
-@Serializable
-enum class NotchPosition {
-    TOP_CENTER,
-    RIGHT_CENTER,
-    BOTTOM_CENTER,
-    LEFT_CENTER;
-
-    /** True when the notch grows along the vertical axis (left / right edges). */
-    val isVertical: Boolean
-        get() = this == LEFT_CENTER || this == RIGHT_CENTER
-}
-
-/**
  * The physical silhouette of the notch. All three share the same expand/collapse
  * choreography; they differ in how the body meets the screen edge.
  */
@@ -104,7 +86,6 @@ enum class ClockDateFormat(val pattern: String) {
 @Immutable
 @Serializable
 data class NotchConfig(
-    val position: NotchPosition = NotchPosition.TOP_CENTER,
     val style: NotchStyle = NotchStyle.DYNAMIC_ISLAND,
     val surface: NotchSurface = NotchSurface.SOLID,
     val widgets: WidgetsConfig = WidgetsConfig(),
