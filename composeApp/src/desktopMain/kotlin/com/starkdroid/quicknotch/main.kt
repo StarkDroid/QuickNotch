@@ -33,6 +33,7 @@ import com.starkdroid.quicknotch.ui.SettingsScreen
 import com.starkdroid.quicknotch.ui.computeNotchMetrics
 import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
+import kotlinx.coroutines.delay
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
 import java.awt.image.BufferedImage
@@ -204,6 +205,13 @@ private fun NotchOverlayWindow(
         }
 
         LaunchedEffect(config.position, config.style, targetSize) {
+            // Absolute placement is only honoured once the AWT window is mapped:
+            // an assignment made earlier is silently dropped and the window keeps
+            // its aligned placeholder position (top-centre) instead of hugging
+            // the chosen edge. Wait for the window to show, give it a frame to
+            // finish its initial layout, then pin it to the edge atomically.
+            while (!awtWindow.isShowing) delay(10)
+            delay(100)
             val graphicsConfiguration = awtWindow.graphicsConfiguration
             val insets = Toolkit.getDefaultToolkit().getScreenInsets(graphicsConfiguration)
             // Window size is expressed in the same AWT units overlayScreenLocation
