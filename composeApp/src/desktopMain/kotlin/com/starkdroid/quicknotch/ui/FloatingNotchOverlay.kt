@@ -78,7 +78,6 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
@@ -87,8 +86,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.node.ModifierNodeElement
-import androidx.compose.ui.node.PointerInputModifierNode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
@@ -100,7 +97,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -197,56 +193,6 @@ private const val DockLabelFontSizeFactor = 0.145f
 private const val IslandSettleTimeoutMs = 650L
 
 // ── Hover input sharing ────────────────────────────────────────────────────
-
-/**
- * Hover tracking lives on a small transparent sibling Box that sits on top of
- * the dock. On macOS the dock Box carries a scroll handler and is therefore
- * pointer-eligible, so a plain [Modifier.onPointerEvent] hover area would be
- * shadowed by it: when siblings overlap, hit testing only adds the highest-z
- * eligible one, and the dock is drawn above the hover area.
- *
- * This node opts into [sharePointerInputWithSiblings], so once the hover area
- * is hit the hit test keeps walking down through the dock subtree and both
- * stay on the pointer path — hover Enter/Exit still fires while the dock keeps
- * its scroll handling and icon clicks. See the sibling ordering in
- * [FloatingNotchOverlay] for why the hover area has to be on top for this to
- * work.
- */
-private class SharingHoverNode(
-    var onHoverChanged: (Boolean) -> Unit
-) : Modifier.Node(), PointerInputModifierNode {
-
-    override fun onPointerEvent(event: PointerEvent, pass: PointerEventPass, bounds: IntSize) {
-        when (event.type) {
-            PointerEventType.Enter -> onHoverChanged(true)
-            PointerEventType.Exit -> onHoverChanged(false)
-            else -> Unit
-        }
-    }
-
-    override fun onCancelPointerInput() {
-        // Callback-only hover tracking holds no gesture state to reset.
-    }
-
-    override fun sharePointerInputWithSiblings(): Boolean = true
-}
-
-private class SharingHoverElement(
-    private val onHoverChanged: (Boolean) -> Unit
-) : ModifierNodeElement<SharingHoverNode>() {
-    override fun create(): SharingHoverNode = SharingHoverNode(onHoverChanged)
-    override fun update(node: SharingHoverNode) {
-        node.onHoverChanged = onHoverChanged
-    }
-
-    override fun equals(other: Any?): Boolean =
-        other is SharingHoverElement && other.onHoverChanged == onHoverChanged
-
-    override fun hashCode(): Int = onHoverChanged.hashCode()
-}
-
-private fun Modifier.sharingHover(onHoverChanged: (Boolean) -> Unit): Modifier =
-    this.then(SharingHoverElement(onHoverChanged))
 
 /**
  * True while the cursor is inside the notch's current hover footprint
@@ -509,20 +455,16 @@ internal fun FloatingNotchOverlay(
         // island; hugging the island means the notch retracts the moment the
         // cursor leaves it.
         //
-        // This box must stay the LAST sibling (topmost z-order): when siblings
-        // overlap, hit testing only considers the highest-z pointer-eligible one.
-        // On macOS the dock box carries a scroll handler, so sitting below it the
-        // hover area was shadowed and never entered. Sharing
-        // ([SharingHoverNode.sharePointerInputWithSiblings]) then walks the hit
-        // test back down to the dock subtree, so the hover tracks while the dock
-        // keeps its scroll handling and icon clicks. The box draws nothing, so
-        // being on top has no visual effect.
+        // This box must stay the LAST sibling (topmost z-order) so it receives
+        // Enter/Exit events while scroll events fall through to the dock box
+        // below. The box draws nothing, so being on top has no visual effect.
         val glow = HoverGlow
         Box(
             modifier = Modifier
                 .size(animatedWidth + glow * 2, animatedHeight + glow)
                 .onGloballyPositioned { hoverCoordinates = it }
-                .sharingHover { setHovered(it) }
+                .onPointerEvent(PointerEventType.Enter) { setHovered(true) }
+                .onPointerEvent(PointerEventType.Exit) { setHovered(false) }
         ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
     }
 }
