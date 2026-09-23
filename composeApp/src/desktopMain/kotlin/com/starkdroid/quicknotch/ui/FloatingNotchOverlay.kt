@@ -369,10 +369,21 @@ internal fun FloatingNotchOverlay(
     // handler covers the whole notch there. Windows receives no scroll through
     // that pipeline on its unfocused overlay window — AWT does — so the Compose
     // handler is skipped on Windows to avoid every notch being counted twice.
+    //
+    // Compose reports scroll in `preciseWheelRotation` units (one wheel notch =
+    // 1.0 rotation), not pixels, and the pager accumulator is in the same pixel
+    // space the Windows AWT listener feeds it with rotation × stepPx. So scale
+    // the same way here: without it, a whole trackpad swipe lands far below the
+    // step threshold and several swipes are needed for one page flip. Sum both
+    // axes because Shift+scroll on macOS is reported on the x axis, which keeps
+    // this path insensitive to Shift exactly like the Windows listener is.
     val composeScrollModifier =
         if (HostPlatform.isWindows) Modifier
         else Modifier.onPointerEvent(PointerEventType.Scroll) { event ->
-            pager.consumeWheel(event.changes.fold(0f) { acc, change -> acc + change.scrollDelta.y })
+            val rotations = event.changes.fold(0f) { acc, change ->
+                acc + change.scrollDelta.x + change.scrollDelta.y
+            }
+            pager.consumeWheel(rotations * pager.stepPx)
         }
 
     val metrics = remember(config, favorites.size, musicLive) {
