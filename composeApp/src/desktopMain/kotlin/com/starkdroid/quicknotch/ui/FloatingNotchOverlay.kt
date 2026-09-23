@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -718,7 +719,15 @@ private fun CollapsedIsland(
     volumePercent: Int?,
     clock: ClockPrefs
 ) {
-    val rotated = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
+    // Side docks rotate the collapsed content into the pill's long axis. The
+    // transform must be applied *after* the child lays out at its natural
+    // width: without unbounded measurement the 34dp cross-section of a left/
+    // right pill would squeeze every un-rotated child into a clipped stub
+    // (dots collapsed into a sliver, clock text cut to fragments).
+    val rotated = if (vertical) Modifier
+        .graphicsLayer { rotationZ = 90f }
+        .wrapContentWidth(unbounded = true)
+    else Modifier
     Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
         if (style == NotchStyle.DRAG_HANDLE) {
             // A single slim grabber line — the whole point of the handle is to
