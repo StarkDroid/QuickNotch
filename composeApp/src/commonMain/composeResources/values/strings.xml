@@ -53,6 +53,14 @@
     <string name="value_dp">%1$s dp</string>
     <string name="value_scale">%1$sx</string>
 
+    <!-- Idle clock in the collapsed pill -->
+    <string name="clock_title">Idle Clock</string>
+    <string name="clock_desc">Show a live date &amp; time in the collapsed pill instead of the idle dots</string>
+    <string name="clock_show_date">Show Date</string>
+    <string name="clock_show_time">Show Time</string>
+    <string name="clock_24h">24-Hour Clock</string>
+    <string name="clock_date_format">Date Format</string>
+
     <!-- Pinned apps tab -->
     <string name="pinned_items">Pinned Items</string>
     <string name="no_apps_pinned">No apps pinned.

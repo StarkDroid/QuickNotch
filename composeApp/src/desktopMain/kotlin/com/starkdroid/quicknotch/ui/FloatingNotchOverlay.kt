@@ -357,7 +357,15 @@ internal fun FloatingNotchOverlay(
                     style = config.style,
                     surface = config.surface,
                     media = if (musicLive) liveSession else null,
-                    volumePercent = volumePercent
+                    volumePercent = volumePercent,
+                    clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
+                        ClockPrefs(
+                            showDate = config.clockDate,
+                            showTime = config.clockTime,
+                            clock24Hour = config.clock24Hour,
+                            dateFormat = config.clockDateFormat
+                        )
+                    }
                 )
             }
             // Live progress hugs the pill's inner border (the edge facing the
@@ -707,10 +715,11 @@ private fun CollapsedIsland(
     style: NotchStyle,
     surface: NotchSurface,
     media: MediaSession?,
-    volumePercent: Int?
+    volumePercent: Int?,
+    clock: ClockPrefs
 ) {
     val rotated = if (vertical) Modifier.graphicsLayer { rotationZ = 90f } else Modifier
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
         if (style == NotchStyle.DRAG_HANDLE) {
             // A single slim grabber line — the whole point of the handle is to
             // stay out of the way until it is pulled open.
@@ -767,6 +776,16 @@ private fun CollapsedIsland(
                     }
                 }
             }
+        } else if (clock.showDate || clock.showTime) {
+            // Idle clock: date / time replace the dots while nothing plays.
+            // Depending on the chosen format and pill width the whole phrase
+            // usually fits; the pill clips rather than stretching.
+            IdleClockRow(
+                clock = clock,
+                vertical = vertical,
+                tint = islandTint(surface),
+                modifier = rotated
+            )
         } else {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),

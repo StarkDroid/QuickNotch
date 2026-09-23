@@ -74,6 +74,27 @@ data class WidgetsConfig(
 )
 
 /**
+ * Date layouts for the idle clock shown in the collapsed pill (while nothing
+ * is playing). The pattern is [java.time.format.DateTimeFormatter] syntax and
+ * the dropdown renders a live example, so users pick the exact look they get.
+ */
+@Serializable
+enum class ClockDateFormat(val pattern: String) {
+    /** 23 Sep */
+    DD_MMM("d MMM"),
+    /** Sep 23 */
+    MMM_DD("MMM d"),
+    /** Wed, 23 Sep */
+    EEE_DD_MMM("EEE, d MMM"),
+    /** 23/09/26 */
+    DD_MM_YY("dd/MM/yy"),
+    /** 09/23/26 */
+    MM_DD_YY("MM/dd/yy"),
+    /** 2026-09-23 */
+    YYYY_MM_DD("yyyy-MM-dd")
+}
+
+/**
  * Persistent configuration for the floating notch and its dock.
  *
  * The fisheye magnification radius is no longer user-tunable: it is derived
@@ -97,5 +118,12 @@ data class NotchConfig(
     val showTooltips: Boolean = true,
     val hideOnAppLaunch: Boolean = false,
     val collapseDelayMs: Long = 400L,
+    // Idle clock in the collapsed pill: replaces the idle dots whenever either
+    // piece is on. Old config files load fine (missing fields take these
+    // defaults via kotlinx.serialization).
+    val clockDate: Boolean = true,
+    val clockTime: Boolean = true,
+    val clock24Hour: Boolean = false,
+    val clockDateFormat: ClockDateFormat = ClockDateFormat.DD_MMM,
     val themeDark: Boolean = true
 )

@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
@@ -312,6 +313,100 @@ internal fun DockSizingTab(
                         value = config.expandedNotchHeightDp.toFloat().coerceIn(70f, 86f),
                         valueRange = 70f..86f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(expandedNotchHeightDp = it.toInt()) } }
+                    )
+                }
+            }
+        }
+
+        // Section 4: Idle clock in the collapsed pill
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = FlatSurface),
+                border = BorderStroke(1.dp, FlatBorder),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(Res.string.clock_title),
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = stringResource(Res.string.clock_desc),
+                        style = AppTypography.bodySmall,
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.clock_show_date),
+                            style = AppTypography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                        MinimalistRectSwitch(
+                            checked = config.clockDate,
+                            onCheckedChange = { checked -> onUpdate { it.copy(clockDate = checked) } }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.clock_show_time),
+                            style = AppTypography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                        MinimalistRectSwitch(
+                            checked = config.clockTime,
+                            onCheckedChange = { checked -> onUpdate { it.copy(clockTime = checked) } }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.clock_24h),
+                            style = AppTypography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                        MinimalistRectSwitch(
+                            checked = config.clock24Hour,
+                            onCheckedChange = { checked -> onUpdate { it.copy(clock24Hour = checked) } }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    AppearanceDropdown(
+                        label = stringResource(Res.string.clock_date_format),
+                        options = ClockDateFormat.entries.toList(),
+                        selected = config.clockDateFormat,
+                        optionLabel = { formatClockDate(it) },
+                        onSelect = { format -> onUpdate { it.copy(clockDateFormat = format) } },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }

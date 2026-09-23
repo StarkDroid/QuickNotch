@@ -24,6 +24,7 @@ import com.starkdroid.quicknotch.datasource.InstalledAppsScanner
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
+import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchPosition
@@ -159,7 +160,11 @@ fun SettingsScreen(
                                     baseIconSizeDp = 38,
                                     collapsedPillWidthDp = 150,
                                     collapsedPillHeightDp = 30,
-                                    expandedNotchHeightDp = 78
+                                    expandedNotchHeightDp = 78,
+                                    clockDate = true,
+                                    clockTime = true,
+                                    clock24Hour = false,
+                                    clockDateFormat = ClockDateFormat.DD_MMM
                                 )
                             }
                         }
