@@ -178,6 +178,15 @@ private const val FisheyeRadiusFactor = 1.5f
 /** Cross-axis travel of a fully magnified icon, in dp. */
 private val IconLift = 8.dp
 
+/**
+ * Extra hover tolerance around the island footprint (the collapsed pill or the
+ * expanded dock). The hover hit area is the island plus this glow — never the
+ * whole native window — so a side dock's transparent label-bubble gutter is
+ * not part of the hit target and the notch retracts as soon as the cursor
+ * leaves the visible island.
+ */
+private val HoverGlow = 10.dp
+
 /** Label font size as a fraction of the expanded dock height (≈11sp at 78dp). */
 private const val DockLabelFontSizeFactor = 0.145f
 
@@ -331,12 +340,34 @@ internal fun FloatingNotchOverlay(
     }
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .onPointerEvent(PointerEventType.Enter) { setHovered(true) }
-            .onPointerEvent(PointerEventType.Exit) { setHovered(false) },
+        modifier = modifier.fillMaxSize(),
         contentAlignment = containerAlignment(config.position)
     ) {
+        // Hover target is the island footprint plus a small glow — never the
+        // whole native window. A side dock's expanded window carries a wide
+        // transparent label-bubble gutter on the inner side; with the entire
+        // window as the hit target the cursor had to cross that invisible dead
+        // zone before the Exit fired, so side docks stayed glued open until the
+        // cursor had travelled almost half the screen. Because the zone hugs the
+        // visible island (the dock icons live inside it when open), the notch
+        // retracts the moment the cursor leaves the island. Top/bottom docks are
+        // unchanged: their window IS the island, so a wider zone just gets
+        // clipped by the window.
+        val glow = HoverGlow
+        Box(
+            modifier = Modifier
+                .then(
+                    when (config.position) {
+                        NotchPosition.TOP_CENTER -> Modifier.size(animatedWidth + glow * 2, animatedHeight + glow)
+                        NotchPosition.BOTTOM_CENTER -> Modifier.size(animatedWidth + glow * 2, animatedHeight + glow)
+                        NotchPosition.LEFT_CENTER -> Modifier.size(animatedWidth + glow, animatedHeight + glow * 2)
+                        NotchPosition.RIGHT_CENTER -> Modifier.size(animatedWidth + glow, animatedHeight + glow * 2)
+                    }
+                )
+                .onPointerEvent(PointerEventType.Enter) { setHovered(true) }
+                .onPointerEvent(PointerEventType.Exit) { setHovered(false) }
+        ) { /* Transparent hover area; the island and dock draw over it. */ }
+
         // Island background + collapsed pill: the only thing that actually
         // resizes. The dock is a sibling, not a child, so its layout is stable.
         Box(
@@ -405,6 +436,7 @@ internal fun FloatingNotchOverlay(
                 density = density,
                 interactive = showDock,
                 bubbleInset = metrics.bubbleInset,
+                islandDepth = if (config.position.isVertical) metrics.island.width else metrics.island.height,
                 onLaunch = { app ->
                     scope.launch {
                         AppLauncher.launch(app)
@@ -441,6 +473,7 @@ private fun Dock(
     density: Density,
     interactive: Boolean,
     bubbleInset: Dp,
+    islandDepth: Dp,
     onLaunch: (AppItem) -> Unit
 ) {
     val vertical = config.position.isVertical
@@ -514,14 +547,19 @@ private fun Dock(
 
     if (vertical) {
         // Side docks have no room for an inline label inside the narrow
-        // island, so the icons keep their edge-aligned column and the name
-        // surfaces as a bubble floating in the gutter just outside the
-        // island's inner border.
+        // island, so the icons keep their column and the name surfaces as a
+        // bubble floating in the gutter just outside the island's inner border.
+        // The column is centred across the island's cross-section: pinning it to
+        // the screen edge left a ~36dp dead strip between the notch's visible
+        // inner border and the icons, which read as extra padding.
         Box(modifier = Modifier.fillMaxSize()) {
+            val iconSlot = config.baseIconSizeDp.dp + DockLayout.IconPadding * 2
+            val crossPad = ((islandDepth - iconSlot) / 2).coerceAtLeast(0.dp)
             Column(
                 modifier = Modifier
                     .align(if (towardStart) Alignment.CenterStart else Alignment.CenterEnd)
-                    .padding(dockPadding(config.position))
+                    .offset(x = if (towardStart) crossPad else -crossPad)
+                    .padding(top = 8.dp, bottom = 8.dp)
                     .then(pointerModifier),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -908,6 +946,7 @@ private fun WidgetPages(
     density: Density,
     interactive: Boolean,
     bubbleInset: Dp,
+    islandDepth: Dp,
     onLaunch: (AppItem) -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -931,6 +970,7 @@ private fun WidgetPages(
                         density = density,
                         interactive = interactive && isActive,
                         bubbleInset = bubbleInset,
+                        islandDepth = islandDepth,
                         onLaunch = onLaunch
                     )
                     WidgetPage.Music -> if (session != null) {
