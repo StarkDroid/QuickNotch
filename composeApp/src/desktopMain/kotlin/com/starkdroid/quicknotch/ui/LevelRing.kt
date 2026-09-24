@@ -9,8 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.BatteryAlert
-import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,9 +19,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.starkdroid.quicknotch.generated.resources.*
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * Shared palette for the level rings: a soft white glyph/arc over a faint
@@ -58,7 +60,7 @@ private const val RingSweepAnimationMs = 260
 @Composable
 internal fun LevelRing(
     level: Int,
-    icon: ImageVector,
+    icon: Painter,
     contentDescription: String,
     modifier: Modifier = Modifier,
     tint: Color = LevelRingGlyph,
@@ -106,7 +108,7 @@ internal fun LevelRing(
             }
         }
         Icon(
-            imageVector = icon,
+            painter = icon,
             contentDescription = contentDescription,
             tint = levelColor,
             modifier = Modifier.fillMaxSize(iconFraction)
@@ -121,11 +123,16 @@ internal fun volumeGlyph(level: Int): ImageVector = when {
     else -> Icons.AutoMirrored.Filled.VolumeUp
 }
 
+/** Volume glyph as a painter the level ring can draw (silent/low/loud). */
+@Composable
+internal fun volumePainter(level: Int): Painter = rememberVectorPainter(volumeGlyph(level))
+
 /**
- * Battery glyph shared by every battery ring: a full-cell marker normally and
- * an alert one at low charge (the ring's [BatteryLowTint] rides along).
+ * Battery/device glyph as a painter: the headphone drawable for a connected
+ * audio device, the bluetooth drawable for any other connected device. Both
+ * come from packaged compose resources — no icon data lives in code.
  */
-internal fun batteryGlyph(level: Int): ImageVector = when {
-    level <= BatteryLowThreshold -> Icons.Default.BatteryAlert
-    else -> Icons.Default.BatteryFull
-}
+@Composable
+internal fun batteryPainter(isAudio: Boolean): Painter =
+    if (isAudio) painterResource(Res.drawable.headphone)
+    else painterResource(Res.drawable.bluetooth)

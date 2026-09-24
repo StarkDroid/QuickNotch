@@ -9,7 +9,7 @@
 #  values the OS may still hand out after a device unplugs never confuse it,
 #  and nothing here ever reads the slow battery property.
 #
-#    {"present":true,"instance":"BTHENUM\\...","name":"...","address":"840F2A94240A"}
+#    {"present":true,"instance":"BTHENUM\\...","name":"...","address":"840F2A94240A","audio":true}
 #    {"present":false}
 #
 #  With -InstanceId (the slow ~30-second refresh) it reads that device's
@@ -17,7 +17,11 @@
 #  ({104EA319-6EE2-4701-BD47-8DDBF425BBE5}, 2), which the OS may answer by
 #  polling the headset over the air (can take many seconds):
 #
-#    {"name":"...","level":87}    {"level":null}    {"present":false}
+#    {"name":"...","level":87,"audio":true}    {"level":null,"present":false}    {"present":false}
+#
+#  `audio` marks a Bluetooth audio-stack device (Hands-Free / A2DP / AVRCP
+#  service, or MEDIA class) so the UI can swap the battery glyph for the
+#  headset glyph in the level ring.
 #
 
 param([string]$InstanceId = '')
@@ -85,6 +89,22 @@ function Get-DeviceBatteryLevel($device) {
     return $level
 }
 
+# True when the instance belongs to a Bluetooth audio stack: a BTHENUM
+# enumeration of an audio-profile service (Hands-Free, A2DP, AVRCP transports)
+# or a PnP device in the MEDIA class. Drives the level ring's device glyph.
+function Test-IsAudioInstance([string]$InstanceId, [string]$Class) {
+    if ($InstanceId -like 'BTHENUM\{0000110A-*' -or   # Audio Source / A2DP SNK
+        $InstanceId -like 'BTHENUM\{0000110B-*' -or   # Audio Sink / A2DP MEDIA
+        $InstanceId -like 'BTHENUM\{0000110C-*' -or   # AVRCP transport
+        $InstanceId -like 'BTHENUM\{0000110D-*' -or   # AVRCP transport
+        $InstanceId -like 'BTHENUM\{0000110E-*' -or   # AVRCP transport
+        $InstanceId -like 'BTHENUM\{0000111E-*' -or   # Hands-Free AG
+        $InstanceId -like 'BTHENUM\{0000111F-*') {    # Hands-Free HF
+        return $true
+    }
+    return ($Class -eq 'MEDIA')
+}
+
 if ([string]::IsNullOrWhiteSpace($InstanceId)) {
     # ── Mode A: is a Bluetooth audio device connected right now? ─────────────
     $connected = Get-ConnectedBluetooth
@@ -132,6 +152,7 @@ if ([string]::IsNullOrWhiteSpace($InstanceId)) {
                 instance = $entry.Device.InstanceId
                 name     = Get-DeviceName $entry.Device
                 address  = $entry.Address
+                audio    = (Test-IsAudioInstance $entry.Device.InstanceId $entry.Device.Class)
             }
             $payload | ConvertTo-Json -Compress
             exit 0
@@ -154,6 +175,7 @@ else {
         instance = $device.InstanceId
         name     = Get-DeviceName $device
         level    = $level
+        audio    = (Test-IsAudioInstance $device.InstanceId $device.Class)
     }
     $payload | ConvertTo-Json -Compress
     exit 0

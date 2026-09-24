@@ -98,7 +98,7 @@ internal fun IdleClockRow(
         }
         if (clock.showDate && clock.showTime) {
             ClockTextFrame(
-                text = "\u00B7",
+                text = stringResource(Res.string.clock_date_separator),
                 color = tint.copy(alpha = 0.45f),
                 weight = FontWeight.Medium
             )
@@ -115,7 +115,7 @@ internal fun IdleClockRow(
         if (battery != null) {
             LevelRing(
                 level = battery.levelPercent,
-                icon = batteryGlyph(battery.levelPercent),
+                icon = batteryPainter(battery.isAudio),
                 contentDescription = stringResource(
                     Res.string.music_battery,
                     battery.name?.takeIf { it.isNotBlank() }

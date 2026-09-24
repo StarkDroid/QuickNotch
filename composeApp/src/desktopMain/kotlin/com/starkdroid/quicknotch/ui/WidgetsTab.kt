@@ -305,7 +305,7 @@ internal fun NowPlayingStatus(
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = if (live && liveSession != null) {
-                stringResource(Res.string.widget_now_playing, liveSession.title, liveSession.artist.ifBlank { "—" })
+                stringResource(Res.string.widget_now_playing, liveSession.title, liveSession.artist.ifBlank { stringResource(Res.string.widget_unknown_artist) })
             } else {
                 stringResource(Res.string.widget_no_session)
             },

@@ -23,11 +23,20 @@ import kotlinx.serialization.json.intOrNull
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** A connected audio device reporting a battery percentage (0-100). */
+/**
+ * A connected audio device reporting a battery percentage (0-100).
+ *
+ * @param isAudio true when the OS data reports the device as part of a
+ *   Bluetooth audio stack (Hands-Free / A2DP / AVRCP), which drives which
+ *   glyph the level ring shows. Defaults to true because the macOS plist path
+ *   has no reliable device-class field and only surfaces battery-carrying
+ *   devices anyway.
+ */
 data class AudioDeviceBattery(
     /** Device name as reported by the OS; null when unknown. */
     val name: String?,
-    val levelPercent: Int
+    val levelPercent: Int,
+    val isAudio: Boolean = true
 )
 
 /** Output of [battery.ps1] (both the fast probe and the slow refresh). */
@@ -36,7 +45,8 @@ private data class BatteryProbe(
     @SerialName("present") val present: Boolean = false,
     @SerialName("instance") val instance: String? = null,
     @SerialName("name") val name: String? = null,
-    @SerialName("level") val level: Int? = null
+    @SerialName("level") val level: Int? = null,
+    @SerialName("audio") val audio: Boolean = false
 )
 
 /** Last-known level persisted per device instance (Windows). */
@@ -108,6 +118,11 @@ internal object AudioBattery {
     private var cachedLevel: Int? = null
     @Volatile
     private var cachedName: String? = null
+
+    // Whether the active device is part of a Bluetooth audio stack; picked up
+    // from the probe alongside identity so the UI's level-ring glyph matches.
+    @Volatile
+    private var cachedAudio = false
 
     // True while the last probe (mode A, real connection state) saw an audio
     // device connected. The slow refresh consults this before publishing — a
@@ -204,11 +219,12 @@ internal object AudioBattery {
             activeInstance = instance
             isPresent = true
             cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
+            cachedAudio = snap.audio
             // A device that just appeared (or one we have no level for yet)
             // kicks an immediate refresh so the percentage shows up quickly.
             if (appeared || cachedLevel == null) kickRefresh()
             val level = if (cachedInstance == instance) cachedLevel else null
-            _info.value = if (level != null) AudioDeviceBattery(cachedName, level) else null
+            _info.value = if (level != null) AudioDeviceBattery(cachedName, level, cachedAudio) else null
         } else {
             // The WinRT connected set is empty — the device is gone. Hide now;
             // the cached level is kept for an instant restore on reconnect.
@@ -249,8 +265,9 @@ internal object AudioBattery {
         cachedInstance = instance
         cachedLevel = level
         cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
+        cachedAudio = snap.audio
         persistCache(instance, cachedName, level)
-        _info.value = AudioDeviceBattery(cachedName, level)
+        _info.value = AudioDeviceBattery(cachedName, level, cachedAudio)
     }
 
     // ── macOS (1 s cadence, plist carries presence + battery) ────────────────

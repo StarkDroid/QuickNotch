@@ -129,7 +129,7 @@ fun main() {
             Window(
                 onCloseRequest = { showSettings = false },
                 state = settingsState,
-                title = "QuickNotch Settings",
+                title = stringResource(Res.string.settings_window_title),
                 icon = BitmapPainter(appIcon),
                 resizable = true
             ) {
@@ -183,7 +183,7 @@ private fun NotchOverlayWindow(
     Window(
         onCloseRequest = { },
         state = overlayState,
-        title = "QuickNotch",
+        title = stringResource(Res.string.app_name),
         icon = BitmapPainter(appIcon),
         undecorated = true,
         transparent = true,

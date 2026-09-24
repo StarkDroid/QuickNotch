@@ -821,7 +821,7 @@ private fun CollapsedIsland(
                     if (showVolume && volumePercent != null) {
                         LevelRing(
                             level = volumePercent,
-                            icon = volumeGlyph(volumePercent),
+                            icon = volumePainter(volumePercent),
                             contentDescription = stringResource(Res.string.music_volume),
                             modifier = Modifier.size(22.dp)
                         )
@@ -829,7 +829,7 @@ private fun CollapsedIsland(
                     if (showBattery && battery != null) {
                         LevelRing(
                             level = battery.levelPercent,
-                            icon = batteryGlyph(battery.levelPercent),
+                            icon = batteryPainter(battery.isAudio),
                             contentDescription = stringResource(
                                 Res.string.music_battery,
                                 battery.name?.takeIf { it.isNotBlank() }
@@ -1088,7 +1088,7 @@ private fun MusicContent(
                 if (volumePercent != null) {
                     LevelRing(
                         level = volumePercent,
-                        icon = volumeGlyph(volumePercent),
+                        icon = volumePainter(volumePercent),
                         contentDescription = stringResource(Res.string.music_volume),
                         modifier = Modifier.size(28.dp)
                     )
@@ -1096,7 +1096,7 @@ private fun MusicContent(
                 if (battery != null) {
                     LevelRing(
                         level = battery.levelPercent,
-                        icon = batteryGlyph(battery.levelPercent),
+                        icon = batteryPainter(battery.isAudio),
                         contentDescription = stringResource(
                             Res.string.music_battery,
                             battery.name?.takeIf { it.isNotBlank() }
