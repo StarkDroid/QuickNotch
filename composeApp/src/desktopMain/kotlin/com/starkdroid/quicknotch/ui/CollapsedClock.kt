@@ -3,6 +3,7 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,11 +19,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The user-tunable pieces of the collapsed-pill idle clock. Derived from
@@ -55,7 +59,8 @@ internal fun formatClockTime(clock24Hour: Boolean, now: LocalDateTime = LocalDat
 internal fun IdleClockRow(
     clock: ClockPrefs,
     tint: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    battery: AudioDeviceBattery? = null
 ) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -100,6 +105,22 @@ internal fun IdleClockRow(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
+                )
+            }
+            // Connected device battery right beside the date/time stamps, gated
+            // by the same collapsed-pill toggle as the music-state battery.
+            if (battery != null) {
+                LevelRing(
+                    level = battery.levelPercent,
+                    icon = batteryGlyph(battery.levelPercent),
+                    contentDescription = stringResource(
+                        Res.string.music_battery,
+                        battery.name?.takeIf { it.isNotBlank() }
+                            ?: stringResource(Res.string.music_audio_device)
+                    ),
+                    modifier = Modifier.size(22.dp),
+                    lowTint = BatteryLowTint,
+                    lowThreshold = BatteryLowThreshold
                 )
             }
         }

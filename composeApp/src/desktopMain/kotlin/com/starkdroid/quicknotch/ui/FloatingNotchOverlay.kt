@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,11 +41,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeDown
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.BatteryAlert
-import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -80,7 +74,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -521,6 +514,7 @@ internal fun FloatingNotchOverlay(
                 media = media,
                 nowMs = nowMs,
                 battery = battery,
+                volumePercent = volumePercent,
                 density = density,
                 interactive = showDock,
                 onLaunch = { app ->
@@ -816,32 +810,26 @@ private fun CollapsedIsland(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (showVolume && volumePercent != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = when {
-                                    volumePercent <= 0 -> Icons.AutoMirrored.Filled.VolumeOff
-                                    volumePercent < 50 -> Icons.AutoMirrored.Filled.VolumeDown
-                                    else -> Icons.AutoMirrored.Filled.VolumeUp
-                                },
-                                contentDescription = stringResource(Res.string.music_volume),
-                                tint = Color.White.copy(alpha = 0.95f),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = "$volumePercent%",
-                                color = Color.White.copy(alpha = 0.92f),
-                                fontSize = 11.sp,
-                                lineHeight = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1
-                            )
-                        }
+                        LevelRing(
+                            level = volumePercent,
+                            icon = volumeGlyph(volumePercent),
+                            contentDescription = stringResource(Res.string.music_volume),
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                     if (showBattery && battery != null) {
-                        BatteryChip(battery = battery, compact = true)
+                        LevelRing(
+                            level = battery.levelPercent,
+                            icon = batteryGlyph(battery.levelPercent),
+                            contentDescription = stringResource(
+                                Res.string.music_battery,
+                                battery.name?.takeIf { it.isNotBlank() }
+                                    ?: stringResource(Res.string.music_audio_device)
+                            ),
+                            modifier = Modifier.size(22.dp),
+                            lowTint = BatteryLowTint,
+                            lowThreshold = BatteryLowThreshold
+                        )
                     }
                 }
             }
@@ -851,7 +839,8 @@ private fun CollapsedIsland(
             // usually fits; the pill clips rather than stretching.
             IdleClockRow(
                 clock = clock,
-                tint = islandTint(surface)
+                tint = islandTint(surface),
+                battery = if (showBattery) battery else null
             )
         } else {
             Row(
@@ -870,48 +859,6 @@ private fun CollapsedIsland(
             }
         }
     }
-}
-
-/**
- * Compact battery indicator (icon + percent) shared by the collapsed pill and
- * the expanded music page. The icon flips to an alert glyph and a warm amber
- * tint under 20% so a draining device reads at a glance.
- */
-@Composable
-private fun RowScope.BatteryChip(
-    battery: AudioDeviceBattery,
-    compact: Boolean
-) {
-    val iconSize = if (compact) 13.dp else 14.dp
-    val fontSize = if (compact) 11.sp else 12.sp
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = batteryIcon(battery.levelPercent),
-            contentDescription = stringResource(
-                Res.string.music_battery,
-                battery.name?.takeIf { it.isNotBlank() }
-                    ?: stringResource(Res.string.music_audio_device)
-            ),
-            tint = if (battery.levelPercent <= 20) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.95f),
-            modifier = Modifier.size(iconSize)
-        )
-        Text(
-            text = "${battery.levelPercent}%",
-            color = Color.White.copy(alpha = 0.92f),
-            fontSize = fontSize,
-            lineHeight = if (compact) 13.sp else fontSize,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1
-        )
-    }
-}
-
-private fun batteryIcon(level: Int): ImageVector = when {
-    level <= 20 -> Icons.Default.BatteryAlert
-    else -> Icons.Default.BatteryFull
 }
 
 /**
@@ -986,6 +933,7 @@ private fun WidgetPages(
     media: MediaController,
     nowMs: Long,
     battery: AudioDeviceBattery?,
+    volumePercent: Int?,
     density: Density,
     interactive: Boolean,
     onLaunch: (AppItem) -> Unit
@@ -1017,6 +965,7 @@ private fun WidgetPages(
                             media = media,
                             nowMs = nowMs,
                             battery = battery,
+                            volumePercent = volumePercent,
                             interactive = interactive && isActive
                         )
                     }
@@ -1032,6 +981,7 @@ private fun MusicPage(
     media: MediaController,
     nowMs: Long,
     battery: AudioDeviceBattery?,
+    volumePercent: Int?,
     interactive: Boolean
 ) {
     Box(
@@ -1043,6 +993,7 @@ private fun MusicPage(
             media = media,
             nowMs = nowMs,
             battery = battery,
+            volumePercent = volumePercent,
             interactive = interactive
         )
     }
@@ -1060,6 +1011,7 @@ private fun MusicContent(
     media: MediaController,
     nowMs: Long,
     battery: AudioDeviceBattery?,
+    volumePercent: Int?,
     interactive: Boolean
 ) {
     val playing = session.state == PlaybackState.PLAYING
@@ -1120,10 +1072,31 @@ private fun MusicContent(
                     modifier = Modifier.weight(1f)
                 )
                 TrackTimeLabel(duration)
-                // The expanded page always shows the device battery; the
-                // collapsed-only toggle governs just the pill's chip.
+                // Both level rings use the exact same shape as the collapsed
+                // pill's, so volume and battery read identically everywhere.
+                // The expanded page always shows them; the collapsed-only
+                // toggles govern just the pill.
+                if (volumePercent != null) {
+                    LevelRing(
+                        level = volumePercent,
+                        icon = volumeGlyph(volumePercent),
+                        contentDescription = stringResource(Res.string.music_volume),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
                 if (battery != null) {
-                    BatteryChip(battery = battery, compact = false)
+                    LevelRing(
+                        level = battery.levelPercent,
+                        icon = batteryGlyph(battery.levelPercent),
+                        contentDescription = stringResource(
+                            Res.string.music_battery,
+                            battery.name?.takeIf { it.isNotBlank() }
+                                ?: stringResource(Res.string.music_audio_device)
+                        ),
+                        modifier = Modifier.size(28.dp),
+                        lowTint = BatteryLowTint,
+                        lowThreshold = BatteryLowThreshold
+                    )
                 }
             }
         }
