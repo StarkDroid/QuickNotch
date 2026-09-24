@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +45,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.BatteryAlert
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -77,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -108,6 +112,8 @@ import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.AudioBattery
+import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
@@ -285,6 +291,8 @@ internal fun FloatingNotchOverlay(
     modifier: Modifier = Modifier,
     /** System master-volume percentage (0-100); null hides the volume chip. */
     volumePercent: Int? = null,
+    /** Connected audio device battery (0-100); null hides the battery chip. */
+    battery: AudioDeviceBattery? = null,
     /** Shared widget-pager state (also driven by the Windows AWT wheel listener). */
     pager: OverlayPager
 ) {
@@ -311,6 +319,13 @@ internal fun FloatingNotchOverlay(
     }
 
     var showDock by pager.dockVisible
+
+    // Connectivity is polled every second in the background; re-probe the
+    // moment the notch opens or the music goes live so the battery chip never
+    // shows a stale read (or a ghost after the device disconnected).
+    LaunchedEffect(isExpanded, musicLive) {
+        AudioBattery.poke()
+    }
 
     // Collapse is debounced so a cursor briefly clipping the edge does not
     // immediately retract the dock.
@@ -462,6 +477,9 @@ internal fun FloatingNotchOverlay(
                     surface = config.surface,
                     media = if (musicLive) liveSession else null,
                     volumePercent = volumePercent,
+                    battery = battery,
+                    showVolume = config.widgets.showCollapsedVolume,
+                    showBattery = config.widgets.showCollapsedBattery,
                     clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
                         ClockPrefs(
                             showDate = config.clockDate,
@@ -502,6 +520,7 @@ internal fun FloatingNotchOverlay(
                 session = liveSession,
                 media = media,
                 nowMs = nowMs,
+                battery = battery,
                 density = density,
                 interactive = showDock,
                 onLaunch = { app ->
@@ -754,6 +773,9 @@ private fun CollapsedIsland(
     surface: NotchSurface,
     media: MediaSession?,
     volumePercent: Int?,
+    battery: AudioDeviceBattery?,
+    showVolume: Boolean,
+    showBattery: Boolean,
     clock: ClockPrefs
 ) {
     Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
@@ -769,8 +791,10 @@ private fun CollapsedIsland(
         } else if (media != null) {
             // Collapsed live activity: the disc hugs the left end, the title
             // sits centred (marqueed when long) and the system volume degree
-            // caps the right. The pill is not interactive, so there is no
-            // transport control here; play/pause lives in the expanded page.
+            // plus the audio device's battery cap the right — each behind its
+            // own collapsed-only toggle. The pill is not interactive, so there
+            // is no transport control here; play/pause lives in the expanded
+            // page.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -787,29 +811,37 @@ private fun CollapsedIsland(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
-                if (volumePercent != null) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = when {
-                                volumePercent <= 0 -> Icons.AutoMirrored.Filled.VolumeOff
-                                volumePercent < 50 -> Icons.AutoMirrored.Filled.VolumeDown
-                                else -> Icons.AutoMirrored.Filled.VolumeUp
-                            },
-                            contentDescription = stringResource(Res.string.music_volume),
-                            tint = Color.White.copy(alpha = 0.95f),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "$volumePercent%",
-                            color = Color.White.copy(alpha = 0.92f),
-                            fontSize = 11.sp,
-                            lineHeight = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
-                        )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (showVolume && volumePercent != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = when {
+                                    volumePercent <= 0 -> Icons.AutoMirrored.Filled.VolumeOff
+                                    volumePercent < 50 -> Icons.AutoMirrored.Filled.VolumeDown
+                                    else -> Icons.AutoMirrored.Filled.VolumeUp
+                                },
+                                contentDescription = stringResource(Res.string.music_volume),
+                                tint = Color.White.copy(alpha = 0.95f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "$volumePercent%",
+                                color = Color.White.copy(alpha = 0.92f),
+                                fontSize = 11.sp,
+                                lineHeight = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    if (showBattery && battery != null) {
+                        BatteryChip(battery = battery, compact = true)
                     }
                 }
             }
@@ -838,6 +870,48 @@ private fun CollapsedIsland(
             }
         }
     }
+}
+
+/**
+ * Compact battery indicator (icon + percent) shared by the collapsed pill and
+ * the expanded music page. The icon flips to an alert glyph and a warm amber
+ * tint under 20% so a draining device reads at a glance.
+ */
+@Composable
+private fun RowScope.BatteryChip(
+    battery: AudioDeviceBattery,
+    compact: Boolean
+) {
+    val iconSize = if (compact) 13.dp else 14.dp
+    val fontSize = if (compact) 11.sp else 12.sp
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = batteryIcon(battery.levelPercent),
+            contentDescription = stringResource(
+                Res.string.music_battery,
+                battery.name?.takeIf { it.isNotBlank() }
+                    ?: stringResource(Res.string.music_audio_device)
+            ),
+            tint = if (battery.levelPercent <= 20) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.95f),
+            modifier = Modifier.size(iconSize)
+        )
+        Text(
+            text = "${battery.levelPercent}%",
+            color = Color.White.copy(alpha = 0.92f),
+            fontSize = fontSize,
+            lineHeight = if (compact) 13.sp else fontSize,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
+    }
+}
+
+private fun batteryIcon(level: Int): ImageVector = when {
+    level <= 20 -> Icons.Default.BatteryAlert
+    else -> Icons.Default.BatteryFull
 }
 
 /**
@@ -911,6 +985,7 @@ private fun WidgetPages(
     session: MediaSession?,
     media: MediaController,
     nowMs: Long,
+    battery: AudioDeviceBattery?,
     density: Density,
     interactive: Boolean,
     onLaunch: (AppItem) -> Unit
@@ -941,6 +1016,7 @@ private fun WidgetPages(
                             session = session,
                             media = media,
                             nowMs = nowMs,
+                            battery = battery,
                             interactive = interactive && isActive
                         )
                     }
@@ -955,6 +1031,7 @@ private fun MusicPage(
     session: MediaSession,
     media: MediaController,
     nowMs: Long,
+    battery: AudioDeviceBattery?,
     interactive: Boolean
 ) {
     Box(
@@ -965,6 +1042,7 @@ private fun MusicPage(
             session = session,
             media = media,
             nowMs = nowMs,
+            battery = battery,
             interactive = interactive
         )
     }
@@ -981,6 +1059,7 @@ private fun MusicContent(
     session: MediaSession,
     media: MediaController,
     nowMs: Long,
+    battery: AudioDeviceBattery?,
     interactive: Boolean
 ) {
     val playing = session.state == PlaybackState.PLAYING
@@ -1041,6 +1120,11 @@ private fun MusicContent(
                     modifier = Modifier.weight(1f)
                 )
                 TrackTimeLabel(duration)
+                // The expanded page always shows the device battery; the
+                // collapsed-only toggle governs just the pill's chip.
+                if (battery != null) {
+                    BatteryChip(battery = battery, compact = false)
+                }
             }
         }
 

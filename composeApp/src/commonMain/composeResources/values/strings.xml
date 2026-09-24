@@ -81,9 +81,17 @@ Add apps from the list on the right.</string>
     <string name="widget_no_session">No active media session</string>
     <string name="widget_style_warning">Live activity appears only on the Dynamic Island and Floating Pill styles.</string>
     <string name="widget_scroll_hint">Scroll the mouse wheel over the open notch to switch between enabled widgets.</string>
+    <string name="widget_collapsed_indicators_title">Collapsed Pill Indicators</string>
+    <string name="widget_collapsed_indicators_desc">What the collapsed music pill shows beside the track while it plays; the expanded page always shows them</string>
+    <string name="widget_show_volume_title">Show System Volume</string>
+    <string name="widget_show_volume_desc">Display the volume percentage in the collapsed pill</string>
+    <string name="widget_show_battery_title">Show Device Battery</string>
+    <string name="widget_show_battery_desc">Display the connected audio device\'s battery percentage in the collapsed pill</string>
     <string name="music_play">Play</string>
     <string name="music_pause">Pause</string>
     <string name="music_volume">System volume</string>
+    <string name="music_battery">Audio device battery: %1$s</string>
+    <string name="music_audio_device">audio device</string>
     <string name="music_previous">Previous track</string>
     <string name="music_next">Next track</string>
 

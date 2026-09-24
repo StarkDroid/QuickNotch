@@ -148,6 +148,44 @@ internal fun WidgetsTab(
                             lineHeight = 15.sp
                         )
 
+                        HorizontalDivider(color = FlatBorder)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = stringResource(Res.string.widget_collapsed_indicators_title),
+                                style = AppTypography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = stringResource(Res.string.widget_collapsed_indicators_desc),
+                                style = AppTypography.bodySmall,
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                            BehaviorSwitchRow(
+                                title = stringResource(Res.string.widget_show_volume_title),
+                                subtitle = stringResource(Res.string.widget_show_volume_desc),
+                                checked = config.widgets.showCollapsedVolume,
+                                onCheckedChange = { checked ->
+                                    onUpdate {
+                                        it.copy(widgets = it.widgets.copy(showCollapsedVolume = checked))
+                                    }
+                                }
+                            )
+                            BehaviorSwitchRow(
+                                title = stringResource(Res.string.widget_show_battery_title),
+                                subtitle = stringResource(Res.string.widget_show_battery_desc),
+                                checked = config.widgets.showCollapsedBattery,
+                                onCheckedChange = { checked ->
+                                    onUpdate {
+                                        it.copy(widgets = it.widgets.copy(showCollapsedBattery = checked))
+                                    }
+                                }
+                            )
+                        }
+
                         if (!isStyleEligibleForLiveActivity(config)) {
                             Text(
                                 text = stringResource(Res.string.widget_style_warning),

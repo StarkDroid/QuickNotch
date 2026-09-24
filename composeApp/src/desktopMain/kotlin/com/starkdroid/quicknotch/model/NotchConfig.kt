@@ -52,7 +52,10 @@ enum class NotchSurface {
 @Serializable
 data class WidgetsConfig(
     val pinnedAppsEnabled: Boolean = true,
-    val nowPlayingEnabled: Boolean = true
+    val nowPlayingEnabled: Boolean = true,
+    /** Collapsed-pill indicator toggles; the expanded music page always shows both. */
+    val showCollapsedVolume: Boolean = true,
+    val showCollapsedBattery: Boolean = true
 )
 
 /**

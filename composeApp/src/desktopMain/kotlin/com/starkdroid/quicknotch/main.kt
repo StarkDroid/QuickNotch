@@ -22,6 +22,8 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.AudioBattery
+import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
 import com.starkdroid.quicknotch.media.SystemVolume
@@ -65,14 +67,18 @@ fun main() {
 
         // Master volume drives the collapsed music pill's percentage chip; it
         // is polled separately from the session feed (SMTC/MediaRemote carry
-        // no volume) and simply stays hidden whenever a query fails.
+        // no volume) and simply stays hidden whenever a query fails. The same
+        // goes for the connected audio device's battery level.
         val volumePercent by SystemVolume.percent.collectAsState()
+        val battery by AudioBattery.info.collectAsState()
         DisposableEffect(Unit) {
             media.start()
             SystemVolume.start()
+            AudioBattery.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
+                AudioBattery.stop()
             }
         }
 
@@ -109,6 +115,7 @@ fun main() {
                 isExpanded = isExpanded,
                 isWindowExpanded = isWindowExpanded,
                 volumePercent = volumePercent,
+                battery = battery,
                 onExpandedChange = { isExpanded = it },
                 onWindowExpandedChange = { isWindowExpanded = it }
             )
@@ -157,6 +164,7 @@ private fun NotchOverlayWindow(
     isExpanded: Boolean,
     isWindowExpanded: Boolean,
     volumePercent: Int?,
+    battery: AudioDeviceBattery?,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit
 ) {
@@ -236,6 +244,7 @@ private fun NotchOverlayWindow(
                 onExpandedChange = onExpandedChange,
                 onWindowExpandedChange = onWindowExpandedChange,
                 volumePercent = volumePercent,
+                battery = battery,
                 pager = pager
             )
         }
