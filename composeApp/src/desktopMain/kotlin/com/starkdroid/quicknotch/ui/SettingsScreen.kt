@@ -179,8 +179,7 @@ fun SettingsScreen(
                         onSearchQueryChange = { searchQuery = it },
                         onAddFavorite = { repository.addFavorite(it) },
                         onRemoveFavorite = { repository.removeFavorite(it) },
-                        onMoveUp = { i -> if (i > 0) repository.reorderFavorites(i, i - 1) },
-                        onMoveDown = { i -> if (i < favorites.size - 1) repository.reorderFavorites(i, i + 1) },
+                        onMove = { from, to -> repository.reorderFavorites(from, to) },
                         onUpdate = { repository.updateConfig(it) },
                         onResetDefaults = { repository.resetToDefaults() }
                     )

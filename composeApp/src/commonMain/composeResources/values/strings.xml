@@ -66,8 +66,7 @@ Add apps from the list on the right.</string>
     <string name="pick_mac_title">Choose a macOS Application</string>
     <string name="pick_mac_filter">Applications (.app)</string>
     <string name="pick_win_filter">Executables &amp; Shortcuts (*.exe, *.lnk)</string>
-    <string name="move_up">Move Up</string>
-    <string name="move_down">Move Down</string>
+    <string name="reorder_handle">Drag to reorder</string>
     <string name="remove">Remove</string>
     <string name="pinned_badge">Pinned</string>
     <string name="add">Add</string>

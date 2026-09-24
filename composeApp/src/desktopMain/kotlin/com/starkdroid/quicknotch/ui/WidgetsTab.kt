@@ -12,10 +12,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -30,7 +32,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,8 +73,7 @@ internal fun WidgetsTab(
     onSearchQueryChange: (String) -> Unit,
     onAddFavorite: (AppItem) -> Unit,
     onRemoveFavorite: (String) -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
     onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
     onResetDefaults: () -> Unit
 ) {
@@ -118,8 +126,7 @@ internal fun WidgetsTab(
                         onSearchQueryChange = onSearchQueryChange,
                         onAddFavorite = onAddFavorite,
                         onRemoveFavorite = onRemoveFavorite,
-                        onMoveUp = onMoveUp,
-                        onMoveDown = onMoveDown,
+                        onMove = onMove,
                         onResetDefaults = onResetDefaults,
                         fixedHeight = true
                     )
@@ -346,8 +353,7 @@ internal fun PinnedAppsTab(
     onSearchQueryChange: (String) -> Unit,
     onAddFavorite: (AppItem) -> Unit,
     onRemoveFavorite: (String) -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
     onResetDefaults: () -> Unit,
     fixedHeight: Boolean = false
 ) {
@@ -364,6 +370,27 @@ internal fun PinnedAppsTab(
     val pickMacTitle = stringResource(Res.string.pick_mac_title)
     val pickMacFilter = stringResource(Res.string.pick_mac_filter)
     val pickWindowsFilter = stringResource(Res.string.pick_win_filter)
+
+    // Drag-to-reorder state. The list renders from a local snapshot so swaps
+    // apply synchronously under the finger; a single repository write commits
+    // the final position when the drag ends. Rows are equal height, but each
+    // measured height is tracked anyway so the swap threshold stays honest.
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragStartIndex by remember { mutableStateOf(-1) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    val listState = rememberLazyListState()
+    val rowHeights = remember { mutableStateMapOf<String, Int>() }
+    val ordered = remember {
+        mutableStateListOf<AppItem>().apply { addAll(favorites) }
+    }
+    LaunchedEffect(favorites) {
+        // Never clobber an in-flight drag; resync once it has committed.
+        if (draggingId == null) {
+            ordered.clear()
+            ordered.addAll(favorites)
+        }
+    }
+    val reorderGapPx = with(LocalDensity.current) { 6.dp.toPx() }
 
     // Embedded in the widgets accordion the content gets a fixed height so the
     // inner LazyColumns are never measured against an unbounded constraint.
@@ -439,17 +466,52 @@ internal fun PinnedAppsTab(
                     }
                 } else {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        itemsIndexed(favorites, key = { _, item -> item.id }, contentType = { _, _ -> "pinnedRow" }) { index, item ->
+                        itemsIndexed(ordered, key = { _, item -> item.id }, contentType = { _, _ -> "pinnedRow" }) { index, item ->
+                            val isDragging = item.id == draggingId
                             PinnedAppRow(
                                 item = item,
-                                canMoveUp = index > 0,
-                                canMoveDown = index < favorites.size - 1,
-                                onMoveUp = { onMoveUp(index) },
-                                onMoveDown = { onMoveDown(index) },
-                                onRemove = { onRemoveFavorite(item.id) }
+                                isDragging = isDragging,
+                                onDragStart = {
+                                    draggingId = item.id
+                                    dragStartIndex = index
+                                    dragOffset = 0f
+                                },
+                                onDrag = { deltaY ->
+                                    dragOffset += deltaY
+                                    val current = ordered.indexOfFirst { it.id == draggingId }
+                                    if (current < 0) return@PinnedAppRow
+                                    val slot = (rowHeights[draggingId] ?: 0) + reorderGapPx
+                                    if (slot <= reorderGapPx) return@PinnedAppRow
+                                    // Swap only once the dragged row has travelled
+                                    // past half the neighbour it is entering.
+                                    if (dragOffset > slot / 2f && current < ordered.lastIndex) {
+                                        ordered.add(current + 1, ordered.removeAt(current))
+                                        dragOffset -= slot
+                                    } else if (dragOffset < -slot / 2f && current > 0) {
+                                        ordered.add(current - 1, ordered.removeAt(current))
+                                        dragOffset += slot
+                                    }
+                                },
+                                onDragEnd = {
+                                    val id = draggingId
+                                    if (id != null && dragStartIndex >= 0) {
+                                        val end = ordered.indexOfFirst { it.id == id }
+                                        if (end >= 0 && end != dragStartIndex) onMove(dragStartIndex, end)
+                                    }
+                                    draggingId = null
+                                    dragStartIndex = -1
+                                    dragOffset = 0f
+                                },
+                                onRemove = { onRemoveFavorite(item.id) },
+                                onHeightChanged = { height -> rowHeights[item.id] = height },
+                                modifier = Modifier
+                                    .then(if (isDragging) Modifier else Modifier.animateItem())
+                                    .zIndex(if (isDragging) 1f else 0f)
+                                    .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
                             )
                         }
                     }
@@ -619,25 +681,55 @@ internal fun rememberAppIcon(app: AppItem): ImageBitmap? {
 @Composable
 internal fun PinnedAppRow(
     item: AppItem,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onRemove: () -> Unit
+    isDragging: Boolean,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onRemove: () -> Unit,
+    onHeightChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val iconBitmap = rememberAppIcon(item)
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .onSizeChanged { onHeightChanged(it.height) }
             .clip(RoundedCornerShape(8.dp))
             .background(FlatCard)
-            .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+            .border(1.dp, if (isDragging) AccentCyan else FlatBorder, RoundedCornerShape(8.dp))
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            // Drag handle sits at the leading edge, before the app icon.
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .pointerInput(item.id) {
+                        detectDragGestures(
+                            onDragStart = { onDragStart() },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onDrag(dragAmount.y)
+                            },
+                            onDragEnd = { onDragEnd() },
+                            onDragCancel = { onDragEnd() }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.DragHandle,
+                    contentDescription = stringResource(Res.string.reorder_handle),
+                    tint = if (isDragging) AccentCyan else TextMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -687,42 +779,16 @@ internal fun PinnedAppRow(
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            IconButton(
-                onClick = onMoveUp,
-                enabled = canMoveUp,
-                modifier = Modifier.size(26.dp)
-            ) {
-                Icon(
-                    Icons.Default.ArrowUpward,
-                    stringResource(Res.string.move_up),
-                    tint = if (canMoveUp) TextSecondary else TextMuted.copy(alpha = 0.3f),
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-            IconButton(
-                onClick = onMoveDown,
-                enabled = canMoveDown,
-                modifier = Modifier.size(26.dp)
-            ) {
-                Icon(
-                    Icons.Default.ArrowDownward,
-                    stringResource(Res.string.move_down),
-                    tint = if (canMoveDown) TextSecondary else TextMuted.copy(alpha = 0.3f),
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier.size(26.dp)
-            ) {
-                Icon(
-                    Icons.Default.Delete,
-                    stringResource(Res.string.remove),
-                    tint = AccentRed.copy(alpha = 0.85f),
-                    modifier = Modifier.size(15.dp)
-                )
-            }
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.size(26.dp)
+        ) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(Res.string.remove),
+                tint = AccentRed.copy(alpha = 0.85f),
+                modifier = Modifier.size(15.dp)
+            )
         }
     }
 }
