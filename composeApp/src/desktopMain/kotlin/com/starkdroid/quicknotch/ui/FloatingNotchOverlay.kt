@@ -1,9 +1,15 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
@@ -15,6 +21,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -171,6 +179,14 @@ private fun dockRevealSpring() = spring(
     visibilityThreshold = 0.001f
 )
 
+/**
+ * Bounds spring for shared-element morphs. The collapsed pill's disc/title and
+ * their detailed-view counterparts travel on the same near-critically-damped
+ * curve as the notch itself, so the two ends of the transition read as one
+ * continuous motion rather than a crossfade.
+ */
+private fun sharedBoundsSpring() = spring<Rect>(dampingRatio = 0.9f, stiffness = 320f)
+
 /** Distance from an icon centre (in multiples of icon size) the wave reaches. */
 private const val FisheyeRadiusFactor = 1.5f
 
@@ -272,9 +288,39 @@ private fun cursorOverNotch(coordinates: LayoutCoordinates?): Boolean {
     )
 }
 
+// ── Shared-element morph keys ────────────────────────────────────────────────
+// The collapsed live-activity elements and their detailed now-playing page
+// counterparts share these keys, so Compose morphs each pair's bounds instead
+// of cutting between the two surfaces when the notch opens or closes.
+
+private const val NowPlayingDiscKey = "nowPlayingDisc"
+private const val NowPlayingTitleKey = "nowPlayingTitle"
+private const val NowPlayingVolumeKey = "nowPlayingVolume"
+private const val NowPlayingBatteryKey = "nowPlayingBattery"
+
+/**
+ * Bounds one collapsed-pill element to its expanded-page counterpart (the mini
+ * disc vs. the vinyl disc, the marquee titles, the level rings). The two are
+ * different composables, so this is a [SharedTransitionScope.sharedBounds]
+ * crossfade under one shared moving frame rather than a strict
+ * [SharedTransitionScope.sharedElement].
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun SharedTransitionScope.nowPlayingSharedBounds(
+    key: String,
+    animatedVisibilityScope: AnimatedVisibilityScope
+): Modifier = Modifier.sharedBounds(
+    sharedContentState = rememberSharedContentState(key),
+    animatedVisibilityScope = animatedVisibilityScope,
+    boundsTransform = object : BoundsTransform {
+        override fun transform(initialBounds: Rect, targetBounds: Rect) = sharedBoundsSpring()
+    }
+)
+
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun FloatingNotchOverlay(
     repository: FavoritesRepository,
@@ -357,10 +403,15 @@ internal fun FloatingNotchOverlay(
     // pages; the wheel moves between them. The set is derived only from things
     // that rarely change, and a page entering/leaving mid-expansion clamps the
     // index instead of jittering.
+    //
+    // The now-playing page leads while a track is live: expanding a collapsed
+    // notch that is already showing media should continue into the detailed
+    // music view, not the pinned-apps dock. The apps page stays available behind
+    // it for the wheel.
     val pages = remember(config.widgets.pinnedAppsEnabled, musicLive) {
         buildList {
-            if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
             if (musicLive) add(WidgetPage.Music)
+            if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
         }
     }
     // Page switching is owned by a shared [OverlayPager]: the overlay renders
@@ -405,17 +456,19 @@ internal fun FloatingNotchOverlay(
     // so nothing here allocates while the island animates.
     val surface = remember(config.surface) { IslandSurface.styleFor(config.surface) }
 
-    // The dock stays composed permanently (with input gated off while hidden) so
-    // its first measure/layout never coincides with the open animation; all
-    // the reveal does is fade a layer. Alpha 0 also skips the draw entirely.
-    val dockAlpha by animateFloatAsState(if (showDock) 1f else 0f, if (showDock) DockFadeIn else DockFadeOut, label = "dockAlpha")
-    val dockScale by animateFloatAsState(if (showDock) 1f else 0.97f, dockRevealSpring(), label = "dockScale")
+    // The dock reveal is a layer animation (fade + scale) over the always
+    // expanded-size dock. Driving it through [MutableTransitionState] rather
+    // than raw alpha/scale floats lets the same visibility transition feed the
+    // shared-element morph (the disc/title fly between pill and detail) and the
+    // island's "hold expanded until the dock is done" gate below.
+    val dockState = remember { MutableTransitionState(false) }
+    dockState.targetState = showDock
 
     // The island keeps the dock as its *sibling*, so the fading dock is not
     // clipped by the shrinking pill; the pill holds its expanded size until the
     // dock fade is done, then contracts. For a top-centred notch the island
     // footprint matches the window, so no extra gutter is needed.
-    val islandExpanded = isExpanded || dockAlpha > 0.01f
+    val islandExpanded = isExpanded || dockState.currentState || dockState.targetState
     val targetSize = metrics.islandFor(islandExpanded)
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
@@ -438,6 +491,12 @@ internal fun FloatingNotchOverlay(
             }
             if (isExpanded) showDock = true
         } else {
+            // Snap the pager back to its leading page before the dock fades so
+            // the next expansion re-opens the live activity (music while a
+            // track is playing, otherwise the apps dock) instead of wherever
+            // the wheel was left — and so the shared-element morph reads the
+            // now-playing page's real bounds as the pill returns.
+            pager.pageIndex.value = 0
             showDock = false
             val collapsed = metrics.islandFor(false)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
@@ -449,111 +508,137 @@ internal fun FloatingNotchOverlay(
         }
     }
 
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        // Island background + collapsed pill: the only thing that actually
-        // resizes. The dock is a sibling, not a child, so its layout is stable.
+    SharedTransitionLayout(modifier = modifier.fillMaxSize()) {
+        // Shared-element scope for the now-playing morph: the collapsed pill and
+        // the detailed page render matching disc/title keys beneath it, so
+        // Compose can fly each element between the two surfaces.
+        val sharedScope = this
         Box(
-            modifier = Modifier
-                .width(animatedWidth)
-                .height(animatedHeight)
-                .clip(shape)
-                .islandSurface(config.surface)
-                .border(surface.borderWidth.dp, surface.border, shape),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
         ) {
-            AnimatedVisibility(
-                visible = !isExpanded,
-                enter = fadeIn(tween(120)),
-                exit = fadeOut(tween(80))
+            // Island background + collapsed pill: the only thing that actually
+            // resizes. The dock is a sibling, not a child, so its layout is
+            // stable.
+            Box(
+                modifier = Modifier
+                    .width(animatedWidth)
+                    .height(animatedHeight)
+                    .clip(shape)
+                    .islandSurface(config.surface)
+                    .border(surface.borderWidth.dp, surface.border, shape),
+                contentAlignment = Alignment.Center
             ) {
-                CollapsedIsland(
-                    style = config.style,
-                    surface = config.surface,
-                    media = if (musicLive) liveSession else null,
-                    volumePercent = volumePercent,
-                    battery = battery,
-                    deviceBattery = deviceBattery,
-                    showVolume = config.widgets.showCollapsedVolume,
-                    showBattery = config.widgets.showCollapsedBattery,
-                    showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
-                    clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
-                        ClockPrefs(
-                            showDate = config.clockDate,
-                            showTime = config.clockTime,
-                            clock24Hour = config.clock24Hour,
-                            dateFormat = config.clockDateFormat
-                        )
-                    }
-                )
-            }
-            // Live progress hugs the pill's inner border (the edge facing the
-            // nearest screen centre), thinning while the pill itself is thin.
-            val liveNow = if (musicLive) liveSession else null
-            if (!isExpanded && liveNow != null) {
-                LiveProgressStrip(fraction = liveNow.progressFraction(nowMs))
-            }
-        }
-
-        // The dock stays composed permanently (with input gated off while hidden) so
-        // its first measure/layout never coincides with the open animation; all
-        // the reveal does is fade a layer. Alpha 0 also skips the draw entirely.
-        Box(
-            modifier = composeScrollModifier
-                .size(metrics.dockArea.width, metrics.dockArea.height)
-                .graphicsLayer {
-                    alpha = dockAlpha
-                    scaleX = dockScale
-                    scaleY = dockScale
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            WidgetPages(
-                pages = pages,
-                pagePosition = pagePosition,
-                favorites = favorites,
-                config = config,
-                iconBitmaps = iconBitmaps,
-                session = liveSession,
-                media = media,
-                nowMs = nowMs,
-                battery = battery,
-                volumePercent = volumePercent,
-                density = density,
-                interactive = showDock,
-                onLaunch = { app ->
-                    scope.launch {
-                        AppLauncher.launch(app)
-                        if (config.hideOnAppLaunch) onExpandedChange(false)
-                    }
+                // Keep the collapsed pill on screen until the dock is actually
+                // visible while a track is live, so the two surfaces cross at
+                // the same instant and Compose can morph the shared disc/title
+                // between them. Without a live session there is nothing to
+                // morph, so the pill retracts immediately as before.
+                AnimatedVisibility(
+                    visible = if (musicLive) !showDock else !isExpanded,
+                    enter = fadeIn(tween(120)),
+                    exit = fadeOut(tween(80))
+                ) {
+                    val collapsedScope = this
+                    CollapsedIsland(
+                        style = config.style,
+                        surface = config.surface,
+                        media = if (musicLive) liveSession else null,
+                        volumePercent = volumePercent,
+                        battery = battery,
+                        deviceBattery = deviceBattery,
+                        showVolume = config.widgets.showCollapsedVolume,
+                        showBattery = config.widgets.showCollapsedBattery,
+                        showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
+                        discModifier = sharedScope.nowPlayingSharedBounds(NowPlayingDiscKey, collapsedScope),
+                        titleModifier = sharedScope.nowPlayingSharedBounds(NowPlayingTitleKey, collapsedScope),
+                        volumeRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingVolumeKey, collapsedScope),
+                        batteryRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingBatteryKey, collapsedScope),
+                        clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
+                            ClockPrefs(
+                                showDate = config.clockDate,
+                                showTime = config.clockTime,
+                                clock24Hour = config.clock24Hour,
+                                dateFormat = config.clockDateFormat
+                            )
+                        }
+                    )
                 }
-            )
-        }
+                // Live progress hugs the pill's inner border (the edge facing
+                // the nearest screen centre), thinning while the pill itself is
+                // thin.
+                val liveNow = if (musicLive) liveSession else null
+                if (!isExpanded && liveNow != null) {
+                    LiveProgressStrip(fraction = liveNow.progressFraction(nowMs))
+                }
+            }
 
-        // Hover target is the island footprint plus a small glow — never the
-        // whole native window (the notch is top-centred, so the window and the
-        // island coincide). With the entire window as the hit target, the notch
-        // stayed glued open until the cursor had travelled far past the visible
-        // island; hugging the island means the notch retracts the moment the
-        // cursor leaves it.
-        //
-        // This box must stay the LAST sibling (topmost z-order): when siblings
-        // overlap, hit testing only considers the highest-z pointer-eligible one.
-        // On macOS the dock box carries a scroll handler, so sitting below it the
-        // hover area was shadowed and never entered. Sharing
-        // ([SharingHoverNode.sharePointerInputWithSiblings]) then walks the hit
-        // test back down to the dock subtree, so the hover tracks while the dock
-        // keeps its scroll handling and icon clicks. The box draws nothing, so
-        // being on top has no visual effect.
-        val glow = HoverGlow
-        Box(
-            modifier = Modifier
-                .size(animatedWidth + glow * 2, animatedHeight + glow)
-                .onGloballyPositioned { hoverCoordinates = it }
-                .sharingHover { setHovered(it) }
-        ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
+            // The dock is revealed with a fade + scale layer; its visibility
+            // state doubles as the shared-element transition scope, so the
+            // now-playing morph runs in lockstep with the reveal and the
+            // island's "hold expanded" gate above.
+            Box(
+                modifier = composeScrollModifier
+                    .size(metrics.dockArea.width, metrics.dockArea.height),
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedVisibility(
+                    visibleState = dockState,
+                    enter = fadeIn(DockFadeIn) + scaleIn(initialScale = 0.97f, animationSpec = dockRevealSpring()),
+                    exit = fadeOut(DockFadeOut) + scaleOut(targetScale = 0.97f, animationSpec = dockRevealSpring())
+                ) {
+                    val dockScope = this
+                    WidgetPages(
+                        pages = pages,
+                        pagePosition = pagePosition,
+                        favorites = favorites,
+                        config = config,
+                        iconBitmaps = iconBitmaps,
+                        session = liveSession,
+                        media = media,
+                        nowMs = nowMs,
+                        battery = battery,
+                        volumePercent = volumePercent,
+                        density = density,
+                        interactive = showDock,
+                        discModifier = sharedScope.nowPlayingSharedBounds(NowPlayingDiscKey, dockScope),
+                        titleModifier = sharedScope.nowPlayingSharedBounds(NowPlayingTitleKey, dockScope),
+                        volumeRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingVolumeKey, dockScope),
+                        batteryRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingBatteryKey, dockScope),
+                        onLaunch = { app ->
+                            scope.launch {
+                                AppLauncher.launch(app)
+                                if (config.hideOnAppLaunch) onExpandedChange(false)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // Hover target is the island footprint plus a small glow — never the
+            // whole native window (the notch is top-centred, so the window and
+            // the island coincide). With the entire window as the hit target, the
+            // notch stayed glued open until the cursor had travelled far past the
+            // visible island; hugging the island means the notch retracts the
+            // moment the cursor leaves it.
+            //
+            // This box must stay the LAST sibling (topmost z-order): when
+            // siblings overlap, hit testing only considers the highest-z
+            // pointer-eligible one. On macOS the dock box carries a scroll
+            // handler, so sitting below it the hover area was shadowed and never
+            // entered. Sharing
+            // ([SharingHoverNode.sharePointerInputWithSiblings]) then walks the
+            // hit test back down to the dock subtree, so the hover tracks while
+            // the dock keeps its scroll handling and icon clicks. The box draws
+            // nothing, so being on top has no visual effect.
+            val glow = HoverGlow
+            Box(
+                modifier = Modifier
+                    .size(animatedWidth + glow * 2, animatedHeight + glow)
+                    .onGloballyPositioned { hoverCoordinates = it }
+                    .sharingHover { setHovered(it) }
+            ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
+        }
     }
 }
 
@@ -778,6 +863,11 @@ private fun CollapsedIsland(
     showVolume: Boolean,
     showBattery: Boolean,
     showDeviceBattery: Boolean,
+    /** Shared-element morph modifiers for the live-activity disc/title/rings. */
+    discModifier: Modifier = Modifier,
+    titleModifier: Modifier = Modifier,
+    volumeRingModifier: Modifier = Modifier,
+    batteryRingModifier: Modifier = Modifier,
     clock: ClockPrefs
 ) {
     Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
@@ -804,7 +894,7 @@ private fun CollapsedIsland(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
-                MiniDisc(art = media.artwork, size = 20.dp)
+                MiniDisc(art = media.artwork, size = 20.dp, modifier = discModifier)
                 // The title shares the exact 22dp frame the level rings use, so
                 // the disc, text and rings all sit on one vertical centreline.
                 Box(
@@ -819,7 +909,7 @@ private fun CollapsedIsland(
                         fontSize = 11.sp,
                         lineHeight = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = titleModifier.fillMaxWidth()
                     )
                 }
                 Row(
@@ -831,7 +921,7 @@ private fun CollapsedIsland(
                             level = volumePercent,
                             icon = volumePainter(volumePercent),
                             contentDescription = stringResource(Res.string.music_volume),
-                            modifier = Modifier.size(22.dp)
+                            modifier = volumeRingModifier.size(22.dp)
                         )
                     }
                     if (showBattery && battery != null) {
@@ -843,7 +933,7 @@ private fun CollapsedIsland(
                                 battery.name?.takeIf { it.isNotBlank() }
                                     ?: stringResource(Res.string.music_audio_device)
                             ),
-                            modifier = Modifier.size(22.dp),
+                            modifier = batteryRingModifier.size(22.dp),
                             lowTint = BatteryLowTint,
                             lowThreshold = BatteryLowThreshold
                         )
@@ -902,9 +992,9 @@ private fun BoxScope.LiveProgressStrip(
 }
 
 @Composable
-private fun MiniDisc(art: ImageBitmap?, size: Dp) {
+private fun MiniDisc(art: ImageBitmap?, size: Dp, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .clip(CircleShape)
             .background(VinylDiscFill)
@@ -954,6 +1044,10 @@ private fun WidgetPages(
     volumePercent: Int?,
     density: Density,
     interactive: Boolean,
+    discModifier: Modifier,
+    titleModifier: Modifier,
+    volumeRingModifier: Modifier,
+    batteryRingModifier: Modifier,
     onLaunch: (AppItem) -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -984,7 +1078,11 @@ private fun WidgetPages(
                             nowMs = nowMs,
                             battery = battery,
                             volumePercent = volumePercent,
-                            interactive = interactive && isActive
+                            interactive = interactive && isActive,
+                            discModifier = discModifier,
+                            titleModifier = titleModifier,
+                            volumeRingModifier = volumeRingModifier,
+                            batteryRingModifier = batteryRingModifier
                         )
                     }
                 }
@@ -1000,7 +1098,11 @@ private fun MusicPage(
     nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
-    interactive: Boolean
+    interactive: Boolean,
+    discModifier: Modifier,
+    titleModifier: Modifier,
+    volumeRingModifier: Modifier,
+    batteryRingModifier: Modifier
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -1012,7 +1114,11 @@ private fun MusicPage(
             nowMs = nowMs,
             battery = battery,
             volumePercent = volumePercent,
-            interactive = interactive
+            interactive = interactive,
+            discModifier = discModifier,
+            titleModifier = titleModifier,
+            volumeRingModifier = volumeRingModifier,
+            batteryRingModifier = batteryRingModifier
         )
     }
 }
@@ -1030,7 +1136,11 @@ private fun MusicContent(
     nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
-    interactive: Boolean
+    interactive: Boolean,
+    discModifier: Modifier,
+    titleModifier: Modifier,
+    volumeRingModifier: Modifier,
+    batteryRingModifier: Modifier
 ) {
     val playing = session.state == PlaybackState.PLAYING
     val duration = session.durationMs.coerceAtLeast(0L)
@@ -1048,6 +1158,7 @@ private fun MusicContent(
             art = session.artwork,
             playing = playing,
             size = 56.dp,
+            modifier = discModifier,
             onClick = {
                 AppLauncher.openMediaProvider(session.sourceId, session.source)
             }
@@ -1062,7 +1173,8 @@ private fun MusicContent(
                 text = session.title,
                 color = Color.White.copy(alpha = 0.95f),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                modifier = titleModifier
             )
             if (session.artist.isNotBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
@@ -1099,7 +1211,7 @@ private fun MusicContent(
                         level = volumePercent,
                         icon = volumePainter(volumePercent),
                         contentDescription = stringResource(Res.string.music_volume),
-                        modifier = Modifier.size(28.dp)
+                        modifier = volumeRingModifier.size(28.dp)
                     )
                 }
                 if (battery != null) {
@@ -1111,7 +1223,7 @@ private fun MusicContent(
                             battery.name?.takeIf { it.isNotBlank() }
                                 ?: stringResource(Res.string.music_audio_device)
                         ),
-                        modifier = Modifier.size(28.dp),
+                        modifier = batteryRingModifier.size(28.dp),
                         lowTint = BatteryLowTint,
                         lowThreshold = BatteryLowThreshold
                     )
@@ -1341,6 +1453,7 @@ private fun VinylDisc(
     art: ImageBitmap?,
     playing: Boolean,
     size: Dp,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
 ) {
     val rotation by rememberInfiniteTransition(label = "vinyl").animateFloat(
@@ -1354,7 +1467,7 @@ private fun VinylDisc(
     val angle = if (playing) rotation else frozenAngle
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .graphicsLayer { rotationZ = angle }
             .clip(CircleShape)
