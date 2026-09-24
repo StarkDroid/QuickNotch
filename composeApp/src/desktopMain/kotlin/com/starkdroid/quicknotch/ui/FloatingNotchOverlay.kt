@@ -797,14 +797,23 @@ private fun CollapsedIsland(
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 MiniDisc(art = media.artwork, size = 20.dp)
-                MarqueeText(
-                    text = media.title,
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
+                // The title shares the exact 22dp frame the level rings use, so
+                // the disc, text and rings all sit on one vertical centreline.
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(22.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    MarqueeText(
+                        text = media.title,
+                        color = Color.White.copy(alpha = 0.92f),
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1183,13 +1192,21 @@ private fun MarqueeText(
 }
 
 @Composable
-private fun TrackTimeLabel(ms: Long) {
-    Text(
-        text = formatMs(ms),
-        color = Color.White.copy(alpha = 0.5f),
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Medium
-    )
+private fun TrackTimeLabel(ms: Long, frameHeight: Dp = 28.dp) {
+    // Same fixed-height frame as the level rings beside it, so the elapsed /
+    // duration stamps stay optically centred on the volume and battery rings.
+    Box(
+        modifier = Modifier.height(frameHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = formatMs(ms),
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
 
 /**

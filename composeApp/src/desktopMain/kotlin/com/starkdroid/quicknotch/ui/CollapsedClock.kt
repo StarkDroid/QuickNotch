@@ -1,7 +1,9 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -17,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.*
@@ -74,6 +77,11 @@ internal fun IdleClockRow(
         }
     }
 
+    // Date, separator, time and the battery ring all occupy the same
+    // fixed-height frame, so their vertical centres always coincide no matter
+    // what the font's line box reports — the default typography inflates the
+    // text box and would otherwise push the glyphs below the ring's centre.
+    val indicatorFrame = 22.dp
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -82,46 +90,70 @@ internal fun IdleClockRow(
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         if (clock.showDate) {
-            Text(
+            ClockTextFrame(
                 text = formatClockDate(clock.dateFormat, now),
                 color = tint.copy(alpha = 0.92f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
+                weight = FontWeight.Medium
             )
         }
         if (clock.showDate && clock.showTime) {
-                Text(
-                    text = "\u00B7",
-                    color = tint.copy(alpha = 0.45f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            if (clock.showTime) {
-                Text(
-                    text = formatClockTime(clock.clock24Hour, now),
-                    color = tint,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-            }
-            // Connected device battery right beside the date/time stamps, gated
-            // by the same collapsed-pill toggle as the music-state battery.
-            if (battery != null) {
-                LevelRing(
-                    level = battery.levelPercent,
-                    icon = batteryGlyph(battery.levelPercent),
-                    contentDescription = stringResource(
-                        Res.string.music_battery,
-                        battery.name?.takeIf { it.isNotBlank() }
-                            ?: stringResource(Res.string.music_audio_device)
-                    ),
-                    modifier = Modifier.size(22.dp),
-                    lowTint = BatteryLowTint,
-                    lowThreshold = BatteryLowThreshold
-                )
-            }
+            ClockTextFrame(
+                text = "\u00B7",
+                color = tint.copy(alpha = 0.45f),
+                weight = FontWeight.Medium
+            )
         }
+        if (clock.showTime) {
+            ClockTextFrame(
+                text = formatClockTime(clock.clock24Hour, now),
+                color = tint,
+                weight = FontWeight.SemiBold
+            )
+        }
+        // Connected device battery right beside the date/time stamps, gated
+        // by the same collapsed-pill toggle as the music-state battery.
+        if (battery != null) {
+            LevelRing(
+                level = battery.levelPercent,
+                icon = batteryGlyph(battery.levelPercent),
+                contentDescription = stringResource(
+                    Res.string.music_battery,
+                    battery.name?.takeIf { it.isNotBlank() }
+                        ?: stringResource(Res.string.music_audio_device)
+                ),
+                modifier = Modifier.size(indicatorFrame),
+                lowTint = BatteryLowTint,
+                lowThreshold = BatteryLowThreshold
+            )
+        }
+    }
+}
+
+/**
+ * Renders a clock fragment centred inside the same fixed-height frame that the
+ * battery ring occupies, so the date, separator and time all share one
+ * vertical centreline with the ring regardless of the font's reported line
+ * box. The explicit tight line height keeps the default typography from
+ * inflating the box and pushing the glyphs off centre.
+ */
+@Composable
+private fun ClockTextFrame(
+    text: String,
+    color: Color,
+    weight: FontWeight,
+    frameHeight: Dp = 22.dp
+) {
+    Box(
+        modifier = Modifier.height(frameHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = color,
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = weight,
+            maxLines = 1
+        )
+    }
 }
