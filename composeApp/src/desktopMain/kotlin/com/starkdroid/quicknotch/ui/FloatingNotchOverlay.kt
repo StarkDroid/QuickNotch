@@ -19,6 +19,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -37,6 +39,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -142,6 +146,10 @@ import org.jetbrains.compose.resources.stringResource
 private val LiveAccent = Color(0xFF38BDF8)
 private val VinylDiscFill = Color(0xFF14161C)
 private val VinylRing = Color(0xFF343A45)
+
+/** The playhead fill sweeps accent cyan into a pale sky tip at the head. */
+private val ProgressGradientStart = Color(0xFF0EA5E9)
+private val ProgressGradientEnd = Color(0xFF7DD3FC)
 
 // ── Motion ───────────────────────────────────────────────────────────────────
 // Near-critically-damped springs mirror AppKit's default view animation: a
@@ -299,20 +307,28 @@ private const val NowPlayingVolumeKey = "nowPlayingVolume"
 private const val NowPlayingBatteryKey = "nowPlayingBattery"
 
 /**
- * Bounds one collapsed-pill element to its expanded-page counterpart (the mini
- * disc vs. the vinyl disc, the marquee titles, the level rings). The two are
- * different composables, so this is a [SharedTransitionScope.sharedBounds]
- * crossfade under one shared moving frame rather than a strict
- * [SharedTransitionScope.sharedElement].
+ * Bounds one collapsed-pill element to its expanded-page counterpart (the
+ * vinyl disc, the marquee title, the level rings). The pair are different
+ * composables, so this is a [SharedTransitionScope.sharedBounds] morph under
+ * one shared moving frame rather than a strict
+ * [SharedTransitionScope.sharedElement]. The default enter/exit crossfade the
+ * two contents in the shared frame; the title instead scales between bounds
+ * (via [SharedTransitionScope.scaleInSharedContentToBounds] /
+ * [SharedTransitionScope.scaleOutSharedContentToBounds]) so the marquee text
+ * tracks a single frame mid-flight instead of doubling up.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun SharedTransitionScope.nowPlayingSharedBounds(
     key: String,
-    animatedVisibilityScope: AnimatedVisibilityScope
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    enter: EnterTransition = fadeIn(),
+    exit: ExitTransition = fadeOut()
 ): Modifier = Modifier.sharedBounds(
     sharedContentState = rememberSharedContentState(key),
     animatedVisibilityScope = animatedVisibilityScope,
+    enter = enter,
+    exit = exit,
     boundsTransform = object : BoundsTransform {
         override fun transform(initialBounds: Rect, targetBounds: Rect) = sharedBoundsSpring()
     }
@@ -551,7 +567,12 @@ internal fun FloatingNotchOverlay(
                         showBattery = config.widgets.showCollapsedBattery,
                         showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
                         discModifier = sharedScope.nowPlayingSharedBounds(NowPlayingDiscKey, collapsedScope),
-                        titleModifier = sharedScope.nowPlayingSharedBounds(NowPlayingTitleKey, collapsedScope),
+                        titleModifier = sharedScope.nowPlayingSharedBounds(
+                            NowPlayingTitleKey,
+                            collapsedScope,
+                            enter = sharedScope.scaleInSharedContentToBounds(),
+                            exit = sharedScope.scaleOutSharedContentToBounds()
+                        ),
                         volumeRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingVolumeKey, collapsedScope),
                         batteryRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingBatteryKey, collapsedScope),
                         clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
@@ -602,7 +623,12 @@ internal fun FloatingNotchOverlay(
                         density = density,
                         interactive = showDock,
                         discModifier = sharedScope.nowPlayingSharedBounds(NowPlayingDiscKey, dockScope),
-                        titleModifier = sharedScope.nowPlayingSharedBounds(NowPlayingTitleKey, dockScope),
+                        titleModifier = sharedScope.nowPlayingSharedBounds(
+                            NowPlayingTitleKey,
+                            dockScope,
+                            enter = sharedScope.scaleInSharedContentToBounds(),
+                            exit = sharedScope.scaleOutSharedContentToBounds()
+                        ),
                         volumeRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingVolumeKey, dockScope),
                         batteryRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingBatteryKey, dockScope),
                         onLaunch = { app ->
@@ -894,7 +920,15 @@ private fun CollapsedIsland(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
-                MiniDisc(art = media.artwork, size = 20.dp, modifier = discModifier)
+                // Same vinyl treatment as the expanded page's disc — art on a
+                // grooved disc with a spindle hub, gently rotating while
+                // playing — so the two morph without a style change mid-flight.
+                VinylDisc(
+                    art = media.artwork,
+                    playing = media.state == PlaybackState.PLAYING,
+                    size = 20.dp,
+                    modifier = discModifier
+                )
                 // The title shares the exact 22dp frame the level rings use, so
                 // the disc, text and rings all sit on one vertical centreline.
                 Box(
@@ -989,34 +1023,6 @@ private fun BoxScope.LiveProgressStrip(
             .clip(RoundedCornerShape(2.dp))
             .background(LiveAccent.copy(alpha = 0.95f))
     )
-}
-
-@Composable
-private fun MiniDisc(art: ImageBitmap?, size: Dp, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(VinylDiscFill)
-            .border(1.dp, VinylRing.copy(alpha = 0.8f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        if (art != null) {
-            Image(
-                bitmap = art,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.55f),
-                modifier = Modifier.size(size * 0.58f)
-            )
-        }
-    }
 }
 
 // ── Widget pages ─────────────────────────────────────────────────────────────
@@ -1124,10 +1130,12 @@ private fun MusicPage(
 }
 
 /**
- * Art pinned to the left end of the strip, the title held in the middle with
- * the artist under it, and a progress/timestamps row all sharing one vertical
- * centreline. Every transport control stays visible here; collapsing the
- * play/pause only affects the slim collapsed pill.
+ * Art pinned to the left end of the strip, the metadata held in the middle,
+ * the progress/timestamps strip hugging the bottom edge, and the level rings
+ * stacked above the transport buttons on the right — the two clusters drift
+ * slightly toward the bottom so the controls read as a settled base under the
+ * text. Every transport control stays visible here; collapsing the play/pause
+ * only affects the slim collapsed pill.
  */
 @Composable
 private fun MusicContent(
@@ -1164,30 +1172,42 @@ private fun MusicContent(
             }
         )
 
+        // Title/artist float in the space above the progress strip, and the
+        // strip hugs the bottom edge — mirroring the transport cluster's own
+        // bottom bias so both flanks settle at the same baseline.
         Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            MarqueeText(
-                text = session.title,
-                color = Color.White.copy(alpha = 0.95f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = titleModifier
-            )
-            if (session.artist.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = session.artist,
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    MarqueeText(
+                        text = session.title,
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = titleModifier
+                    )
+                    if (session.artist.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = session.artist,
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1202,10 +1222,24 @@ private fun MusicContent(
                     modifier = Modifier.weight(1f)
                 )
                 TrackTimeLabel(duration)
-                // Both level rings use the exact same shape as the collapsed
-                // pill's, so volume and battery read identically everywhere.
-                // The expanded page always shows them; the collapsed-only
-                // toggles govern just the pill.
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Level indicators sit on top of the media controls, with the whole
+        // cluster riding near the bottom edge. Both rings use the exact same
+        // shapes as the collapsed pill's, so volume and battery read
+        // identically everywhere — the collapsed-only toggles govern just the
+        // pill.
+        Column(
+            modifier = Modifier.fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (volumePercent != null) {
                     LevelRing(
                         level = volumePercent,
@@ -1229,13 +1263,14 @@ private fun MusicContent(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            TransportControls(
+                state = session.state,
+                enabled = interactive,
+                media = media
+            )
+            Spacer(modifier = Modifier.height(8.dp))
         }
-
-        TransportControls(
-            state = session.state,
-            enabled = interactive,
-            media = media
-        )
     }
 }
 
@@ -1314,8 +1349,8 @@ private fun MarqueeText(
 
 @Composable
 private fun TrackTimeLabel(ms: Long, frameHeight: Dp = 28.dp) {
-    // Same fixed-height frame as the level rings beside it, so the elapsed /
-    // duration stamps stay optically centred on the volume and battery rings.
+    // Fixed-height frame matching the progress strip beside it, so the elapsed
+    // / duration stamps stay optically centred on the playhead line.
     Box(
         modifier = Modifier.height(frameHeight),
         contentAlignment = Alignment.Center
@@ -1331,9 +1366,11 @@ private fun TrackTimeLabel(ms: Long, frameHeight: Dp = 28.dp) {
 }
 
 /**
- * A playhead line with the elapsed fill in the live accent. Dragging or
- * tapping (when the backend supports seeking) retargets the OS player; on
- * macOS the strip is display-only, matching MediaRemote's limitations.
+ * A playhead strip: a hairline track, an accent-cyan gradient fill, and —
+ * when seeking is available — a round head ringed in the live accent that
+ * rides the tip of the fill. Dragging or tapping (when the backend supports
+ * seeking) retargets the OS player; on macOS the strip is display-only,
+ * matching MediaRemote's limitations.
  */
 @Composable
 private fun TrackProgress(
@@ -1346,6 +1383,9 @@ private fun TrackProgress(
 ) {
     val canSeek = seekable && enabled
     val barHeight = 3.dp
+    val headSize = 8.dp
+    val laneInset = headSize / 2
+    val clamped = fraction.coerceIn(0f, 1f)
     Box(
         modifier = modifier
             .height(16.dp)
@@ -1364,22 +1404,57 @@ private fun TrackProgress(
                     }
                 } else Modifier
             ),
-        contentAlignment = Alignment.CenterStart
+        contentAlignment = Alignment.Center
     ) {
+        // Track + fill share an inset lane so the head can sit flush with the
+        // 0% and 100% marks without spilling off the leading/trailing edges.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(barHeight)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.14f))
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .height(barHeight)
-                .clip(CircleShape)
-                .background(LiveAccent)
-        )
+                .padding(horizontal = laneInset),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(barHeight)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.14f))
+            )
+            if (clamped > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(clamped)
+                        .height(barHeight)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(ProgressGradientStart, LiveAccent, ProgressGradientEnd)
+                            )
+                        )
+                )
+            }
+        }
+        // The head tracks the fill tip inside the same inset lane.
+        if (canSeek) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = laneInset),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(Modifier.fillMaxWidth(clamped)) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .size(headSize)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(2.dp, LiveAccent, CircleShape)
+                    )
+                }
+            }
+        }
     }
 }
 
