@@ -56,23 +56,24 @@ private val batteryJson: Json = Json {
  * Battery percentage of the connected Bluetooth audio device for the music
  * widget (collapsed pill chip + expanded page).
  *
- * Reading a device's battery on Windows can stall for many seconds while the
- * OS polls the headset over the air, and PnP reports every paired radio
- * instance as present, so there is no cheap "is it connected" signal — the
- * battery property is the only way to tell that a device is actually
- * answering. The poller therefore uses the read itself adaptively:
+ * Presence on Windows comes from the OS's live Bluetooth connection state
+ * ([battery.ps1] mode A: `Windows.Devices.Enumeration` +
+ * `BluetoothDevice.ConnectionStatus`), NOT from the battery property — PnP
+ * keeps reporting paired devices as present and hands out cached battery
+ * values for seconds after the device is gone. The connection probe therefore
+ * surfaces a connect or disconnect on the very next poll (≈1 s):
  *
- *  - the 1 s probe runs [battery.ps1] with a short timeout. A probe killed at
- *    the timeout means the OS is still busy talking to a live device, so the
- *    last-known level keeps showing; a probe that answers fast with no data
- *    means the device is gone or silent, and the chip hides immediately —
- *    disconnects surface within a couple of seconds;
- *  - the ~30 s refresh re-reads the level with a generous timeout so the chip
- *    stays honest, and the last-known level is persisted per device instance
- *    so reconnecting the same device (or restarting the app) restores it
- *    instantly instead of waiting out the first slow read;
- *  - [poke] forces an immediate probe whenever the notch opens, so the chip
- *    right after opening is fresh.
+ *  - the 1 s probe asks "is a Bluetooth audio device connected right now"
+ *    (a fast WinRT enumeration; the PnP instance walk is skipped entirely
+ *    when nothing is connected, so a disconnect is effectively immediate);
+ *  - the ~30 s refresh reads that device's battery level with a generous
+ *    timeout (the OS may poll the headset over the air for many seconds) and
+ *    only publishes while presence still says the device is connected;
+ *  - the last-known level is persisted per device instance, so reconnecting
+ *    the same device (or restarting the app) restores the chip instantly;
+ *  - [poke] forces an immediate probe whenever the notch opens, and a device
+ *    that just appeared kicks an immediate refresh so the level shows up
+ *    right away.
  *
  * macOS has no public API for this; the Bluetooth preferences plist
  * (~/Library/Preferences/com.apple.Bluetooth.plist) is read with `plutil`,
@@ -83,7 +84,7 @@ private val batteryJson: Json = Json {
 internal object AudioBattery {
 
     private const val PresencePollMs = 1_000L
-    private const val LiveProbeTimeoutMs = 2_500L
+    private const val LiveProbeTimeoutMs = 8_000L
     private const val BatteryRefreshMs = 30_000L
     private const val BatteryFirstRetryMs = 5_000L
     private const val RefreshTimeoutMs = 40_000L
@@ -97,18 +98,23 @@ internal object AudioBattery {
 
     // Identity + level currently believed. The level is deliberately kept
     // across disconnects so reconnecting the same device restores instantly;
-    // it is only replaced by a successful read.
+    // it is only replaced by a successful read, and only used while the probe
+    // confirms the same instance is still connected.
     @Volatile
     private var activeInstance: String? = null
+    @Volatile
+    private var cachedInstance: String? = null
     @Volatile
     private var cachedLevel: Int? = null
     @Volatile
     private var cachedName: String? = null
 
-    // Restored from disk on start (Windows) so a restart with the same device
-    // connected shows the level immediately instead of a slow first read.
+    // True while the last probe (mode A, real connection state) saw an audio
+    // device connected. The slow refresh consults this before publishing — a
+    // mode-B snapshot alone cannot be trusted, because the battery property
+    // keeps answering for a device that is already unplugged.
     @Volatile
-    private var restoredInstance: String? = null
+    private var isPresent = false
 
     private var scope: CoroutineScope? = null
     private var presenceJob: Job? = null
@@ -162,6 +168,11 @@ internal object AudioBattery {
         }
     }
 
+    private fun kickRefresh() {
+        val active = scope ?: return
+        active.launch { refreshBattery() }
+    }
+
     // ── Probe (1 s cadence) ──────────────────────────────────────────────────
 
     private fun probePresence() {
@@ -179,16 +190,7 @@ internal object AudioBattery {
             LiveProbeTimeoutMs
         )
         if (raw == null) {
-            // Killed at the cap: the OS is still polling the headset over the
-            // air, so the device is reachable. Keep showing the last-known
-            // level; on a fresh session adopt the persisted identity.
-            val level = cachedLevel
-            if (level != null) {
-                if (activeInstance == null) activeInstance = restoredInstance
-                if (activeInstance != null) {
-                    _info.value = AudioDeviceBattery(cachedName, level)
-                }
-            }
+            // Spawn failed or was killed: no opinion, keep the current display.
             return
         }
         val line = raw.lineSequence().firstOrNull { it.startsWith("{") } ?: return
@@ -196,27 +198,23 @@ internal object AudioBattery {
             batteryJson.decodeFromString(BatteryProbe.serializer(), line)
         }.getOrNull() ?: return
 
-        when {
-            !snap.present -> {
-                // Device deregistered entirely.
-                activeInstance = null
-                _info.value = null
-            }
-            snap.level != null -> {
-                val instance = snap.instance ?: return
-                activeInstance = instance
-                cachedLevel = snap.level
-                cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
-                persistCache(instance, cachedName, snap.level)
-                _info.value = AudioDeviceBattery(cachedName, snap.level)
-            }
-            else -> {
-                // Fast "no data": device is in the tree but not answering
-                // (disconnected, or reports no battery at all). Hide the chip;
-                // the cached level is kept for an instant restore on reconnect.
-                if (snap.instance != null) activeInstance = snap.instance
-                _info.value = null
-            }
+        if (snap.present) {
+            val instance = snap.instance ?: return
+            val appeared = instance != activeInstance || cachedInstance != instance
+            activeInstance = instance
+            isPresent = true
+            cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
+            // A device that just appeared (or one we have no level for yet)
+            // kicks an immediate refresh so the percentage shows up quickly.
+            if (appeared || cachedLevel == null) kickRefresh()
+            val level = if (cachedInstance == instance) cachedLevel else null
+            _info.value = if (level != null) AudioDeviceBattery(cachedName, level) else null
+        } else {
+            // The WinRT connected set is empty — the device is gone. Hide now;
+            // the cached level is kept for an instant restore on reconnect.
+            isPresent = false
+            activeInstance = null
+            _info.value = null
         }
     }
 
@@ -225,49 +223,34 @@ internal object AudioBattery {
     private fun refreshBattery() {
         if (!HostPlatform.isWindows) return
         val file = script ?: return
-        // Unknown identity: let the script find the device itself (mode A).
-        // Known identity: probe exactly that instance (mode B).
-        val instance = activeInstance
-        val command = if (instance != null) {
+        // Only ever probe a known device instance (mode B); the probe's mode A
+        // finds the connected device and drives identity + presence.
+        val instance = activeInstance ?: return
+        val raw = runProcess(
             listOf(
                 "powershell.exe",
                 "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                 "-File", file.absolutePath, "-InstanceId", instance
-            )
-        } else {
-            listOf(
-                "powershell.exe",
-                "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                "-File", file.absolutePath
-            )
-        }
-        val raw = runProcess(command, RefreshTimeoutMs) ?: return
+            ),
+            RefreshTimeoutMs
+        ) ?: return
         val line = raw.lineSequence().firstOrNull { it.startsWith("{") } ?: return
         val snap = runCatching {
             batteryJson.decodeFromString(BatteryProbe.serializer(), line)
         }.getOrNull() ?: return
 
-        when {
-            !snap.present -> {
-                if (instance == null || instance == activeInstance) {
-                    activeInstance = null
-                    _info.value = null
-                }
-            }
-            snap.level != null -> {
-                val resolved = snap.instance ?: instance ?: return
-                if (instance == null || resolved == activeInstance) {
-                    activeInstance = resolved
-                    cachedLevel = snap.level
-                    cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
-                    persistCache(resolved, cachedName, snap.level)
-                    _info.value = AudioDeviceBattery(cachedName, snap.level)
-                }
-            }
-            else -> {
-                if (instance == null || instance == activeInstance) _info.value = null
-            }
-        }
+        // The probe has the final word on presence: mode B's own `present`
+        // merely reflects PnP presence, which a paired-but-off device still
+        // reports as true — and its battery answer can be a stale cached
+        // value. Nothing publishes once presence says the device is gone.
+        if (!isPresent || instance != activeInstance) return
+
+        val level = snap.level ?: return // connected but no data yet: keep display
+        cachedInstance = instance
+        cachedLevel = level
+        cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
+        persistCache(instance, cachedName, level)
+        _info.value = AudioDeviceBattery(cachedName, level)
     }
 
     // ── macOS (1 s cadence, plist carries presence + battery) ────────────────
@@ -354,12 +337,11 @@ internal object AudioBattery {
     }
 
     private fun loadPersistedCache() {
-        restoredInstance = null
         runCatching {
             val file = cacheFile() ?: return
             if (!file.isFile) return
             val parsed = batteryJson.decodeFromString(BatteryCache.serializer(), file.readText())
-            restoredInstance = parsed.instance
+            cachedInstance = parsed.instance
             cachedLevel = parsed.level
             cachedName = parsed.name?.takeIf { it.isNotBlank() }
         }
