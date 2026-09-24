@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -63,7 +64,8 @@ internal fun IdleClockRow(
     clock: ClockPrefs,
     tint: Color,
     modifier: Modifier = Modifier,
-    battery: AudioDeviceBattery? = null
+    battery: AudioDeviceBattery? = null,
+    deviceBattery: SystemBattery? = null
 ) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -120,6 +122,22 @@ internal fun IdleClockRow(
                     Res.string.music_battery,
                     battery.name?.takeIf { it.isNotBlank() }
                         ?: stringResource(Res.string.music_audio_device)
+                ),
+                modifier = Modifier.size(indicatorFrame),
+                lowTint = BatteryLowTint,
+                lowThreshold = BatteryLowThreshold
+            )
+        }
+        // The machine's own battery (laptops): the same ring design, gated by
+        // its own collapsed-only toggle, and shown only beside the clock.
+        if (deviceBattery != null) {
+            LevelRing(
+                level = deviceBattery.levelPercent,
+                icon = systemBatteryPainter(deviceBattery.levelPercent, deviceBattery.charging),
+                contentDescription = stringResource(
+                    if (deviceBattery.charging) Res.string.device_battery_charging
+                    else Res.string.device_battery,
+                    deviceBattery.levelPercent
                 ),
                 modifier = Modifier.size(indicatorFrame),
                 lowTint = BatteryLowTint,

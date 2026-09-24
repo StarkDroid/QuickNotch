@@ -53,9 +53,11 @@ enum class NotchSurface {
 data class WidgetsConfig(
     val pinnedAppsEnabled: Boolean = true,
     val nowPlayingEnabled: Boolean = true,
-    /** Collapsed-pill indicator toggles; the expanded music page always shows both. */
+    /** Collapsed-pill indicator toggles; the expanded music page always shows volume + audio battery. */
     val showCollapsedVolume: Boolean = true,
-    val showCollapsedBattery: Boolean = true
+    val showCollapsedBattery: Boolean = true,
+    /** System (laptop) battery indicator; collapsed pill only, beside the clock. */
+    val showCollapsedDeviceBattery: Boolean = true
 )
 
 /**

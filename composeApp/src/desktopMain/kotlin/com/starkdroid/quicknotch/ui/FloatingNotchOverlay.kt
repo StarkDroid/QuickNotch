@@ -110,6 +110,7 @@ import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -286,6 +287,8 @@ internal fun FloatingNotchOverlay(
     volumePercent: Int? = null,
     /** Connected audio device battery (0-100); null hides the battery chip. */
     battery: AudioDeviceBattery? = null,
+    /** The machine's own (laptop) battery; null hides the collapsed-pill device ring. */
+    deviceBattery: SystemBattery? = null,
     /** Shared widget-pager state (also driven by the Windows AWT wheel listener). */
     pager: OverlayPager
 ) {
@@ -318,6 +321,7 @@ internal fun FloatingNotchOverlay(
     // shows a stale read (or a ghost after the device disconnected).
     LaunchedEffect(isExpanded, musicLive) {
         AudioBattery.poke()
+        SystemBattery.poke()
     }
 
     // Collapse is debounced so a cursor briefly clipping the edge does not
@@ -471,8 +475,10 @@ internal fun FloatingNotchOverlay(
                     media = if (musicLive) liveSession else null,
                     volumePercent = volumePercent,
                     battery = battery,
+                    deviceBattery = deviceBattery,
                     showVolume = config.widgets.showCollapsedVolume,
                     showBattery = config.widgets.showCollapsedBattery,
+                    showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
                     clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
                         ClockPrefs(
                             showDate = config.clockDate,
@@ -768,8 +774,10 @@ private fun CollapsedIsland(
     media: MediaSession?,
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
+    deviceBattery: SystemBattery?,
     showVolume: Boolean,
     showBattery: Boolean,
+    showDeviceBattery: Boolean,
     clock: ClockPrefs
 ) {
     Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
@@ -849,7 +857,8 @@ private fun CollapsedIsland(
             IdleClockRow(
                 clock = clock,
                 tint = islandTint(surface),
-                battery = if (showBattery) battery else null
+                battery = if (showBattery) battery else null,
+                deviceBattery = if (showDeviceBattery) deviceBattery else null
             )
         } else {
             Row(

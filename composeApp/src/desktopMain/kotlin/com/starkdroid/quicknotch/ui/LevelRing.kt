@@ -136,3 +136,18 @@ internal fun volumePainter(level: Int): Painter = rememberVectorPainter(volumeGl
 internal fun batteryPainter(isAudio: Boolean): Painter =
     if (isAudio) painterResource(Res.drawable.headphone)
     else painterResource(Res.drawable.bluetooth)
+
+/**
+ * System (laptop) battery glyph: the charging bolt while the OS is filling
+ * the battery, otherwise a battery silhouette whose fill tracks the level
+ * (full ≥ 80%, mid ≥ 3%, a low sliver below 3%). All four come from packaged
+ * compose resources.
+ */
+@Composable
+internal fun systemBatteryPainter(level: Int, charging: Boolean): Painter =
+    when {
+        charging -> painterResource(Res.drawable.charging)
+        level >= 80 -> painterResource(Res.drawable.battery_full)
+        level >= 3 -> painterResource(Res.drawable.battery_mid)
+        else -> painterResource(Res.drawable.battery_low)
+    }

@@ -27,6 +27,7 @@ import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
 import com.starkdroid.quicknotch.media.SystemVolume
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
@@ -71,14 +72,17 @@ fun main() {
         // goes for the connected audio device's battery level.
         val volumePercent by SystemVolume.percent.collectAsState()
         val battery by AudioBattery.info.collectAsState()
+        val deviceBattery by SystemBattery.state.collectAsState()
         DisposableEffect(Unit) {
             media.start()
             SystemVolume.start()
             AudioBattery.start()
+            SystemBattery.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
                 AudioBattery.stop()
+                SystemBattery.stop()
             }
         }
 
@@ -116,6 +120,7 @@ fun main() {
                 isWindowExpanded = isWindowExpanded,
                 volumePercent = volumePercent,
                 battery = battery,
+                deviceBattery = deviceBattery,
                 onExpandedChange = { isExpanded = it },
                 onWindowExpandedChange = { isWindowExpanded = it }
             )
@@ -165,6 +170,7 @@ private fun NotchOverlayWindow(
     isWindowExpanded: Boolean,
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
+    deviceBattery: SystemBattery?,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit
 ) {
@@ -245,6 +251,7 @@ private fun NotchOverlayWindow(
                 onWindowExpandedChange = onWindowExpandedChange,
                 volumePercent = volumePercent,
                 battery = battery,
+                deviceBattery = deviceBattery,
                 pager = pager
             )
         }

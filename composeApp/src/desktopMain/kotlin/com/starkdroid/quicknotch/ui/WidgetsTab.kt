@@ -41,6 +41,7 @@ import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.theme.*
@@ -68,6 +69,9 @@ internal fun WidgetsTab(
     onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
     onResetDefaults: () -> Unit
 ) {
+    // A desktop has no battery; only offer the device-battery toggle where it
+    // can actually do something.
+    val hasDeviceBattery by SystemBattery.hasBattery.collectAsState()
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -158,7 +162,10 @@ internal fun WidgetsTab(
                                 color = TextPrimary
                             )
                             Text(
-                                text = stringResource(Res.string.widget_collapsed_indicators_desc),
+                                text = stringResource(
+                                    if (hasDeviceBattery) Res.string.widget_collapsed_indicators_desc_laptop
+                                    else Res.string.widget_collapsed_indicators_desc
+                                ),
                                 style = AppTypography.bodySmall,
                                 color = TextSecondary,
                                 fontSize = 11.sp,
@@ -184,6 +191,18 @@ internal fun WidgetsTab(
                                     }
                                 }
                             )
+                            if (hasDeviceBattery) {
+                                BehaviorSwitchRow(
+                                    title = stringResource(Res.string.widget_show_device_battery_title),
+                                    subtitle = stringResource(Res.string.widget_show_device_battery_desc),
+                                    checked = config.widgets.showCollapsedDeviceBattery,
+                                    onCheckedChange = { checked ->
+                                        onUpdate {
+                                            it.copy(widgets = it.widgets.copy(showCollapsedDeviceBattery = checked))
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         if (!isStyleEligibleForLiveActivity(config)) {
