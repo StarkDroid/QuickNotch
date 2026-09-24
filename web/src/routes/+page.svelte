@@ -21,9 +21,12 @@
 		'AMOLED notch',
 		'Floating pill',
 		'Drag handle',
+		'Always on top',
 		'No account',
+		'No telemetry',
 		'Runs offline',
-		'100% free'
+		'100% free',
+		'More on the way'
 	];
 </script>
 

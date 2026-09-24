@@ -48,6 +48,11 @@
 					</li>
 				{/each}
 			</ul>
+
+			<p class="teaser" aria-label="Widgets in the pipeline">
+				<Icon name="sparkle" size={15} />
+				In the oven: a clipboard, keyboard shortcuts, a stopwatch and friends.
+			</p>
 		</div>
 	</div>
 </section>
@@ -151,6 +156,28 @@
 	.item__text span {
 		font-size: var(--fs-small);
 		color: var(--text-3);
+	}
+
+	/* Footnote ticket under the widget list — a glimpse of what is still coming. */
+	.teaser {
+		position: relative;
+		z-index: 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		width: fit-content;
+		margin-top: 0.9rem;
+		padding: 0.7rem 1.1rem;
+		border: 2px dashed var(--line-strong);
+		border-radius: var(--r-md);
+		font-size: var(--fs-small);
+		color: var(--text-3);
+	}
+
+	.teaser :global(svg) {
+		color: var(--accent);
+		flex: none;
 	}
 
 	@media (min-width: 900px) {

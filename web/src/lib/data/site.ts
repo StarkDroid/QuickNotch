@@ -19,9 +19,9 @@ export const site = {
 	version: '1.0.0',
 	price: '0',
 	currency: 'USD',
-	tagline: 'One tiny notch. Every app you need.',
+	tagline: 'One tiny notch. Apps, weather, stats and more.',
 	description:
-		'QuickNotch is a free Dynamic Island-style notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance — styled as an AMOLED notch, a floating pill or a slim drag handle.',
+		'QuickNotch is a free Dynamic Island-style notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance — styled as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
 	shortDescription:
 		'A free Dynamic Island-style notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
@@ -74,10 +74,10 @@ export const platforms = [
 
 export const hero = {
 	// Sticker ribbon that sits on top of the headline.
-	badge: 'brimful of apps · 100% free',
+	badge: 'a notchful of good stuff · 100% free',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'A Dynamic Island-style notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around — without ever leaving the window you are in.',
+	sub: 'A Dynamic Island-style notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around — without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
 	primaryCta: 'Download for free',
 	secondaryCta: 'See how it works',
 	trust: ['No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
@@ -113,28 +113,28 @@ export const themes: { id: ThemeId; label: string; blurb: string }[] = [
 ];
 
 export const launch = {
-	eyebrow: 'Launch from anywhere',
-	title: 'One click, from inside any window',
-	body: 'The notch floats above whatever you are doing, so you never have to abandon your window to open another app. Cross the void in a single click.',
+	eyebrow: 'The notch overlay',
+	title: 'Hover the notch. Get what you need.',
+	body: 'The notch rests slim at the top-centre of your screen. Hover it and the overlay answers — an app dock that grows straight out of the notch, right where you are looking. Move along and it tucks itself away, leaving a pixel-wide nothing behind.',
 	items: [
 		{
-			title: 'One click to launch',
-			body: 'Every pinned app opens the instant you click, exactly as the system would launch it.'
+			title: 'Hover to expand',
+			body: 'Rest over the notch and it grows into an app dock, exactly the way a Dynamic Island does — no clicks, no menu, no fumbling.'
 		},
 		{
 			title: 'Always on top',
 			body: 'Keep the notch above everything, or let it politely recede when you want a clean canvas.'
 		},
 		{
-			title: 'Collapse on launch',
-			body: 'Optionally tuck the dock away the moment your app opens — ready and waiting for the next one.'
+			title: 'Tucks away on its own',
+			body: 'Move along and the overlay collapses back to a slim notch. Nothing lingers, nothing gets in your way, and a single press of Escape closes it too.'
 		}
 	]
 } as const;
 
 export const download = {
 	title: 'Slap a notch on your desktop',
-	body: 'Grab the installer for your platform, run it once, and boom — a tiny superpower notch. No account, no credit card, no signing your soul away.',
+	body: 'Grab the installer for your platform, run it once, and boom — a tiny superpower notch. Apps, weather, stats and media controls on day one, with new widgets queued up after. No account, no credit card, no signing your soul away.',
 	notes: [
 		'Installs on Windows 10 & 11 and macOS 12 or newer.',
 		'No account, no telemetry, no cloud.',
@@ -177,6 +177,11 @@ export const faq = [
 		question: 'Does QuickNotch start automatically?',
 		answer:
 			'If you want it to. Toggle "start at login" in Settings and QuickNotch will be waiting on your desktop edge after every restart.'
+	},
+	{
+		question: 'Is QuickNotch more than an app launcher?',
+		answer:
+			'It started as a launcher, and the notch has grown into a whole widget stack: apps, weather, system usage, game FPS and live media controls today, with more widgets and tricks queued up for the next updates. Every bit of it is free, offline-facing and one glance away.'
 	}
 ] as const;
 

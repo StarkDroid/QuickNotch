@@ -4,16 +4,19 @@
 	import { dockTiles } from '$data/site';
 
 	/**
-	 * The signature QuickNotch interaction, live on the page: a collapsed pill
-	 * morphs into a dock on hover, then moving the cursor across the tiles
-	 * magnifies and lifts them in a cosine-squared wave — exactly how the desktop
-	 * dock tracks the cursor.
+	 * The signature QuickNotch interaction, live on the page: a slim notch hangs
+	 * off the top edge of the desktop, and the moment your cursor visits it the
+	 * overlay answers — growing down into an app dock, tiles magnetising toward
+	 * the cursor in a gentle cosine-squared wave. Leave the overlay and it tucks
+	 * itself back into the notch. That is exactly how the desktop product behaves.
 	 *
-	 * The collapsed pill always renders (it is the initial state), so nothing is
-	 * hidden without JavaScript; the wave simply never arms.
+	 * Hover behaviour only arms on fine pointers; touch users tap the notch to
+	 * open (Enter/Space works from the keyboard) and a tile to launch — it closes
+	 * again either way, so nothing is ever locked open. The collapsed notch always
+	 * renders, so nothing is hidden without JavaScript — the wave just never arms.
 	 */
 
-	let expanded = $state(false);
+	let open = $state(false);
 	let launched = $state(false);
 	let launchedName = $state('');
 	let clock = $state('9:41');
@@ -27,14 +30,20 @@
 	// Applied (display) values, lerped toward `tileState` so the wave flows.
 	const display = tiles.map(() => ({ scale: 1, lift: 0, x: 0 }));
 
-	let dockEl: HTMLElement | undefined;
+	let overlayEl: HTMLElement | undefined;
 	let raf = 0;
 	let running = false;
-	let lastPointerX: number | null = null;
+	let pointerX: number | null = null;
+	let graceTimer = 0;
+	let settleTimer = 0;
+	let launchTimer = 0;
+	/** Non-null only while the cursor actually rests over the overlay. */
+	let overOverlay = false;
 
-	const MAX_SCALE = 1.62;
-	const MAX_LIFT = 34;
-	const WAVE_RADIUS_BASES = 2.4;
+	const MAX_SCALE = 1.28;
+	const MAX_LIFT = 16;
+	const WAVE_RADIUS_BASES = 2.1;
+	const SPREAD = 0.22;
 
 	$effect(() => {
 		reduced =
@@ -42,9 +51,17 @@
 			window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	});
 
-	// A live ticking clock inside the collapsed pill — a nod to the real product's
-	// idle pill showing the time. Wired up only while the component is mounted and
-	// paused entirely under reduced motion.
+	/** The wave only fronts for real hovering pointers. */
+	function finePointer(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			window.matchMedia('(hover: hover) and (pointer: fine)').matches
+		);
+	}
+
+	// A live ticking clock inside the resting notch — a nod to the real product's
+	// idle pill showing the time. Wired up only while mounted and paused entirely
+	// under reduced motion.
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		let frame: number | null = null;
@@ -63,16 +80,16 @@
 		};
 	});
 
-	function onExpand() {
-		if (reduced || expanded) return;
-		expanded = true;
-		// Early settle so the enter transition lands before the wave arms.
-		setTimeout(() => armWave(), 80);
-	}
-
 	function armWave() {
+		if (reduced) return;
 		running = true;
 		if (!raf) raf = requestAnimationFrame(frame);
+	}
+
+	function stopWave() {
+		running = false;
+		if (raf) cancelAnimationFrame(raf);
+		raf = 0;
 	}
 
 	/** Cosine-squared falloff: 1 under the cursor, 0 at the wave's edge. */
@@ -82,14 +99,9 @@
 		return cos * cos;
 	}
 
-	/** Recompute each tile's resting wave state for the current cursor position. */
+	/** Recompute each tile's resting wave state for the current cursor. */
 	function updateWave() {
-		const tilesEl = dockEl?.querySelectorAll<HTMLElement>('[data-tile]');
-		if (!tilesEl || tilesEl.length === 0) return;
-
-		const rect = dockEl!.getBoundingClientRect();
-
-		if (lastPointerX === null) {
+		if (pointerX === null) {
 			for (const s of tileState) {
 				s.scale = 1;
 				s.lift = 0;
@@ -98,9 +110,13 @@
 			return;
 		}
 
-		const base = tilesEl[0]?.getBoundingClientRect().width ?? 44;
+		const tilesEl = overlayEl?.querySelectorAll<HTMLElement>('[data-tile]');
+		if (!tilesEl || tilesEl.length === 0) return;
+
+		const base = tilesEl[0]?.getBoundingClientRect().width ?? 40;
 		const radius = base * WAVE_RADIUS_BASES;
-		const dockCentre = rect.left + rect.width / 2;
+		const dockRect = overlayEl!.getBoundingClientRect();
+		const dockCentre = dockRect.left + dockRect.width / 2;
 
 		const centers: number[] = [];
 		tilesEl.forEach((el) => {
@@ -109,112 +125,145 @@
 		});
 
 		tilesEl.forEach((el, index) => {
-			const pointer = lastPointerX!;
-			const intensity = waveIntensity(Math.abs(centers[index] - pointer), radius);
-			tileState[index].scale = 1 + (MAX_SCALE - 1) * intensity;
+			const intensity = waveIntensity(Math.abs(centers[index] - pointerX!), radius);
+			const scale = 1 + (MAX_SCALE - 1) * intensity;
+			tileState[index].scale = scale;
 			tileState[index].lift = MAX_LIFT * intensity;
 			// Tiles push outward from the cursor so magnified neighbours make
 			// room instead of overlapping — the classic oil-spill spread.
-			const away = Math.sign(centers[index] - pointer) || (centers[index] < dockCentre ? -1 : 1);
-			tileState[index].x = away * (tileState[index].scale - 1) * base * 0.3;
+			const away = Math.sign(centers[index] - pointerX!) || (centers[index] < dockCentre ? -1 : 1);
+			tileState[index].x = away * (scale - 1) * base * SPREAD;
 		});
 	}
 
 	function frame() {
 		if (!running) return;
-		render();
-		const settled = display.every(
-			(cur, i) =>
-				Math.abs(cur.scale - tileState[i].scale) < 0.002 &&
-				Math.abs(cur.lift - tileState[i].lift) < 0.1 &&
-				Math.abs(cur.x - tileState[i].x) < 0.1
-		);
-		const rest = tileState.every((s) => s.scale === 1 && s.lift === 0 && s.x === 0);
-		if (settled && rest && !isPointerOverDock()) {
-			running = false;
-			raf = 0;
+		const tilesEl = overlayEl?.querySelectorAll<HTMLElement>('[data-tile]');
+		if (!tilesEl) {
+			stopWave();
+			return;
+		}
+
+		let settled = true;
+		tilesEl.forEach((el, index) => {
+			const target = tileState[index];
+			const cur = display[index];
+			const k = pointerX === null ? 0.2 : 0.3;
+			cur.scale += (target.scale - cur.scale) * k;
+			cur.lift += (target.lift - cur.lift) * k;
+			cur.x += (target.x - cur.x) * k;
+			el.style.transform = `translate3d(${cur.x.toFixed(1)}px, ${-cur.lift.toFixed(1)}px, 0) scale(${cur.scale.toFixed(3)})`;
+
+			if (
+				Math.abs(cur.scale - target.scale) > 0.002 ||
+				Math.abs(cur.lift - target.lift) > 0.1 ||
+				Math.abs(cur.x - target.x) > 0.1
+			) {
+				settled = false;
+			}
+		});
+
+		if (settled && (pointerX === null || !overOverlay)) {
+			stopWave();
 			return;
 		}
 		raf = requestAnimationFrame(frame);
 	}
 
-	/** True while the cursor sits inside the dock area (fine pointers only). */
-	function isPointerOverDock(): boolean {
-		if (!expanded || lastPointerX === null || !dockEl) return false;
-		const rect = dockEl!.getBoundingClientRect();
-		return lastPointerX >= rect.left - 40 && lastPointerX <= rect.right + 40;
-	}
-
-	function render() {
-		const tilesEl = dockEl?.querySelectorAll<HTMLElement>('[data-tile]');
-		if (!tilesEl) return;
-
-		tilesEl.forEach((el, index) => {
-			const target = tileState[index];
-			const cur = display[index];
-			const k = lastPointerX === null ? 0.21 : 0.3;
-			cur.scale += (target.scale - cur.scale) * k;
-			cur.lift += (target.lift - cur.lift) * k;
-			cur.x += (target.x - cur.x) * k;
-
-			el.style.transform = `translate3d(${cur.x.toFixed(1)}px, ${-cur.lift.toFixed(1)}px, 0) scale(${cur.scale.toFixed(3)})`;
-		});
+	function onEnter() {
+		if (!finePointer()) return;
+		clearGrace();
+		clearTimeout(settleTimer);
+		if (!open) {
+			open = true;
+			// Let the island settle before the wave arms so tiles stay put during
+			// the grow-in transition.
+			window.setTimeout(() => {
+				if (open) armWave();
+			}, 90);
+		} else {
+			armWave();
+		}
 	}
 
 	function onMove(event: PointerEvent) {
-		if (!expanded || reduced) return;
-		lastPointerX = event.clientX;
+		if (!open || reduced) return;
+		overOverlay = true;
+		pointerX = event.clientX;
 		updateWave();
-		if (!raf) {
-			running = true;
-			raf = requestAnimationFrame(frame);
+		armWave();
+	}
+
+	function onLeave() {
+		if (!finePointer()) return;
+		overOverlay = false;
+		pointerX = null;
+		// A short grace period lets quick trips across the edge avoid flapping;
+		// re-entering cancels the collapse.
+		graceTimer = window.setTimeout(() => {
+			open = false;
+			graceTimer = 0;
+			updateWave();
+			armWave();
+		}, 160);
+	}
+
+	function clearGrace() {
+		if (graceTimer) {
+			clearTimeout(graceTimer);
+			graceTimer = 0;
 		}
 	}
 
-	function onLeaveWindow(event?: Event) {
-		if (!expanded) return;
-		// Only reset when the pointer genuinely left the dock area.
-		if (event && dockEl) {
-			const rect = dockEl!.getBoundingClientRect();
-			const x =
-				event instanceof PointerEvent
-					? event.clientX
-					: (event as unknown as { clientX?: number }).clientX ?? 0;
-			if (x >= rect.left - 40 && x <= rect.right + 40) return;
-		}
-		lastPointerX = null;
-		updateWave();
-		if (!raf) {
-			running = true;
-			raf = requestAnimationFrame(frame);
+	/** Coarse pointers (and keyboard users via the button): tap to toggle. */
+	function onToggle() {
+		if (finePointer()) return;
+		clearGrace();
+		if (open) {
+			open = false;
+			pointerX = null;
+			updateWave();
+		} else {
+			open = true;
+			if (!reduced) armWave();
 		}
 	}
 
-	function onTileClick(index: number) {
+	function onTileClick(index: number, event: MouseEvent) {
+		event.stopPropagation();
+		clearTimeout(launchTimer);
 		launchedName = tiles[index].name;
 		launched = true;
-		if (typeof window !== 'undefined') {
-			clearTimeout((window as unknown as { __qnLaunch?: number }).__qnLaunch);
-			(window as unknown as { __qnLaunch?: number }).__qnLaunch = window.setTimeout(
-				() => (launched = false),
-				1400
-			);
-		}
+		launchTimer = window.setTimeout(() => (launched = false), 1800);
+
+		// Let the toast land for a beat, then the island tucks away — launching
+		// dismisses the overlay, exactly like the product.
+		clearGrace();
+		clearTimeout(settleTimer);
+		settleTimer = window.setTimeout(() => {
+			open = false;
+			pointerX = null;
+			updateWave();
+			armWave();
+		}, 720);
 	}
+
+	$effect(() => {
+		return () => {
+			clearGrace();
+			clearTimeout(settleTimer);
+			clearTimeout(launchTimer);
+			stopWave();
+		};
+	});
 </script>
 
-<svelte:window
-	onpointermove={onMove}
-	onpointerleave={onLeaveWindow}
-	onblur={onLeaveWindow}
-/>
+<svelte:window onkeydown={(event) => event.key === 'Escape' && (open = false)} />
 
 <div
 	class="dock-demo"
-	class:dock-demo--open={expanded}
-	bind:this={dockEl}
 	role="region"
-	aria-label="Live QuickNotch dock demo — hover the pill to expand it into a dock, then move your cursor across the icons to feel the magnification wave"
+	aria-label="Live QuickNotch overlay demo — hover the notch at the top of the screen to expand it into a dock, then move your cursor across the icons to feel the magnification wave. It tucks back into the notch when you leave."
 >
 	<div class="dock-demo__screen">
 		<div class="dock-demo__chrome" aria-hidden="true">
@@ -231,46 +280,61 @@
 				<div class="dock-demo__winbar"><i></i><i></i></div>
 				<div class="dock-demo__wingrid"><i></i><i></i><i></i><i></i></div>
 			</div>
-		</div>
 
-		<!-- The pill: collapsed resting state, morphs into the dock on expand. -->
-		<button
-			class="dock-demo__pill"
-			class:open={expanded}
-			type="button"
-			aria-label={expanded ? 'QuickNotch dock demo is open' : 'Expand the QuickNotch dock demo'}
-			onclick={onExpand}
-			onpointerenter={onExpand}
-		>
-			<span class="dock-demo__pill-icon"><Icon name="logo" size={15} /></span>
-			<span class="dock-demo__clock">{clock}</span>
-		</button>
-
-		<!-- The expanded dock: tiles magnify and lift in a cosine-squared wave. -->
-		<div class="dock-demo__dock">
-			{#each tiles as tile, index (tile.id)}
+			<!-- The overlay: one connected shape — resting notch, then island. -->
+			<div
+				class="dock-demo__overlay"
+				class:open
+				role="group"
+				bind:this={overlayEl}
+				onpointerenter={onEnter}
+				onpointermove={onMove}
+				onpointerleave={onLeave}
+			>
 				<button
 					type="button"
-					class="dock-demo__tile-btn"
-					data-tile
-					aria-label="{tile.name} — launch demo"
-					onclick={() => onTileClick(index)}
+					class="dock-demo__notch"
+					class:notch-open={open}
+					aria-label={open
+						? 'QuickNotch overlay is open — press Escape to close'
+						: 'Notch — hover or click to open QuickNotch'}
+					aria-expanded={open}
+					onclick={onToggle}
 				>
-					<AppTile {tile} size={44} decorative />
+					<span class="dock-demo__notch-icon"><Icon name="logo" size={14} /></span>
+					<span class="dock-demo__clock">{clock}</span>
 				</button>
-			{/each}
 
-			<div class="dock-demo__launched" class:show={launched} aria-live="polite">
-				<Icon name="check" size={14} />
-				{launchedName} opened
+				<div class="dock-demo__dock" aria-hidden={!open} inert={!open}>
+					{#each tiles as tile, index (tile.id)}
+						<button
+							type="button"
+							class="dock-demo__tile-btn"
+							data-tile
+							aria-label="{tile.name} — launch demo"
+							onclick={(event) => onTileClick(index, event)}
+						>
+							<AppTile {tile} size={40} decorative />
+						</button>
+					{/each}
+				</div>
+
+				{#if launchedName}
+					<div class="dock-demo__launched" class:show={launched} aria-live="polite">
+						<Icon name="check" size={14} />
+						{launchedName} opened
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
 
 	<p class="dock-demo__hint">
-		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Hover the pill</span>
+		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Hover the notch</span>
 		<Icon name="arrow-right" size={14} />
-		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Move across to feel the wave</span>
+		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Overlay pops open · move to feel the wave</span>
+		<Icon name="arrow-right" size={14} />
+		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Leave — it tucks away</span>
 	</p>
 </div>
 
@@ -279,6 +343,7 @@
 		position: relative;
 		max-width: 52rem;
 		margin-inline: auto;
+		z-index: 1;
 	}
 
 	.dock-demo__screen {
@@ -289,15 +354,6 @@
 		box-shadow: var(--shadow-3);
 		overflow: hidden;
 		height: clamp(280px, 40vw, 420px);
-	}
-
-	.dock-demo__screen::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background: rgb(255 255 255 / 0.03);
-		pointer-events: none;
-		z-index: 3;
 	}
 
 	.dock-demo__chrome {
@@ -332,15 +388,15 @@
 		overflow: hidden;
 	}
 
-	/* A soft flat glow behind the dock area — flat washes only, no gradient. */
+	/* A soft flat glow behind the overlay — flat washes only, no gradient. */
 	.dock-demo__desktop::before {
 		content: '';
 		position: absolute;
 		left: 50%;
-		top: -120px;
+		top: -80px;
 		translate: -50% 0;
 		width: 560px;
-		height: 360px;
+		height: 320px;
 		background: var(--accent-soft);
 		filter: blur(70px);
 		opacity: 0.7;
@@ -357,14 +413,14 @@
 
 	.dock-demo__window--a {
 		left: 7%;
-		top: 20%;
+		top: 24%;
 		width: 44%;
 		padding-bottom: 0.9rem;
 	}
 
 	.dock-demo__window--b {
 		right: 8%;
-		top: 40%;
+		top: 46%;
 		width: 32%;
 		padding-bottom: 0.7rem;
 	}
@@ -409,52 +465,66 @@
 		background: rgb(255 255 255 / 0.07);
 	}
 
-	/* ---- The pill ---------------------------------------------------- */
-	.dock-demo__pill {
+	/* ---- The overlay ------------------------------------------------ */
+	/* One connected shape hanging off the top edge. The notch strip is always
+	   there; the dock participates in the same rounded capsule, so growing it
+	   reads as an island — not something bolted on mid-screen. */
+	.dock-demo__overlay {
 		position: absolute;
 		left: 50%;
 		top: 0;
 		z-index: 4;
-		translate: -50% 40%;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.55rem;
-		height: 44px;
-		padding-inline: 1.25rem;
-		border-radius: 999px;
+		translate: -50% 0;
+		width: clamp(196px, 30vw, 236px);
+		height: 38px;
+		border-radius: 0 0 18px 18px;
 		border: 1px solid rgb(255 255 255 / 0.18);
-		background: rgb(18 20 28 / 0.94);
+		background: rgb(16 18 26 / 0.94);
 		backdrop-filter: blur(16px) saturate(150%);
 		-webkit-backdrop-filter: blur(16px) saturate(150%);
 		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.12),
-			0 22px 60px -24px rgb(0 0 0 / 0.85);
+			inset 0 1px 0 rgb(255 255 255 / 0.1),
+			0 22px 50px -24px rgb(0 0 0 / 0.85);
 		color: var(--on-dark);
-		cursor: pointer;
+		overflow: hidden;
 		transition:
+			width 520ms var(--ease-out),
 			height 520ms var(--ease-out),
-			padding-inline 520ms var(--ease-out),
-			gap 520ms var(--ease-out),
-			border-radius 520ms var(--ease-out),
-			translate 520ms var(--ease-out);
+			border-radius 520ms var(--ease-out);
 	}
 
-	.dock-demo__pill.open {
-		height: 0;
-		padding-inline: 0;
-		gap: 0;
-		border-radius: 0;
-		translate: -50% 40%;
-		pointer-events: none;
-		color: transparent;
+	/* Notch resting on the top edge grows into a round island when open. */
+	.dock-demo__overlay.open {
+		width: clamp(320px, 46vw, 380px);
+		height: 148px;
+		border-radius: 20px;
 	}
 
-	.dock-demo__pill-icon {
+	/* The resting notch strip: logo + live clock, and the touch/keyboard handle. */
+	.dock-demo__notch {
+		all: unset;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.55rem;
+		width: 100%;
+		height: 38px;
+		white-space: nowrap;
+		cursor: pointer;
+		color: inherit;
+	}
+
+	.dock-demo__notch-icon {
 		display: grid;
 		place-items: center;
 		flex: none;
 		color: var(--tomato);
+	}
+
+	.dock-demo__notch:focus-visible {
+		outline: 2px solid var(--tomato);
+		outline-offset: -2px;
+		border-radius: 4px;
 	}
 
 	.dock-demo__clock {
@@ -463,42 +533,28 @@
 		letter-spacing: 0.06em;
 		color: var(--on-dark-2);
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
 	}
 
-	/* ---- The dock ---------------------------------------------------- */
+	/* The dock that grows out of the notch. */
 	.dock-demo__dock {
-		position: absolute;
-		left: 50%;
-		top: 44%;
-		z-index: 4;
-		translate: -50% -50%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		flex-wrap: nowrap;
-		gap: 0.5rem;
-		padding: 0.6rem 0.8rem;
-		border-radius: 22px;
-		border: 1px solid rgb(255 255 255 / 0.16);
-		background: rgb(14 16 24 / 0.92);
-		backdrop-filter: blur(20px) saturate(160%);
-		-webkit-backdrop-filter: blur(20px) saturate(160%);
-		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.1),
-			0 30px 80px -30px rgb(0 0 0 / 0.9);
+		gap: 0.45rem;
+		height: 92px;
+		padding: 0 0.85rem 0.35rem;
 		opacity: 0;
-		pointer-events: none;
-		transform: scale(0.8, 0.4) translateY(28px);
+		transform: translateY(10px);
 		transition:
-			transform 560ms var(--ease-out),
-			opacity 380ms var(--ease-out);
+			opacity 240ms var(--ease-out),
+			transform 240ms var(--ease-out);
+		pointer-events: none;
 	}
 
-	.dock-demo--open .dock-demo__dock {
+	.dock-demo__overlay.open .dock-demo__dock {
 		opacity: 1;
-		pointer-events: auto;
 		transform: none;
+		pointer-events: auto;
 	}
 
 	.dock-demo__tile-btn {
@@ -516,33 +572,35 @@
 		filter: saturate(120%) brightness(1.08);
 	}
 
-	/* Launch flash: a small toast that pops above the dock. */
+	/* Launch flash: a small toast that pops up inside the open island. */
 	.dock-demo__launched {
 		position: absolute;
 		left: 50%;
-		bottom: calc(100% + 14px);
+		bottom: 0.7rem;
 		display: inline-flex;
 		align-items: center;
 		gap: 0.45rem;
-		padding: 0.45rem 0.85rem;
+		padding: 0.42rem 0.8rem;
 		border-radius: var(--r-pill);
 		background: rgb(255 255 255 / 0.96);
 		color: #223046;
 		font-size: var(--fs-small);
 		font-weight: 600;
 		box-shadow: var(--shadow-2);
+		translate: -50% 0;
 		opacity: 0;
-		transform: translate(-50%, 8px);
+		transform: translateY(8px);
 		transition:
 			opacity 180ms var(--ease-out),
 			transform 180ms var(--ease-out);
 		pointer-events: none;
 		white-space: nowrap;
+		z-index: 2;
 	}
 
 	.dock-demo__launched.show {
 		opacity: 1;
-		transform: translate(-50%, 0);
+		transform: translateY(0);
 	}
 
 	.dock-demo__hint {
@@ -575,18 +633,36 @@
 		background: var(--accent);
 	}
 
-	.dock-demo__hint :global(.marquee__dots .dot) {
-		background: var(--cyan);
-	}
-
 	@media (max-width: 620px) {
 		.dock-demo__screen {
 			height: 300px;
 		}
 
+		.dock-demo__overlay {
+			width: 186px;
+		}
+
+		.dock-demo__overlay.open {
+			width: 316px;
+		}
+
 		.dock-demo__tile-btn :global(.tile) {
 			width: 34px !important;
 			height: 34px !important;
+		}
+
+		.dock-demo__dock {
+			gap: 0.3rem;
+		}
+
+		.dock-demo__overlay.open .dock-demo__notch-icon {
+			color: var(--tomato);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.dock-demo__notch-icon {
+			color: var(--on-dark-2);
 		}
 	}
 </style>

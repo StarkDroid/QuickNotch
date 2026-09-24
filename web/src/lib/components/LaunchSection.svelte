@@ -10,10 +10,10 @@
 	 * Glyph per launch card, keyed by the title in `site.ts` so reordering the
 	 * copy can never silently swap the icons.
 	 */
-	const cardIcons: Record<LaunchItemTitle, 'bolt' | 'layers' | 'chevron-down'> = {
-		'One click to launch': 'bolt',
+	const cardIcons: Record<LaunchItemTitle, 'bolt' | 'layers' | 'chevron-down' | 'arrow-up-right'> = {
+		'Hover to expand': 'chevron-down',
 		'Always on top': 'layers',
-		'Collapse on launch': 'chevron-down'
+		'Tucks away on its own': 'arrow-up-right'
 	};
 </script>
 
@@ -30,7 +30,7 @@
 				<span class="tape tape--tl"></span>
 				<span class="tape tape--br"></span>
 			</div>
-			<span class="mono stage__tag">fig. 2 — the dock, lovingly open</span>
+			<span class="mono stage__tag">fig. 2 — hover the notch to open the overlay</span>
 			<DockDemo />
 		</div>
 
