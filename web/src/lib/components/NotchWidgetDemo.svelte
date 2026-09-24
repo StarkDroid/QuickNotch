@@ -457,7 +457,7 @@
 	}
 
 	.music__controls .music__play:hover {
-		background: var(--indigo-light);
+		background: var(--tomato-deep);
 		color: var(--on-accent);
 	}
 

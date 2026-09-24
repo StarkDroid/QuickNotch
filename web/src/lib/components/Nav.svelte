@@ -127,17 +127,18 @@
 		position: sticky;
 		top: 0;
 		z-index: 100;
-		backdrop-filter: blur(0px);
-		transition: background-color var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
-		border-bottom: 1px solid transparent;
+		transition: background-color var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out),
+			box-shadow var(--dur) var(--ease-out);
+		border-bottom: 2px solid transparent;
 	}
 
+	/* On a cream page the header opens transparent, then slips onto a solid paper
+	   sheet with a hard print border once you scroll — no frosted glass. */
 	.nav.scrolled,
 	.nav.open {
-		background: rgb(255 255 255 / 0.78);
-		border-bottom-color: var(--line);
-		backdrop-filter: blur(18px) saturate(150%);
-		-webkit-backdrop-filter: blur(18px) saturate(150%);
+		background: var(--paper-lift);
+		border-bottom-color: var(--ink);
+		box-shadow: 0 5px 0 rgb(33 28 19 / 0.1);
 	}
 
 	.nav__bar {
@@ -155,7 +156,7 @@
 		gap: 0.6rem;
 		font-family: var(--font-display);
 		font-weight: 700;
-		font-size: 1.08rem;
+		font-size: 1.15rem;
 		letter-spacing: -0.02em;
 		color: var(--text);
 		flex: none;
@@ -164,12 +165,13 @@
 	.brand__mark {
 		display: grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 10px;
-		color: #fff;
+		width: 34px;
+		height: 34px;
+		border-radius: var(--r-sm);
+		border: 2px solid var(--ink);
+		color: var(--on-accent);
 		background: var(--accent);
-		box-shadow: 0 8px 22px -10px rgb(79 70 229 / 0.4);
+		box-shadow: 3px 3px 0 rgb(33 28 19 / 0.9);
 	}
 
 	.nav__links {
@@ -182,7 +184,7 @@
 	.nav__link {
 		position: relative;
 		padding: 0.5rem 0.8rem;
-		border-radius: var(--r-pill);
+		border-radius: var(--r-sm);
 		font-size: 0.9rem;
 		color: var(--text-2);
 		transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
@@ -190,11 +192,12 @@
 
 	.nav__link:hover {
 		color: var(--text);
-		background: rgb(15 23 42 / 0.05);
+		background: var(--paper-deep);
 	}
 
 	.nav__link.active {
 		color: var(--text);
+		font-weight: 600;
 	}
 
 	.nav__link.active::after {
@@ -205,8 +208,7 @@
 		translate: -50% 0;
 		width: 14px;
 		height: 2px;
-		border-radius: 2px;
-		background: var(--indigo-light);
+		background: var(--accent);
 	}
 
 	.nav__actions {
@@ -219,12 +221,13 @@
 	.nav__toggle {
 		display: grid;
 		place-items: center;
-		width: 38px;
-		height: 38px;
-		border-radius: 11px;
-		border: 1px solid var(--line-strong);
+		width: 40px;
+		height: 40px;
+		border-radius: var(--r-sm);
+		border: 2px solid var(--ink);
 		color: var(--text);
-		background: rgb(15 23 42 / 0.04);
+		background: var(--paper-lift);
+		box-shadow: 2px 2px 0 rgb(33 28 19 / 0.85);
 	}
 
 	.nav__mobile {
@@ -232,7 +235,8 @@
 		flex-direction: column;
 		gap: 0.2rem;
 		padding: 0.5rem var(--gutter) 1.2rem;
-		border-top: 1px solid var(--line);
+		border-top: 2px solid var(--ink);
+		background: var(--paper-lift);
 	}
 
 	.nav__mobile[hidden] {
@@ -243,7 +247,7 @@
 		padding: 0.75rem 0.25rem;
 		font-size: 1.05rem;
 		color: var(--text-2);
-		border-bottom: 1px solid var(--line);
+		border-bottom: 1px dashed var(--line-strong);
 	}
 
 	.nav__mobile > a:not(.btn):hover {
@@ -257,12 +261,12 @@
 	.nav__progress {
 		position: absolute;
 		left: 0;
-		bottom: -1px;
+		bottom: -2px;
 		width: 100%;
-		height: 2px;
+		height: 3px;
 		transform-origin: 0 50%;
-		background: var(--indigo-light);
-		opacity: 0.85;
+		background: var(--accent);
+		opacity: 0.9;
 	}
 
 	@media (min-width: 900px) {

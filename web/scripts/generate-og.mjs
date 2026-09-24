@@ -23,21 +23,21 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const staticDir = join(root, 'static');
 
 const FONT = "'Inter','Helvetica Neue',Helvetica,Arial,sans-serif";
-const DISPLAY = "'Space Grotesk','Inter','Helvetica Neue',Helvetica,Arial,sans-serif";
+const DISPLAY = "'Fraunces','Georgia','Times New Roman',serif";
 
 const escape = (value) =>
 	value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 const dots = `
 	<g transform="translate(600,470)">
-		<rect x="-164" y="-22" width="328" height="44" rx="22" fill="#0A0A0A" stroke="#0b1220" stroke-opacity="0.12"/>
+		<rect x="-164" y="-22" width="328" height="44" rx="22" fill="#0A0A0A" stroke="#211c13" stroke-opacity="0.16"/>
 		<circle cx="-104" cy="0" r="7" fill="#ffffff" fill-opacity="0.34"/>
 		<rect x="-76" y="-7" width="34" height="14" rx="7" fill="#ffffff" fill-opacity="0.18"/>
 		<circle cx="-24" cy="0" r="7" fill="#ffffff" fill-opacity="0.34"/>
 		<g>
-			<rect x="24" y="-17" width="34" height="34" rx="9" fill="#6366f1"/>
-			<rect x="66" y="-17" width="34" height="34" rx="9" fill="#0891b2"/>
-			<rect x="108" y="-17" width="34" height="34" rx="9" fill="#7e22ce"/>
+			<rect x="24" y="-17" width="34" height="34" rx="9" fill="#e8481c"/>
+			<rect x="66" y="-17" width="34" height="34" rx="9" fill="#1f4fd8"/>
+			<rect x="108" y="-17" width="34" height="34" rx="9" fill="#0f8fa6"/>
 		</g>
 	</g>
 `;
@@ -45,33 +45,31 @@ const dots = `
 const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
 	<defs>
 		<pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
-			<path d="M60 0H0V60" fill="none" stroke="#0b1220" stroke-opacity="0.035"/>
+			<path d="M60 0H0V60" fill="none" stroke="#211c13" stroke-opacity="0.045"/>
 		</pattern>
 	</defs>
 
-	<rect width="1200" height="630" fill="#f7f9fc"/>
+	<rect width="1200" height="630" fill="#f9f3e7"/>
 	<rect width="1200" height="630" fill="url(#grid)"/>
 
 	<!-- Flat ambient tints: no gradients, just translucent flat discs. -->
-	<circle cx="190" cy="20" r="320" fill="#4f46e5" fill-opacity="0.08"/>
-	<circle cx="1100" cy="60" r="270" fill="#0891b2" fill-opacity="0.07"/>
-	<circle cx="600" cy="660" r="330" fill="#7e22ce" fill-opacity="0.06"/>
+	<circle cx="170" cy="40" r="330" fill="#e8481c" fill-opacity="0.09"/>
+	<circle cx="1080" cy="80" r="280" fill="#1f4fd8" fill-opacity="0.08"/>
+	<circle cx="600" cy="680" r="340" fill="#b83a10" fill-opacity="0.05"/>
 
-	<g>
-		<rect x="500" y="70" width="200" height="34" rx="17" fill="#ffffff" fill-opacity="0.7" stroke="#0b1220" stroke-opacity="0.1"/>
-		<text x="600" y="92" text-anchor="middle" font-family="${FONT}" font-size="14" font-weight="600" fill="#475569" letter-spacing="2.4">WINDOWS &amp; macOS</text>
-	</g>
+	<rect x="500" y="90" width="200" height="34" rx="8" fill="#fffdf6" stroke="#211c13" stroke-width="2"/>
+	<text x="600" y="112" text-anchor="middle" font-family="${FONT}" font-size="14" font-weight="700" fill="#b83a10" letter-spacing="2.4">WINDOWS &amp; MACOS</text>
 
-	<text x="600" y="215" text-anchor="middle" font-family="${DISPLAY}" font-size="96" font-weight="700" fill="#0b1220" letter-spacing="-4">Your apps, one</text>
-	<text x="600" y="315" text-anchor="middle" font-family="${DISPLAY}" font-size="96" font-weight="700" fill="#4338ca" letter-spacing="-4">flick away.</text>
+	<text x="600" y="235" text-anchor="middle" font-family="${DISPLAY}" font-size="96" font-weight="700" fill="#211c13" letter-spacing="-4">Everything you need.</text>
+	<text x="600" y="335" text-anchor="middle" font-family="${DISPLAY}" font-size="96" font-weight="700" fill="#b83a10" letter-spacing="-4">One tiny notch.</text>
 
-	<text x="600" y="378" text-anchor="middle" font-family="${FONT}" font-size="24" font-weight="400" fill="#475569">A glanceable notch that shows your apps, weather, stats and live controls.</text>
+	<text x="600" y="395" text-anchor="middle" font-family="${FONT}" font-size="24" font-weight="400" fill="#4c4437">The free Dynamic Island-style notch and app dock for Windows and macOS.</text>
 
 	${dots}
 
-	<rect x="60" y="556" width="1080" height="1" fill="#0b1220" fill-opacity="0.08"/>
-	<text x="60" y="600" font-family="${FONT}" font-size="17" font-weight="600" fill="#0b1220" letter-spacing="0.2">QuickNotch</text>
-	<text x="1140" y="600" text-anchor="end" font-family="${FONT}" font-size="17" font-weight="500" fill="#64748b">Free · Windows &amp; macOS</text>
+	<rect x="60" y="556" width="1080" height="3" fill="#211c13" fill-opacity="0.12"/>
+	<text x="60" y="600" font-family="${FONT}" font-size="17" font-weight="700" fill="#211c13" letter-spacing="0.2">QuickNotch — app dock, notch, widgets</text>
+	<text x="1140" y="600" text-anchor="end" font-family="${FONT}" font-size="17" font-weight="500" fill="#4c4437">Free · Windows &amp; macOS</text>
 </svg>`;
 
 async function writePng(name, buffer, width) {
@@ -99,7 +97,7 @@ async function main() {
 
 	const touch = await sharp(favicon, { density: 1152 })
 		.resize(180, 180, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-		.flatten({ background: '#4f46e5' })
+		.flatten({ background: '#e8481c' })
 		.png({ compressionLevel: 9, effort: 10 })
 		.toBuffer();
 	await writePng('apple-touch-icon.png', touch, 180);

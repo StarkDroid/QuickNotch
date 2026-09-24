@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import DockDemo from './DockDemo.svelte';
 	import { launch } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
@@ -24,6 +25,15 @@
 			<p class="lead">{launch.body}</p>
 		</header>
 
+		<div class="stage" use:reveal={{ from: 'scale', delay: 0.05 }} data-reveal="scale">
+			<div class="stage__crop" aria-hidden="true">
+				<span class="tape tape--tl"></span>
+				<span class="tape tape--br"></span>
+			</div>
+			<span class="mono stage__tag">fig. 2 — the dock, lovingly open</span>
+			<DockDemo />
+		</div>
+
 		<div class="grid-2 cards" use:stagger={{ step: 0.08 }} data-stagger>
 			{#each launch.items as item (item.title)}
 				<article class="card card--lift">
@@ -39,6 +49,46 @@
 </section>
 
 <style>
+	.stage {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.9rem;
+		margin-bottom: clamp(2.5rem, 5vw, 4rem);
+	}
+
+	.stage__crop {
+		position: absolute;
+		inset: -0.4rem 10%;
+		border: 2px dashed var(--line-strong);
+		border-radius: var(--r-lg);
+		pointer-events: none;
+		z-index: 0;
+	}
+
+	.tape--tl {
+		top: -0.8rem;
+		left: 14%;
+	}
+
+	.tape--br {
+		right: 14%;
+		bottom: 2rem;
+		rotate: 3deg;
+	}
+
+	.stage__tag {
+		z-index: 1;
+		color: var(--ink-3);
+		opacity: 0.85;
+	}
+
+	.cards {
+		position: relative;
+		z-index: 1;
+	}
+
 	.cards article {
 		display: flex;
 		flex-direction: column;
@@ -48,14 +98,14 @@
 	.badge {
 		display: inline-grid;
 		place-items: center;
-		width: 40px;
-		height: 40px;
+		width: 42px;
+		height: 42px;
 		margin-bottom: 0.3rem;
-		border-radius: 12px;
-		border: 1px solid rgb(79 70 229 / 0.25);
-		background: rgb(79 70 229 / 0.12);
-		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6);
-		color: #4338ca;
+		border-radius: var(--r-sm);
+		border: 2px solid var(--ink);
+		background: var(--accent-soft);
+		box-shadow: 2px 2px 0 rgb(33 28 19 / 0.75);
+		color: var(--accent-text);
 	}
 
 	.cards p {

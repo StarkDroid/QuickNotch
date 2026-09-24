@@ -37,6 +37,21 @@
 		font-weight: 700;
 		letter-spacing: -0.03em;
 		white-space: nowrap;
-		color: rgb(15 23 42 / 0.12);
+		color: var(--text-3);
+		opacity: 0.55;
+		font-variation-settings:
+			'SOFT' 52,
+			'WONK' 0.72;
+	}
+
+	/* A hand-set star separates each word of the strip. */
+	.marquee__item::after {
+		content: '✦';
+		display: inline-block;
+		margin-left: 3.5rem;
+		color: var(--accent-text);
+		opacity: 0.8;
+		font-family: var(--font-body);
+		transform: scale(1.1);
 	}
 </style>

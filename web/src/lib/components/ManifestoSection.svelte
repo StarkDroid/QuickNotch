@@ -14,9 +14,9 @@
 	 */
 
 	const statements = [
-		{ n: '01', text: 'Everything, one glance.' },
-		{ n: '02', text: 'Style it your way.' },
-		{ n: '03', text: 'Launch from anywhere.' }
+		{ n: '01', text: 'Stop hunting in menus.' },
+		{ n: '02', text: 'Make every pixel yours.' },
+		{ n: '03', text: 'Click once. There it is.' }
 	];
 
 	let rootEl: HTMLElement | undefined = $state();
@@ -91,16 +91,26 @@
 	}
 
 	.manifesto__line {
-		display: flex;
+		display: grid;
+		grid-template-columns: auto 1fr;
 		align-items: baseline;
-		gap: clamp(1rem, 3vw, 2.5rem);
+		column-gap: clamp(1rem, 3vw, 2.5rem);
+		row-gap: 1.25rem;
 		min-height: clamp(14rem, 38vh, 26rem);
 		padding-block: 1rem;
 	}
 
 	.manifesto__index {
 		flex: none;
+		display: grid;
+		place-items: center;
+		width: 2.6rem;
+		height: 2.6rem;
+		border-radius: 50%;
+		border: 2px solid var(--ink);
+		background: var(--paper-lift);
 		color: var(--accent-text);
+		box-shadow: 3px 3px 0 rgb(33 28 19 / 0.85);
 	}
 
 	.manifesto__text {
@@ -111,7 +121,24 @@
 		letter-spacing: -0.035em;
 		color: var(--text);
 		text-wrap: balance;
-		max-width: 14ch;
+		max-width: 16ch;
+		font-variation-settings:
+			'SOFT' 52,
+			'WONK' 0.72;
+	}
+
+	/* The closing statement answers in the loud accent — the "stamp" of the
+	   poster. */
+	.manifesto__line:last-child .manifesto__text {
+		color: var(--accent-text);
+	}
+
+	/* Ticket stub under each line, like a tear-off. */
+	.manifesto__line::after {
+		content: '';
+		grid-column: 2;
+		margin-top: 1.5rem;
+		border-top: 2px dashed var(--line-strong);
 	}
 
 	.manifesto__line:nth-child(2) {

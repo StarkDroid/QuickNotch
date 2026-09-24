@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { platforms, site, stats } from '$data/site';
+	import { faq, platforms, site, stats, widgets, themes } from '$data/site';
 
 	/**
 	 * All document-level SEO in one place.
@@ -9,9 +9,10 @@
 	 * exactly what rich-result validators complain about.
 	 */
 
-	const title = 'QuickNotch — a Dynamic Island–style app launcher for Windows & macOS';
+	const title = 'QuickNotch — Free Dynamic Island app launcher & dock for Windows and macOS';
 	const canonical = `${site.url}/`;
 	const ogImage = `${site.url}/og.png`;
+	const logo = `${site.url}/icon-512.png`;
 
 	const osList = platforms.map((platform) => platform.requirement).join(', ');
 
@@ -26,6 +27,8 @@
 		softwareVersion: site.version,
 		downloadUrl: site.downloadUrl,
 		installUrl: site.downloadUrl,
+		fileFormat: 'application/octet-stream',
+		sameAs: [canonical],
 		isAccessibleForFree: true,
 		description: site.description,
 		inLanguage: 'en',
@@ -34,12 +37,20 @@
 			'@type': 'Offer',
 			price: site.price,
 			priceCurrency: site.currency,
-			availability: 'https://schema.org/InStock'
+			availability: 'https://schema.org/InStock',
+			url: site.downloadUrl
 		},
 		author: {
 			'@type': 'Organization',
 			name: site.author,
-			url: site.url
+			url: site.url,
+			logo: { '@type': 'ImageObject', url: logo }
+		},
+		publisher: {
+			'@type': 'Organization',
+			name: site.author,
+			url: site.url,
+			logo: { '@type': 'ImageObject', url: logo }
 		},
 		featureList: [
 			'Five glanceable widgets with vertical-scroll pagination',
@@ -47,7 +58,8 @@
 			'Three notch styles: AMOLED notch, floating pill or drag handle',
 			'Pin any installed app or browse for one on disk',
 			'Launch from anywhere with always-on-top overlay',
-			'Start at login automatically'
+			'Start at login automatically',
+			'Runs 100% offline with no account and no telemetry'
 		],
 		// Interesting, indexable facts rather than generic marketing filler.
 		additionalProperty: stats.map((stat) => ({
@@ -63,7 +75,13 @@
 		name: site.name,
 		url: canonical,
 		description: site.shortDescription,
-		inLanguage: 'en'
+		inLanguage: 'en',
+		publisher: {
+			'@type': 'Organization',
+			name: site.author,
+			url: site.url,
+			logo: { '@type': 'ImageObject', url: logo }
+		}
 	};
 
 	const organizationSchema = {
@@ -71,7 +89,48 @@
 		'@type': 'Organization',
 		name: site.author,
 		url: site.url,
-		description: `Makers of ${site.name}, a floating app launcher for Windows and macOS.`
+		logo: { '@type': 'ImageObject', url: logo },
+		description: `Makers of ${site.name}, a free floating app launcher and notch for Windows and macOS.`
+	};
+
+	/**
+	 * FAQPage: the visible accordion below the fold is mirrored here, sourced
+	 * from the same `faq` array so the rich result can never disagree with the
+	 * rendered answers.
+	 */
+	const faqSchema = {
+		'@context': 'https://schema.org',
+		'@type': 'FAQPage',
+		mainEntity: faq.map((item) => ({
+			'@type': 'Question',
+			name: item.question,
+			acceptedAnswer: { '@type': 'Answer', text: item.answer }
+		}))
+	};
+
+	/** ItemList of the widget stack, for entity-rich crawlable signals. */
+	const widgetListSchema = {
+		'@context': 'https://schema.org',
+		'@type': 'ItemList',
+		name: 'QuickNotch widgets',
+		itemListElement: widgets.map((widget, index) => ({
+			'@type': 'ListItem',
+			position: index + 1,
+			name: widget.label,
+			description: widget.blurb
+		}))
+	};
+
+	const themeListSchema = {
+		'@context': 'https://schema.org',
+		'@type': 'ItemList',
+		name: 'QuickNotch notch themes',
+		itemListElement: themes.map((theme, index) => ({
+			'@type': 'ListItem',
+			position: index + 1,
+			name: theme.label,
+			description: theme.blurb
+		}))
 	};
 
 	/** Escapes `<` so a JSON string can never terminate the script tag early. */
@@ -86,11 +145,15 @@
 	<link rel="canonical" href={canonical} />
 
 	<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
-	<meta name="googlebot" content="index, follow" />
+	<meta name="googlebot" content="index, follow, max-image-preview:large" />
+	<meta name="bingbot" content="index, follow, max-image-preview:large" />
 	<meta name="author" content={site.author} />
 	<meta name="keywords" content={site.keywords.join(', ')} />
 	<meta name="application-name" content={site.name} />
 	<meta name="generator" content="SvelteKit" />
+	<meta name="referrer" content="strict-origin-when-cross-origin" />
+	<meta name="format-detection" content="telephone=no" />
+	<meta name="theme-color" content="#f9f3e7" />
 
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content={site.name} />
@@ -101,9 +164,10 @@
 	<meta property="og:image" content={ogImage} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
+	<meta property="og:image:type" content="image/png" />
 	<meta
 		property="og:image:alt"
-		content="QuickNotch: a floating notch on a desktop that expands into a dock of pinned apps."
+		content="QuickNotch: a free floating notch on a desktop that expands into a dock of pinned apps for Windows and macOS."
 	/>
 
 	<meta name="twitter:card" content="summary_large_image" />
@@ -112,10 +176,13 @@
 	<meta name="twitter:image" content={ogImage} />
 	<meta
 		name="twitter:image:alt"
-		content="QuickNotch: a floating notch on a desktop that expands into a dock of pinned apps."
+		content="QuickNotch: a free floating notch on a desktop that expands into a dock of pinned apps."
 	/>
 
 	{@html `<script type="application/ld+json">${serialise(softwareSchema)}<\/script>`}
 	{@html `<script type="application/ld+json">${serialise(websiteSchema)}<\/script>`}
 	{@html `<script type="application/ld+json">${serialise(organizationSchema)}<\/script>`}
+	{@html `<script type="application/ld+json">${serialise(faqSchema)}<\/script>`}
+	{@html `<script type="application/ld+json">${serialise(widgetListSchema)}<\/script>`}
+	{@html `<script type="application/ld+json">${serialise(themeListSchema)}<\/script>`}
 </svelte:head>
