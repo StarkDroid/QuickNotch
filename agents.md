@@ -369,7 +369,10 @@ composeApp/
     `AudioBattery` parses `system_profiler SPBluetoothDataType` instead (device name is
     a heading ending in `:`, attrs are `Key: value` at +8 indent; left/right battery
     averaged, single `Battery Level` next, `Case Battery Level` last; audio = services
-    HFP/AVRCP/A2DP/AACP or minor type Headphones/Headset/Earbuds/Audio). It's ~10× slower
+    HFP/AVRCP/A2DP/AACP or minor type Headphones/Headset/Earbuds/Audio). BLE-only idle
+    links (AirPods in their case, Find My) appear under Connected with a `Services: ...
+    < BLE >` line and must NOT publish — only audio-classified devices emit a ring, or
+    macOS shows a ghost bluetooth ring with nothing in use. It's ~10× slower
     than the WinRT probe, so macOS polls it at 10 s (not 1 s) and relies on `poke()` for
     instant refresh on notch-open. `ioreg` carries no battery data.
 

@@ -310,10 +310,12 @@ internal object AudioBattery {
 
     /**
      * Parses `system_profiler SPBluetoothDataType`: walks the Connected:
-     * section, and picks the first battery-carrying audio device. A headset
-     * exposing separate earbuds reports its Left/Right average; a device with a
-     * single percentage uses that; the case level is the last resort. `isAudio`
-     * is decided from the Services/Minor Type lines, not assumed.
+     * section, and picks the battery of the first device the OS classifies as
+     * audio. A headset exposing separate earbuds reports its Left/Right
+     * average; a device with a single percentage uses that; the case level is
+     * the last resort. `isAudio` is decided from the Services/Minor Type lines,
+     * not assumed — BLE-only idle links (AirPods in their case, Find My) never
+     * publish because their Services line carries no audio tags.
      */
     private fun parseSystemProfiler(raw: String): AudioDeviceBattery? {
         val header = raw.indexOf("Connected:")
@@ -346,13 +348,14 @@ internal object AudioBattery {
             }
         }
 
-        // Prefer the first *audio* device with a level; fall back to any
-        // connected battery-carrying device so a single non-audio device still
-        // renders a ring (its glyph honours isAudio=false → bluetooth).
+        // Only a device the OS classifies as audio is published: macOS also
+        // lists idle BLE links (e.g. AirPods in their case nearby, Find My) as
+        // "Connected" with a Services line that is BLE-only, and surfacing
+        // those as a bluetooth ring reads as a ghost device to the user.
         val candidates = devices.mapNotNull { device ->
             macDeviceLevel(device)?.let { (level, audio) -> Triple(device, level, audio) }
         }
-        val pick = candidates.firstOrNull { it.third } ?: candidates.firstOrNull() ?: return null
+        val pick = candidates.firstOrNull { it.third } ?: return null
         val name = pick.first.name.takeIf { it.isNotBlank() }
         return AudioDeviceBattery(name, pick.second, pick.third)
     }

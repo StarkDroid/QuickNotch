@@ -465,8 +465,19 @@ internal fun FloatingNotchOverlay(
             pager.consumeWheel(rotations * pager.stepPx)
         }
 
-    val metrics = remember(config, favorites.size, musicLive) {
-        computeNotchMetrics(config, favorites.size, musicLive)
+    // Rings shown beside the idle clock also widen the collapsed pill (one
+    // indicator slot per visible ring), so date/time + device + laptop battery
+    // coexist instead of clipping. Gated to the clock branch: the dots and the
+    // drag-handle styles render no rings at all.
+    val collapsedRings =
+        if (musicLive || config.style == NotchStyle.DRAG_HANDLE || !(config.clockDate || config.clockTime)) 0
+        else listOfNotNull(
+            battery.takeIf { config.widgets.showCollapsedBattery },
+            deviceBattery.takeIf { config.widgets.showCollapsedDeviceBattery }
+        ).size
+
+    val metrics = remember(config, favorites.size, musicLive, collapsedRings) {
+        computeNotchMetrics(config, favorites.size, musicLive, collapsedRings)
     }
     // Cached once per surface choice; the brushes are built at class load,
     // so nothing here allocates while the island animates.

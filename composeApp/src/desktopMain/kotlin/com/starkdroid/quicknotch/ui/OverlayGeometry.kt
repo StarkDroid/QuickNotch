@@ -44,6 +44,14 @@ internal object DockLayout {
      * art + marquee title + play/pause in the island's slim cross-section.
      */
     val LiveCollapsedWidth: Dp = 236.dp
+
+    /**
+     * Extra collapsed-pill length per additional indicator shown in the idle
+     * clock (22dp ring + 6dp spacing). The idle pill widens by this per visible
+     * ring so date/time + device battery + laptop battery all coexist without
+     * clipping, mirroring how the live pill already grows to its rings.
+     */
+    val CollapsedClockIndicatorSlot: Dp = 28.dp
 }
 
 /**
@@ -80,11 +88,17 @@ data class NotchMetrics(
  * removes the dead space that used to flank the icons. When the now-playing
  * page is live it is wider than the apps page, so the window widens to that
  * page — the apps page keeps its own (narrower) layout, centred.
+ *
+ * [collapsedRings] is the count of level-ring indicators actually rendered in
+ * the idle pill next to the clock (connected-device + laptop battery); the
+ * collapsed footprint grows by one indicator slot per ring so the rings are
+ * never clipped by the configured pill width.
  */
 fun computeNotchMetrics(
     config: NotchConfig,
     favoriteCount: Int,
-    musicActive: Boolean = false
+    musicActive: Boolean = false,
+    collapsedRings: Int = 0
 ): NotchMetrics {
     val base = config.baseIconSizeDp.dp
     val count = favoriteCount.coerceAtLeast(0)
@@ -98,7 +112,8 @@ fun computeNotchMetrics(
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
     val alongExpanded = maxOf(appsAlong, musicAlong)
     val alongCollapsed = maxOf(
-        config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin,
+        config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin +
+            DockLayout.CollapsedClockIndicatorSlot * collapsedRings.coerceAtLeast(0),
         if (musicActive) DockLayout.LiveCollapsedWidth else 0.dp
     )
 
