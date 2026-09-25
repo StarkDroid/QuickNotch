@@ -76,21 +76,28 @@ internal fun WidgetsTab(
     onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
     onResetDefaults: () -> Unit
 ) {
-    // Widgets are organized as expandable accordions; the collapsed-pill
-    // indicators moved to the Dock & Sizing tab where they belong.
     Column(modifier = Modifier.fillMaxSize()) {
-        SettingsPageHeader(
-            eyebrow = stringResource(Res.string.eyebrow_widgets),
-            title = stringResource(Res.string.widgets_header)
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = stringResource(Res.string.widgets_header_desc),
-            style = AppTypography.bodySmall,
-            color = TextSecondary,
-            fontSize = 11.sp
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = stringResource(Res.string.widgets_header),
+                    style = AppTypography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextSecondary
+                )
+                Text(
+                    text = stringResource(Res.string.widgets_header_desc),
+                    style = AppTypography.bodySmall,
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -181,7 +188,7 @@ internal fun WidgetAccordion(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = FlatSurface),
         border = BorderStroke(1.dp, FlatBorder),
-        shape = RoundedCornerShape(18.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column {
             Row(
@@ -193,16 +200,16 @@ internal fun WidgetAccordion(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(9.dp))
                         .background(FlatSurfaceElevated)
-                        .border(1.dp, FlatBorder, RoundedCornerShape(12.dp)),
+                        .border(1.dp, FlatBorder, RoundedCornerShape(9.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = WebIndigoLight,
+                        tint = AccentIndigoLight,
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -221,7 +228,7 @@ internal fun WidgetAccordion(
                         fontSize = 12.sp
                     )
                 }
-                MinimalSwitch(checked = enabled, onCheckedChange = onToggleEnabled)
+                MinimalistRectSwitch(checked = enabled, onCheckedChange = onToggleEnabled)
                 Spacer(modifier = Modifier.width(6.dp))
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -264,7 +271,7 @@ internal fun NowPlayingStatus(
             modifier = Modifier
                 .size(6.dp)
                 .clip(CircleShape)
-                .background(if (live) WebGreen else TextMuted.copy(alpha = 0.4f))
+                .background(if (live) AccentGreen else TextMuted.copy(alpha = 0.4f))
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
@@ -372,7 +379,7 @@ internal fun PinnedAppsTab(
                             Text(
                                 text = "${favorites.size}",
                                 style = AppTypography.labelSmall,
-                                color = WebCyan,
+                                color = AccentCyan,
                                 fontSize = 11.sp
                             )
                         }
@@ -382,9 +389,9 @@ internal fun PinnedAppsTab(
                         onClick = onResetDefaults,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, tint = WebRed, modifier = Modifier.size(13.dp))
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = AccentRed, modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(stringResource(Res.string.reset), style = AppTypography.labelSmall, color = WebRed)
+                        Text(stringResource(Res.string.reset), style = AppTypography.labelSmall, color = AccentRed)
                     }
                 }
 
@@ -501,7 +508,7 @@ internal fun PinnedAppsTab(
                             onValueChange = onSearchQueryChange,
                             singleLine = true,
                             textStyle = LocalTextStyle.current.copy(color = TextPrimary, fontSize = 13.sp),
-                            cursorBrush = SolidColor(WebIndigo),
+                            cursorBrush = SolidColor(AccentIndigo),
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .focusRequester(searchFocus),
@@ -572,7 +579,7 @@ internal fun PinnedAppsTab(
 
                 if (isScanning) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = WebIndigo, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                        CircularProgressIndicator(color = AccentIndigo, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
                     }
                 } else if (filteredApps.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -635,7 +642,7 @@ internal fun PinnedAppRow(
             .onSizeChanged { onHeightChanged(it.height) }
             .clip(RoundedCornerShape(8.dp))
             .background(FlatCard)
-            .border(1.dp, if (isDragging) WebCyan else FlatBorder, RoundedCornerShape(8.dp))
+            .border(1.dp, if (isDragging) AccentCyan else FlatBorder, RoundedCornerShape(8.dp))
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -663,7 +670,7 @@ internal fun PinnedAppRow(
                 Icon(
                     Icons.Default.DragHandle,
                     contentDescription = stringResource(Res.string.reorder_handle),
-                    tint = if (isDragging) WebCyan else TextMuted,
+                    tint = if (isDragging) AccentCyan else TextMuted,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -724,7 +731,7 @@ internal fun PinnedAppRow(
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(Res.string.remove),
-                tint = WebRed.copy(alpha = 0.85f),
+                tint = AccentRed.copy(alpha = 0.85f),
                 modifier = Modifier.size(15.dp)
             )
         }
@@ -803,22 +810,27 @@ internal fun AvailableAppRow(
         }
 
         if (isPinned) {
-            SettingsChip(
-                text = stringResource(Res.string.pinned_badge),
-                tint = WebGreen
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(AccentGreen.copy(alpha = 0.12f))
+                    .border(1.dp, AccentGreen.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
+            ) {
+                Text(stringResource(Res.string.pinned_badge), style = AppTypography.labelSmall, color = AccentGreen, fontSize = 11.sp)
+            }
         } else {
             Button(
                 onClick = onAdd,
                 modifier = Modifier.height(26.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
                 border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(999.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                shape = RoundedCornerShape(5.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
             ) {
-                Icon(Icons.Default.Add, stringResource(Res.string.add), tint = WebCyan, modifier = Modifier.size(13.dp))
+                Icon(Icons.Default.Add, stringResource(Res.string.add), tint = AccentCyan, modifier = Modifier.size(13.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text(stringResource(Res.string.add), color = WebCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
+                Text(stringResource(Res.string.add), color = AccentCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
             }
         }
     }

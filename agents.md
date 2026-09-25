@@ -264,12 +264,6 @@ composeApp/
 - **Progress bar** (expanded): hairline track + cyan gradient fill + white head ringed
   in the accent riding the fill tip (inset lane so 0%/100% never clip; head only when
   seekable).
-- **Settings window has its own scoped palette** (`SettingsComponents.kt`): mirrors the
-  web module's design language (flat gradient-free accents, indigo #4F46E5 family,
-  pill switches/tabs/chips, mono dashed eyebrows, 18dp cards) under `Flat*`/`Web*`
-  tokens. Scoped on purpose — never change the notch overlay's accents via settings
-  tokens. The collapsed-pill indicator toggles (volume / audio-device battery / laptop
-  battery) live under "Collapsed Pill Indicators" in the Dock & Sizing tab.
 
 ---
 
@@ -284,7 +278,7 @@ composeApp/
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
 | Idle clock in pill (date/time formats) | done |
-| Settings tabs (Dock & Sizing / Widgets / Behavior) | done |
+| Settings tabs (Appearance / Widgets / Behavior) | done |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).

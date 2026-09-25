@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,7 +30,6 @@ import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.*
-import java.util.Locale
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -99,33 +96,30 @@ fun SettingsScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 24.dp)
             ) {
-                // Pill-segmented tab selector, mirrored on the web module's chip+"segmented"
-                // control language: one raised pill runs the whole strip, the
-                // active segment is a solid indigo pill sitting inside it.
+                // Minimalist Flat Tab Selector
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(FlatSurface)
-                        .border(1.dp, FlatBorder, RoundedCornerShape(999.dp))
-                        .padding(3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        .border(1.dp, FlatBorder, RoundedCornerShape(10.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     tabs.forEachIndexed { index, title ->
                         val isSelected = selectedTab == index
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(999.dp))
-                                .shadow(
-                                    elevation = if (isSelected) 4.dp else 0.dp,
-                                    shape = RoundedCornerShape(999.dp),
-                                    ambientColor = WebIndigo.copy(alpha = 0.5f),
-                                    spotColor = WebIndigo.copy(alpha = 0.4f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) FlatSurfaceElevated else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) FlatBorder.copy(alpha = 0.9f) else Color.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
                                 )
-                                .background(if (isSelected) WebIndigo else Color.Transparent)
                                 .clickable { selectedTab = index }
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -135,14 +129,14 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = tabIcons[index],
                                     contentDescription = title,
-                                    tint = if (isSelected) Color.White else TextMuted,
-                                    modifier = Modifier.size(16.dp)
+                                    tint = if (isSelected) AccentIndigoLight else TextMuted,
+                                    modifier = Modifier.size(17.dp)
                                 )
-                                Spacer(modifier = Modifier.width(7.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = title,
                                     style = AppTypography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (isSelected) Color.White else TextSecondary
                                 )
                             }
@@ -219,14 +213,8 @@ private fun SettingsTopBar(
                 painter = painterResource(Res.drawable.quicknotch_icon),
                 contentDescription = stringResource(Res.string.app_name),
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .shadow(
-                        elevation = 3.dp,
-                        shape = RoundedCornerShape(10.dp),
-                        ambientColor = WebIndigo.copy(alpha = 0.35f),
-                        spotColor = WebIndigo.copy(alpha = 0.3f)
-                    )
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
@@ -234,32 +222,30 @@ private fun SettingsTopBar(
                     text = stringResource(Res.string.app_name),
                     style = AppTypography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    fontSize = 17.sp
+                    color = TextPrimary
                 )
                 Text(
-                    text = stringResource(Res.string.settings_tagline).uppercase(Locale.ROOT),
+                    text = stringResource(Res.string.settings_tagline),
                     style = AppTypography.bodySmall,
-                    color = TextMuted,
-                    fontSize = 9.sp,
-                    letterSpacing = 0.8.sp
+                    color = TextSecondary,
+                    fontSize = 12.sp
                 )
             }
         }
 
-        Box(
+        IconButton(
+            onClick = onOpenAbout,
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .clickable(onClick = onOpenAbout)
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(FlatSurfaceElevated)
-                .border(1.dp, FlatBorder, RoundedCornerShape(999.dp))
-                .padding(horizontal = 6.dp, vertical = 6.dp)
+                .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = stringResource(Res.string.about),
-                tint = WebIndigoLight,
-                modifier = Modifier.size(18.dp)
+                tint = TextSecondary,
+                modifier = Modifier.size(16.dp)
             )
         }
     }
@@ -301,7 +287,7 @@ private fun AboutDialog(
                 .clickable(enabled = false) {},
             colors = CardDefaults.cardColors(containerColor = FlatSurface),
             border = BorderStroke(1.dp, FlatBorder),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(14.dp)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -312,46 +298,36 @@ private fun AboutDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        EyebrowText(stringResource(Res.string.eyebrow_about))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(Res.string.about_header),
-                            style = AppTypography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    }
+                    Text(
+                        text = stringResource(Res.string.about_header),
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(Res.string.close),
                             tint = TextMuted,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 Image(
                     painter = painterResource(Res.drawable.quicknotch_icon),
                     contentDescription = stringResource(Res.string.app_name),
                     modifier = Modifier
-                        .size(58.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .shadow(
-                            elevation = 6.dp,
-                            shape = RoundedCornerShape(16.dp),
-                            ambientColor = WebIndigo.copy(alpha = 0.35f),
-                            spotColor = WebIndigo.copy(alpha = 0.3f)
-                        )
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = stringResource(Res.string.about_product_name),
@@ -360,14 +336,23 @@ private fun AboutDialog(
                     color = TextPrimary
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                SettingsChip(
-                    text = stringResource(Res.string.about_version, stringResource(Res.string.app_version)),
-                    tint = WebCyan
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AccentIndigo.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = stringResource(Res.string.about_version, stringResource(Res.string.app_version)),
+                        style = AppTypography.labelSmall,
+                        color = AccentCyan,
+                        fontSize = 11.sp
+                    )
+                }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = stringResource(Res.string.about_description),
@@ -397,11 +382,15 @@ private fun AboutDialog(
                         )
                     }
                     tags.forEach { tag ->
-                        SettingsChip(
-                            text = tag,
-                            tint = TextSecondary,
-                            tintSoft = FlatSurfaceElevated
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(FlatSurfaceElevated)
+                                .border(1.dp, FlatBorder, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                        ) {
+                            Text(tag, style = AppTypography.labelSmall, color = TextMuted, fontSize = 10.sp)
+                        }
                     }
                 }
 

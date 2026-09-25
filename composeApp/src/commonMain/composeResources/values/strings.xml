@@ -15,7 +15,7 @@
     <string name="menu_quit">Quit QuickNotch</string>
 
     <!-- Tabs -->
-    <string name="tab_dock_sizing">Dock &amp; Sizing</string>
+    <string name="tab_dock_sizing">Appearance</string>
     <string name="tab_widgets">Widgets</string>
     <string name="tab_behavior">Behavior</string>
 
@@ -29,7 +29,7 @@
     <string name="surface_translucent">Translucent</string>
 
     <!-- Dock & Sizing tab -->
-    <string name="dock_sizing_header">Dock Layout &amp; Sizing</string>
+    <string name="dock_sizing_header">Appearance</string>
     <string name="reset">Reset</string>
     <string name="notch_style">Notch Style</string>
     <string name="surface_theme">Surface Theme</string>
@@ -54,19 +54,6 @@
     <string name="pill_show_audio_battery_desc">Display the connected audio device\'s battery in the collapsed pill, beside the clock and next to the track</string>
     <string name="pill_show_laptop_battery_title">Show Laptop Battery</string>
     <string name="pill_show_laptop_battery_desc">Display the machine\'s own battery beside the clock in the collapsed pill; useful on laptops</string>
-
-    <!-- Settings section headings (eyebrow labels) -->
-    <string name="eyebrow_configure">configure</string>
-    <string name="eyebrow_style">style</string>
-    <string name="eyebrow_icons">icons</string>
-    <string name="eyebrow_geometry">geometry</string>
-    <string name="eyebrow_clock">clock</string>
-    <string name="eyebrow_collapsed_pill">collapsed pill</string>
-    <string name="eyebrow_widgets">widgets</string>
-    <string name="eyebrow_apps">launcher</string>
-    <string name="eyebrow_media">now playing</string>
-    <string name="eyebrow_behavior">behavior</string>
-    <string name="eyebrow_about">about</string>
 
     <!-- Idle clock in the collapsed pill -->
     <string name="clock_title">Idle Clock</string>
