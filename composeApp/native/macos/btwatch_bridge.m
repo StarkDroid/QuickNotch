@@ -73,7 +73,7 @@ static void ObserveDistributed(NSString *name) {
         addObserverForName:name
                     object:nil
                         queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *) {
+                usingBlock:^(NSNotification *__unused note) {
                     EmitChange("BT");
                 }];
 }
@@ -82,7 +82,7 @@ static void ObserveDarwin(const char *name) {
     __attribute__((unused)) int token = 0;
     notify_register_dispatch(name, &token,
                              dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0),
-                             ^(int) {
+                             ^(int __unused tokenValue) {
         EmitChange("BT");
     });
 }
