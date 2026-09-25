@@ -134,12 +134,14 @@ NowPlayingDiscKey="nowPlayingDisc"  NowPlayingTitleKey="nowPlayingTitle"
 NowPlayingVolumeKey="nowPlayingVolume"  NowPlayingBatteryKey="nowPlayingBattery"
 ```
 
-`SharedTransitionScope.nowPlayingSharedBounds(key, scope, enter, exit)` builds the
-`sharedBounds` modifier. **Title** uses `scaleInSharedContentToBounds()` /
-`scaleOutSharedContentToBounds()` (no crossfade — the marquee text must not double up
-mid-flight); disc + rings use the default fade crossfade. The dock reveal is driven by
-a `MutableTransitionState` (`dockState`) so the visibility transition doubles as the
-shared-transition scope.
+`SharedTransitionScope.nowPlayingSharedBounds(key, scope)` builds the `sharedBounds`
+modifier for every morphing key — the disc, the title and both level rings all use
+`scaleInSharedContentToBounds()` / `scaleOutSharedContentToBounds()` (no crossfade —
+the default fade enter/exit draws the pill copy and the page copy over each other
+mid-flight, so the marquee scrolls twice and the disc/rings flash a duplicate before
+settling; one content scaled to the travelling bounds avoids that for all four keys).
+The dock reveal is driven by a `MutableTransitionState` (`dockState`) so the visibility
+transition doubles as the shared-transition scope.
 
 Collapsed-pill visibility while a track is live is `!showDock` (pill stays until the
 dock is visible → both surfaces cross in the same frame → morph triggers). Idle/clock
@@ -351,8 +353,12 @@ composeApp/
 8. **Artwork**: never re-rasterize per poll — cache by content id, downscale to ≤256px.
 9. **`AnimatedVisibility` + morph crossing**: the pill must stay visible until `showDock`
    flips while a track is live (`if (musicLive) !showDock else !isExpanded`).
-10. **Marquee title morph**: crossfade doubles the scrolling text → use
-    `scaleInSharedContentToBounds`/`scaleOutSharedContentToBounds` for the title only.
+10. **Shared-element morph must not crossfade contents**: the default fade
+    enter/exit draws the pill copy and the page copy over each other mid-flight
+    (marquee scrolls twice, disc/rings flash a duplicate before settling). Every
+    morphing key uses `scaleInSharedContentToBounds`/`scaleOutSharedContentToBounds`
+    (one content scaled to the travelling bounds); also keeps the shared-element
+    keys/scope shape in section 5.4 intact — never reintroduce a fade on `sharedBounds`.
 11. **Settings slider spam**: rely on `FavoritesRepository` coalescing; don't add
     per-tick persistence.
 12. **Expanded page vertical budget**: `expandedNotchHeightDp` is 70–86 (+6 margin). The
