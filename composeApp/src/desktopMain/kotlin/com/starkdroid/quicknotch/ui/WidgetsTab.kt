@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -91,18 +92,37 @@ internal fun WidgetsTab(
                     onUpdate { it.copy(widgets = it.widgets.copy(pinnedAppsEnabled = enabled)) }
                 }
             ) {
-                PinnedAppsTab(
-                    favorites = favorites,
-                    scannedApps = scannedApps,
-                    searchQuery = searchQuery,
-                    isScanning = isScanning,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onAddFavorite = onAddFavorite,
-                    onRemoveFavorite = onRemoveFavorite,
-                    onMove = onMove,
-                    onResetDefaults = onResetDefaults,
-                    fixedHeight = true
-                )
+                Column {
+                    PinnedAppsTab(
+                        favorites = favorites,
+                        scannedApps = scannedApps,
+                        searchQuery = searchQuery,
+                        isScanning = isScanning,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onAddFavorite = onAddFavorite,
+                        onRemoveFavorite = onRemoveFavorite,
+                        onMove = onMove,
+                        onResetDefaults = onResetDefaults,
+                        fixedHeight = true
+                    )
+
+                    HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        BehaviorSwitchRow(
+                            icon = Icons.AutoMirrored.Filled.Label,
+                            title = stringResource(Res.string.show_labels_title),
+                            subtitle = stringResource(Res.string.show_labels_desc),
+                            checked = config.showTooltips,
+                            onCheckedChange = { checked ->
+                                onUpdate { it.copy(showTooltips = checked) }
+                            }
+                        )
+                    }
+                }
             }
         }
         item(key = "nowPlaying") {

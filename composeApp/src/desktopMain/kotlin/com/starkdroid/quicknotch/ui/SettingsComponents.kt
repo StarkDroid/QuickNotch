@@ -267,9 +267,14 @@ internal fun MinimalistRectSwitch(
     }
 }
 
-/** Static gradient for the mini-notch silhouettes in the style picker. */
-private val miniPillBrush = Brush.verticalGradient(
-    listOf(Color(0xFF2A3448), Color(0xFF11161F))
+/** Gradients for the style-picker previews: a light "screen edge" band that the
+ *  dark silhouette sits against, and the notch body itself. The band is what
+ *  keeps the dark pill legible against the equally-dark selection cell. */
+private val screenBandBrush = Brush.verticalGradient(
+    listOf(Color(0xFF49536A), Color(0xFF2A3142))
+)
+private val notchSilhouetteBrush = Brush.verticalGradient(
+    listOf(Color(0xFF212A3A), Color(0xFF0E121B))
 )
 
 /**
@@ -307,7 +312,7 @@ internal fun NotchStylePicker(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    NotchMiniPreview(style)
+                    NotchMiniPreview(style, isSelected)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = style.label(),
@@ -341,39 +346,49 @@ internal fun NotchStylePicker(
 }
 
 /**
- * A tiny screen edge + notch silhouette for [NotchStylePicker]. A hairline at
- * the top suggests the screen edge; the style body forecasts exactly how the
- * real pill meets — or floats off — that edge.
+ * A tiny screen edge + notch silhouette for [NotchStylePicker]. A light band
+ * across the top stands in for the display edge, so the dark notch body reads
+ * clearly against the dark card — and the style's relationship to that edge
+ * (flush-and-squared, floating capsule, or slim bar) is exactly how it meets
+ * the real screen. A contrast rim keeps the silhouette legible when selected.
  */
 @Composable
-private fun NotchMiniPreview(style: NotchStyle) {
+private fun NotchMiniPreview(style: NotchStyle, selected: Boolean) {
+    val rim = if (selected) AccentIndigoLight.copy(alpha = 0.9f) else Color(0xFF5B6680)
     Box(
         modifier = Modifier
-            .width(56.dp)
-            .height(38.dp)
+            .width(58.dp)
+            .height(40.dp)
     ) {
-        // Screen edge hairline the styles anchor to or float away from.
+        // Screen edge band the styles anchor to or float away from.
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .height(2.dp)
-                .background(FlatBorder)
+                .height(18.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(screenBandBrush)
+                .border(1.dp, Color(0xFF3C455A), RoundedCornerShape(6.dp))
         )
 
         val topPadding: Dp
         val shape: RoundedCornerShape
         when (style) {
             NotchStyle.DYNAMIC_ISLAND -> {
-                topPadding = 3.dp
-                shape = RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)
+                topPadding = 15.dp
+                shape = RoundedCornerShape(
+                    topStart = 0.dp,
+                    topEnd = 0.dp,
+                    bottomStart = 6.dp,
+                    bottomEnd = 6.dp
+                )
             }
             NotchStyle.FLOATING_PILL -> {
-                topPadding = 8.dp
+                topPadding = 22.dp
                 shape = RoundedCornerShape(percent = 50)
             }
             NotchStyle.DRAG_HANDLE -> {
-                topPadding = 9.dp
+                topPadding = 23.dp
                 shape = RoundedCornerShape(percent = 50)
             }
         }
@@ -391,13 +406,14 @@ private fun NotchMiniPreview(style: NotchStyle) {
                 )
                 .height(
                     when (style) {
-                        NotchStyle.DYNAMIC_ISLAND -> 26.dp
-                        NotchStyle.FLOATING_PILL -> 18.dp
-                        NotchStyle.DRAG_HANDLE -> 7.dp
+                        NotchStyle.DYNAMIC_ISLAND -> 20.dp
+                        NotchStyle.FLOATING_PILL -> 14.dp
+                        NotchStyle.DRAG_HANDLE -> 6.dp
                     }
                 )
                 .clip(shape)
-                .background(miniPillBrush)
+                .background(notchSilhouetteBrush)
+                .border(1.dp, rim, shape)
         )
     }
 }

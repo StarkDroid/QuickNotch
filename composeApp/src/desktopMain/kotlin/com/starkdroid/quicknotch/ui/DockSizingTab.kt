@@ -158,37 +158,6 @@ internal fun DockSizingTab(
                         valueRange = 32f..44f,
                         onValueChange = { onUpdate { cfg -> cfg.copy(baseIconSizeDp = it.toInt()) } }
                     )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(Res.string.show_labels_title),
-                                style = AppTypography.bodySmall,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = stringResource(Res.string.show_labels_desc),
-                                style = AppTypography.labelSmall,
-                                color = TextSecondary,
-                                fontSize = 11.sp
-                            )
-                        }
-                        MinimalistRectSwitch(
-                            checked = config.showTooltips,
-                            onCheckedChange = { checked ->
-                                onUpdate { it.copy(showTooltips = checked) }
-                            }
-                        )
-                    }
                 }
             }
         }
