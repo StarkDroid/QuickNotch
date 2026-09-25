@@ -277,13 +277,14 @@ composeApp/
 | Expand-into-music + shared-element morph | done (`a02cdc1`, tuned `0c9a9a7`) |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
+| Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
-- **Laptop battery UI**: NOT testable on this desktop (no built-in battery → `SystemBattery` stays null). Code-reviewed only; rings beside clock, glyph swaps, desktop gate.
-- **macOS**: NO Mac available. All macOS paths (`plutil`, `pmset -g batt`, `nowplaying-bridge`, `osascript`, audio-flag default, SOFTWARE renderer, LaunchAgent) are **code-reviewed only, never executed**. Re-verify on real hardware when possible.
+- **Laptop battery UI**: testable on the macOS dev machine (built-in battery → `SystemBattery` talks through `pmset -g batt`). On the Windows desktop it stays null by design.
+- **macOS (this machine)**: now a live test surface — build, run, idle clock + laptop battery ring, volume ring (SVG glyphs), SOFTWARE renderer all verified in-session. Still untestable here: Win32 paths, Windows wheel paging, SMTC seek. The very first pull of this repo may have had no macOS hardware; that is no longer true.
 - **Shared-element morph / expand-into-music look**: cannot be judged from code; needs a live session + hover expansion on a real machine. When in doubt, run the app and watch it.
 
 ---
@@ -354,6 +355,11 @@ composeApp/
 12. **Expanded page vertical budget**: `expandedNotchHeightDp` is 70–86 (+6 margin). The
     music page's right cluster (rings 28 + 4 + transport 34 + 8 floor = 74dp) fits the
     minimum; don't silently exceed it.
+13. **Level-ring glyphs must be solid `fill="currentColor"` silhouettes**: stroke-based
+    icons (e.g. a `stroke="#000" stroke-opacity="0.32"` battery casing) render at ~1/3
+    opacity after the SrcIn tint and read as wrong/faint in the ring. Punch interior
+    holes with `fill-rule="evenodd"` (skia SVGDOM honours it); verify any new glyph by
+    rasterising the resource through skia, not by eye on one platform.
 
 ---
 
@@ -381,7 +387,8 @@ composeApp/
 ## 13. Environment notes (dev machine)
 
 - **Windows desktop, no battery** — laptop-battery UI untestable locally.
-- **No Mac available** — macOS code paths are review-only; do not claim they're verified.
+- **macOS MacBook (current session host)** — macOS build/run verified in-session; built-in
+  battery exercises the laptop-battery ring. Windows-only paths still unverified.
 - Test Bluetooth audio device: **realme Buds Air 5**, MAC `84:0F:2A:94:24:0A`.
 - Temp/scratch dir for external tools: `C:\Users\gamer\AppData\Local\Temp\opencode`.
 - Long-running GUI smoke runs: start with a timeout and clean up leftover
@@ -401,6 +408,10 @@ composeApp/
 - `a4e4576`: drag-to-reorder pinned apps replacing arrows.
 - `a02cdc1` → `0c9a9a7`: expand-into-music + shared-element morph; unified vinyl disc,
   rings stacked above transport, scale-based title morph, gradient progress redesign.
+- `0c9a9a7` → (pending): ring glyphs became solid `fill="currentColor"` silhouettes
+  (battery/charging/volume) so every level-ring icon tints fully on macOS — the old
+  32%-opacity stroke battery casing was nearly invisible once tinted. Volume ring now
+  uses the packaged `volume.svg` instead of Material icons.
 
 ---
 

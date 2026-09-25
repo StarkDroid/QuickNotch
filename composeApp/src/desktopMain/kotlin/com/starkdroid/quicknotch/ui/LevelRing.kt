@@ -5,10 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeDown
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,8 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.generated.resources.*
@@ -116,16 +110,14 @@ internal fun LevelRing(
     }
 }
 
-/** Volume glyph that flips with the level: silent, low, then loud. */
-internal fun volumeGlyph(level: Int): ImageVector = when {
-    level <= 0 -> Icons.AutoMirrored.Filled.VolumeOff
-    level < 50 -> Icons.AutoMirrored.Filled.VolumeDown
-    else -> Icons.AutoMirrored.Filled.VolumeUp
-}
-
-/** Volume glyph as a painter the level ring can draw (silent/low/loud). */
+/**
+ * Volume glyph as a painter the level ring can draw — the packaged volume
+ * drawable, tinted at draw time with the ring's colour. A single glyph for
+ * every level: the ring's sweep already carries the level, so the icon never
+ * needs to swap.
+ */
 @Composable
-internal fun volumePainter(level: Int): Painter = rememberVectorPainter(volumeGlyph(level))
+internal fun volumePainter(): Painter = painterResource(Res.drawable.volume)
 
 /**
  * Battery/device glyph as a painter: the headphone drawable for a connected

@@ -953,7 +953,7 @@ private fun CollapsedIsland(
                     if (showVolume && volumePercent != null) {
                         LevelRing(
                             level = volumePercent,
-                            icon = volumePainter(volumePercent),
+                            icon = volumePainter(),
                             contentDescription = stringResource(Res.string.music_volume),
                             modifier = volumeRingModifier.size(22.dp)
                         )
@@ -1243,7 +1243,7 @@ private fun MusicContent(
                 if (volumePercent != null) {
                     LevelRing(
                         level = volumePercent,
-                        icon = volumePainter(volumePercent),
+                        icon = volumePainter(),
                         contentDescription = stringResource(Res.string.music_volume),
                         modifier = volumeRingModifier.size(28.dp)
                     )
