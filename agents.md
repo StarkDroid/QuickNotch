@@ -360,6 +360,10 @@ composeApp/
    macOS needs `scrollDelta.x + scrollDelta.y` (Shift+scroll) scaled by the same `stepPx`.
 2. **Transparent overlay hover flaps** while content resizes under a stationary cursor —
    always verify with `cursorOverNotch` before collapsing; the gate only suppresses.
+   **Never collapse on a single suppressed check**: a fast expand-and-leave detaches the
+   hover-footprint node mid-resize, so the first gate reprieve is often stale — a one-shot
+   check then wedges the notch open forever. The collapse job must re-poll until the cursor
+   is confirmed out (see `setHovered`).
 3. **Shared-transition API in CMP 1.7.3**: `sharedBounds`/`sharedElement` require an
    `AnimatedVisibilityScope` (the caller-managed variant isn't public);
    `BoundsTransform` is a plain interface (no SAM) → `object : BoundsTransform {...}`;

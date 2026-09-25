@@ -400,17 +400,37 @@ internal fun FloatingNotchOverlay(
             onExpandedChange(true)
         } else {
             collapseJob = scope.launch {
-                delay(config.collapseDelayMs)
-                // Only retract once the cursor has *actually* left the notch.
-                // Transparent overlay windows re-state hover when they resize
-                // under a stationary cursor on both macOS and Windows, so an
-                // Exit event alone is not trustworthy while content keeps
+                // Debounce the release, then watch the *real* cursor until it
+                // has truly left the notch. Transparent overlay windows re-state
+                // their hover region while resizing under a stationary cursor,
+                // so an Exit event alone is not trustworthy while content keeps
                 // changing under the pointer (e.g. a playing track ticking its
                 // progress) — collapsing straight away makes the notch flap
-                // open/closed. Verify the true pointer position instead; the
-                // gate only ever suppresses a collapse, never forces an expand.
-                if (!cursorOverNotch(hoverCoordinates)) {
-                    onExpandedChange(false)
+                // open/closed. The gate below verifies the true pointer position
+                // and only ever suppresses a collapse, never forces an expand.
+                //
+                // It must *re-poll* rather than decide once: a single suppressed
+                // check is enough to wedge the notch open. During a fast expand
+                // the native window resizes and the hover footprint node can be
+                // transiently null or detached at the moment the check runs, so
+                // the first gate reprieve is often a stale one — and with a
+                // one-shot check nothing ever re-evaluates it (the pointer is
+                // already long gone, so no new Exit arrives). Keep watching until
+                // the cursor is confirmed out.
+                while (true) {
+                    delay(config.collapseDelayMs)
+                    val coords = hoverCoordinates
+                    when {
+                        // Unknown or still-detached footprint (window mid-resize):
+                        // keep the notch open without flapping, but keep polling —
+                        // this path no longer wedges.
+                        coords == null || !coords.isAttached -> continue
+                        // Cursor confirmed out of the footprint: retract.
+                        !cursorOverNotch(coords) -> {
+                            onExpandedChange(false)
+                            break
+                        }
+                    }
                 }
             }
         }
