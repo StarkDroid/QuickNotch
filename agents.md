@@ -154,7 +154,10 @@ volume ring + device-battery ring — each gated by its own collapsed-only toggl
 **idle clock** (`IdleClockRow`, date/time + optional rings), else the **idle dots**.
 The drag-handle style shows only a slim grabber line. `LiveProgressStrip` hugs the pill
 edge facing the screen centre while playing (collapsed only; auto-hidden behind the
-expanded dock).
+expanded dock). The idle pill widens by one indicator slot (28dp) per visible ring —
+the ring count comes from `collapsedIndicatorRingCount(...)` and **both** the native
+window sizer (`NotchOverlayWindow` in `main.kt`) and the overlay content derive the
+collapsed footprint from it, so the rings are never clipped against the window edge.
 
 ### 5.6 Media pipeline
 
@@ -381,6 +384,12 @@ composeApp/
     macOS shows a ghost bluetooth ring with nothing in use. It's ~10× slower
     than the WinRT probe, so macOS polls it at 10 s (not 1 s) and relies on `poke()` for
     instant refresh on notch-open. `ioreg` carries no battery data.
+15. **Idle-pill ring width must be shared**: the native window sizer
+    (`NotchOverlayWindow` in `main.kt`) and the overlay content each build their own
+    `NotchMetrics`. If the ring count diverges they disagree on the collapsed footprint
+    and the right-most ring clips off the window edge — locally: laptop battery ring
+    "missing". Always derive the count via `collapsedIndicatorRingCount(...)` (and reset
+    `AudioBattery._info` on every macOS empty-probe, so a disconnected ring never lingers).
 
 ---
 

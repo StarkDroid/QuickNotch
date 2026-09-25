@@ -282,7 +282,9 @@ internal object AudioBattery {
     private fun probeMac() {
         // system_profiler is authoritative on modern macOS (battery + services
         // in one fast call). Plist remains a fallback for older systems that
-        // still write a DeviceCache.
+        // still write a DeviceCache. Every path that finds nothing local ends
+        // by clearing _info, so a ring can never linger for a device the OS no
+        // longer reports as connected.
         val raw = runProcess(listOf("system_profiler", "SPBluetoothDataType"), MacProbeTimeoutMs)
         if (raw != null) {
             parseSystemProfiler(raw)?.let {
@@ -290,14 +292,20 @@ internal object AudioBattery {
                 return
             }
         }
-        val home = System.getProperty("user.home") ?: return
-        val plist = File(home, "Library/Preferences/com.apple.Bluetooth.plist")
-        if (!plist.isFile) return
+        val home = System.getProperty("user.home")
+        val plist = home?.let { File(it, "Library/Preferences/com.apple.Bluetooth.plist") }
+        if (plist == null || !plist.isFile) {
+            _info.value = null
+            return
+        }
         val plistRaw = runProcess(
             listOf("plutil", "-convert", "json", "-o", "-", plist.absolutePath),
             MacProbeTimeoutMs
-        ) ?: return
-        _info.value = parseMacPlist(plistRaw)
+        ) ?: run {
+            _info.value = null
+            return
+        }
+        _info.value = parseMacPlist(plistRaw) // null when nothing / parse fails
     }
 
     // system_profiler flags a headset as audio through its service list

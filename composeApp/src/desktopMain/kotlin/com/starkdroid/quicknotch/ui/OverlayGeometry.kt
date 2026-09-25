@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import com.starkdroid.quicknotch.media.AudioDeviceBattery
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import java.awt.Insets
@@ -139,6 +141,27 @@ fun computeNotchMetrics(
         edgeGapDp = config.style.edgeGapDp
     )
 }
+
+/**
+ * How many level-ring indicators the idle pill actually renders beside the
+ * clock right now: the connected-device ring and/or the laptop ring, each
+ * gated by its own collapsed-only toggle. The window sizer and the overlay
+ * content MUST agree on this — it widens the collapsed footprint by one
+ * indicator slot per ring so the rings never clip against the window edge.
+ * Gated to the clock branch: the dots and the drag-handle styles render no
+ * rings at all, and a live media pill grows to its own (fixed) width.
+ */
+fun collapsedIndicatorRingCount(
+    config: NotchConfig,
+    musicLive: Boolean,
+    battery: AudioDeviceBattery?,
+    deviceBattery: SystemBattery?
+): Int =
+    if (musicLive || config.style == NotchStyle.DRAG_HANDLE || !(config.clockDate || config.clockTime)) 0
+    else listOfNotNull(
+        battery.takeIf { config.widgets.showCollapsedBattery },
+        deviceBattery.takeIf { config.widgets.showCollapsedDeviceBattery }
+    ).size
 
 /**
  * Computes the top-left screen coordinate (in AWT points) for the overlay

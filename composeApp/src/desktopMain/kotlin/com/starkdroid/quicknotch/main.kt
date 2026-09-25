@@ -33,6 +33,7 @@ import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
 import com.starkdroid.quicknotch.ui.OverlayPager
 import com.starkdroid.quicknotch.ui.SettingsScreen
+import com.starkdroid.quicknotch.ui.collapsedIndicatorRingCount
 import com.starkdroid.quicknotch.ui.computeNotchMetrics
 import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
@@ -176,8 +177,12 @@ private fun NotchOverlayWindow(
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
-    val metrics = remember(config, favorites.size, musicLive) {
-        computeNotchMetrics(config, favorites.size, musicLive)
+    // The native window and the overlay content must size the collapsed pill
+    // identically, or the indicator rings (device + laptop battery) clip off
+    // the far edge. Both derive the ring count through the same helper.
+    val collapsedRings = collapsedIndicatorRingCount(config, musicLive, battery, deviceBattery)
+    val metrics = remember(config, favorites.size, musicLive, collapsedRings) {
+        computeNotchMetrics(config, favorites.size, musicLive, collapsedRings)
     }
     val targetSize = metrics.sizeFor(isWindowExpanded)
 
