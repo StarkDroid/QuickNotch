@@ -27,6 +27,7 @@
     <!-- Enum labels: surface -->
     <string name="surface_solid">Solid</string>
     <string name="surface_translucent">Translucent</string>
+    <string name="surface_system_accent">System Accent</string>
 
     <!-- Dock & Sizing tab -->
     <string name="dock_sizing_header">Appearance</string>

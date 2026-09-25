@@ -17,7 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -31,14 +36,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.NotchConfig
-import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
+import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AccentRed
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.TextPrimary
@@ -61,19 +67,13 @@ internal fun DockSizingTab(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        // Tab Header with Reset Defaults action
+        // Tab Header with Reset Defaults action (the tab label already names it)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = stringResource(Res.string.dock_sizing_header),
-                    style = AppTypography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextSecondary
-                )
                 TextButton(
                     onClick = onResetDefaults,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
@@ -90,34 +90,28 @@ internal fun DockSizingTab(
             }
         }
 
-        // Section 1: Appearance — silhouette and material, side by side
+        // Section 1: Appearance — silhouette picker, then the surface theme
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = FlatSurface),
                 border = BorderStroke(1.dp, FlatBorder),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    AppearanceDropdown(
-                        label = stringResource(Res.string.notch_style),
-                        options = NotchStyle.entries.toList(),
+                Column(modifier = Modifier.padding(16.dp)) {
+                    SectionHeader(Icons.Default.Palette, stringResource(Res.string.notch_style))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NotchStylePicker(
                         selected = config.style,
-                        optionLabel = { it.label() },
-                        onSelect = { style -> onUpdate { it.copy(style = style) } },
-                        modifier = Modifier.weight(1f)
+                        onSelect = { style -> onUpdate { it.copy(style = style) } }
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
                     AppearanceDropdown(
                         label = stringResource(Res.string.surface_theme),
                         options = NotchSurface.entries.toList(),
                         selected = config.surface,
                         optionLabel = { it.label() },
                         onSelect = { surface -> onUpdate { it.copy(surface = surface) } },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -131,12 +125,7 @@ internal fun DockSizingTab(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(Res.string.fisheye_title),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
+                    SectionHeader(Icons.Default.ZoomIn, stringResource(Res.string.fisheye_title))
                     Text(
                         text = stringResource(Res.string.fisheye_desc),
                         style = AppTypography.bodySmall,
@@ -212,12 +201,7 @@ internal fun DockSizingTab(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(Res.string.geometry_title),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
+                    SectionHeader(Icons.Default.Straighten, stringResource(Res.string.geometry_title))
                     Text(
                         text = stringResource(Res.string.geometry_desc),
                         style = AppTypography.bodySmall,
@@ -263,12 +247,7 @@ internal fun DockSizingTab(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(Res.string.pill_indicators_title),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
+                    SectionHeader(Icons.Default.Sensors, stringResource(Res.string.pill_indicators_title))
                     Text(
                         text = stringResource(
                             if (hasDeviceBattery) Res.string.pill_indicators_desc_laptop
@@ -335,12 +314,7 @@ internal fun DockSizingTab(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(Res.string.clock_title),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
+                    SectionHeader(Icons.Default.Schedule, stringResource(Res.string.clock_title))
                     Text(
                         text = stringResource(Res.string.clock_desc),
                         style = AppTypography.bodySmall,
@@ -420,5 +394,28 @@ internal fun DockSizingTab(
                 }
             }
         }
+    }
+}
+
+/**
+ * Card section header: a small accent icon beside the title. Used across every
+ * Dock & Sizing card so each section reads as one scannable unit.
+ */
+@Composable
+private fun SectionHeader(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = AccentIndigoLight,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title,
+            style = AppTypography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary
+        )
     }
 }

@@ -202,6 +202,12 @@ collapsed footprint from it, so the rings are never clipped against the window e
 - `SystemBattery` (laptop, 5s): `Win32_Battery` via `system-battery.ps1` (Windows) /
   `pmset -g batt` (macOS). Exposes `state` + `hasBattery` (gates the settings toggle so
   desktops never see it). `charging` = **actively charging only** (status 6/7/8/9).
+- `SystemAccent` (datasource): one-shot OS accent fetch, cached for the process. macOS
+  maps `defaults read -g AppleAccentColor` (index incl. `-2` multicolor/`-1` graphite) onto
+  system accent RGBs; Windows reads the DWM `AccentColor` (ABGR DWORD) via `accent.ps1`.
+  Null result (unreadable/e.g. PowerShell) → the caller falls back to accent-free
+  translucent glass. Feeds `NotchSurface.SYSTEM_ACCENT`; `IslandSurface.buildAccented()`
+  blends it into the glass body/rim at ~10–16% so it reads as tinted glass, not a swatch.
 - All process spawns: `waitFor(timeout)` then `destroyForcibly()`; failed probes leave
   the previous value (indicator only ever shows real data).
 
@@ -237,7 +243,7 @@ reorder target. `resetToDefaults()` seeds platform defaults.
 composeApp/
 ├── build.gradle.kts                      # KMP + Compose Desktop config, bridge sync tasks
 ├── native/
-│   ├── windows/{smtc,volume,system-battery,battery}.ps1   # source of truth for bridges
+│   ├── windows/{smtc,volume,system-battery,battery,accent}.ps1   # source of truth for bridges
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
 │   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
 └── src/
@@ -250,7 +256,7 @@ composeApp/
             ├── main.kt                   # app entry: tray + overlay + settings windows, poller lifecycle
             ├── theme/                    # Color.kt (central palette), Theme.kt, Typography.kt
             ├── model/                    # AppItem, NotchConfig (+WidgetsConfig, enums), FavoritesRepository
-            ├── datasource/               # HostPlatform, scanners/icon loaders/launchers/startup (Win+Mac facades)
+            ├── datasource/               # HostPlatform, SystemAccent, scanners/icon loaders/launchers/startup
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
@@ -260,9 +266,11 @@ composeApp/
                 ├── OverlayPager.kt           # shared page/flip state
                 ├── LevelRing.kt              # reusable 288° ring + painters
                 ├── CollapsedClock.kt         # IdleClockRow (+ laptop battery ring)
-                ├── IslandSurface.kt          # SOLID/TRANSLUCENT surface brushes
+                ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached once)
                 ├── Shimmer.kt                # label shimmer (Settings/fish-labels)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
+                    # SettingsComponents also holds AppearanceDropdown + NotchStylePicker
+                    # (3-across visual selector for the notch silhouette)
 ```
 
 ---
@@ -300,6 +308,7 @@ composeApp/
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
+| Settings revamp: accent tab underglow, section-header icons, 3-across visual notch-style picker, `System Accent` surface (OS-accent-tinted glass) | done (this session) — visual pass still pending on a live machine |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
@@ -364,7 +373,9 @@ composeApp/
    processes — the ObjC bridge must route through `osascript -l JavaScript`. Never "simplify"
    it to a direct MediaRemote call.
 7. **Gradients/brushes on the SOFTWARE renderer**: cache brushes per surface at class
-   load (see `IslandSurface`, `surface`) — no per-frame allocation while animating.
+   load (see `IslandSurface`, `surface`); `SYSTEM_ACCENT` is built once on first use
+   (its value depends on the OS accent) and cached from then on — no per-frame
+   allocation while animating.
 8. **Artwork**: never re-rasterize per poll — cache by content id, downscale to ≤256px.
 9. **`AnimatedVisibility` + morph crossing**: the pill must stay visible until `showDock`
    flips while a track is live (`if (musicLive) !showDock else !isExpanded`).

@@ -26,12 +26,12 @@ enum class NotchStyle(
 }
 
 /**
- * The body's material. Both entries resolve to statically cached brushes, so
- * neither adds per-frame shader work on the software renderer. [TRANSLUCENT]
- * is a deliberately texture-free glass: a tinted body that lets the desktop
- * bleed through the transparent window plus a smooth light sheen. A literal
- * blur of the pixels behind a borderless window is unreachable from Compose
- * without a native screen-capture loop.
+ * The body's material. All entries resolve to brushes built once and cached, so
+ * none adds per-frame shader work on the software renderer. [TRANSLUCENT] and
+ * [SYSTEM_ACCENT] are deliberately texture-free glass: a tinted body that lets
+ * the desktop bleed through the transparent window plus a smooth light sheen.
+ * A literal blur of the pixels behind a borderless window is unreachable from
+ * Compose without a native screen-capture loop.
  */
 @Serializable
 enum class NotchSurface {
@@ -40,7 +40,11 @@ enum class NotchSurface {
 
     /** Translucent, smooth glass. (Serialised as the former name "BLUR".) */
     @SerialName("BLUR")
-    TRANSLUCENT
+    TRANSLUCENT,
+
+    /** Glass tinted with the desktop's accent colour (macOS/Windows). */
+    @SerialName("SYSTEM_ACCENT")
+    SYSTEM_ACCENT
 }
 
 /**

@@ -76,96 +76,72 @@ internal fun WidgetsTab(
     onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
     onResetDefaults: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = stringResource(Res.string.widgets_header),
-                    style = AppTypography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextSecondary
-                )
-                Text(
-                    text = stringResource(Res.string.widgets_header_desc),
-                    style = AppTypography.bodySmall,
-                    color = TextSecondary,
-                    fontSize = 11.sp
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(bottom = 16.dp)
+    ) {
+        item(key = "pinnedApps") {
+            WidgetAccordion(
+                icon = Icons.Default.Apps,
+                title = stringResource(Res.string.widget_apps_title),
+                subtitle = stringResource(Res.string.widget_apps_desc),
+                enabled = config.widgets.pinnedAppsEnabled,
+                onToggleEnabled = { enabled ->
+                    onUpdate { it.copy(widgets = it.widgets.copy(pinnedAppsEnabled = enabled)) }
+                }
+            ) {
+                PinnedAppsTab(
+                    favorites = favorites,
+                    scannedApps = scannedApps,
+                    searchQuery = searchQuery,
+                    isScanning = isScanning,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onAddFavorite = onAddFavorite,
+                    onRemoveFavorite = onRemoveFavorite,
+                    onMove = onMove,
+                    onResetDefaults = onResetDefaults,
+                    fixedHeight = true
                 )
             }
         }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            item(key = "pinnedApps") {
-                WidgetAccordion(
-                    icon = Icons.Default.Apps,
-                    title = stringResource(Res.string.widget_apps_title),
-                    subtitle = stringResource(Res.string.widget_apps_desc),
-                    enabled = config.widgets.pinnedAppsEnabled,
-                    onToggleEnabled = { enabled ->
-                        onUpdate { it.copy(widgets = it.widgets.copy(pinnedAppsEnabled = enabled)) }
-                    }
-                ) {
-                    PinnedAppsTab(
-                        favorites = favorites,
-                        scannedApps = scannedApps,
-                        searchQuery = searchQuery,
-                        isScanning = isScanning,
-                        onSearchQueryChange = onSearchQueryChange,
-                        onAddFavorite = onAddFavorite,
-                        onRemoveFavorite = onRemoveFavorite,
-                        onMove = onMove,
-                        onResetDefaults = onResetDefaults,
-                        fixedHeight = true
-                    )
+        item(key = "nowPlaying") {
+            WidgetAccordion(
+                icon = Icons.Default.MusicNote,
+                title = stringResource(Res.string.widget_music_title),
+                subtitle = stringResource(Res.string.widget_music_desc),
+                enabled = config.widgets.nowPlayingEnabled,
+                onToggleEnabled = { enabled ->
+                    onUpdate { it.copy(widgets = it.widgets.copy(nowPlayingEnabled = enabled)) }
                 }
-            }
-            item(key = "nowPlaying") {
-                WidgetAccordion(
-                    icon = Icons.Default.MusicNote,
-                    title = stringResource(Res.string.widget_music_title),
-                    subtitle = stringResource(Res.string.widget_music_desc),
-                    enabled = config.widgets.nowPlayingEnabled,
-                    onToggleEnabled = { enabled ->
-                        onUpdate { it.copy(widgets = it.widgets.copy(nowPlayingEnabled = enabled)) }
-                    }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .padding(bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .padding(bottom = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        NowPlayingStatus(config = config, liveSession = liveSession)
+                    NowPlayingStatus(config = config, liveSession = liveSession)
 
+                    Text(
+                        text = stringResource(Res.string.widget_scroll_hint),
+                        style = AppTypography.bodySmall,
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+
+                    HorizontalDivider(color = FlatBorder)
+
+                    if (!isStyleEligibleForLiveActivity(config)) {
                         Text(
-                            text = stringResource(Res.string.widget_scroll_hint),
+                            text = stringResource(Res.string.widget_style_warning),
                             style = AppTypography.bodySmall,
-                            color = TextSecondary,
+                            color = TextMuted,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
                         )
-
-                        HorizontalDivider(color = FlatBorder)
-
-                        if (!isStyleEligibleForLiveActivity(config)) {
-                            Text(
-                                text = stringResource(Res.string.widget_style_warning),
-                                style = AppTypography.bodySmall,
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp
-                            )
-                        }
                     }
                 }
             }
@@ -819,22 +795,22 @@ internal fun AvailableAppRow(
             ) {
                 Text(stringResource(Res.string.pinned_badge), style = AppTypography.labelSmall, color = AccentGreen, fontSize = 11.sp)
             }
-        } else {
-            Button(
-                onClick = onAdd,
-                modifier = Modifier.height(26.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(5.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-            ) {
-                Icon(Icons.Default.Add, stringResource(Res.string.add), tint = AccentCyan, modifier = Modifier.size(13.dp))
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(stringResource(Res.string.add), color = AccentCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
+} else {
+                Button(
+                    onClick = onAdd,
+                    modifier = Modifier.height(26.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
+                    border = BorderStroke(1.dp, FlatBorder),
+                    shape = RoundedCornerShape(5.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Icon(Icons.Default.Add, stringResource(Res.string.add), tint = AccentCyan, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(stringResource(Res.string.add), color = AccentCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
+                }
             }
         }
     }
-}
 
 private fun pickCustomApplication(
     macDialogTitle: String,

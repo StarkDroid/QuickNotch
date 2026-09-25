@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -41,8 +42,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.TextMuted
@@ -260,6 +263,141 @@ internal fun MinimalistRectSwitch(
                 .clip(RoundedCornerShape(3.5.dp))
                 .background(thumbBg)
                 .border(0.5.dp, thumbBorder, RoundedCornerShape(3.5.dp))
+        )
+    }
+}
+
+/** Static gradient for the mini-notch silhouettes in the style picker. */
+private val miniPillBrush = Brush.verticalGradient(
+    listOf(Color(0xFF2A3448), Color(0xFF11161F))
+)
+
+/**
+ * Three-across visual picker for the notch silhouette. Each cell is a miniature
+ * screen edge with the style drawn against it, so users select exactly the
+ * shape they get — flush-and-squared, floating capsule, or slim bar. Pure
+ * Compose shapes, so no drawable resources are involved.
+ */
+@Composable
+internal fun NotchStylePicker(
+    selected: NotchStyle,
+    onSelect: (NotchStyle) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        NotchStyle.entries.forEach { style ->
+            val isSelected = style == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSelected) FlatSurfaceSelected else FlatCard)
+                    .border(
+                        width = 1.dp,
+                        color = if (isSelected) AccentIndigoLight.copy(alpha = 0.9f) else FlatBorder,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .clickable { onSelect(style) }
+                    .padding(top = 8.dp, bottom = 10.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    NotchMiniPreview(style)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = style.label(),
+                        style = AppTypography.labelSmall,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) Color.White else TextSecondary
+                    )
+                }
+
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(AccentIndigoLight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = Color(0xFF0C0E14),
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A tiny screen edge + notch silhouette for [NotchStylePicker]. A hairline at
+ * the top suggests the screen edge; the style body forecasts exactly how the
+ * real pill meets — or floats off — that edge.
+ */
+@Composable
+private fun NotchMiniPreview(style: NotchStyle) {
+    Box(
+        modifier = Modifier
+            .width(56.dp)
+            .height(38.dp)
+    ) {
+        // Screen edge hairline the styles anchor to or float away from.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(FlatBorder)
+        )
+
+        val topPadding: Dp
+        val shape: RoundedCornerShape
+        when (style) {
+            NotchStyle.DYNAMIC_ISLAND -> {
+                topPadding = 3.dp
+                shape = RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)
+            }
+            NotchStyle.FLOATING_PILL -> {
+                topPadding = 8.dp
+                shape = RoundedCornerShape(percent = 50)
+            }
+            NotchStyle.DRAG_HANDLE -> {
+                topPadding = 9.dp
+                shape = RoundedCornerShape(percent = 50)
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = topPadding)
+                .fillMaxWidth(
+                    when (style) {
+                        NotchStyle.DYNAMIC_ISLAND -> 0.64f
+                        NotchStyle.FLOATING_PILL -> 0.72f
+                        NotchStyle.DRAG_HANDLE -> 0.46f
+                    }
+                )
+                .height(
+                    when (style) {
+                        NotchStyle.DYNAMIC_ISLAND -> 26.dp
+                        NotchStyle.FLOATING_PILL -> 18.dp
+                        NotchStyle.DRAG_HANDLE -> 7.dp
+                    }
+                )
+                .clip(shape)
+                .background(miniPillBrush)
         )
     }
 }

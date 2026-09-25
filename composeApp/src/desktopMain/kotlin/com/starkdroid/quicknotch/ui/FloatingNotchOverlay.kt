@@ -1608,14 +1608,16 @@ internal fun isMusicLive(config: NotchConfig, session: MediaSession?): Boolean =
         isStyleEligibleForLiveActivity(config) &&
         session?.isActive == true
 
-// Glyph colours brighten slightly over the translucent surface so they
+// Glyph colours brighten slightly over the translucent surfaces so they
 // stay legible, and stay near-white on the opaque one.
 private fun handleTint(surface: NotchSurface): Color =
-    if (surface == NotchSurface.TRANSLUCENT) Color.White.copy(alpha = 0.42f)
+    if (surface == NotchSurface.TRANSLUCENT || surface == NotchSurface.SYSTEM_ACCENT)
+        Color.White.copy(alpha = 0.42f)
     else Color.White.copy(alpha = 0.30f)
 
 private fun islandTint(surface: NotchSurface): Color =
-    if (surface == NotchSurface.TRANSLUCENT) Color.White.copy(alpha = 0.72f)
+    if (surface == NotchSurface.TRANSLUCENT || surface == NotchSurface.SYSTEM_ACCENT)
+        Color.White.copy(alpha = 0.72f)
     else Color.White
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
