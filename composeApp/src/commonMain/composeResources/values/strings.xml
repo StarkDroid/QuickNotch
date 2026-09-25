@@ -45,6 +45,28 @@
     <string name="expanded_height_title">Expanded Dock Height</string>
     <string name="value_dp">%1$s dp</string>
     <string name="value_scale">%1$sx</string>
+    <string name="pill_indicators_title">Collapsed Pill Indicators</string>
+    <string name="pill_indicators_desc">What the collapsed pill fills in beside the playing track and next to the clock when idle. The expanded page always shows volume and the audio-device battery.</string>
+    <string name="pill_indicators_desc_laptop">What the collapsed pill fills in beside the playing track and next to the clock when idle. The expanded page always shows volume and the audio-device battery; the laptop battery appears only beside the clock.</string>
+    <string name="pill_show_volume_title">Show System Volume</string>
+    <string name="pill_show_volume_desc">Display the volume level in the collapsed pill</string>
+    <string name="pill_show_audio_battery_title">Show Audio Device Battery</string>
+    <string name="pill_show_audio_battery_desc">Display the connected audio device\'s battery in the collapsed pill, beside the clock and next to the track</string>
+    <string name="pill_show_laptop_battery_title">Show Laptop Battery</string>
+    <string name="pill_show_laptop_battery_desc">Display the machine\'s own battery beside the clock in the collapsed pill; useful on laptops</string>
+
+    <!-- Settings section headings (eyebrow labels) -->
+    <string name="eyebrow_configure">configure</string>
+    <string name="eyebrow_style">style</string>
+    <string name="eyebrow_icons">icons</string>
+    <string name="eyebrow_geometry">geometry</string>
+    <string name="eyebrow_clock">clock</string>
+    <string name="eyebrow_collapsed_pill">collapsed pill</string>
+    <string name="eyebrow_widgets">widgets</string>
+    <string name="eyebrow_apps">launcher</string>
+    <string name="eyebrow_media">now playing</string>
+    <string name="eyebrow_behavior">behavior</string>
+    <string name="eyebrow_about">about</string>
 
     <!-- Idle clock in the collapsed pill -->
     <string name="clock_title">Idle Clock</string>
@@ -83,15 +105,6 @@ Add apps from the list on the right.</string>
     <string name="widget_no_session">No active media session</string>
     <string name="widget_style_warning">Live activity appears only on the Dynamic Island and Floating Pill styles.</string>
     <string name="widget_scroll_hint">Scroll the mouse wheel over the open notch to switch between enabled widgets.</string>
-    <string name="widget_collapsed_indicators_title">Collapsed Pill Indicators</string>
-    <string name="widget_collapsed_indicators_desc">What the collapsed pill shows beside the track while it plays and next to the clock when idle. The expanded page always shows volume and the audio-device battery.</string>
-    <string name="widget_collapsed_indicators_desc_laptop">What the collapsed pill shows beside the track while it plays and next to the clock when idle. The expanded page always shows volume and the audio-device battery; the laptop battery shows only beside the clock.</string>
-    <string name="widget_show_volume_title">Show System Volume</string>
-    <string name="widget_show_volume_desc">Display the volume level in the collapsed pill</string>
-    <string name="widget_show_battery_title">Show Device Battery</string>
-    <string name="widget_show_battery_desc">Display the connected audio device\'s battery in the collapsed pill, beside the clock and next to the track</string>
-    <string name="widget_show_device_battery_title">Show Laptop Battery</string>
-    <string name="widget_show_device_battery_desc">Display the machine\'s own battery beside the clock in the collapsed pill; useful on laptops</string>
     <string name="music_play">Play</string>
     <string name="music_pause">Pause</string>
     <string name="music_volume">System volume</string>

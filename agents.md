@@ -264,6 +264,12 @@ composeApp/
 - **Progress bar** (expanded): hairline track + cyan gradient fill + white head ringed
   in the accent riding the fill tip (inset lane so 0%/100% never clip; head only when
   seekable).
+- **Settings window has its own scoped palette** (`SettingsComponents.kt`): mirrors the
+  web module's design language (flat gradient-free accents, indigo #4F46E5 family,
+  pill switches/tabs/chips, mono dashed eyebrows, 18dp cards) under `Flat*`/`Web*`
+  tokens. Scoped on purpose — never change the notch overlay's accents via settings
+  tokens. The collapsed-pill indicator toggles (volume / audio-device battery / laptop
+  battery) live under "Collapsed Pill Indicators" in the Dock & Sizing tab.
 
 ---
 
