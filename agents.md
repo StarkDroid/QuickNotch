@@ -183,7 +183,10 @@ expanded dock).
   `output volume` (macOS). Null hides the chip.
 - `AudioBattery` (audio device): presence via WinRT `BluetoothDevice.ConnectionStatus`
   (poll 1s), level via `DEVPKEY_Device_BatteryLevel` (live probe timeout 8s); macOS
-  reads `~/Library/Preferences/com.apple.Bluetooth.plist` via `plutil`. `poke()` forces
+  reads `system_profiler SPBluetoothDataType` (≈100 ms — carries both presence + battery,
+  polled at 10 s to keep the laptop quiet, `poke()` re-probes instantly on notch-open).
+  The old Bluetooth preferences plist DeviceCache path is dead on modern macOS; kept only
+  as a legacy fallback. `poke()` forces
   a probe when the notch opens / music goes live.
 - `SystemBattery` (laptop, 5s): `Win32_Battery` via `system-battery.ps1` (Windows) /
   `pmset -g batt` (macOS). Exposes `state` + `hasBattery` (gates the settings toggle so
@@ -284,7 +287,7 @@ composeApp/
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
 - **Laptop battery UI**: testable on the macOS dev machine (built-in battery → `SystemBattery` talks through `pmset -g batt`). On the Windows desktop it stays null by design.
-- **macOS (this machine)**: now a live test surface — build, run, idle clock + laptop battery ring, volume ring (SVG glyphs), SOFTWARE renderer all verified in-session. Still untestable here: Win32 paths, Windows wheel paging, SMTC seek. The very first pull of this repo may have had no macOS hardware; that is no longer true.
+- **macOS (this machine)**: now a live test surface — build, run, idle clock + laptop battery ring, volume ring (SVG glyphs), audio-device battery ring (via `system_profiler`, AirPods Pro connected), SOFTWARE renderer all verified in-session. Still untestable here: Win32 paths, Windows wheel paging, SMTC seek. The very first pull of this repo may have had no macOS hardware; that is no longer true.
 - **Shared-element morph / expand-into-music look**: cannot be judged from code; needs a live session + hover expansion on a real machine. When in doubt, run the app and watch it.
 
 ---
@@ -360,6 +363,15 @@ composeApp/
     opacity after the SrcIn tint and read as wrong/faint in the ring. Punch interior
     holes with `fill-rule="evenodd"` (skia SVGDOM honours it); verify any new glyph by
     rasterising the resource through skia, not by eye on one platform.
+14. **macOS Bluetooth battery lives in `system_profiler`, not the plist**: the
+    `com.apple.Bluetooth.plist` DeviceCache is gone on modern macOS (the file shrinks to
+    ~136 bytes of `lastNowPlayingTargetHeadsetAddress`/`lastNowPlayedTime`), so
+    `AudioBattery` parses `system_profiler SPBluetoothDataType` instead (device name is
+    a heading ending in `:`, attrs are `Key: value` at +8 indent; left/right battery
+    averaged, single `Battery Level` next, `Case Battery Level` last; audio = services
+    HFP/AVRCP/A2DP/AACP or minor type Headphones/Headset/Earbuds/Audio). It's ~10× slower
+    than the WinRT probe, so macOS polls it at 10 s (not 1 s) and relies on `poke()` for
+    instant refresh on notch-open. `ioreg` carries no battery data.
 
 ---
 

@@ -28,9 +28,8 @@ import java.util.concurrent.TimeUnit
  *
  * @param isAudio true when the OS data reports the device as part of a
  *   Bluetooth audio stack (Hands-Free / A2DP / AVRCP), which drives which
- *   glyph the level ring shows. Defaults to true because the macOS plist path
- *   has no reliable device-class field and only surfaces battery-carrying
- *   devices anyway.
+ *   glyph the level ring shows. Decided from real device metadata on both
+ *   platforms; defaults to true as the least-bad fallback for unknown devices.
  */
 data class AudioDeviceBattery(
     /** Device name as reported by the OS; null when unknown. */
@@ -85,20 +84,28 @@ private val batteryJson: Json = Json {
  *    that just appeared kicks an immediate refresh so the level shows up
  *    right away.
  *
- * macOS has no public API for this; the Bluetooth preferences plist
- * (~/Library/Preferences/com.apple.Bluetooth.plist) is read with `plutil`,
- * which is fast enough to carry both presence and battery in the same 1 s
- * poll. A failed or misparsed read simply leaves the value null and the UI
+ * macOS has no public API for this; `system_profiler SPBluetoothDataType`
+ * reports the connected device's battery and services (≈100 ms, so it carries
+ * both presence and battery in the poll — at a slower 10 s cadence to keep the
+ * laptop quiet, with an instant re-probe when the notch opens/music goes live).
+ * The old Bluetooth preferences plist
+ * (~/Library/Preferences/com.apple.Bluetooth.plist) stopped carrying a
+ * DeviceCache on modern macOS, so it is kept only as a fallback for older
+ * systems. A failed or misparsed read simply leaves the value null and the UI
  * hides the chip.
  */
 internal object AudioBattery {
 
     private const val PresencePollMs = 1_000L
+    // system_profiler is more expensive than the Windows WinRT probe, so the
+    // macOS cadence is slower; a notch-open or music-live poke still probes
+    // immediately, so connect/disconnect reflects right away on expand.
+    private const val MacPresencePollMs = 10_000L
     private const val LiveProbeTimeoutMs = 8_000L
     private const val BatteryRefreshMs = 30_000L
     private const val BatteryFirstRetryMs = 5_000L
     private const val RefreshTimeoutMs = 40_000L
-    private const val MacProbeTimeoutMs = 3_000L
+    private const val MacProbeTimeoutMs = 6_000L
 
     private val _info = MutableStateFlow<AudioDeviceBattery?>(null)
     val info: StateFlow<AudioDeviceBattery?> = _info.asStateFlow()
@@ -146,7 +153,7 @@ internal object AudioBattery {
         presenceJob = active.launch {
             while (isActive) {
                 probePresence()
-                delay(PresencePollMs)
+                delay(if (HostPlatform.isWindows) PresencePollMs else MacPresencePollMs)
             }
         }
         if (HostPlatform.isWindows) {
@@ -270,17 +277,123 @@ internal object AudioBattery {
         _info.value = AudioDeviceBattery(cachedName, level, cachedAudio)
     }
 
-    // ── macOS (1 s cadence, plist carries presence + battery) ────────────────
+    // ── macOS (10 s cadence, system_profiler carries presence + battery) ────
 
     private fun probeMac() {
+        // system_profiler is authoritative on modern macOS (battery + services
+        // in one fast call). Plist remains a fallback for older systems that
+        // still write a DeviceCache.
+        val raw = runProcess(listOf("system_profiler", "SPBluetoothDataType"), MacProbeTimeoutMs)
+        if (raw != null) {
+            parseSystemProfiler(raw)?.let {
+                _info.value = it
+                return
+            }
+        }
         val home = System.getProperty("user.home") ?: return
         val plist = File(home, "Library/Preferences/com.apple.Bluetooth.plist")
         if (!plist.isFile) return
-        val raw = runProcess(
+        val plistRaw = runProcess(
             listOf("plutil", "-convert", "json", "-o", "-", plist.absolutePath),
             MacProbeTimeoutMs
         ) ?: return
-        _info.value = parseMacPlist(raw)
+        _info.value = parseMacPlist(plistRaw)
+    }
+
+    // system_profiler flags a headset as audio through its service list
+    // (A2DP is the music path; HFP/AVRCP/AACP tag the voice/control stacks) or
+    // through a headphone-style Minor Type line. Both are honoured so realme
+    // earbuds (usually only "Battery Level: nn%") and Apple headphones (with a
+    // full Services line) resolve to the headphone-glyph ring.
+    private val macAudioServices = setOf("HFP", "AVRCP", "A2DP", "AACP")
+    private val macAudioMinorTypes = setOf("Headphones", "Headset", "Earbuds", "Audio")
+
+    /**
+     * Parses `system_profiler SPBluetoothDataType`: walks the Connected:
+     * section, and picks the first battery-carrying audio device. A headset
+     * exposing separate earbuds reports its Left/Right average; a device with a
+     * single percentage uses that; the case level is the last resort. `isAudio`
+     * is decided from the Services/Minor Type lines, not assumed.
+     */
+    private fun parseSystemProfiler(raw: String): AudioDeviceBattery? {
+        val header = raw.indexOf("Connected:")
+        if (header < 0) return null
+        val sectionStart = header + "Connected:".length
+        val notConnected = raw.indexOf("Not Connected:", sectionStart)
+        val section = raw.substring(
+            sectionStart,
+            if (notConnected > sectionStart) notConnected else raw.length
+        )
+
+        // system_profiler indents the section header N spaces, device names N+4
+        // and attributes N+8 — names carry the device label (no value), while
+        // attributes are always "Key: value" lines, so indentation alone splits
+        // them robustly regardless of the header's own indent.
+        val headerIndent = countIndent(raw, header)
+        val nameRegex = Regex("^\\s{${headerIndent + 4}}\\S.*:$")
+        val attrRegex = Regex("^\\s+([^:]+):\\s+(.+)$")
+
+        var current: MacDevice? = null
+        val devices = mutableListOf<MacDevice>()
+        for (line in section.lineSequence()) {
+            if (line.isBlank()) continue
+            if (nameRegex.matches(line)) {
+                current = MacDevice(line.dropWhile { it == ' ' }.dropLast(1))
+                devices.add(current)
+            } else {
+                val match = attrRegex.find(line) ?: continue
+                current?.attrs[match.groupValues[1].trim()] = match.groupValues[2].trim()
+            }
+        }
+
+        // Prefer the first *audio* device with a level; fall back to any
+        // connected battery-carrying device so a single non-audio device still
+        // renders a ring (its glyph honours isAudio=false → bluetooth).
+        val candidates = devices.mapNotNull { device ->
+            macDeviceLevel(device)?.let { (level, audio) -> Triple(device, level, audio) }
+        }
+        val pick = candidates.firstOrNull { it.third } ?: candidates.firstOrNull() ?: return null
+        val name = pick.first.name.takeIf { it.isNotBlank() }
+        return AudioDeviceBattery(name, pick.second, pick.third)
+    }
+
+    private class MacDevice(val name: String, val attrs: MutableMap<String, String> = mutableMapOf())
+
+    /** Extracts [level, isAudio] from a device block, or null when no battery. */
+    private fun macDeviceLevel(device: MacDevice): Pair<Int, Boolean>? {
+        val attrs = device.attrs
+        val services = attrs["Services"].orEmpty()
+        val minor = attrs["Minor Type"].orEmpty()
+        val audio = macAudioServices.any { services.contains(it) } || minor.trim() in macAudioMinorTypes
+        val left = attrs["Left Battery Level"]?.extractPercent()
+        val right = attrs["Right Battery Level"]?.extractPercent()
+        val single = attrs["Battery Level"]?.extractPercent()
+        val case = attrs["Case Battery Level"]?.extractPercent()
+        val level = when {
+            left != null && right != null -> (left + right + 1) / 2
+            single != null -> single
+            left != null -> left
+            right != null -> right
+            case != null -> case
+            else -> null
+        } ?: return null
+        return level to audio
+    }
+
+    /** "93%" → 93; null when the value carries no number. */
+    private fun String.extractPercent(): Int? =
+        Regex("\\d+").find(this)?.value?.toIntOrNull()
+
+    private fun countIndent(line: String): Int {
+        var i = 0
+        while (i < line.length && line[i] == ' ') i++
+        return i
+    }
+
+    private fun countIndent(raw: String, index: Int): Int {
+        val lineStart = raw.lastIndexOf('\n', index).let { if (it < 0) 0 else it + 1 }
+        val lineEnd = raw.indexOf('\n', index).let { if (it < 0) raw.length else it }
+        return countIndent(raw.substring(lineStart, lineEnd))
     }
 
     /**
