@@ -1,9 +1,5 @@
 package com.starkdroid.quicknotch.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -101,8 +96,7 @@ fun SettingsScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 24.dp)
             ) {
-                // Minimalist Flat Tab Selector; the active tab gets a soft accent
-                // underglow that bleeds out from beneath its pill.
+                // Minimalist Flat Tab Selector
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -125,14 +119,11 @@ fun SettingsScreen(
                                     color = if (isSelected) FlatBorder.copy(alpha = 0.9f) else Color.Transparent,
                                     shape = RoundedCornerShape(8.dp)
                                 )
-                                .clickable { selectedTab = index },
-                            // No padding on the Box: the pill padding lives on the inner
-                            // Row so BottomCenter alignment below lands on the *outer*
-                            // bottom edge (a padded content box would center the glow).
+                                .clickable { selectedTab = index }
+                                .padding(vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
-                                modifier = Modifier.padding(vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
@@ -150,12 +141,6 @@ fun SettingsScreen(
                                     color = if (isSelected) Color.White else TextSecondary
                                 )
                             }
-
-                            // Soft accent glow spilling out under the active tab.
-                            TabUnderglow(
-                                visible = isSelected,
-                                modifier = Modifier.align(Alignment.BottomCenter)
-                            )
                         }
                     }
                 }
@@ -264,38 +249,6 @@ private fun SettingsTopBar(
                 modifier = Modifier.size(16.dp)
             )
         }
-    }
-}
-
-// Underglow beam under the active tab: a soft accent that fades out as it
-// spills from beneath the pill edge. Extracted so the implicit RowScope
-// receiver from the tab strip doesn't select the RowScope.AnimatedVisibility
-// overload (that variant is sized for rows, not for a bottom-aligned beam).
-@Composable
-private fun TabUnderglow(
-    visible: Boolean,
-    modifier: Modifier = Modifier
-) {
-    AnimatedVisibility(
-        visible = visible,
-        modifier = modifier,
-        enter = fadeIn(animationSpec = tween(180)),
-        exit = fadeOut(animationSpec = tween(140))
-    ) {
-        Box(
-            modifier = Modifier
-                .offset(y = 1.dp)
-                .width(44.dp)
-                .height(12.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        0f to AccentIndigoLight.copy(alpha = 0.8f),
-                        0.35f to AccentIndigoLight.copy(alpha = 0.28f),
-                        1f to Color.Transparent
-                    ),
-                    shape = RoundedCornerShape(percent = 50)
-                )
-        )
     }
 }
 

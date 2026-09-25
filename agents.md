@@ -308,7 +308,7 @@ composeApp/
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
-| Settings revamp: accent tab underglow, section-header icons, 3-across visual notch-style picker, `System Accent` surface (OS-accent-tinted glass) | done (this session) — visual pass still pending on a live machine |
+| Settings revamp: section-header icons, 3-across visual notch-style picker, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted | done (this session) — visual pass still pending on a live machine |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
