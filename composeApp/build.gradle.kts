@@ -70,11 +70,36 @@ val compileMacNowPlayingBridge by tasks.registering(Exec::class) {
     )
 }
 
+// macOS Bluetooth/audio change watcher: CoreAudio default-output listeners +
+// bluetoothd connect notifications that let the audio-battery poller probe the
+// stack the instant a device connects (see `btwatch_bridge.m`). Same build
+// shape as the now-playing bridge above; only built on macOS hosts.
+val compileMacBtWatchBridge by tasks.registering(Exec::class) {
+    onlyIf {
+        val os = System.getProperty("os.name").lowercase()
+        os.contains("mac") || os.contentEquals("darwin")
+    }
+    doFirst {
+        project.file("src/desktopMain/resources/macos").mkdirs()
+    }
+    workingDir = project.file("native/macos")
+    commandLine(
+        "cc",
+        "-O2",
+        "-mmacosx-version-min=12.0",
+        "-fobjc-arc",
+        "-framework", "Foundation",
+        "-framework", "CoreAudio",
+        "btwatch_bridge.m",
+        "-o", project.file("src/desktopMain/resources/macos/btwatch-bridge")
+    )
+}
+
 tasks.named("desktopJar") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge)
 }
 tasks.named("desktopProcessResources") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge)
 }
 
 compose.resources {

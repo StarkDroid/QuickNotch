@@ -142,6 +142,10 @@ internal object AudioBattery {
     private var presenceJob: Job? = null
     private var batteryJob: Job? = null
 
+    /** The macOS `btwatch-bridge` process watching bluetoothd notifications. */
+    @Volatile
+    private var macWatch: Process? = null
+
     fun start() {
         if (HostPlatform.isWindows) {
             script = NativeResources.extract("windows/battery.ps1", ".ps1")
@@ -166,10 +170,16 @@ internal object AudioBattery {
                     delay(if (cachedLevel == null) BatteryFirstRetryMs else BatteryRefreshMs)
                 }
             }
+        } else {
+            // Events bridge connect/disconnect instantly; the 10 s poll above
+            // becomes a backstop for OSes that never post a notification.
+            startMacWatch()
         }
     }
 
     fun stop() {
+        macWatch?.destroy()
+        macWatch = null
         presenceJob?.cancel()
         presenceJob = null
         batteryJob?.cancel()
@@ -279,7 +289,7 @@ internal object AudioBattery {
 
     // ── macOS (10 s cadence, system_profiler carries presence + battery) ────
 
-    private fun probeMac() {
+    private fun probeMac(): Boolean {
         // system_profiler carries presence + battery in one fast call.
         //
         // macOS, however, keeps recent earphones listed as Connected (an
@@ -288,34 +298,91 @@ internal object AudioBattery {
         // against the *active output*, or it reads as a phantom device. Plist
         // remains a fallback for older systems that still write a DeviceCache;
         // every path that finds nothing local ends by clearing _info so a
-        // disconnected ring can never linger.
+        // disconnected ring can never linger. Returns true when a ring was
+        // published (the Bluetooth-change watcher uses that to decide whether
+        // to re-probe once the audio routing settles).
         val raw = runProcess(listOf("system_profiler", "SPBluetoothDataType"), MacProbeTimeoutMs)
         val candidate = raw?.let { parseSystemProfiler(it) }
         if (candidate != null && candidate.name != null) {
             // A probe failure leaves the last value alone (no opinion); a clear
             // "the default output is something else" hides the ring right away.
-            val activeOutput = macActiveOutputName() ?: return
+            val activeOutput = macActiveOutputName() ?: return false
             if (activeOutput.isNotEmpty() && macNamesMatch(activeOutput, candidate.name!!)) {
                 _info.value = candidate
-                return
+                return true
             }
             _info.value = null
-            return
+            return false
         }
         val home = System.getProperty("user.home")
         val plist = home?.let { File(it, "Library/Preferences/com.apple.Bluetooth.plist") }
         if (plist == null || !plist.isFile) {
             _info.value = null
-            return
+            return false
         }
         val plistRaw = runProcess(
             listOf("plutil", "-convert", "json", "-o", "-", plist.absolutePath),
             MacProbeTimeoutMs
         ) ?: run {
             _info.value = null
-            return
+            return false
         }
-        _info.value = parseMacPlist(plistRaw) // null when nothing / parse fails
+        val parsed = parseMacPlist(plistRaw) // null when nothing / parse fails
+        _info.value = parsed
+        return parsed != null
+    }
+
+    // ── macOS Bluetooth-change watcher ────────────────────────────────────────
+
+    /**
+     * Supervises the `btwatch-bridge` helper: it watches CoreAudio default-
+     * output changes plus bluetoothd connect/disconnect notifications and
+     * prints one `AUDIO`/`BT` marker per event burst, letting the battery
+     * poller probe the stack the instant a device connects instead of up to
+     * the 10 s backstop cadence later. Restarts the process if it dies (like
+     * the now-playing bridge). Absent on non-mac builds — the poller simply
+     * keeps its slow cadence.
+     */
+    private fun startMacWatch() {
+        val binary = NativeResources.extract("macos/btwatch-bridge", "")
+        if (binary == null || !binary.canExecute()) return
+        val active = scope ?: return
+        active.launch {
+            while (isActive) {
+                runCatching {
+                    val process = ProcessBuilder(binary.absolutePath)
+                        .redirectErrorStream(false)
+                        .start()
+                    macWatch = process
+                    process.inputStream.bufferedReader().use { reader ->
+                        while (isActive) {
+                            val line = reader.readLine() ?: break
+                            if (line == "AUDIO" || line == "BT") onMacWatchEvent()
+                        }
+                    }
+                    process.waitFor()
+                }
+                macWatch = null
+                delay(2_000)
+            }
+        }
+    }
+
+    /**
+     * A device connected/disconnected at the Bluetooth level. Probe now; if
+     * the immediate snapshot still found nothing routed, re-probe ~1.2 s later
+     * so macOS can finish registering the device as the audio output (that
+     * beats the previous "up to 10 s later"). Cheap: one or two system_profiler
+     * calls per actual Bluetooth connect/disconnect.
+     */
+    private fun onMacWatchEvent() {
+        val active = scope ?: return
+        active.launch {
+            if (!probeMac()) {
+                delay(1_200)
+                probeMac()
+            }
+        }
     }
 
     /**

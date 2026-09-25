@@ -67,6 +67,7 @@ command line matches `MainKt|quicknotch`.
 
 - `syncWindowsBridge` — copies `composeApp/native/windows/*.ps1` → `src/desktopMain/resources/windows/`.
 - `compileMacNowPlayingBridge` — builds `native/macos/nowplaying_bridge.m` with `cc` (macOS hosts only).
+- `compileMacBtWatchBridge` — builds `native/macos/btwatch_bridge.m` with Foundation + CoreAudio (macOS hosts only).
 
 If a Windows `.ps1` script is edited in `native/windows`, the copy into
 `resources/windows` is refreshed automatically at jar time — but **during a plain
@@ -190,6 +191,11 @@ collapsed footprint from it, so the rings are never clipped against the window e
   (poll 1s), level via `DEVPKEY_Device_BatteryLevel` (live probe timeout 8s); macOS
   reads `system_profiler SPBluetoothDataType` (≈100 ms — carries both presence + battery,
   polled at 10 s to keep the laptop quiet, `poke()` re-probes instantly on notch-open).
+  A compiled watcher (`btwatch_bridge.m`) makes the slow poll event-driven: CoreAudio
+  default-output/device-change listeners (plus best-effort bluetoothd distributed /
+  Darwin connect notifications) fire the instant a headset routes in or out, and each
+  marker triggers an immediate probe (+ one settling re-probe ~1.2 s later), so the ring
+  appears within ~1–2 s of the device connecting instead of up to 10 s later.
   The old Bluetooth preferences plist DeviceCache path is dead on modern macOS; kept only
   as a legacy fallback. `poke()` forces
   a probe when the notch opens / music goes live.
@@ -217,6 +223,11 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   `syncWindowsBridge` copies them into resources before jar/processResources.
 - macOS bridge: `native/macos/nowplaying_bridge.m` → `cc` → `resources/macos/nowplaying-bridge`
   (macOS hosts only). `dlopen`s MediaRemote, runs JXA via `osascript` for entitlement.
+- macOS watcher: `native/macos/btwatch_bridge.m` → `cc` (Foundation + CoreAudio) →
+  `resources/macos/btwatch-bridge`. Listens on CoreAudio default-output/device changes
+  (+ bluetoothd connect notifications) and prints `AUDIO`/`BT` markers on stdout; the
+  audio-battery poller re-probes instantly on each marker. Same build gating as the
+  now-playing bridge (`compileMacBtWatchBridge`).
 
 ---
 
@@ -228,6 +239,7 @@ composeApp/
 ├── native/
 │   ├── windows/{smtc,volume,system-battery,battery}.ps1   # source of truth for bridges
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
+│   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
 └── src/
     ├── commonMain/composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
@@ -394,6 +406,16 @@ composeApp/
     and the right-most ring clips off the window edge — locally: laptop battery ring
     "missing". Always derive the count via `collapsedIndicatorRingCount(...)` (and reset
     `AudioBattery._info` on every macOS empty-probe, so a disconnected ring never lingers).
+16. **Real-time BT connection events must come from CoreAudio, not bluetoothd
+    notifications**: bluetoothd's `com.apple.bluetooth.device-connected` /
+    `-disconnected` names fire via neither NSDistributedNotificationCenter nor
+    `notify_register_dispatch`/`notifyutil -w` on current macOS (verified with a power
+    toggle and a live connect attempt; nothing arrives). The reliable real-time signal
+    is a CoreAudio property listener on `kAudioHardwarePropertyDefaultOutputDevice`
+    (+ `DefaultSystemOutputDevice` + `Devices`) — it fires exactly when a headset
+    routes in/out, which is what `btwatch_bridge.m` uses to poke the poller. Lowering
+    the `system_profiler` cadence instead would cost ~5–7% of a core (≈150 ms/probe), so
+    keep the 10 s poll as the backstop and the watcher as the trigger.
 
 ---
 
