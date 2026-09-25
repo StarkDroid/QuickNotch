@@ -280,17 +280,27 @@ internal object AudioBattery {
     // ── macOS (10 s cadence, system_profiler carries presence + battery) ────
 
     private fun probeMac() {
-        // system_profiler is authoritative on modern macOS (battery + services
-        // in one fast call). Plist remains a fallback for older systems that
-        // still write a DeviceCache. Every path that finds nothing local ends
-        // by clearing _info, so a ring can never linger for a device the OS no
-        // longer reports as connected.
+        // system_profiler carries presence + battery in one fast call.
+        //
+        // macOS, however, keeps recent earphones listed as Connected (an
+        // audio-capable BLE link) even while audio is actually playing through
+        // other speakers — so a headset ring must additionally be checked
+        // against the *active output*, or it reads as a phantom device. Plist
+        // remains a fallback for older systems that still write a DeviceCache;
+        // every path that finds nothing local ends by clearing _info so a
+        // disconnected ring can never linger.
         val raw = runProcess(listOf("system_profiler", "SPBluetoothDataType"), MacProbeTimeoutMs)
-        if (raw != null) {
-            parseSystemProfiler(raw)?.let {
-                _info.value = it
+        val candidate = raw?.let { parseSystemProfiler(it) }
+        if (candidate != null && candidate.name != null) {
+            // A probe failure leaves the last value alone (no opinion); a clear
+            // "the default output is something else" hides the ring right away.
+            val activeOutput = macActiveOutputName() ?: return
+            if (activeOutput.isNotEmpty() && macNamesMatch(activeOutput, candidate.name!!)) {
+                _info.value = candidate
                 return
             }
+            _info.value = null
+            return
         }
         val home = System.getProperty("user.home")
         val plist = home?.let { File(it, "Library/Preferences/com.apple.Bluetooth.plist") }
@@ -306,6 +316,24 @@ internal object AudioBattery {
             return
         }
         _info.value = parseMacPlist(plistRaw) // null when nothing / parse fails
+    }
+
+    /**
+     * Name of the device the OS currently routes audio to, or null when the
+     * probe failed outright (caller keeps the last value — no opinion). An
+     * empty string means the probe ran but no Default Output Device line
+     * exists, i.e. audio is definitely not routed to a named wireless device.
+     */
+    private fun macActiveOutputName(): String? {
+        val audioRaw = runProcess(listOf("system_profiler", "SPAudioDataType"), MacProbeTimeoutMs) ?: return null
+        return macDefaultOutputDevice(audioRaw) ?: ""
+    }
+
+    /** Loose name equality (case-insensitive, either name contains the other). */
+    private fun macNamesMatch(a: String, b: String): Boolean {
+        val x = a.trim().lowercase()
+        val y = b.trim().lowercase()
+        return x == y || x.contains(y) || y.contains(x)
     }
 
     // system_profiler flags a headset as audio through its service list
@@ -389,6 +417,37 @@ internal object AudioBattery {
             else -> null
         } ?: return null
         return level to audio
+    }
+
+    /**
+     * Name of the device marked as the current output in `SPAudioDataType`.
+     * Its section heading ("Devices:") sits at N spaces and device names at N+4
+     * with "Key: value" attrs deeper — the same indent shape the Bluetooth
+     * parser relies on, so the same regexes apply.
+     */
+    private fun macDefaultOutputDevice(raw: String): String? {
+        val devices = raw.indexOf("Devices:")
+        if (devices < 0) return null
+        val headerIndent = countIndent(raw, devices)
+        val nameRegex = Regex("^\\s{${headerIndent + 4}}\\S.*:$")
+        val attrRegex = Regex("^\\s+([^:]+):\\s+(.+)$")
+
+        var current: String? = null
+        for (line in raw.substring(devices).lineSequence()) {
+            if (line.isBlank()) continue
+            if (nameRegex.matches(line)) {
+                current = line.dropWhile { it == ' ' }.dropLast(1)
+            } else {
+                val match = attrRegex.find(line) ?: continue
+                if (
+                    match.groupValues[1].trim() == "Default Output Device" &&
+                    match.groupValues[2].trim() == "Yes"
+                ) {
+                    return current
+                }
+            }
+        }
+        return null
     }
 
     /** "93%" → 93; null when the value carries no number. */

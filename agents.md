@@ -381,7 +381,11 @@ composeApp/
     HFP/AVRCP/A2DP/AACP or minor type Headphones/Headset/Earbuds/Audio). BLE-only idle
     links (AirPods in their case, Find My) appear under Connected with a `Services: ...
     < BLE >` line and must NOT publish — only audio-classified devices emit a ring, or
-    macOS shows a ghost bluetooth ring with nothing in use. It's ~10× slower
+    macOS shows a ghost bluetooth ring with nothing in use. That is not enough on its
+    own, though: macOS keeps recent earphones listed as Connected (an audio-capable
+    BLE link) even while audio plays through other speakers, so the ring is published
+    only when the connected audio device is ALSO the current default output
+    (`SPAudioDataType` "Default Output Device: Yes", matched loosely by name). It's ~10× slower
     than the WinRT probe, so macOS polls it at 10 s (not 1 s) and relies on `poke()` for
     instant refresh on notch-open. `ioreg` carries no battery data.
 15. **Idle-pill ring width must be shared**: the native window sizer
