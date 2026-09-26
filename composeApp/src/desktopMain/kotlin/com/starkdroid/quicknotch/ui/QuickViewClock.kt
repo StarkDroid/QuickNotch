@@ -1,11 +1,16 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -16,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -25,6 +31,7 @@ import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
+import com.starkdroid.quicknotch.theme.AccentRed
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -32,7 +39,7 @@ import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The user-tunable pieces of the collapsed-pill idle clock. Derived from
+ * The user-tunable pieces of the quickview idle clock. Derived from
  * [com.starkdroid.quicknotch.model.NotchConfig] at the overlay call site so
  * the pill and the settings tab stay in lock-step.
  */
@@ -53,7 +60,7 @@ internal fun formatClockTime(clock24Hour: Boolean, now: LocalDateTime = LocalDat
     now.toLocalTime().format(DateTimeFormatter.ofPattern(if (clock24Hour) "HH:mm" else "h:mm a", Locale.getDefault()))
 
 /**
- * The collapsed-pill idle content shown in place of the dots while nothing is
+ * The quickview idle content shown in place of the dots while nothing is
  * playing: a live date and/or time, centred, marquee-free. The display refreshes
  * exactly on the minute boundary so "9:41" flips at :00 rather than drifting
  * a few seconds off the real minute.
@@ -64,7 +71,8 @@ internal fun IdleClockRow(
     tint: Color,
     modifier: Modifier = Modifier,
     battery: AudioDeviceBattery? = null,
-    deviceBattery: SystemBattery? = null
+    deviceBattery: SystemBattery? = null,
+    notificationCount: Int? = null
 ) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -110,7 +118,7 @@ internal fun IdleClockRow(
             )
         }
         // Connected device battery right beside the date/time stamps, gated
-        // by the same collapsed-pill toggle as the music-state battery.
+        // by the same quickview indicator toggle as the music-state battery.
         if (battery != null) {
             LevelRing(
                 level = battery.levelPercent,
@@ -140,6 +148,57 @@ internal fun IdleClockRow(
                 lowTint = BatteryLowTint,
                 lowThreshold = BatteryLowThreshold
             )
+        }
+        // Unread notifications cap the row, farthest right, past the rings —
+        // the bell + badge mirror the macOS Dock's badge count and only render
+        // while that count is readable.
+        if (notificationCount != null) {
+            NotificationIndicator(count = notificationCount, tint = tint)
+        }
+    }
+}
+
+/**
+ * The quickview's notification indicator: the packaged bell silhouette tinted
+ * with the island colour, wearing a red badge bubble on its top-right corner
+ * that carries the unread [count] (capped at "99+"). Shown only while the
+ * count is readable — an unreadable store (e.g. Full Disk Access not granted)
+ * hides the whole indicator rather than showing a false "empty" state.
+ */
+@Composable
+internal fun NotificationIndicator(
+    count: Int,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.size(22.dp), contentAlignment = Alignment.Center) {
+        Icon(
+            painter = notificationPainter(),
+            contentDescription = stringResource(Res.string.notification_indicator),
+            tint = tint,
+            modifier = Modifier.size(17.dp)
+        )
+        if (count > 0) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp)
+                    .height(11.dp)
+                    .defaultMinSize(minWidth = 11.dp)
+                    .clip(RoundedCornerShape(5.5.dp))
+                    .background(AccentRed)
+                    .padding(horizontal = 3.dp)
+            ) {
+                Text(
+                    text = if (count >= 100) "99+" else count.toString(),
+                    color = Color.White,
+                    fontSize = 7.sp,
+                    lineHeight = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

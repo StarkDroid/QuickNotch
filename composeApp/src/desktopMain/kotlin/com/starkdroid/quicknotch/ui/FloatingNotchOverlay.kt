@@ -122,6 +122,7 @@ import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
+import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.AppItem
@@ -189,7 +190,7 @@ private fun dockRevealSpring() = spring(
 )
 
 /**
- * Bounds spring for shared-element morphs. The collapsed pill's disc/title and
+ * Bounds spring for shared-element morphs. The quickview's disc/title and
  * their detailed-view counterparts travel on the same near-critically-damped
  * curve as the notch itself, so the two ends of the transition read as one
  * continuous motion rather than a crossfade.
@@ -203,7 +204,7 @@ private const val FisheyeRadiusFactor = 1.5f
 private val IconLift = 8.dp
 
 /**
- * Extra hover tolerance around the island footprint (the collapsed pill or the
+ * Extra hover tolerance around the island footprint (the quickview or the
  * expanded dock). The hover hit area is the island plus this glow — never the
  * whole native window — so the notch retracts as soon as the cursor leaves the
  * visible island instead of staying glued open.
@@ -312,7 +313,7 @@ private const val NowPlayingBatteryKey = "nowPlayingBattery"
 private const val SystemAccentPollMs = 3000L
 
 /**
- * Bounds one collapsed-pill element to its expanded-page counterpart (the
+ * Bounds one quickview element to its expanded-page counterpart (the
  * vinyl disc, the marquee title, the level rings). The pair are different
  * composables, so this is a [SharedTransitionScope.sharedBounds] morph under
  * one shared moving frame rather than a strict
@@ -355,7 +356,7 @@ internal fun FloatingNotchOverlay(
     volumePercent: Int? = null,
     /** Connected audio device battery (0-100); null hides the battery chip. */
     battery: AudioDeviceBattery? = null,
-    /** The machine's own (laptop) battery; null hides the collapsed-pill device ring. */
+    /** The machine's own (laptop) battery; null hides the quickview device ring. */
     deviceBattery: SystemBattery? = null,
     /** Shared widget-pager state (also driven by the Windows AWT wheel listener). */
     pager: OverlayPager
@@ -370,6 +371,10 @@ internal fun FloatingNotchOverlay(
 
     val liveSession by media.session.collectAsState()
     val musicLive = isMusicLive(config, liveSession)
+
+    // Unread notification count for the quickview's bell + badge; null (the OS
+    // store unreadable, e.g. without Full Disk Access) hides the indicator.
+    val notificationCount by NotificationCount.count.collectAsState()
 
     // The System Accent surface tints itself to the desktop accent. While that
     // surface is chosen, re-read the OS accent every few seconds so changing
@@ -505,15 +510,16 @@ internal fun FloatingNotchOverlay(
             pager.consumeWheel(rotations * pager.stepPx)
         }
 
-    // Rings shown beside the idle clock also widen the collapsed pill (one
-    // indicator slot per visible ring), so date/time + device + laptop battery
-    // coexist instead of clipping. Derived through the same helper the native
-    // window sizer in main.kt uses, so both ever agree on the footprint. Gated
-    // to the clock branch: the dots and the drag-handle styles render no rings.
-    val collapsedRings = collapsedIndicatorRingCount(config, musicLive, battery, deviceBattery)
+    // Indicators shown beside the idle clock also widen the quickview (one
+    // indicator slot each), so date/time + device + laptop battery + the
+    // notification bell coexist instead of clipping. Derived through the same
+    // helper the native window sizer in main.kt uses, so both ever agree on
+    // the footprint. Gated to the idle branches: the drag-handle style renders
+    // no indicators and a live media pill grows to its own fixed width.
+    val indicatorSlots = quickViewIndicatorSlots(config, musicLive, battery, deviceBattery, notificationCount)
 
-    val metrics = remember(config, favorites.size, musicLive, collapsedRings) {
-        computeNotchMetrics(config, favorites.size, musicLive, collapsedRings)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
     }
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
@@ -575,7 +581,7 @@ internal fun FloatingNotchOverlay(
     }
 
     SharedTransitionLayout(modifier = modifier.fillMaxSize()) {
-        // Shared-element scope for the now-playing morph: the collapsed pill and
+        // Shared-element scope for the now-playing morph: the quickview and
         // the detailed page render matching disc/title keys beneath it, so
         // Compose can fly each element between the two surfaces.
         val sharedScope = this
@@ -583,7 +589,7 @@ internal fun FloatingNotchOverlay(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
         ) {
-            // Island background + collapsed pill: the only thing that actually
+            // Island background + quickview: the only thing that actually
             // resizes. The dock is a sibling, not a child, so its layout is
             // stable.
             Box(
@@ -595,7 +601,7 @@ internal fun FloatingNotchOverlay(
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {
-                // Keep the collapsed pill on screen until the dock is actually
+                // Keep the quickview on screen until the dock is actually
                 // visible while a track is live, so the two surfaces cross at
                 // the same instant and Compose can morph the shared disc/title
                 // between them. Without a live session there is nothing to
@@ -606,13 +612,14 @@ internal fun FloatingNotchOverlay(
                     exit = fadeOut(tween(80))
                 ) {
                     val collapsedScope = this
-                    CollapsedIsland(
+                    QuickView(
                         style = config.style,
                         surface = config.surface,
                         media = if (musicLive) liveSession else null,
                         volumePercent = volumePercent,
                         battery = battery,
                         deviceBattery = deviceBattery,
+                        notificationCount = notificationCount,
                         showVolume = config.widgets.showCollapsedVolume,
                         showBattery = config.widgets.showCollapsedBattery,
                         showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
@@ -765,7 +772,7 @@ private fun Dock(
 
     // The dock lives in the tree even while hidden, so pointer tracking and icon
     // clicks must be gated explicitly: an invisible dock must not swallow events
-    // meant for the collapsed pill or launch apps from under the cursor.
+    // meant for the quickview or launch apps from under the cursor.
     val pointerModifier = if (interactive) {
         Modifier
             .onPointerEvent(PointerEventType.Move) { change ->
@@ -919,13 +926,14 @@ private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
 }
 
 @Composable
-private fun CollapsedIsland(
+private fun QuickView(
     style: NotchStyle,
     surface: NotchSurface,
     media: MediaSession?,
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
+    notificationCount: Int?,
     showVolume: Boolean,
     showBattery: Boolean,
     showDeviceBattery: Boolean,
@@ -1022,9 +1030,11 @@ private fun CollapsedIsland(
                 clock = clock,
                 tint = islandTint(surface),
                 battery = if (showBattery) battery else null,
-                deviceBattery = if (showDeviceBattery) deviceBattery else null
+                deviceBattery = if (showDeviceBattery) deviceBattery else null,
+                notificationCount = notificationCount
             )
         } else {
+            // Idle dots; the notification bell, when readable, caps the row.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1038,6 +1048,9 @@ private fun CollapsedIsland(
                         .background(dot.copy(alpha = 0.16f))
                 )
                 Box(Modifier.size(5.dp).clip(CircleShape).background(dot.copy(alpha = 0.28f)))
+                if (notificationCount != null) {
+                    NotificationIndicator(count = notificationCount, tint = dot.copy(alpha = 0.8f))
+                }
             }
         }
     }
@@ -1175,7 +1188,7 @@ private fun MusicPage(
  * stacked above the transport buttons on the right — the two clusters drift
  * slightly toward the bottom so the controls read as a settled base under the
  * text. Every transport control stays visible here; collapsing the play/pause
- * only affects the slim collapsed pill.
+ * only affects the slim quickview.
  */
 @Composable
 private fun MusicContent(
@@ -1268,7 +1281,7 @@ private fun MusicContent(
 
         // Level indicators sit on top of the media controls, with the whole
         // cluster riding near the bottom edge. Both rings use the exact same
-        // shapes as the collapsed pill's, so volume and battery read
+        // shapes as the quickview's, so volume and battery read
         // identically everywhere — the collapsed-only toggles govern just the
         // pill.
         Column(

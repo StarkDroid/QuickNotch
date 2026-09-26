@@ -12,7 +12,7 @@ touch against the code — the file the comment narrates is the source of truth.
 it expands into a dock of pinned apps (fisheye magnification, launch on click),
 plus a growing set of **widgets**: a now-playing "live activity" (vinyl disc,
 marquee title, volume + device-battery level rings, transport controls, seekable
-gradient progress bar) and an idle clock (date/time) in the collapsed pill.
+gradient progress bar) and an idle clock (date/time) in the quickview.
 
 One Kotlin/Compose Multiplatform (Desktop JVM) codebase runs both platforms;
 only scanning, icons, launch, login-items, and the media/battery bridges differ
@@ -126,7 +126,7 @@ page stays reachable via the wheel.
 
 ### 5.4 Shared-element morphs (expand into music)
 
-Whole overlay is wrapped in `SharedTransitionLayout`. The collapsed pill's
+Whole overlay is wrapped in `SharedTransitionLayout`. The quickview's
 `AnimatedVisibility` scope and the dock's `AnimatedVisibility` scope provide the
 `AnimatedVisibilityScope` for `sharedBounds` calls. Keys:
 
@@ -144,21 +144,27 @@ settling; one content scaled to the travelling bounds avoids that for all four k
 The dock reveal is driven by a `MutableTransitionState` (`dockState`) so the visibility
 transition doubles as the shared-transition scope.
 
-Collapsed-pill visibility while a track is live is `!showDock` (pill stays until the
+Quickview visibility while a track is live is `!showDock` (pill stays until the
 dock is visible → both surfaces cross in the same frame → morph triggers). Idle/clock
 retracts immediately.
 
-### 5.5 Collapsed pill (`CollapsedIsland`)
+### 5.5 Quickview (`QuickView`)
 
 Three branches by state: **live media** (vinyl disc 20dp → art+hub, marquee title 11sp,
 volume ring + device-battery ring — each gated by its own collapsed-only toggle),
 **idle clock** (`IdleClockRow`, date/time + optional rings), else the **idle dots**.
 The drag-handle style shows only a slim grabber line. `LiveProgressStrip` hugs the pill
 edge facing the screen centre while playing (collapsed only; auto-hidden behind the
-expanded dock). The idle pill widens by one indicator slot (28dp) per visible ring —
-the ring count comes from `collapsedIndicatorRingCount(...)` and **both** the native
+expanded dock). The idle pill widens by one indicator slot (28dp) per visible indicator —
+the count comes from `quickViewIndicatorSlots(...)` (device + laptop battery rings, plus
+the notification bell when its unread count is readable) and **both** the native
 window sizer (`NotchOverlayWindow` in `main.kt`) and the overlay content derive the
 collapsed footprint from it, so the rings are never clipped against the window edge.
+The notification bell + red count badge (`notification.svg`, `AccentRed`) cap the row
+farthest right; the count is polled from the macOS Notification Center store
+(`~/Library/Group Containers/group.com.apple.usernoted/db2/db` via `sqlite3`) every 3s —
+a store falling Full Disk Access leaves it null and hides the indicator, and Windows has
+no unread store yet (see `NotificationCount`).
 
 ### 5.6 Media pipeline
 
@@ -265,11 +271,11 @@ composeApp/
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
             └── ui/
-                ├── FloatingNotchOverlay.kt   # THE overlay: island, dock, pill, morph, music page
+                ├── FloatingNotchOverlay.kt   # THE overlay: island, dock, quickview, morph, music page
                 ├── OverlayGeometry.kt        # metrics + screen placement + DockLayout
                 ├── OverlayPager.kt           # shared page/flip state
                 ├── LevelRing.kt              # reusable 288° ring + painters
-                ├── CollapsedClock.kt         # IdleClockRow (+ laptop battery ring)
+                ├── QuickViewClock.kt         # IdleClockRow + NotificationIndicator (+ laptop battery ring)
                 ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached per value)
                 ├── Shimmer.kt                # label shimmer (Settings/fish-labels)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
@@ -312,7 +318,8 @@ composeApp/
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
-| Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the collapsed-pill indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
+| Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
+| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store (`NotificationCount`) | done (this session) — hidden until Full Disk Access is granted; visual pass pending |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
@@ -419,12 +426,15 @@ composeApp/
     (`SPAudioDataType` "Default Output Device: Yes", matched loosely by name). It's ~10× slower
     than the WinRT probe, so macOS polls it at 10 s (not 1 s) and relies on `poke()` for
     instant refresh on notch-open. `ioreg` carries no battery data.
-15. **Idle-pill ring width must be shared**: the native window sizer
+15. **Idle-quickview indicator width must be shared**: the native window sizer
     (`NotchOverlayWindow` in `main.kt`) and the overlay content each build their own
-    `NotchMetrics`. If the ring count diverges they disagree on the collapsed footprint
-    and the right-most ring clips off the window edge — locally: laptop battery ring
-    "missing". Always derive the count via `collapsedIndicatorRingCount(...)` (and reset
-    `AudioBattery._info` on every macOS empty-probe, so a disconnected ring never lingers).
+    `NotchMetrics`. If the indicator-slot count diverges they disagree on the collapsed
+    footprint and the right-most indicator clips off the window edge — locally: laptop
+    battery ring "missing". Always derive the count via `quickViewIndicatorSlots(...)`
+    (and reset `AudioBattery._info` on every macOS empty-probe, so a disconnected ring
+    never lingers). The notification bell adds one slot, so a readable/unreadable store
+    flips the collapsed width by 28dp — both sizers must feed it the same `NotificationCount`
+    value.
 16. **Real-time BT connection events must come from CoreAudio, not bluetoothd
     notifications**: bluetoothd's `com.apple.bluetooth.device-connected` /
     `-disconnected` names fire via neither NSDistributedNotificationCenter nor
@@ -494,7 +504,7 @@ composeApp/
 
 | Constant | Value | Where |
 | --- | --- | --- |
-| `collapsedPillWidthDp` / `heightDp` | 150 / 30 (default) | `NotchConfig` |
+| `quickViewWidthDp` / `quickViewHeightDp` | 150 / 30 (default; serialised as `collapsedPillWidthDp`/`collapsedPillHeightDp`) | `NotchConfig` |
 | `expandedNotchHeightDp` | 78 (slider 70–86) | `NotchConfig`, `DockSizingTab` |
 | island depth | height + 6dp | `OverlayGeometry` |
 | `NowPlayingWidth` / `LiveCollapsedWidth` | 356dp / 236dp | `DockLayout` |

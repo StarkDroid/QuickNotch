@@ -26,6 +26,7 @@ import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
+import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
@@ -33,10 +34,10 @@ import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
 import com.starkdroid.quicknotch.ui.OverlayPager
 import com.starkdroid.quicknotch.ui.SettingsScreen
-import com.starkdroid.quicknotch.ui.collapsedIndicatorRingCount
 import com.starkdroid.quicknotch.ui.computeNotchMetrics
 import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
+import com.starkdroid.quicknotch.ui.quickViewIndicatorSlots
 import kotlinx.coroutines.delay
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
@@ -74,16 +75,19 @@ fun main() {
         val volumePercent by SystemVolume.percent.collectAsState()
         val battery by AudioBattery.info.collectAsState()
         val deviceBattery by SystemBattery.state.collectAsState()
+        val notificationCount by NotificationCount.count.collectAsState()
         DisposableEffect(Unit) {
             media.start()
             SystemVolume.start()
             AudioBattery.start()
             SystemBattery.start()
+            NotificationCount.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
                 AudioBattery.stop()
                 SystemBattery.stop()
+                NotificationCount.stop()
             }
         }
 
@@ -122,6 +126,7 @@ fun main() {
                 volumePercent = volumePercent,
                 battery = battery,
                 deviceBattery = deviceBattery,
+                notificationCount = notificationCount,
                 onExpandedChange = { isExpanded = it },
                 onWindowExpandedChange = { isWindowExpanded = it }
             )
@@ -172,17 +177,19 @@ private fun NotchOverlayWindow(
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
+    notificationCount: Int?,
     onExpandedChange: (Boolean) -> Unit,
     onWindowExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
-    // The native window and the overlay content must size the collapsed pill
-    // identically, or the indicator rings (device + laptop battery) clip off
-    // the far edge. Both derive the ring count through the same helper.
-    val collapsedRings = collapsedIndicatorRingCount(config, musicLive, battery, deviceBattery)
-    val metrics = remember(config, favorites.size, musicLive, collapsedRings) {
-        computeNotchMetrics(config, favorites.size, musicLive, collapsedRings)
+    // The native window and the overlay content must size the quickview
+    // identically, or the indicator slots (device + laptop battery + the
+    // notification bell) clip off the far edge. Both derive the slot count
+    // through the same helper.
+    val indicatorSlots = quickViewIndicatorSlots(config, musicLive, battery, deviceBattery, notificationCount)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
     }
     val targetSize = metrics.sizeFor(isWindowExpanded)
 

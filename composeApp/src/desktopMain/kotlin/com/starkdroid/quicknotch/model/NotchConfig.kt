@@ -60,12 +60,12 @@ data class WidgetsConfig(
     /** Collapsed-pill indicator toggles; the expanded music page always shows volume + audio battery. */
     val showCollapsedVolume: Boolean = true,
     val showCollapsedBattery: Boolean = true,
-    /** System (laptop) battery indicator; collapsed pill only, beside the clock. */
+    /** System (laptop) battery indicator; quickview only, beside the clock. */
     val showCollapsedDeviceBattery: Boolean = true
 )
 
 /**
- * Date layouts for the idle clock shown in the collapsed pill (while nothing
+ * Date layouts for the idle clock shown in the quickview (while nothing
  * is playing). The pattern is [java.time.format.DateTimeFormatter] syntax and
  * the dropdown renders a live example, so users pick the exact look they get.
  */
@@ -100,15 +100,18 @@ data class NotchConfig(
     val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,
     val baseIconSizeDp: Int = 38,
-    val collapsedPillWidthDp: Int = 150,
-    val collapsedPillHeightDp: Int = 30,
+    /** Quickview (collapsed pill) footprint; serialised under the old names so existing files load. */
+    @SerialName("collapsedPillWidthDp")
+    val quickViewWidthDp: Int = 150,
+    @SerialName("collapsedPillHeightDp")
+    val quickViewHeightDp: Int = 30,
     val expandedNotchHeightDp: Int = 78,
     val autoStartOnBoot: Boolean = false,
     val alwaysOnTop: Boolean = true,
     val showTooltips: Boolean = true,
     val hideOnAppLaunch: Boolean = false,
     val collapseDelayMs: Long = 400L,
-    // Idle clock in the collapsed pill: replaces the idle dots whenever either
+    // Idle clock in the quickview: replaces the idle dots whenever either
     // piece is on. Old config files load fine (missing fields take these
     // defaults via kotlinx.serialization).
     val clockDate: Boolean = true,

@@ -34,7 +34,7 @@ private val systemBatteryJson: Json = Json {
 /**
  * The machine's own battery (a laptop): level 0-100 and whether the OS is
  * actively charging it. Null while no battery exists (desktops), so the
- * collapsed-pill indicator only ever appears on machines that can actually
+ * quickview indicator only ever appears on machines that can actually
  * drain.
  *
  * Polling lives in the companion: it runs independently of [AudioBattery]

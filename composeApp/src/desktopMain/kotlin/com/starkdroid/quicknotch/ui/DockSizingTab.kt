@@ -175,14 +175,14 @@ internal fun DockSizingTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     MinimalistSliderRow(
-                        title = stringResource(Res.string.collapsed_width_title),
+                        title = stringResource(Res.string.quickview_width_title),
                         valueLabel = stringResource(
                             Res.string.value_dp,
-                            config.collapsedPillWidthDp.coerceIn(140, 190).toString()
+                            config.quickViewWidthDp.coerceIn(140, 190).toString()
                         ),
-                        value = config.collapsedPillWidthDp.toFloat().coerceIn(140f, 190f),
+                        value = config.quickViewWidthDp.toFloat().coerceIn(140f, 190f),
                         valueRange = 140f..190f,
-                        onValueChange = { onUpdate { cfg -> cfg.copy(collapsedPillWidthDp = it.toInt()) } }
+                        onValueChange = { onUpdate { cfg -> cfg.copy(quickViewWidthDp = it.toInt()) } }
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -201,8 +201,8 @@ internal fun DockSizingTab(
             }
         }
 
-        // Section 4: Collapsed Pill Indicators (moved here from the Now Playing
-        // widget accordion — they tune the collapsed pill, not the music widget).
+        // Section 4: QuickView Indicators (moved here from the Now Playing
+        // widget accordion — they tune the quickview, not the music widget).
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = FlatSurface),
@@ -210,7 +210,7 @@ internal fun DockSizingTab(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    SectionHeader(Icons.Default.Sensors, stringResource(Res.string.pill_indicators_title))
+                    SectionHeader(Icons.Default.Sensors, stringResource(Res.string.quickview_indicators_title))
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -255,7 +255,7 @@ internal fun DockSizingTab(
             }
         }
 
-        // Section 5: Idle clock in the collapsed pill
+        // Section 5: Idle clock in the quickview
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = FlatSurface),
@@ -364,7 +364,7 @@ private fun SectionHeader(icon: ImageVector, title: String) {
 }
 
 /**
- * One cell in the collapsed-pill indicators grid (Volume / Audio Battery /
+ * One cell in the quickview indicators grid (Volume / Audio Battery /
  * Laptop Battery): a square toggle that previews the level-ring glyph and its
  * level, with the label centered underneath. The on-state reads as an
  * accent-cased selected cell with a full-bright ring; off is a neutral card

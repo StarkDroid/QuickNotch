@@ -143,3 +143,10 @@ internal fun systemBatteryPainter(level: Int, charging: Boolean): Painter =
         level >= 3 -> painterResource(Res.drawable.battery_mid)
         else -> painterResource(Res.drawable.battery_low)
     }
+
+/**
+ * Notification bell glyph as a painter for the quickview's badge indicator —
+ * the packaged notification drawable, tinted at draw time like the rings.
+ */
+@Composable
+internal fun notificationPainter(): Painter = painterResource(Res.drawable.notification)

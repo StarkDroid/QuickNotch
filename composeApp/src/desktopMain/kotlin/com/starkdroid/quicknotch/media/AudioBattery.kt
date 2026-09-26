@@ -63,7 +63,7 @@ private val batteryJson: Json = Json {
 
 /**
  * Battery percentage of the connected Bluetooth audio device for the music
- * widget (collapsed pill chip + expanded page).
+ * widget (quickview chip + expanded page).
  *
  * Presence on Windows comes from the OS's live Bluetooth connection state
  * ([battery.ps1] mode A: `Windows.Devices.Enumeration` +

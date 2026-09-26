@@ -48,16 +48,16 @@ internal object DockLayout {
     val LiveCollapsedWidth: Dp = 236.dp
 
     /**
-     * Extra collapsed-pill length per additional indicator shown in the idle
-     * clock (22dp ring + 6dp spacing). The idle pill widens by this per visible
-     * ring so date/time + device battery + laptop battery all coexist without
-     * clipping, mirroring how the live pill already grows to its rings.
+     * Extra quickview length per indicator shown in the idle pill (22dp ring or
+     * bell + 6dp spacing). The idle pill widens by this per indicator so
+     * date/time + device battery + laptop battery + notifications all coexist
+     * without clipping, mirroring how the live pill already grows to its rings.
      */
-    val CollapsedClockIndicatorSlot: Dp = 28.dp
+    val QuickViewIndicatorSlot: Dp = 28.dp
 }
 
 /**
- * The window footprint (in dp) for both the collapsed pill and the expanded
+ * The window footprint (in dp) for both the quickview and the expanded
  * dock.
  */
 @Immutable
@@ -91,16 +91,16 @@ data class NotchMetrics(
  * page is live it is wider than the apps page, so the window widens to that
  * page — the apps page keeps its own (narrower) layout, centred.
  *
- * [collapsedRings] is the count of level-ring indicators actually rendered in
- * the idle pill next to the clock (connected-device + laptop battery); the
- * collapsed footprint grows by one indicator slot per ring so the rings are
- * never clipped by the configured pill width.
+ * [indicatorSlots] is the count of indicators actually rendered in the idle
+ * quickview next to the clock (connected-device + laptop battery rings, plus the
+ * notification bell); the collapsed footprint grows by one slot per indicator so
+ * nothing is ever clipped by the configured pill width.
  */
 fun computeNotchMetrics(
     config: NotchConfig,
     favoriteCount: Int,
     musicActive: Boolean = false,
-    collapsedRings: Int = 0
+    indicatorSlots: Int = 0
 ): NotchMetrics {
     val base = config.baseIconSizeDp.dp
     val count = favoriteCount.coerceAtLeast(0)
@@ -114,8 +114,8 @@ fun computeNotchMetrics(
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
     val alongExpanded = maxOf(appsAlong, musicAlong)
     val alongCollapsed = maxOf(
-        config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin +
-            DockLayout.CollapsedClockIndicatorSlot * collapsedRings.coerceAtLeast(0),
+        config.quickViewWidthDp.dp + DockLayout.CollapsedMargin +
+            DockLayout.QuickViewIndicatorSlot * indicatorSlots.coerceAtLeast(0),
         if (musicActive) DockLayout.LiveCollapsedWidth else 0.dp
     )
 
@@ -125,7 +125,7 @@ fun computeNotchMetrics(
     // pill, so it recedes into the edge when idle.
     val collapsedHeightDp =
         if (config.style == NotchStyle.DRAG_HANDLE) DockLayout.DragHandleHeightDp
-        else config.collapsedPillHeightDp
+        else config.quickViewHeightDp
     val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
 
     val islandExpanded = DpSize(alongExpanded, islandDepth)
@@ -143,25 +143,30 @@ fun computeNotchMetrics(
 }
 
 /**
- * How many level-ring indicators the idle pill actually renders beside the
- * clock right now: the connected-device ring and/or the laptop ring, each
- * gated by its own collapsed-only toggle. The window sizer and the overlay
- * content MUST agree on this — it widens the collapsed footprint by one
- * indicator slot per ring so the rings never clip against the window edge.
- * Gated to the clock branch: the dots and the drag-handle styles render no
- * rings at all, and a live media pill grows to its own (fixed) width.
+ * How many indicator slots the idle quickview actually renders right now: the
+ * connected-device ring, the laptop ring (each gated by its own collapsed-only
+ * toggle) and the notification bell (shown whenever the unread count is
+ * readable). The window sizer and the overlay content MUST agree on this — it
+ * widens the collapsed footprint by one slot per indicator so nothing clips
+ * against the window edge. Gated to the idle branches: the drag-handle style
+ * renders no indicators and a live media pill grows to its own (fixed) width.
  */
-fun collapsedIndicatorRingCount(
+fun quickViewIndicatorSlots(
     config: NotchConfig,
     musicLive: Boolean,
     battery: AudioDeviceBattery?,
-    deviceBattery: SystemBattery?
-): Int =
-    if (musicLive || config.style == NotchStyle.DRAG_HANDLE || !(config.clockDate || config.clockTime)) 0
-    else listOfNotNull(
+    deviceBattery: SystemBattery?,
+    notificationCount: Int?
+): Int {
+    if (musicLive || config.style == NotchStyle.DRAG_HANDLE) return 0
+    val notificationSlots = if (notificationCount != null) 1 else 0
+    // Dots branch (no clock): only the bell renders beside the dots.
+    if (!(config.clockDate || config.clockTime)) return notificationSlots
+    return notificationSlots + listOfNotNull(
         battery.takeIf { config.widgets.showCollapsedBattery },
         deviceBattery.takeIf { config.widgets.showCollapsedDeviceBattery }
     ).size
+}
 
 /**
  * Computes the top-left screen coordinate (in AWT points) for the overlay

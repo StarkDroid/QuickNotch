@@ -39,16 +39,17 @@
     <string name="base_icon_size_title">Base Icon Size</string>
     <string name="show_labels_title">Show App Labels</string>
     <string name="geometry_title">Notch Geometry</string>
-    <string name="collapsed_width_title">Collapsed Pill Width</string>
+    <string name="quickview_width_title">QuickView Width</string>
     <string name="expanded_height_title">Expanded Dock Height</string>
     <string name="value_dp">%1$s dp</string>
     <string name="value_scale">%1$sx</string>
-    <string name="pill_indicators_title">Collapsed Pill Indicators</string>
+    <string name="quickview_indicators_title">QuickView Indicators</string>
     <string name="indicator_volume">Volume</string>
     <string name="indicator_audio_battery">Audio Battery</string>
     <string name="indicator_laptop_battery">Laptop Battery</string>
+    <string name="notification_indicator">Unread notifications</string>
 
-    <!-- Idle clock in the collapsed pill -->
+    <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>
     <string name="clock_show_date">Show Date</string>
     <string name="clock_show_time">Show Time</string>
