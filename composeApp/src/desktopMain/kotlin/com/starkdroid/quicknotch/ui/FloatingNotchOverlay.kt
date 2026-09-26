@@ -619,7 +619,8 @@ internal fun FloatingNotchOverlay(
                         volumePercent = volumePercent,
                         battery = battery,
                         deviceBattery = deviceBattery,
-                        notificationCount = notificationCount,
+                        notificationCount =
+                            if (config.widgets.showCollapsedNotifications) notificationCount else null,
                         showVolume = config.widgets.showCollapsedVolume,
                         showBattery = config.widgets.showCollapsedBattery,
                         showDeviceBattery = config.widgets.showCollapsedDeviceBattery,

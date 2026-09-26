@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,16 +35,22 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -65,6 +73,17 @@ internal fun DockSizingTab(
     // A desktop has no battery; only offer the device-battery toggle where it
     // can actually do something.
     val hasDeviceBattery by SystemBattery.hasBattery.collectAsState()
+
+    // Live unread count drives the notification helper row below the indicator
+    // grid: null on macOS means Full Disk Access is still missing (offer the
+    // grant button); any Int means the source is readable (offer the test
+    // button). Windows feeds a session-local counter, so it reads as 0 → test
+    // button immediately.
+    val notificationCount by NotificationCount.count.collectAsState()
+    var testNotificationSequence by remember { mutableStateOf(0) }
+    val notificationTestTitle = stringResource(Res.string.notification_test_title)
+    val notificationTestBody = stringResource(Res.string.notification_test_body)
+    val notificationNeedsPermission = HostPlatform.isMac && notificationCount == null
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -250,6 +269,46 @@ internal fun DockSizingTab(
                                 }
                             )
                         }
+                        NotificationToggleBox(
+                            title = stringResource(Res.string.indicator_notifications),
+                            checked = config.widgets.showCollapsedNotifications,
+                            modifier = Modifier.weight(1f),
+                            onClick = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedNotifications = checked)) }
+                            }
+                        )
+                    }
+
+                    // Permission / test-notification helper for the notification
+                    // indicator. Hidden entirely while the toggle is off. macOS
+                    // without Full Disk Access offers a button that opens the
+                    // Privacy & Security pane; once the store becomes readable
+                    // (or on Windows, where nothing needs granting) the button
+                    // swaps to one that posts test notifications so the badge's
+                    // 99+ stacking can be watched live.
+                    if (config.widgets.showCollapsedNotifications) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        NotificationHelperRow(
+                            needsPermission = notificationNeedsPermission,
+                            permissionButton = stringResource(Res.string.notification_grant_button),
+                            permissionHint = stringResource(Res.string.notification_grant_hint),
+                            testButton = stringResource(Res.string.notification_test_button),
+                            testHint = stringResource(Res.string.notification_test_hint),
+                            onGrant = { NotificationCount.openPermissionSettings() },
+                            onTest = {
+                                testNotificationSequence += 1
+                                NotificationCount.postTestNotification(
+                                    title = notificationTestTitle,
+                                    body = String.format(
+                                        Locale.ROOT,
+                                        notificationTestBody,
+                                        testNotificationSequence
+                                    )
+                                )
+                            }
+                        )
                     }
                 }
             }
@@ -379,6 +438,79 @@ private fun IndicatorToggleBox(
     onClick: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
+        LevelRing(
+            level = level,
+            icon = icon,
+            contentDescription = title,
+            modifier = Modifier.size(42.dp),
+            tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
+            ringColor = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.35f),
+            trackColor = if (checked) LevelRingTrack else LevelRingTrack.copy(alpha = 0.7f),
+            strokeWidth = 2.5.dp,
+            iconFraction = 0.5f
+        )
+    }
+}
+
+/**
+ * The notifications entry of the same quickview indicators grid: identical
+ * chrome to [IndicatorToggleBox] but the preview is the real indicator — a lit
+ * bell wearing a red "3" badge on its corner — since a notification has no
+ * level percentage to show inside a ring.
+ */
+@Composable
+private fun NotificationToggleBox(
+    title: String,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
+        Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                painter = notificationPainter(),
+                contentDescription = null,
+                tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
+                modifier = Modifier.size(29.dp)
+            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = 2.dp)
+                    .height(11.dp)
+                    .defaultMinSize(minWidth = 11.dp)
+                    .clip(RoundedCornerShape(5.5.dp))
+                    .background(AccentRed.copy(alpha = if (checked) 1f else 0.55f))
+                    .padding(horizontal = 3.dp)
+            ) {
+                Text(
+                    text = "3",
+                    color = Color.White,
+                    fontSize = 7.sp,
+                    lineHeight = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Shared chrome for one indicator-grid cell: the accent-outlined square toggle
+ * with the caller-provided preview sitting above the centered label. The whole
+ * cell toggles on the next click.
+ */
+@Composable
+private fun IndicatorCell(
+    title: String,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    preview: @Composable () -> Unit
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -393,17 +525,7 @@ private fun IndicatorToggleBox(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LevelRing(
-                level = level,
-                icon = icon,
-                contentDescription = title,
-                modifier = Modifier.size(42.dp),
-                tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
-                ringColor = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.35f),
-                trackColor = if (checked) LevelRingTrack else LevelRingTrack.copy(alpha = 0.7f),
-                strokeWidth = 2.5.dp,
-                iconFraction = 0.5f
-            )
+            preview()
             Spacer(modifier = Modifier.height(7.dp))
             Text(
                 text = title,
@@ -412,6 +534,47 @@ private fun IndicatorToggleBox(
                 color = if (checked) TextPrimary else TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * Helper row under the indicators grid: a short hint plus one action button.
+ * While the notification store is unreadable (macOS missing Full Disk Access)
+ * the button opens the Privacy &amp; Security pane; once readable — or on
+ * Windows, where nothing needs granting — it posts test notifications instead,
+ * so pressing it repeatedly stacks the quickview badge.
+ */
+@Composable
+private fun NotificationHelperRow(
+    needsPermission: Boolean,
+    permissionButton: String,
+    permissionHint: String,
+    testButton: String,
+    testHint: String,
+    onGrant: () -> Unit,
+    onTest: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (needsPermission) permissionHint else testHint,
+            style = AppTypography.bodySmall,
+            color = TextSecondary,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(
+            onClick = if (needsPermission) onGrant else onTest,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = if (needsPermission) permissionButton else testButton,
+                style = AppTypography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = AccentIndigoLight
             )
         }
     }

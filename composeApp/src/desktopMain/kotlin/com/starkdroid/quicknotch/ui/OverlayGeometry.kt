@@ -146,10 +146,11 @@ fun computeNotchMetrics(
  * How many indicator slots the idle quickview actually renders right now: the
  * connected-device ring, the laptop ring (each gated by its own collapsed-only
  * toggle) and the notification bell (shown whenever the unread count is
- * readable). The window sizer and the overlay content MUST agree on this — it
- * widens the collapsed footprint by one slot per indicator so nothing clips
- * against the window edge. Gated to the idle branches: the drag-handle style
- * renders no indicators and a live media pill grows to its own (fixed) width.
+ * readable AND its toggle is on). The window sizer and the overlay content MUST
+ * agree on this — it widens the collapsed footprint by one slot per indicator
+ * so nothing clips against the window edge. Gated to the idle branches: the
+ * drag-handle style renders no indicators and a live media pill grows to its
+ * own (fixed) width.
  */
 fun quickViewIndicatorSlots(
     config: NotchConfig,
@@ -159,7 +160,8 @@ fun quickViewIndicatorSlots(
     notificationCount: Int?
 ): Int {
     if (musicLive || config.style == NotchStyle.DRAG_HANDLE) return 0
-    val notificationSlots = if (notificationCount != null) 1 else 0
+    val notificationSlots =
+        if (notificationCount != null && config.widgets.showCollapsedNotifications) 1 else 0
     // Dots branch (no clock): only the bell renders beside the dots.
     if (!(config.clockDate || config.clockTime)) return notificationSlots
     return notificationSlots + listOfNotNull(

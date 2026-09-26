@@ -61,7 +61,12 @@ data class WidgetsConfig(
     val showCollapsedVolume: Boolean = true,
     val showCollapsedBattery: Boolean = true,
     /** System (laptop) battery indicator; quickview only, beside the clock. */
-    val showCollapsedDeviceBattery: Boolean = true
+    val showCollapsedDeviceBattery: Boolean = true,
+    /**
+     * Unread-notification indicator (bell + red badge, quickview only). The
+     * slot also drives the permission/test-notification helpers in settings.
+     */
+    val showCollapsedNotifications: Boolean = true
 )
 
 /**

@@ -157,14 +157,25 @@ The drag-handle style shows only a slim grabber line. `LiveProgressStrip` hugs t
 edge facing the screen centre while playing (collapsed only; auto-hidden behind the
 expanded dock). The idle pill widens by one indicator slot (28dp) per visible indicator —
 the count comes from `quickViewIndicatorSlots(...)` (device + laptop battery rings, plus
-the notification bell when its unread count is readable) and **both** the native
+the notification bell when its unread count is readable and the toggle is on) and **both** the native
 window sizer (`NotchOverlayWindow` in `main.kt`) and the overlay content derive the
 collapsed footprint from it, so the rings are never clipped against the window edge.
 The notification bell + red count badge (`notification.svg`, `AccentRed`) cap the row
-farthest right; the count is polled from the macOS Notification Center store
+farthest right, gated by the `showCollapsedNotifications` widget toggle; the count is
+polled from the macOS Notification Center store
 (`~/Library/Group Containers/group.com.apple.usernoted/db2/db` via `sqlite3`) every 3s —
-a store falling Full Disk Access leaves it null and hides the indicator, and Windows has
-no unread store yet (see `NotificationCount`).
+a store falling Full Disk Access leaves it null and hides the indicator. Settings' QuickView
+Indicators card mirrors the toggle (bell + badge cell instead of a ring — a notification has
+no level to preview) and, while the toggle is on, shows a helper row underneath: macOS
+without Full Disk Access offers a **Grant Full Disk Access** button that deep-links the
+Privacy &amp; Security pane (`x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`);
+once the store reads (or on Windows, which needs no grant) the button swaps to **Send Test
+Notifications** — macOS posts a real banner via `osascript -e 'display notification …'` so
+the store count grows, Windows advances a session-local counter and attempts a best-effort
+WinRT toast (`toast.ps1`) that needs the installed MSI Start Menu shortcut/AUMID. Pressing
+repeatedly stacks the badge so its 99+ cap can be watched live (see `NotificationCount`).
+Windows has no public unread store — the badge there counts QuickNotch's own posts, a
+faithful demo but never real per-app counts.
 
 ### 5.6 Media pipeline
 
@@ -253,7 +264,7 @@ reorder target. `resetToDefaults()` seeds platform defaults.
 composeApp/
 ├── build.gradle.kts                      # KMP + Compose Desktop config, bridge sync tasks
 ├── native/
-│   ├── windows/{smtc,volume,system-battery,battery,accent}.ps1   # source of truth for bridges
+│   ├── windows/{smtc,volume,system-battery,battery,accent,toast}.ps1   # source of truth for bridges
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
 │   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
 └── src/
@@ -319,7 +330,7 @@ composeApp/
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
-| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store (`NotificationCount`) | done (this session) — hidden until Full Disk Access is granted; visual pass pending |
+| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — macOS badge still hidden until Full Disk Access is granted; visual pass + Windows toast (needs MSI AUMID) pending |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
