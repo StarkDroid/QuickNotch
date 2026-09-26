@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -42,10 +41,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.TextMuted
@@ -267,153 +264,3 @@ internal fun MinimalistRectSwitch(
     }
 }
 
-/** Gradients for the style-picker previews: a light "screen edge" band that the
- *  dark silhouette sits against, and the notch body itself. The band is what
- *  keeps the dark pill legible against the equally-dark selection cell. */
-private val screenBandBrush = Brush.verticalGradient(
-    listOf(Color(0xFF49536A), Color(0xFF2A3142))
-)
-private val notchSilhouetteBrush = Brush.verticalGradient(
-    listOf(Color(0xFF212A3A), Color(0xFF0E121B))
-)
-
-/**
- * Three-across visual picker for the notch silhouette. Each cell is a miniature
- * screen edge with the style drawn against it, so users select exactly the
- * shape they get — flush-and-squared, floating capsule, or slim bar. Pure
- * Compose shapes, so no drawable resources are involved.
- */
-@Composable
-internal fun NotchStylePicker(
-    selected: NotchStyle,
-    onSelect: (NotchStyle) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        NotchStyle.entries.forEach { style ->
-            val isSelected = style == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isSelected) FlatSurfaceSelected else FlatCard)
-                    .border(
-                        width = 1.dp,
-                        color = if (isSelected) AccentIndigoLight.copy(alpha = 0.9f) else FlatBorder,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .clickable { onSelect(style) }
-                    .padding(top = 8.dp, bottom = 10.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    NotchMiniPreview(style, isSelected)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = style.label(),
-                        style = AppTypography.labelSmall,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isSelected) Color.White else TextSecondary
-                    )
-                }
-
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .size(16.dp)
-                            .clip(CircleShape)
-                            .background(AccentIndigoLight),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color(0xFF0C0E14),
-                            modifier = Modifier.size(10.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * A tiny screen edge + notch silhouette for [NotchStylePicker]. A light band
- * across the top stands in for the display edge, so the dark notch body reads
- * clearly against the dark card — and the style's relationship to that edge
- * (flush-and-squared, floating capsule, or slim bar) is exactly how it meets
- * the real screen. A contrast rim keeps the silhouette legible when selected.
- */
-@Composable
-private fun NotchMiniPreview(style: NotchStyle, selected: Boolean) {
-    val rim = if (selected) AccentIndigoLight.copy(alpha = 0.9f) else Color(0xFF5B6680)
-    Box(
-        modifier = Modifier
-            .width(58.dp)
-            .height(40.dp)
-    ) {
-        // Screen edge band the styles anchor to or float away from.
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(18.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(screenBandBrush)
-                .border(1.dp, Color(0xFF3C455A), RoundedCornerShape(6.dp))
-        )
-
-        val topPadding: Dp
-        val shape: RoundedCornerShape
-        when (style) {
-            NotchStyle.DYNAMIC_ISLAND -> {
-                topPadding = 15.dp
-                shape = RoundedCornerShape(
-                    topStart = 0.dp,
-                    topEnd = 0.dp,
-                    bottomStart = 6.dp,
-                    bottomEnd = 6.dp
-                )
-            }
-            NotchStyle.FLOATING_PILL -> {
-                topPadding = 22.dp
-                shape = RoundedCornerShape(percent = 50)
-            }
-            NotchStyle.DRAG_HANDLE -> {
-                topPadding = 23.dp
-                shape = RoundedCornerShape(percent = 50)
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = topPadding)
-                .fillMaxWidth(
-                    when (style) {
-                        NotchStyle.DYNAMIC_ISLAND -> 0.64f
-                        NotchStyle.FLOATING_PILL -> 0.72f
-                        NotchStyle.DRAG_HANDLE -> 0.46f
-                    }
-                )
-                .height(
-                    when (style) {
-                        NotchStyle.DYNAMIC_ISLAND -> 20.dp
-                        NotchStyle.FLOATING_PILL -> 14.dp
-                        NotchStyle.DRAG_HANDLE -> 6.dp
-                    }
-                )
-                .clip(shape)
-                .background(notchSilhouetteBrush)
-                .border(1.dp, rim, shape)
-        )
-    }
-}

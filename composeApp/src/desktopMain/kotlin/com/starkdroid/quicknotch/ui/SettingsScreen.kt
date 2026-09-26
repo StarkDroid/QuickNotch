@@ -257,7 +257,7 @@ private fun SettingsTopBar(
 @Composable
 internal fun NotchStyle.label(): String = stringResource(
     when (this) {
-        NotchStyle.DYNAMIC_ISLAND -> Res.string.style_dynamic_island
+        NotchStyle.DYNAMIC_ISLAND -> Res.string.style_default
         NotchStyle.FLOATING_PILL -> Res.string.style_floating_pill
         NotchStyle.DRAG_HANDLE -> Res.string.style_drag_handle
     }

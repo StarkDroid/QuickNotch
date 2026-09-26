@@ -269,8 +269,8 @@ composeApp/
                 ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached once)
                 ├── Shimmer.kt                # label shimmer (Settings/fish-labels)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
-                    # SettingsComponents also holds AppearanceDropdown + NotchStylePicker
-                    # (3-across visual selector for the notch silhouette)
+                    # SettingsComponents also holds AppearanceDropdown (shared style/surface/date
+                    # dropdowns), MinimalistSliderRow, and MinimalistRectSwitch
 ```
 
 ---
@@ -308,7 +308,7 @@ composeApp/
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
-| Settings revamp: section-header icons, 3-across visual notch-style picker, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted | done (this session) — visual pass still pending on a live machine |
+| Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the collapsed-pill indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).

@@ -20,7 +20,7 @@
     <string name="tab_behavior">Behavior</string>
 
     <!-- Enum labels: notch style -->
-    <string name="style_dynamic_island">Dynamic Island</string>
+    <string name="style_default">Default</string>
     <string name="style_floating_pill">Floating Pill</string>
     <string name="style_drag_handle">Drag Handle</string>
 
@@ -35,30 +35,21 @@
     <string name="notch_style">Notch Style</string>
     <string name="surface_theme">Surface Theme</string>
     <string name="fisheye_title">Icon Fish-eye Magnification</string>
-    <string name="fisheye_desc">Icons magnify precisely under the cursor; the wave radius is derived from icon size automatically</string>
     <string name="peak_scale_title">Magnification Peak Scale</string>
     <string name="base_icon_size_title">Base Icon Size</string>
     <string name="show_labels_title">Show App Labels</string>
-    <string name="show_labels_desc">Display app name labels when hovering over icons</string>
     <string name="geometry_title">Notch Geometry</string>
-    <string name="geometry_desc">Collapsed pill and expanded dock dimensions</string>
     <string name="collapsed_width_title">Collapsed Pill Width</string>
     <string name="expanded_height_title">Expanded Dock Height</string>
     <string name="value_dp">%1$s dp</string>
     <string name="value_scale">%1$sx</string>
     <string name="pill_indicators_title">Collapsed Pill Indicators</string>
-    <string name="pill_indicators_desc">What the collapsed pill fills in beside the playing track and next to the clock when idle. The expanded page always shows volume and the audio-device battery.</string>
-    <string name="pill_indicators_desc_laptop">What the collapsed pill fills in beside the playing track and next to the clock when idle. The expanded page always shows volume and the audio-device battery; the laptop battery appears only beside the clock.</string>
-    <string name="pill_show_volume_title">Show System Volume</string>
-    <string name="pill_show_volume_desc">Display the volume level in the collapsed pill</string>
-    <string name="pill_show_audio_battery_title">Show Audio Device Battery</string>
-    <string name="pill_show_audio_battery_desc">Display the connected audio device\'s battery in the collapsed pill, beside the clock and next to the track</string>
-    <string name="pill_show_laptop_battery_title">Show Laptop Battery</string>
-    <string name="pill_show_laptop_battery_desc">Display the machine\'s own battery beside the clock in the collapsed pill; useful on laptops</string>
+    <string name="indicator_volume">Volume</string>
+    <string name="indicator_audio_battery">Audio Battery</string>
+    <string name="indicator_laptop_battery">Laptop Battery</string>
 
     <!-- Idle clock in the collapsed pill -->
     <string name="clock_title">Idle Clock</string>
-    <string name="clock_desc">Show a live date &amp; time in the collapsed pill instead of the idle dots</string>
     <string name="clock_show_date">Show Date</string>
     <string name="clock_show_time">Show Time</string>
     <string name="clock_24h">24-Hour Clock</string>
@@ -85,13 +76,11 @@ Add apps from the list on the right.</string>
     <string name="widgets_header">Widgets</string>
     <string name="widgets_header_desc">Enable widgets and tune them. Open the notch and scroll the wheel to flip between the active ones.</string>
     <string name="widget_apps_title">Pinned Apps</string>
-    <string name="widget_apps_desc">Quick-launch applications in the notch dock</string>
     <string name="widget_music_title">Now Playing</string>
-    <string name="widget_music_desc">Live music activity on the notch from any app</string>
     <string name="widget_now_playing">Now playing: %1$s — %2$s</string>
     <string name="widget_unknown_artist">—</string>
     <string name="widget_no_session">No active media session</string>
-    <string name="widget_style_warning">Live activity appears only on the Dynamic Island and Floating Pill styles.</string>
+    <string name="widget_style_warning">Live activity appears only on the Default and Floating Pill styles.</string>
     <string name="widget_scroll_hint">Scroll the mouse wheel over the open notch to switch between enabled widgets.</string>
     <string name="music_play">Play</string>
     <string name="music_pause">Pause</string>
@@ -107,12 +96,8 @@ Add apps from the list on the right.</string>
     <string name="behavior_header">System &amp; Startup Behaviors</string>
     <string name="autostart_title_mac">Start at Login</string>
     <string name="autostart_title_windows">Start on Windows Boot</string>
-    <string name="autostart_desc_mac">Launch QuickNotch automatically when you sign in to macOS</string>
-    <string name="autostart_desc_windows">Launch QuickNotch automatically on user sign-in</string>
     <string name="always_on_top_title">Always on Top</string>
-    <string name="always_on_top_desc">Keep the floating notch and dock above other windows</string>
     <string name="collapse_on_launch_title">Collapse on Launch</string>
-    <string name="collapse_on_launch_desc">Automatically collapse dock back into pill after launching an app</string>
 
     <!-- About dialog -->
     <string name="about_header">About QuickNotch</string>

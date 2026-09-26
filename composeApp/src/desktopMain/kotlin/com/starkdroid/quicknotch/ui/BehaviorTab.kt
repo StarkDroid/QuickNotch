@@ -57,10 +57,6 @@ internal fun BehaviorTab(
                             if (HostPlatform.isMac) Res.string.autostart_title_mac
                             else Res.string.autostart_title_windows
                         ),
-                        subtitle = stringResource(
-                            if (HostPlatform.isMac) Res.string.autostart_desc_mac
-                            else Res.string.autostart_desc_windows
-                        ),
                         checked = config.autoStartOnBoot,
                         onCheckedChange = { checked ->
                             StartupManager.setAutoStartEnabled(checked)
@@ -73,7 +69,6 @@ internal fun BehaviorTab(
                     BehaviorSwitchRow(
                         icon = Icons.Default.PushPin,
                         title = stringResource(Res.string.always_on_top_title),
-                        subtitle = stringResource(Res.string.always_on_top_desc),
                         checked = config.alwaysOnTop,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(alwaysOnTop = checked) }
@@ -85,7 +80,6 @@ internal fun BehaviorTab(
                     BehaviorSwitchRow(
                         icon = Icons.Default.Minimize,
                         title = stringResource(Res.string.collapse_on_launch_title),
-                        subtitle = stringResource(Res.string.collapse_on_launch_desc),
                         checked = config.hideOnAppLaunch,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(hideOnAppLaunch = checked) }
@@ -100,7 +94,6 @@ internal fun BehaviorTab(
 @Composable
 internal fun BehaviorSwitchRow(
     title: String,
-    subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     icon: ImageVector? = null
@@ -128,20 +121,14 @@ internal fun BehaviorSwitchRow(
             }
             Spacer(modifier = Modifier.width(12.dp))
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = AppTypography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
-            )
-            Text(
-                text = subtitle,
-                style = AppTypography.bodySmall,
-                color = TextSecondary,
-                fontSize = 12.sp
-            )
-        }
+        Text(
+            text = title,
+            style = AppTypography.bodyLarge,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary,
+            modifier = Modifier.weight(1f)
+        )
         MinimalistRectSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange

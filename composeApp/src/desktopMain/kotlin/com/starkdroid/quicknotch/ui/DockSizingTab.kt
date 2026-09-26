@@ -3,7 +3,9 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
@@ -35,14 +36,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.NotchConfig
+import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AccentRed
@@ -98,11 +102,13 @@ internal fun DockSizingTab(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    SectionHeader(Icons.Default.Palette, stringResource(Res.string.notch_style))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    NotchStylePicker(
+                    AppearanceDropdown(
+                        label = stringResource(Res.string.notch_style),
+                        options = NotchStyle.entries.toList(),
                         selected = config.style,
-                        onSelect = { style -> onUpdate { it.copy(style = style) } }
+                        optionLabel = { it.label() },
+                        onSelect = { style -> onUpdate { it.copy(style = style) } },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     AppearanceDropdown(
@@ -126,12 +132,6 @@ internal fun DockSizingTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     SectionHeader(Icons.Default.ZoomIn, stringResource(Res.string.fisheye_title))
-                    Text(
-                        text = stringResource(Res.string.fisheye_desc),
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -171,12 +171,6 @@ internal fun DockSizingTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     SectionHeader(Icons.Default.Straighten, stringResource(Res.string.geometry_title))
-                    Text(
-                        text = stringResource(Res.string.geometry_desc),
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -217,59 +211,45 @@ internal fun DockSizingTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     SectionHeader(Icons.Default.Sensors, stringResource(Res.string.pill_indicators_title))
-                    Text(
-                        text = stringResource(
-                            if (hasDeviceBattery) Res.string.pill_indicators_desc_laptop
-                            else Res.string.pill_indicators_desc
-                        ),
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    BehaviorSwitchRow(
-                        title = stringResource(Res.string.pill_show_volume_title),
-                        subtitle = stringResource(Res.string.pill_show_volume_desc),
-                        checked = config.widgets.showCollapsedVolume,
-                        onCheckedChange = { checked ->
-                            onUpdate {
-                                it.copy(widgets = it.widgets.copy(showCollapsedVolume = checked))
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    BehaviorSwitchRow(
-                        title = stringResource(Res.string.pill_show_audio_battery_title),
-                        subtitle = stringResource(Res.string.pill_show_audio_battery_desc),
-                        checked = config.widgets.showCollapsedBattery,
-                        onCheckedChange = { checked ->
-                            onUpdate {
-                                it.copy(widgets = it.widgets.copy(showCollapsedBattery = checked))
-                            }
-                        }
-                    )
-
-                    if (hasDeviceBattery) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        BehaviorSwitchRow(
-                            title = stringResource(Res.string.pill_show_laptop_battery_title),
-                            subtitle = stringResource(Res.string.pill_show_laptop_battery_desc),
-                            checked = config.widgets.showCollapsedDeviceBattery,
-                            onCheckedChange = { checked ->
-                                onUpdate {
-                                    it.copy(widgets = it.widgets.copy(showCollapsedDeviceBattery = checked))
-                                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        IndicatorToggleBox(
+                            title = stringResource(Res.string.indicator_volume),
+                            icon = volumePainter(),
+                            level = 72,
+                            checked = config.widgets.showCollapsedVolume,
+                            modifier = Modifier.weight(1f),
+                            onClick = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedVolume = checked)) }
                             }
                         )
+                        IndicatorToggleBox(
+                            title = stringResource(Res.string.indicator_audio_battery),
+                            icon = batteryPainter(isAudio = true),
+                            level = 68,
+                            checked = config.widgets.showCollapsedBattery,
+                            modifier = Modifier.weight(1f),
+                            onClick = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedBattery = checked)) }
+                            }
+                        )
+                        if (hasDeviceBattery) {
+                            IndicatorToggleBox(
+                                title = stringResource(Res.string.indicator_laptop_battery),
+                                icon = systemBatteryPainter(level = 58, charging = false),
+                                level = 58,
+                                checked = config.widgets.showCollapsedDeviceBattery,
+                                modifier = Modifier.weight(1f),
+                                onClick = { checked ->
+                                    onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedDeviceBattery = checked)) }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -284,12 +264,6 @@ internal fun DockSizingTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     SectionHeader(Icons.Default.Schedule, stringResource(Res.string.clock_title))
-                    Text(
-                        text = stringResource(Res.string.clock_desc),
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -386,5 +360,59 @@ private fun SectionHeader(icon: ImageVector, title: String) {
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary
         )
+    }
+}
+
+/**
+ * One cell in the collapsed-pill indicators grid (Volume / Audio Battery /
+ * Laptop Battery): a square toggle that previews the level-ring glyph and its
+ * level, with the label centered underneath. The on-state reads as an
+ * accent-cased selected cell with a full-bright ring; off is a neutral card
+ * with a dimmed ring.
+ */
+@Composable
+private fun IndicatorToggleBox(
+    title: String,
+    icon: Painter,
+    level: Int,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (checked) FlatSurfaceSelected else FlatCard)
+            .border(
+                width = 1.dp,
+                color = if (checked) AccentIndigoLight.copy(alpha = 0.9f) else FlatBorder,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .clickable { onClick(!checked) }
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            LevelRing(
+                level = level,
+                icon = icon,
+                contentDescription = title,
+                modifier = Modifier.size(42.dp),
+                tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
+                ringColor = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.35f),
+                trackColor = if (checked) LevelRingTrack else LevelRingTrack.copy(alpha = 0.7f),
+                strokeWidth = 2.5.dp,
+                iconFraction = 0.5f
+            )
+            Spacer(modifier = Modifier.height(7.dp))
+            Text(
+                text = title,
+                style = AppTypography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = if (checked) TextPrimary else TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

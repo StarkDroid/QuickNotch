@@ -86,7 +86,6 @@ internal fun WidgetsTab(
             WidgetAccordion(
                 icon = Icons.Default.Apps,
                 title = stringResource(Res.string.widget_apps_title),
-                subtitle = stringResource(Res.string.widget_apps_desc),
                 enabled = config.widgets.pinnedAppsEnabled,
                 onToggleEnabled = { enabled ->
                     onUpdate { it.copy(widgets = it.widgets.copy(pinnedAppsEnabled = enabled)) }
@@ -115,7 +114,6 @@ internal fun WidgetsTab(
                         BehaviorSwitchRow(
                             icon = Icons.AutoMirrored.Filled.Label,
                             title = stringResource(Res.string.show_labels_title),
-                            subtitle = stringResource(Res.string.show_labels_desc),
                             checked = config.showTooltips,
                             onCheckedChange = { checked ->
                                 onUpdate { it.copy(showTooltips = checked) }
@@ -129,7 +127,6 @@ internal fun WidgetsTab(
             WidgetAccordion(
                 icon = Icons.Default.MusicNote,
                 title = stringResource(Res.string.widget_music_title),
-                subtitle = stringResource(Res.string.widget_music_desc),
                 enabled = config.widgets.nowPlayingEnabled,
                 onToggleEnabled = { enabled ->
                     onUpdate { it.copy(widgets = it.widgets.copy(nowPlayingEnabled = enabled)) }
@@ -174,7 +171,6 @@ internal fun WidgetsTab(
 internal fun WidgetAccordion(
     icon: ImageVector,
     title: String,
-    subtitle: String,
     enabled: Boolean,
     onToggleEnabled: (Boolean) -> Unit,
     content: @Composable () -> Unit
@@ -214,14 +210,9 @@ internal fun WidgetAccordion(
                     Text(
                         text = title,
                         style = AppTypography.titleSmall,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
-                    )
-                    Text(
-                        text = subtitle,
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
                     )
                 }
                 MinimalistRectSwitch(checked = enabled, onCheckedChange = onToggleEnabled)
