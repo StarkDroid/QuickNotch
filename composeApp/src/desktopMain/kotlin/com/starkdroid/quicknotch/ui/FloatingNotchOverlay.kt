@@ -116,6 +116,7 @@ import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
+import com.starkdroid.quicknotch.datasource.SystemAccent
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
@@ -306,6 +307,10 @@ private const val NowPlayingTitleKey = "nowPlayingTitle"
 private const val NowPlayingVolumeKey = "nowPlayingVolume"
 private const val NowPlayingBatteryKey = "nowPlayingBattery"
 
+// How often the System Accent surface re-reads the OS accent so a desktop
+// accent change recolours the notch without a restart.
+private const val SystemAccentPollMs = 3000L
+
 /**
  * Bounds one collapsed-pill element to its expanded-page counterpart (the
  * vinyl disc, the marquee title, the level rings). The pair are different
@@ -365,6 +370,20 @@ internal fun FloatingNotchOverlay(
 
     val liveSession by media.session.collectAsState()
     val musicLive = isMusicLive(config, liveSession)
+
+    // The System Accent surface tints itself to the desktop accent. While that
+    // surface is chosen, re-read the OS accent every few seconds so changing
+    // the macOS/Windows accent recolours the notch in place (deduped by the
+    // StateFlow, so only an actual colour change triggers a rebuild).
+    val accent by SystemAccent.accent.collectAsState()
+    LaunchedEffect(config.surface) {
+        if (config.surface != NotchSurface.SYSTEM_ACCENT) return@LaunchedEffect
+        SystemAccent.refresh()
+        while (true) {
+            delay(SystemAccentPollMs)
+            SystemAccent.refresh()
+        }
+    }
 
     // Position interpolation clock. The media bridge samples once per second;
     // advancing a local clock between samples lets the vinyl and the progress
@@ -496,9 +515,12 @@ internal fun FloatingNotchOverlay(
     val metrics = remember(config, favorites.size, musicLive, collapsedRings) {
         computeNotchMetrics(config, favorites.size, musicLive, collapsedRings)
     }
-    // Cached once per surface choice; the brushes are built at class load,
+    // Cached per surface choice *and* per accent value: the brushes are built
+    // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
-    val surface = remember(config.surface) { IslandSurface.styleFor(config.surface) }
+    val surface = remember(config.surface, accent) {
+        IslandSurface.styleFor(config.surface, accent)
+    }
 
     // The dock reveal is a layer animation (fade + scale) over the always
     // expanded-size dock. Driving it through [MutableTransitionState] rather

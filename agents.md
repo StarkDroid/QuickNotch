@@ -202,9 +202,13 @@ collapsed footprint from it, so the rings are never clipped against the window e
 - `SystemBattery` (laptop, 5s): `Win32_Battery` via `system-battery.ps1` (Windows) /
   `pmset -g batt` (macOS). Exposes `state` + `hasBattery` (gates the settings toggle so
   desktops never see it). `charging` = **actively charging only** (status 6/7/8/9).
-- `SystemAccent` (datasource): one-shot OS accent fetch, cached for the process. macOS
+- `SystemAccent` (datasource): OS accent fetch. macOS
   maps `defaults read -g AppleAccentColor` (index incl. `-2` multicolor/`-1` graphite) onto
   system accent RGBs; Windows reads the DWM `AccentColor` (ABGR DWORD) via `accent.ps1`.
+  It is published as a `StateFlow` and re-probed every 3s while the System Accent surface
+  is chosen (poller gated on `config.surface` inside the overlay), so changing the desktop
+  accent recolours the notch in place without a restart; the `IslandSurface` accented style
+  rebuilds only when the accent value changes. A failed probe keeps the previous value.
   Null result (unreadable/e.g. PowerShell) → the caller falls back to accent-free
   translucent glass. Feeds `NotchSurface.SYSTEM_ACCENT`; `IslandSurface.buildAccented()`
   blends it into the glass body/rim at ~10–16% so it reads as tinted glass, not a swatch.
@@ -266,7 +270,7 @@ composeApp/
                 ├── OverlayPager.kt           # shared page/flip state
                 ├── LevelRing.kt              # reusable 288° ring + painters
                 ├── CollapsedClock.kt         # IdleClockRow (+ laptop battery ring)
-                ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached once)
+                ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached per value)
                 ├── Shimmer.kt                # label shimmer (Settings/fish-labels)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
                     # SettingsComponents also holds AppearanceDropdown (shared style/surface/date
@@ -377,9 +381,9 @@ composeApp/
    processes — the ObjC bridge must route through `osascript -l JavaScript`. Never "simplify"
    it to a direct MediaRemote call.
 7. **Gradients/brushes on the SOFTWARE renderer**: cache brushes per surface at class
-   load (see `IslandSurface`, `surface`); `SYSTEM_ACCENT` is built once on first use
-   (its value depends on the OS accent) and cached from then on — no per-frame
-   allocation while animating.
+   load (see `IslandSurface`, `surface`); the `SYSTEM_ACCENT` style is rebuilt only when
+   the OS accent value changes (a rare, user-driven event) and cached per value — no
+   per-frame allocation while animating. Never rebuild it per poll tick.
 8. **Artwork**: never re-rasterize per poll — cache by content id, downscale to ≤256px.
 9. **`AnimatedVisibility` + morph crossing**: the pill must stay visible until `showDock`
    flips while a track is live (`if (musicLive) !showDock else !isExpanded`).

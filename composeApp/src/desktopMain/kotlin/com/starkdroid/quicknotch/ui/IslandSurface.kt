@@ -25,7 +25,9 @@ import com.starkdroid.quicknotch.model.NotchSurface
  * reachable from Compose without a native screen-capture loop (which would
  * also recapture the island itself). [NotchSurface.SYSTEM_ACCENT] is that same
  * glass with the desktop's accent colour blended into the body, rim and a
- * faint sheen glint; the accent is read once and cached (see [SystemAccent]).
+ * faint sheen glint. The accent is passed in by callers (see [SystemAccent]);
+ * the accented style is rebuilt only when that colour changes, so switching the
+ * desktop accent recolours the notch in place without a restart.
  */
 internal object IslandSurface {
 
@@ -61,29 +63,41 @@ internal object IslandSurface {
     )
 
     // The accent style is a function of the OS accent, so it can't live in the
-    // static map above; it is built once on first use and cached from then on.
+    // static map above; it is rebuilt only when the accent value changes (a
+    // rare, user-driven event) and cached per value so steady-state rendering
+    // never reallocates brushes between polls.
     @Volatile private var accented: Style? = null
+    @Volatile private var accentedFor: Color? = null
 
-    fun styleFor(surface: NotchSurface): Style =
+    fun styleFor(
+        surface: NotchSurface,
+        accent: Color? = SystemAccent.current()
+    ): Style =
         if (surface == NotchSurface.SYSTEM_ACCENT) {
-            accented ?: buildAccented()
+            styleForAccent(accent)
         } else {
             styles.getValue(surface)
         }
 
+    private fun styleForAccent(accent: Color?): Style {
+        if (accent == null) return styles.getValue(NotchSurface.TRANSLUCENT)
+        accented?.let { cached ->
+            if (accentedFor == accent) return cached
+        }
+        return buildAccented(accent).also {
+            accented = it
+            accentedFor = accent
+        }
+    }
+
     /**
      * Translucent-glass body with the desktop accent blended in. The tint is
      * deliberate but restrained (roughly 15% of the full accent on the body) so
-     * the notch stays glassy rather than reading as a solid colour swatch. Falls
-     * back to plain translucent glass when the OS accent is unreadable.
+     * the notch stays glassy rather than reading as a solid colour swatch.
      */
-    private fun buildAccented(): Style {
-        val accent = SystemAccent.current()
-        val translucent = styles.getValue(NotchSurface.TRANSLUCENT)
-        if (accent == null) return translucent
-
+    private fun buildAccented(accent: Color): Style {
         val accentRim = accent.copy(alpha = 0.55f)
-        val style = Style(
+        return Style(
             fill = Brush.verticalGradient(
                 0f to lerp(Color(0xC01C2637), accent, 0.16f),
                 0.55f to lerp(Color(0xAB101723), accent, 0.13f),
@@ -98,8 +112,6 @@ internal object IslandSurface {
             border = accentRim,
             borderWidth = 0.75f
         )
-        accented = style
-        return style
     }
 }
 
