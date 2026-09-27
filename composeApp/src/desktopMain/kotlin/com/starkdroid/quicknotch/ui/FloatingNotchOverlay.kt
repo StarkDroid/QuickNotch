@@ -197,8 +197,8 @@ private val DockFadeOut = tween<Float>(90)
 // bottom edge) over a long, eased tween while the dock rises on a slow spring,
 // so the whole cross reads as one unbroken descent rather than a snap-and-pop.
 private val QuickViewSlideIn = tween<IntOffset>(360, easing = FastOutSlowInEasing)
-private val QuickViewSlideOut = tween<IntOffset>(420, easing = FastOutSlowInEasing)
-private val QuickViewFadeOut = tween<Float>(300)
+private val QuickViewSlideOut = tween<IntOffset>(620, easing = FastOutSlowInEasing)
+private val QuickViewFadeOut = tween<Float>(420)
 /** Entry size for the idle dock: far enough below 1 to read as "coming to the
  * front", not so small it feels like a locket pop. Growth is anchored near the
  * top edge where the pill sits, so the apps rise from behind the quickview. */
