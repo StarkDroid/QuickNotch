@@ -1,14 +1,17 @@
 package com.starkdroid.quicknotch.datasource
 
 import com.sun.jna.Function
+import com.sun.jna.NativeLibrary
 import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.GDI32
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
+import com.starkdroid.quicknotch.media.NativeResources
 import java.awt.MouseInfo
 import java.awt.Rectangle
 import java.awt.Window
 import java.awt.event.MouseEvent
+import javax.swing.SwingUtilities
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -61,7 +64,11 @@ internal class WindowPassthrough private constructor(
         scope.launch {
             while (isActive) {
                 try {
-                    impl.apply(islandRect)
+                    val rect = islandRect
+                    // AppKit (macOS) and the owning thread (Windows region)
+                    // both require native window calls on the event thread:
+                    // Compose Desktop renders on the EDT, so dispatch there.
+                    SwingUtilities.invokeLater { impl.apply(rect) }
                 } catch (_: Throwable) {
                     // Fail soft: a single bad tick must never take the overlay down.
                 }
@@ -118,7 +125,11 @@ internal interface WindowPassthroughPlatform {
  */
 private fun windowPeer(window: Window): Any? {
     return try {
-        java.awt.Component::class.java.getMethod("getPeer").invoke(window)
+        // Component.getPeer() is package-private and there is no public
+        // accessor, so read the private `peer` field (+ --add-opens below).
+        val field = java.awt.Component::class.java.getDeclaredField("peer")
+        field.isAccessible = true
+        field.get(window)
     } catch (_: Throwable) {
         null
     }
@@ -145,6 +156,37 @@ private fun resolvePeerLong(peer: Any?, methodName: String): Long? {
     return ptr
 }
 
+/**
+ * The macOS AWT peer (`sun.lwawt.macosx.CPlatformWindow`) holds its NSWindow
+ * in the protected `CFRetainedResource.ptr` field — there is no public
+ * `getNSWindowPtr` on JDK 17. Resolve it via `peer.getPlatformWindow()` and
+ * read that field by reflection.
+ */
+private fun resolveMacWindowPtr(window: Window): Long? {
+    val peer = windowPeer(window) ?: return null
+    val platform = try {
+        peer.javaClass.getMethod("getPlatformWindow").invoke(peer)
+    } catch (_: Throwable) {
+        null
+    } ?: return null
+    try {
+        var cls: Class<*>? = platform.javaClass
+        while (cls != null) {
+            try {
+                val field = cls.getDeclaredField("ptr")
+                field.isAccessible = true
+                if (field.type == java.lang.Long.TYPE) {
+                    return field.getLong(platform)
+                }
+            } catch (_: NoSuchFieldException) {
+            }
+            cls = cls.superclass
+        }
+    } catch (_: Throwable) {
+    }
+    return null
+}
+
 // ── Windows: SetWindowRgn clips both painting and hit-testing ─────────────────
 
 /**
@@ -154,7 +196,11 @@ private fun resolvePeerLong(peer: Any?, methodName: String): Long? {
  * window.
  */
 private class Win32Region(private val window: Window) : WindowPassthroughPlatform {
-    private val hwnd = resolvePeerLong(windowPeer(window), "getHWnd")
+    private val hwnd = resolvePeerLong(windowPeer(window), "getHWnd").also {
+        if (it == null || it == 0L) {
+            System.err.println("QuickNotch: Windows overlay passthrough off (HWND resolve failed)")
+        }
+    }
 
     override fun apply(rect: Rectangle?) {
         val h = hwnd ?: return
@@ -184,25 +230,63 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
  * macOS impl. `ignoresMouseEvents` has no per-region variant, so the window is
  * kept mouse-transparent unless the real cursor sits over the island's
  * rectangle; the toggle is a simple reconcile against `MouseInfo` each tick.
- * The two Objective-C calls (`sel_registerName`/`objc_msgSend`) are made
- * through JNA's raw `Function` API because jna-platform no longer ships the
- * typed `ObjC` helper.
+ *
+ * The actual AppKit toggle runs through the compiled `passthrough_bridge.m`
+ * dylib (`quicknotch_set_ignores_mouse_events`, loaded via JNA): it flips the
+ * property on AppKit's main queue from a plain C symbol, which is far more
+ * reliable than driving objc_msgSend straight from JVM land (void-return /
+ * BOOL-arg sends crash with SIGTRAP on Apple silicon). Missing native bridge =
+ * fail soft.
  */
 private class MacClickThrough(private val window: Window) : WindowPassthroughPlatform {
-    private val nsWindowPtr = resolvePeerLong(windowPeer(window), "getNSWindowPtr")
-    private val ignoreSel = sel_registerName("setIgnoresMouseEvents:")
+    private val nsWindowPtr: Long? = run {
+        val ptr = resolveMacWindowPtr(window)
+        if (ptr == null || ptr == 0L) {
+            System.err.println("QuickNotch: macOS overlay passthrough off (NSWindow resolve failed)")
+            null
+        } else {
+            System.err.println("QuickNotch: macOS overlay passthrough armed (NSWindow 0x${ptr.toString(16)})")
+            ptr
+        }
+    }
+    private val bridge: NativeLibrary? = NativeResources
+        .extract("macos/passthrough-bridge.dylib", ".dylib")
+        ?.let { lib ->
+            try {
+                NativeLibrary.getInstance(lib.absolutePath)
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    private val setIgnoreFn: Function? = bridge?.getFunction("quicknotch_set_ignores_mouse_events")
+    private val respondsFn: Function? = runCatching { bridge?.getFunction("quicknotch_window_responds") }.getOrNull()
+    private val unavailable = bridge == null || setIgnoreFn == null
+    private var reported = false
+
+    /** Log the fail-soft reason once; never spam a 30 ms poll. */
+    private fun reportOnce() {
+        if (!reported) {
+            reported = true
+            System.err.println("QuickNotch: macOS overlay passthrough off (native bridge unavailable)")
+        }
+    }
 
     /** The last value we sent to `setIgnoresMouseEvents:` (avoids redundant calls). */
     private var ignoring = false
 
     override fun apply(rect: Rectangle?) {
         val ptr = nsWindowPtr ?: return
+        if (unavailable) {
+            reportOnce()
+            return
+        }
         val interactive = rect == null || cursorOver(rect)
         setIgnoring(ptr, !interactive)
     }
 
     override fun close() {
         val ptr = nsWindowPtr ?: return
+        if (unavailable) return
         try {
             setIgnoring(ptr, false)
         } catch (_: Throwable) {
@@ -231,10 +315,21 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
 
     private fun setIgnoring(ptr: Long, ignore: Boolean) {
         if (ignore == ignoring) return
-        ignoreSel?.let { sel ->
-            Function.getFunction("objc", "objc_msgSend")
-                .invoke(java.lang.Void::class.java, arrayOf(Pointer(ptr), sel, if (ignore) 1 else 0))
+        val respond = try {
+            respondsFn?.invokeInt(arrayOf(ptr)) ?: 1
+        } catch (_: Throwable) {
+            -1
         }
+        if (respond == 0) {
+            // Never trust the peer friendship: a non-NSWindow pointer must not
+            // receive the setter (an unrecognised selector aborts the JVM).
+            if (!reported) {
+                reported = true
+                System.err.println("QuickNotch: macOS overlay passthrough off (pointer is not a mouse-event window)")
+            }
+            return
+        }
+        setIgnoreFn?.invoke(java.lang.Void::class.java, arrayOf(ptr, if (ignore) 1 else 0))
         ignoring = ignore
         if (!ignore) {
             // The cursor is already over the (now interactive) island, but
@@ -260,15 +355,6 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
             )
             window.dispatchEvent(event)
         } catch (_: Throwable) {
-        }
-    }
-
-    private fun sel_registerName(name: String): Pointer? {
-        return try {
-            Function.getFunction("objc", "sel_registerName")
-                .invokePointer(arrayOf(name))
-        } catch (_: Throwable) {
-            null
         }
     }
 }

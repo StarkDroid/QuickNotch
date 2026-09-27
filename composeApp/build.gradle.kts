@@ -95,11 +95,37 @@ val compileMacBtWatchBridge by tasks.registering(Exec::class) {
     )
 }
 
+// macOS overlay click-through: a tiny dylib (`passthrough_bridge.m`) that
+// drives `[NSWindow setIgnoresMouseEvents:]` on AppKit's main queue. Window
+// passthrough loads it with JNA and calls the plain C exports, which is far
+// more reliable than firing objc_msgSend straight from JVM land (void-return /
+// BOOL-arg calls SIGTRAP on Apple silicon). Only built on macOS hosts.
+val compileMacPassthroughBridge by tasks.registering(Exec::class) {
+    onlyIf {
+        val os = System.getProperty("os.name").lowercase()
+        os.contains("mac") || os.contentEquals("darwin")
+    }
+    doFirst {
+        project.file("src/desktopMain/resources/macos").mkdirs()
+    }
+    workingDir = project.file("native/macos")
+    commandLine(
+        "cc",
+        "-O2",
+        "-mmacosx-version-min=12.0",
+        "-fobjc-arc",
+        "-dynamiclib",
+        "-framework", "Foundation",
+        "passthrough_bridge.m",
+        "-o", project.file("src/desktopMain/resources/macos/passthrough-bridge.dylib")
+    )
+}
+
 tasks.named("desktopJar") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge)
 }
 tasks.named("desktopProcessResources") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge)
 }
 
 compose.resources {
@@ -110,12 +136,15 @@ compose.desktop {
     application {
         mainClass = "com.starkdroid.quicknotch.MainKt"
 
-        // Open the AWT peer packages so WindowPassthrough can resolve the
-        // native window handle (sun.lwawt.LWWindowPeer.getNSWindowPtr on macOS,
-        // sun.awt.windows.WComponentPeer.getHWnd on Windows) and clip its hit
-        // target to the island. Both apply to `run` and the packaged app.
+        // Open the AWT implementation packages so WindowPassthrough can reach
+        // the native window handle and clip its hit target to the island:
+        // java.awt for the private Component.peer field, sun.lwawt.macosx for
+        // CPlatformWindow.ptr (the NSWindow), and sun.awt.windows for
+        // WComponentPeer.getHWnd. Both apply to `run` and the packaged app.
         jvmArgs += listOf(
+            "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
             "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",
+            "--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
             "--add-opens", "java.desktop/sun.awt.windows=ALL-UNNAMED"
         )
 

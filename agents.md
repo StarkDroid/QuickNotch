@@ -68,6 +68,7 @@ command line matches `MainKt|quicknotch`.
 - `syncWindowsBridge` — copies `composeApp/native/windows/*.ps1` → `src/desktopMain/resources/windows/`.
 - `compileMacNowPlayingBridge` — builds `native/macos/nowplaying_bridge.m` with `cc` (macOS hosts only).
 - `compileMacBtWatchBridge` — builds `native/macos/btwatch_bridge.m` with Foundation + CoreAudio (macOS hosts only).
+- `compileMacPassthroughBridge` — builds `native/macos/passthrough_bridge.m` into a dylib with Foundation (macOS hosts only; loaded by `WindowPassthrough`).
 
 If a Windows `.ps1` script is edited in `native/windows`, the copy into
 `resources/windows` is refreshed automatically at jar time — but **during a plain
@@ -280,17 +281,24 @@ window's interactive area to exactly the drawn island each tick:
   the Compose gate: a suppressed hover plays no role here — this is a raw
   AppKit-level hit-test, and poll cadence is what reactivates clicks. When the window is
   flipped back to interactive, a synthetic `MOUSE_MOVED` is dispatched so Compose's hover
-  machinery sees the "enter" it never received while mouse-transparent.
-- Both platforms resolve the native handle by reflecting the AWT peer (`getPeer` →
-  `LWWindowPeer.getNSWindowPtr` / `WComponentPeer.getHWnd`); the `java.awt.peer`/peer
-  implementation packages are opened via `--add-opens java.desktop/sun.lwawt=ALL-UNNAMED`
-  and `--add-opens java.desktop/sun.awt.windows=ALL-UNNAMED` (added to
+  machinery sees the "enter" it never received while mouse-transparent. The AppKit toggle
+  itself runs through the compiled `native/macos/passthrough_bridge.m` dylib (loaded with
+  JNA `NativeLibrary`; `quicknotch_set_ignores_mouse_events`, dispatched on AppKit's main
+  queue) — plain-C args are reliable, where driving objc_msgSend from JVM land with a
+  void return / BOOL arg crashes the JVM (SIGTRAP on Apple silicon).
+- Both platforms resolve the native handle by reflecting the AWT peer: the private
+  `Component.peer` field → `LWWindowPeer.getPlatformWindow` → the protected
+  `CFRetainedResource.ptr` (the NSWindow; no `getNSWindowPtr` exists on JDK 17) /
+  `WComponentPeer.getHWnd`. The packages are opened via
+  `--add-opens java.desktop/java.awt=ALL-UNNAMED`,
+  `--add-opens java.desktop/sun.lwawt.macosx=ALL-UNNAMED` and
+  `--add-opens java.desktop/sun.awt.windows=ALL-UNNAMED` (added to
   `compose.desktop.application` so they apply to `run` and the packaged app).
-- **Fail-soft by design**: `install()` never throws; if the peer method is missing or the
-  handle can't be resolved (logs `QuickNotch: overlay passthrough off (...)`), the window
-  simply stays fully interactive — the old fixed-footprint margin behaviour, degraded but
-  never broken. JNA ObjC goes through the raw `Function` API
-  (`objc_msgSend`/`sel_registerName`) because jna-platform no longer ships a typed `ObjC`.
+- **Fail-soft by design**: `install()` never throws; if the native handle can't be
+  resolved, the bridge is missing, or the pointer fails the `respondsToSelector:` probe,
+  the window simply stays fully interactive — the old fixed-footprint margin behaviour,
+  degraded but never broken. A one-shot `QuickNotch: macOS overlay passthrough
+  armed/off (...)` line is logged at startup.
 
 ---
 
@@ -303,6 +311,7 @@ composeApp/
 │   ├── windows/{smtc,volume,system-battery,battery,accent,toast}.ps1   # source of truth for bridges
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
 │   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
+│   └── macos/passthrough_bridge.m        # ObjC setIgnoresMouseEvents on main queue (WindowPassthrough dylib)
 └── src/
     ├── commonMain/composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
@@ -362,7 +371,7 @@ composeApp/
 | Expand-into-music + shared-element morph | done (`a02cdc1`, tuned `0c9a9a7`) |
 | Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
-| Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — Windows path unverified; macOS smoke ran |
+| Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — macOS live on Apple silicon via a compiled `passthrough_bridge.m` dylib (direct objc_msgSend with a BOOL arg crashes the JVM); Windows path unverified |
 | Tray/menu-bar "Always on top" toggle (mirrors Behavior-tab switch, drives `config.alwaysOnTop`) | done (this session) |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
