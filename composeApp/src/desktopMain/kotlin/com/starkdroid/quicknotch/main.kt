@@ -21,6 +21,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.datasource.HostPlatform
+import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioBattery
@@ -49,7 +50,7 @@ import javax.imageio.ImageIO
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
-fun main() {
+fun main(args: Array<String>) {
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
@@ -60,6 +61,12 @@ fun main() {
             System.setProperty("skiko.renderApi", "SOFTWARE")
         }
     }
+    // A fresh manual launch (Spotlight/Dock/Finder/Launchpad) opens the Settings
+    // window alongside the notch so the app's presence is obvious and the user
+    // can configure it immediately. A login-item auto-start passes
+    // `--login-item` (written into the launch command by StartupManager) and
+    // stays quietly behind the tray instead — nobody asked for settings at boot.
+    val loginItemLaunch = args.contains(StartupManager.LAUNCHED_AT_LOGIN_ARG)
 
     application {
         val repository = remember { FavoritesRepository() }
@@ -95,7 +102,7 @@ fun main() {
         }
 
         val musicLive = isMusicLive(config, liveSession)
-        var showSettings by remember { mutableStateOf(false) }
+        var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
 

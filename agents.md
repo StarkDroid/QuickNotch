@@ -83,7 +83,7 @@ If a Windows `.ps1` script is edited in `native/windows`, the copy into
 - One `application {}`; `FavoritesRepository` + `MediaController` are singletons owned here.
 - **Overlay window**: undecorated, transparent, `alwaysOnTop`, non-resizable, top-centred. The native window holds a **single fixed footprint — the expanded dock size — for its whole life** and is never resized while the notch opens or collapses; expanding is purely drawn growth of the island inside that stable window. This is what kills the macOS resize flash: a transparent AWT window that resizes white-flashes/skips a frame (known Compose Desktop + Skiko issue, see pitfall 17). The fixed window's transparent margin previously swallowed clicks on the desktop around the collapsed pill; `WindowPassthrough` (see 5.10) now clips the hit-test to exactly the drawn island, so the margin is click-through unless the cursor actually sits over the island (see pitfall 17). It is still **atomically positioned** (size+position written together in one `LaunchedEffect`) after the AWT window maps, and re-centred whenever the target footprint changes (favourites count, the widened now-playing page). `LaunchedEffect(config.style, targetSize)` handles placement; never re-place on the window's own live dimensions (feedback loop).
 - **Tray** (Windows) / menu-bar extra (macOS): show/hide notch, an **Always on top** toggle (mirrors the Behavior-tab switch; drives `config.alwaysOnTop`, re-applied to the overlay at next open), open Settings, reset defaults, quit.
-- **Settings window**: 880×660, normal window, `SettingsScreen`.
+- **Settings window**: 880×660, normal window, `SettingsScreen`. A **fresh manual launch** (Spotlight/Dock/Finder/Launchpad) opens it alongside the notch so the app's presence is obvious and configuration is one step away; a **login/boot auto-start** stays quietly behind the tray instead. The distinction is a command-line marker (`StartupManager.LAUNCHED_AT_LOGIN_ARG`) that `main` checks: it's appended to the macOS LaunchAgent / Windows Run-key command when auto-start is enabled, so `main(args)` starts with `showSettings = !args.contains(marker)`. Jpackage forwards `open -a App --args <marker>` arguments to the JVM main (verified via CGWindowList on both paths); an existing login item written before this feature has no marker and will open Settings at boot once until toggled off/on to regenerate it.
 
 Threading: `Dispatchers.IO` for all pollers/bridges; UI observes `StateFlow`s on the
 Compose/EDT thread. `OverlayPager` is deliberately touched from both the AWT wheel
@@ -401,6 +401,7 @@ composeApp/
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
 | Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — value is now `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The "15 after clearing" number is honest: macOS keeps unread-badge apps' notifications until read/dismissed, same as the Dock badges. macOS visual pass + Windows toast (needs MSI AUMID) still pending |
+| Fresh manual launch opens the Settings window alongside the notch; login/boot auto-start stays quietly behind the tray (distinguished by `--quicknotch-launched-at-login`, written into the LaunchAgent/Run-key command) | done (this session) — verified on macOS via CGWindowList on both paths (manual = overlay + settings; marker = overlay only); Windows launch still unverified |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
@@ -598,6 +599,13 @@ composeApp/
   to drive that resize is gone. The fixed window's click-swallowing margin is clipped away
   by `WindowPassthrough` (5.10) — the island is the only touch target; a tray/menu-bar
   "Always on top" toggle mirrors the Behavior-tab switch.
+- (this session → HEAD): a fresh manual launch opens the Settings window so the app's
+  presence is obvious; login/boot auto-start passes `--quicknotch-launched-at-login`
+  (from `StartupManager`, written into the LaunchAgent/Run-key command) and stays
+  quietly behind the tray. The notification indicator became a live "notifications in
+  the Notification Center" count: `count(*)` on the usernoted `record` table (adds on
+  delivery, removes on dismiss/clear), replacing both the `sum(app.badge)` and the
+  `delivered = 1` dead-column attempts.
 
 ---
 
