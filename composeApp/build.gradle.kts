@@ -95,10 +95,12 @@ val compileMacBtWatchBridge by tasks.registering(Exec::class) {
     )
 }
 
-// macOS overlay click-through: a tiny dylib (`passthrough_bridge.m`) that
-// drives `[NSWindow setIgnoresMouseEvents:]` on AppKit's main queue. Window
-// passthrough loads it with JNA and calls the plain C exports, which is far
-// more reliable than firing objc_msgSend straight from JVM land (void-return /
+// macOS overlay click-through + window/Dock policy: a tiny dylib
+// (`passthrough_bridge.m`) that drives `[NSWindow setIgnoresMouseEvents:]`,
+// the above-menu-bar notch level/placement (`setFrameTopGap`), and the app's
+// Dock/activation policy on AppKit's main queue. Window passthrough and
+// MacAppKit load it with JNA and call the plain C exports, which is far more
+// reliable than firing objc_msgSend straight from JVM land (void-return /
 // BOOL-arg calls SIGTRAP on Apple silicon). Only built on macOS hosts.
 val compileMacPassthroughBridge by tasks.registering(Exec::class) {
     onlyIf {
@@ -116,6 +118,7 @@ val compileMacPassthroughBridge by tasks.registering(Exec::class) {
         "-fobjc-arc",
         "-dynamiclib",
         "-framework", "Foundation",
+        "-framework", "AppKit",
         "passthrough_bridge.m",
         "-o", project.file("src/desktopMain/resources/macos/passthrough-bridge.dylib")
     )

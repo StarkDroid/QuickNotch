@@ -14,9 +14,20 @@ plus a growing set of **widgets**: a now-playing "live activity" (vinyl disc,
 marquee title, volume + device-battery level rings, transport controls, seekable
 gradient progress bar) and an idle clock (date/time) in the quickview.
 
+On macOS the pill lives **inside the menu-bar band, flush against the true top
+of the screen** (above the menu bar itself — a real Dynamic Island placement),
+joins every Space and survives full-screen apps while Always-on-top is on. That
+position is unreachable through AWT, so an ObjC bridge parks/keeps the window
+there (see 5.10/5.11). The app is a **quiet agent when only the notch is open**
+(no Dock icon, no app menu bar, overlay layers over full-screen apps); the Dock
+icon, app switcher entry and activation appear **only while the Settings window
+is open**. The Windows overlay is likewise excluded from the taskbar/Alt+Tab
+(`WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`) — only Settings is a taskbar window.
+
 One Kotlin/Compose Multiplatform (Desktop JVM) codebase runs both platforms;
-only scanning, icons, launch, login-items, and the media/battery bridges differ
-(Win32/JNA + PowerShell vs. macOS `open`/`sips`/`plutil`/`pmset`/Objective-C).
+only scanning, icons, launch, login-items, media/battery bridges, window levels
+and Dock/taskbar policy differ (Win32/JNA + PowerShell vs. macOS
+`open`/`sips`/`plutil`/`pmset`/Objective-C).
 
 The repo also contains `web/` (a separate SvelteKit marketing site) — unrelated
 to the app build, ignore it unless explicitly asked.
@@ -68,7 +79,7 @@ command line matches `MainKt|quicknotch`.
 - `syncWindowsBridge` — copies `composeApp/native/windows/*.ps1` → `src/desktopMain/resources/windows/`.
 - `compileMacNowPlayingBridge` — builds `native/macos/nowplaying_bridge.m` with `cc` (macOS hosts only).
 - `compileMacBtWatchBridge` — builds `native/macos/btwatch_bridge.m` with Foundation + CoreAudio (macOS hosts only).
-- `compileMacPassthroughBridge` — builds `native/macos/passthrough_bridge.m` into a dylib with Foundation (macOS hosts only; loaded by `WindowPassthrough`).
+- `compileMacPassthroughBridge` — builds `native/macos/passthrough_bridge.m` into a dylib with Foundation + AppKit (macOS hosts only; loaded by `MacAppKit` and used by `WindowPassthrough`, the overlay window policy and the Dock-presence toggle).
 
 If a Windows `.ps1` script is edited in `native/windows`, the copy into
 `resources/windows` is refreshed automatically at jar time — but **during a plain
@@ -82,6 +93,8 @@ If a Windows `.ps1` script is edited in `native/windows`, the copy into
 
 - One `application {}`; `FavoritesRepository` + `MediaController` are singletons owned here.
 - **Overlay window**: undecorated, transparent, `alwaysOnTop`, non-resizable, top-centred. The native window holds a **single fixed footprint — the expanded dock size — for its whole life** and is never resized while the notch opens or collapses; expanding is purely drawn growth of the island inside that stable window. This is what kills the macOS resize flash: a transparent AWT window that resizes white-flashes/skips a frame (known Compose Desktop + Skiko issue, see pitfall 17). The fixed window's transparent margin previously swallowed clicks on the desktop around the collapsed pill; `WindowPassthrough` (see 5.10) now clips the hit-test to exactly the drawn island, so the margin is click-through unless the cursor actually sits over the island (see pitfall 17). It is still **atomically positioned** (size+position written together in one `LaunchedEffect`) after the AWT window maps, and re-centred whenever the target footprint changes (favourites count, the widened now-playing page). `LaunchedEffect(config.style, targetSize)` handles placement; never re-place on the window's own live dimensions (feedback loop).
+  - **macOS above-menu-bar placement** (`MacOverlayWindowPolicy` via `MacAppKit`): AWT's `alwaysOnTop` only reaches `NSFloatingWindowLevel` (3) — below `kCGMainMenuWindowLevel` (24) — and AWT clamps placement to the visible area (y ≥ menu-bar height), so the island would always park *under* the menu bar ("below the screen", see pitfall 18). On macOS the overlay policy instead parks the window with direct Cocoa calls: level `NSStatusWindowLevel` (25, above the menu bar), collection behaviour `canJoinAllSpaces | stationary | fullScreenAuxiliary | ignoresCycle` (joins every Space, survives full-screen apps), and a frame top-gap of `edgeGapDp` so the island sits **flush against the true top of the screen** (verified: CGWindowList layer 25, bounds y=0). With **Always-on-top off** the policy drops the window to `NSNormalWindowLevel` (0) and re-parks it below the menu bar (`menuBarHeight + edgeGap`), so normal windows can cover the notch again. A slow reconcile loop (~700 ms) re-asserts level + frame because Compose placement and AWT's z-order bookkeeping keep re-parking the window 30pt low; installed only on macOS, off-mac it's a no-op.
+- **Dock / taskbar presence** (`MacDockPresence` via `MacAppKit`): the app is a **quiet agent** while only the notch runs — macOS `setActivationPolicy(NSApplicationActivationPolicyAccessory)` ⇒ no Dock icon, no app menu bar, and the overlay can sit over full-screen apps. Opening the Settings window flips it to `Regular` + `activateIgnoringOtherApps` (Dock icon, switcher entry, focus); closing Settings returns it to accessory. A ~700 ms reconcile loop re-asserts the policy (AWT initialises the process as Regular and can fight a one-shot flip). On Windows the overlay window itself is created with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar slot, no focus steal) while the Settings window stays a normal taskbar window — the same "presence only with Settings" rule. Both are driven from `showSettings` in `main.kt`; verified live: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` with Settings open.
 - **Tray** (Windows) / menu-bar extra (macOS): show/hide notch, an **Always on top** toggle (mirrors the Behavior-tab switch; drives `config.alwaysOnTop`, re-applied to the overlay at next open), open Settings, reset defaults, quit.
 - **Settings window**: 880×660, normal window, `SettingsScreen`. A **fresh manual launch** (Spotlight/Dock/Finder/Launchpad) opens it alongside the notch so the app's presence is obvious and configuration is one step away; a **login/boot auto-start** stays quietly behind the tray instead. The distinction is a command-line marker (`StartupManager.LAUNCHED_AT_LOGIN_ARG`) that `main` checks: it's appended to the macOS LaunchAgent / Windows Run-key command when auto-start is enabled, so `main(args)` starts with `showSettings = !args.contains(marker)`. Jpackage forwards `open -a App --args <marker>` arguments to the JVM main (verified via CGWindowList on both paths); an existing login item written before this feature has no marker and will open Settings at boot once until toggled off/on to regenerate it.
 
@@ -293,18 +306,24 @@ window's interactive area to exactly the drawn island each tick:
   further scaling. `null` = "whole window interactive" (measured/first frame).
 - **Windows**: `SetWindowRgn(GDI32.CreateRectRgn(...))` — the region clips both painting
   and hit-testing; the OS frees the previous region when replaced, so a fresh region per
-  tick is safe. `null` region = full window.
+  tick is safe. `null` region = full window. On construction the overlay also gets
+  `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (via `User32.GetWindowLong/SetWindowLong`,
+  `GWL_EXSTYLE`), so it never occupies a taskbar slot or steals focus.
 - **macOS**: `[NSWindow setIgnoresMouseEvents:]` (whole-window, no per-region variant),
   driven cursor-first each 30 ms poll: the window is mouse-transparent unless the *real*
   cursor (via `MouseInfo`) sits within the island rect (with a 4px pad). The opposite of
   the Compose gate: a suppressed hover plays no role here — this is a raw
   AppKit-level hit-test, and poll cadence is what reactivates clicks. When the window is
   flipped back to interactive, a synthetic `MOUSE_MOVED` is dispatched so Compose's hover
-  machinery sees the "enter" it never received while mouse-transparent. The AppKit toggle
-  itself runs through the compiled `native/macos/passthrough_bridge.m` dylib (loaded with
-  JNA `NativeLibrary`; `quicknotch_set_ignores_mouse_events`, dispatched on AppKit's main
-  queue) — plain-C args are reliable, where driving objc_msgSend from JVM land with a
-  void return / BOOL arg crashes the JVM (SIGTRAP on Apple silicon).
+  machinery sees the "enter" it never received while mouse-transparent. The island's
+  screen position comes from the **real** CG origin (`quicknotch_get_window_cg_origin`),
+  not AWT's cached `locationOnScreen` (which reports y=0 at the bottom of the menu bar
+  and never learns about the above-menu-bar Cocoa moves — see pitfall 18). The AppKit
+  toggle itself runs through the compiled `native/macos/passthrough_bridge.m` dylib
+  (loaded through the shared `MacAppKit` JNA front; `quicknotch_set_ignores_mouse_events`,
+  dispatched on AppKit's main queue) — plain-C args are reliable, where driving
+  objc_msgSend from JVM land with a void return / BOOL arg crashes the JVM (SIGTRAP on
+  Apple silicon).
 - Both platforms resolve the native handle by reflecting the AWT peer: the private
   `Component.peer` field → `LWWindowPeer.getPlatformWindow` → the protected
   `CFRetainedResource.ptr` (the NSWindow; no `getNSWindowPtr` exists on JDK 17) /
@@ -319,6 +338,47 @@ window's interactive area to exactly the drawn island each tick:
   degraded but never broken. A one-shot `QuickNotch: macOS overlay passthrough
   armed/off (...)` line is logged at startup.
 
+### 5.11 Platform integration study (Windows/macOS KMP desktop)
+
+A deliberate survey of how far each platform's native APIs can be reached from the
+single Kotlin/Compose Desktop codebase, feeding §5.10 and the above-menu-bar +
+Dock-presence work. Findings in brief:
+
+- **AWT/Compose limits on macOS** (verified against JDK 17 source and live):
+  `setAlwaysOnTop` tops out at `NSFloatingWindowLevel` (3) — *below* the menu bar
+  (24) — and placement clamps to the visible frame (y ≥ menu-bar height). A
+  Dynamic Island therefore cannot live above the menu bar via AWT. `locationOnScreen`
+  returns a *cached* origin that never observes direct Cocoa frame moves, so any
+  AWT-side screen math (hover gating, passthrough) drifts exactly by the menu-bar
+  height once the window is parked above it.
+- **The right layer for an island is AppKit's `NSStatusWindowLevel` (+1 over the
+  menu bar) with `collectionBehavior = canJoinAllSpaces | stationary |
+  fullScreenAuxiliary | ignoresCycle`** — the same recipe the popular notch
+  utilities use; it yields a window that joins every Space and survives in front of
+  full-screen apps. Mirrored on Windows by `IsWindowTopmost`-style `alwaysOnTop`
+  plus the region-clipped tool-window.
+- **Dock/taskbar presence is `setActivationPolicy` on macOS** — accessory (no Dock
+  icon, silent agent) ↔ regular (Dock icon, switcher) toggled live — and
+  `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` window styles on Windows. Both give the
+  same rule: *app visible in the OS chrome only while Settings is open*.
+- **Calling AppKit from the JVM**: compiled C symbols in a dylib (JNA) beat raw
+  `objc_msgSend` every time — void/BOOL sends SIGTRAP the JVM on Apple silicon.
+  All AppKit work is marshalled onto the main queue inside the dylib.
+- **Windows deep integration** already uses JNA-platform's full Win32 surface:
+  `User32` (window styles/regions/wheel), `GDI32` (`CreateRectRgn`), DWM accent
+  via `accent.ps1`, `Shell32` `SHGetImageList` for jumbo taskbar-style icons, and
+  PowerShell 5.1 projections for SMTC, CoreAudio volume, battery WMI and WinRT
+  Bluetooth presence (see §5.7). PowerShell was chosen over Java libs because
+  SMTC/`BluetoothDevice` have no stable pure-Java projection.
+- **macOS media/battery/mining** stays in small compiled ObjC binaries +
+  AppleScript/JXA + CLI tools (`osascript`, `pmset`, `system_profiler`,
+  `sqlite3`) because MediaRemote since 15.4 only answers `com.apple.*`
+  processes (the JXA subprocess trick, §5.6) and SPI plumbing would be unscoped.
+- **Threading contract**: everything native runs behind `Dispatchers.IO` objects;
+  their AppKit hops are dispatched to the main queue so the UI thread never blocks.
+  Fail-soft loading (bridge absent → features stay silent) is the project-wide
+  rule, so the Windows jar built on a macOS host still runs everything else.
+
 ---
 
 ## 6. Repo map (where things live)
@@ -330,18 +390,23 @@ composeApp/
 │   ├── windows/{smtc,volume,system-battery,battery,accent}.ps1   # source of truth for bridges
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
 │   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
-│   └── macos/passthrough_bridge.m        # ObjC setIgnoresMouseEvents on main queue (WindowPassthrough dylib)
+│   └── macos/passthrough_bridge.m        # ObjC main-queue AppKit dylib: ignoresMouseEvents,
+│                                         # window level/collection/frame-top-gap, CG origin,
+│                                         # activation policy (MacAppKit front)
 └── src/
     ├── commonMain/composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
     │   └── drawable/                     # headphone/bluetooth/charging/battery_* SVGs, quicknotch_icon.png
     └── desktopMain/
-        ├── resources/                    # tray icon, synced windows/*.ps1, (mac) macos/nowplaying-bridge
+        ├── resources/                    # tray icon, synced windows/*.ps1, (mac) macos/nowplaying-bridge,
+        │                                #   btwatch-bridge, passthrough-bridge.dylib
         └── kotlin/com/starkdroid/quicknotch/
             ├── main.kt                   # app entry: tray + overlay + settings windows, poller lifecycle
             ├── theme/                    # Color.kt (central palette), Theme.kt, Typography.kt
             ├── model/                    # AppItem, NotchConfig (+WidgetsConfig, enums), FavoritesRepository
-            ├── datasource/               # HostPlatform, SystemAccent, WindowPassthrough, scanners/icon loaders/launchers/startup
+            ├── datasource/               # HostPlatform, SystemAccent, WindowPassthrough, MacAppKit
+            │                             # (appkit/level/dock-policy front), scanners/icon loaders/
+            │                             # launchers/startup
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
@@ -400,11 +465,13 @@ composeApp/
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
 | Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with a compact rectangular **Grant Full Disk Access** button (deep-links the Privacy &amp; Security pane; the helper row disappears once the count reads) | done (this session) — value is `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The residual count after a Clear All is honest: macOS keeps unread-badge apps' notifications (WhatsApp) *and* genuinely persistent rows (Screen Time weekly report) until read/dismissed, same as the Dock badges. A one-time **Send Test Notifications** flow (osascript banners / WinRT `toast.ps1`) was removed by request — the badge is a real NC ledger, not a demo surface. Windows has no store, so its bell stays hidden (`count` null). App version bumped to **3.0.0** |
 | Fresh manual launch opens the Settings window alongside the notch; login/boot auto-start stays quietly behind the tray (distinguished by `--quicknotch-launched-at-login`, written into the LaunchAgent/Run-key command) | done (this session) — verified on macOS via CGWindowList on both paths (manual = overlay + settings; marker = overlay only); Windows launch still unverified |
+| macOS above-menu-bar placement: overlay parked **flush at the true top of the screen** (level `NSStatusWindowLevel` 25, collection `canJoinAllSpaces|stationary|fullScreenAuxiliary|ignoresCycle`, top-gap = style edge gap) via `MacOverlayWindowPolicy` + the AppKit dylib; AWT would park it under the menu bar (its alwaysOnTop tops out at floating level 3 and placement clamps to the visible area) | done (this session) — **verified live**: `CGWindowList` shows the overlay at `kCGWindowLayer=25`, bounds `y=0`. Off-state (Always-on-top off) drops to level 0 and re-parks below the menu bar. Windows analog is AWT `alwaysOnTop` alone (unchanged) |
+| macOS Dock presence tied to the Settings window: accessory agent (no Dock icon, no app menu bar) while only the notch runs; Regular + activate while Settings is open — `MacDockPresence` via `setActivationPolicy` + reconcile loop | done (this session) — **verified live**: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` (Dock icon, in front) with Settings open; closing Settings returns to accessory. Windows analog: overlay built with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar/Alt+Tab slot, no focus steal) — unverified until a Windows run |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
 - **Laptop battery UI**: testable on the macOS dev machine (built-in battery → `SystemBattery` talks through `pmset -g batt`). On the Windows desktop it stays null by design.
-- **macOS (this machine)**: now a live test surface — build, run, idle clock + laptop battery ring, volume ring (SVG glyphs), audio-device battery ring (via `system_profiler`, AirPods Pro connected), SOFTWARE renderer all verified in-session. Still untestable here: Win32 paths, Windows wheel paging, SMTC seek. The very first pull of this repo may have had no macOS hardware; that is no longer true.
+- **macOS (this machine)**: now a live test surface — above-menu-bar island placement (`CGWindowList` layer 25, y=0) and the Dock-presence flip (`lsappinfo` UIElement → Foreground) verified live; idle clock + laptop battery ring, volume ring (SVG glyphs), audio-device battery ring (via `system_profiler`), SOFTWARE renderer all verified in-session. Still untestable here: the physical hover/click-through feel at the true top edge (needs a live cursor on this machine), Win32 paths, Windows wheel paging, SMTC seek, and the `WS_EX_TOOLWINDOW` taskbar hiding. The very first pull of this repo may have had no macOS hardware; that is no longer true.
 - **Shared-element morph / expand-into-music look**: cannot be judged from code; needs a live session + hover expansion on a real machine. When in doubt, run the app and watch it.
 
 ---
@@ -538,6 +605,24 @@ composeApp/
     because it checks the real cursor against the island box's coordinates.
     If a future change needs a tighter footprint, the trade-off must be revisited
     deliberately — don't reintroduce a per-open/collapse native resize.
+18. **AWT can't park a window above the menu bar and its `locationOnScreen` goes
+    stale the moment Cocoa moves the window** (both verified live + in JDK 17
+    source). `setAlwaysOnTop(true)` maps to `NSFloatingWindowLevel` (3) — below
+    the menu bar's `kCGMainMenuWindowLevel` (24) — and AWT placement clamps to
+    the visible frame (y ≥ menu-bar height), so a Dynamic Island always parks
+    *under* the menu bar ("below the screen"). Both are fixed by the compiled
+    bridge: `NSStatusWindowLevel` (25) + `frame-top-gap` + the Spaces collection
+    behavior, re-asserted on a ~700 ms reconcile loop because Compose placement
+    and AWT z-order reorders re-park the window 30pt low. Because
+    `Window.locationOnScreen` is AWT's *cached* native origin, everything that
+    does screen math in AWT terms — passthrough hit-testing, Compose hover gating
+    through `localToScreen` — drifts 30pt once the window sits above the menu bar;
+    both now read the real CG origin from the bridge (`quicknotch_get_window_cg_origin`),
+    and Compose's `localToScreen` result is shifted by that live drift
+    (`MacAppKit.screenOriginDelta`). Never reintroduce `locationOnScreen`-based
+    screen math in the overlay. Note `androidx.compose.ui.window.LocalWindow` is
+    `internal` in CMP 1.7.3 — pass the AWT window down as a parameter instead of
+    reaching for the composition local.
 
 ---
 
@@ -610,6 +695,24 @@ composeApp/
   Disk Access** button (deep-links to Privacy &amp; Security, hidden once the count
   reads). Windows no longer fakes a session count; its bell stays hidden. App version
   jumped **1.0.0 → 3.0.0** across the feature line.
+- (this session → HEAD): a macOS platform-compat study (§5.11) confirmed the two
+  integration gaps — AWT's `alwaysOnTop` tops out at floating level 3 (below the
+  menu bar) and its `locationOnScreen` is a cached origin — and the
+  `passthrough_bridge.m` dylib grew from click-through to the full island
+  controller: `quicknotch_set_window_level`, `set_collection_behavior`,
+  `set_frame_top_gap`, `get_menu_bar_height`, `get_window_cg_origin`,
+  `set_activation_policy`, `activate_app` (all marshalled on AppKit's main queue).
+  The new `MacAppKit.kt` fronts them for the overlay's **above-menu-bar placement**
+  (`MacOverlayWindowPolicy`: level 25 + Spaces collection + real-top top-gap,
+  toggle-aware — Always-on-top off parks below the menu bar at level 0; ~700ms
+  reconcile loop) and the Settings-gated **Dock presence** (`MacDockPresence`:
+  accessory while only the notch runs, Regular + activate with Settings open;
+  ~700ms reconcile because AWT initialises the process Regular). Passthrough's
+  hit-test and the overlay's collapse gate both read the real CG origin
+  (`MacAppKit.screenOriginDelta` shifts `localToScreen`), because AWT screen math
+  is 30pt low once the island parks above the menu bar. Windows mirrored the
+  "no OS chrome while only the notch runs" rule with
+  `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` on the overlay hwnd.
 
 ---
 

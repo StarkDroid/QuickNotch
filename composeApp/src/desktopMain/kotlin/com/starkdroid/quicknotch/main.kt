@@ -22,6 +22,8 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
+import com.starkdroid.quicknotch.datasource.MacDockPresence
+import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioBattery
@@ -69,6 +71,16 @@ fun main(args: Array<String>) {
     val loginItemLaunch = args.contains(StartupManager.LAUNCHED_AT_LOGIN_ARG)
 
     application {
+        // Dock presence is a function of the Settings window, never of the
+        // notch: the resting QuickNotch is a silent agent (no Dock icon, no app
+        // menu bar — the overlay layers over full-screen apps), and the Dock
+        // icon + app activation appear only while the Settings page is open.
+        // Configured before the first window maps so the accessory policy is
+        // what shows the overlay in. Windows analogues are handled per-window
+        // (the overlay is a tool-window, Settings is a normal taskbar window).
+        MacDockPresence.start()
+        MacDockPresence.setSettingsVisible(!loginItemLaunch)
+
         val repository = remember { FavoritesRepository() }
         val config by repository.config.collectAsState()
         val favorites by repository.favorites.collectAsState()
@@ -98,6 +110,7 @@ fun main(args: Array<String>) {
                 AudioBattery.stop()
                 SystemBattery.stop()
                 NotificationCount.stop()
+                MacDockPresence.stop()
             }
         }
 
@@ -105,6 +118,14 @@ fun main(args: Array<String>) {
         var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
+
+        // Flip the Dock/app presence in-step with the Settings window: the
+        // first Settings open forces activation (an accessory agent can't bring
+        // a regular window forward on its own), and closing it returns the app
+        // to its quiet agent state.
+        LaunchedEffect(showSettings) {
+            MacDockPresence.setSettingsVisible(showSettings)
+        }
 
         val appIcon = remember { loadQuickNotchIcon() }
         Tray(
@@ -260,6 +281,22 @@ private fun NotchOverlayWindow(
             onDispose { passthrough?.close() }
         }
 
+        // macOS above-menu-bar placement: AWT can't reach the true top of the
+        // screen (it clamps to the visible area), so a direct Cocoa policy parks
+        // the island there — raised above the menu bar, joining every Space and
+        // surviving full-screen apps while "always on top" is on. The policy is
+        // re-asserted on a slow reconcile tick because Compose placement and
+        // AWT's z-order bookkeeping keep re-parking the window below the menu
+        // bar; `update` just retargets the flags it re-adheres to. Off-mac this
+        // installs nothing.
+        val macPolicy = remember(awtWindow) { MacOverlayWindowPolicy.install(awtWindow) }
+        LaunchedEffect(config.alwaysOnTop, metrics.edgeGapDp) {
+            macPolicy?.update(config.alwaysOnTop, metrics.edgeGapDp)
+        }
+        DisposableEffect(awtWindow) {
+            onDispose { macPolicy?.close() }
+        }
+
         // Shared widget-pager state; on Windows the wheel listener below drives
         // it straight from AWT because the unfocused overlay window never sees
         // scroll through Compose's pointer pipeline (which macOS' trackpad does).
@@ -302,6 +339,12 @@ private fun NotchOverlayWindow(
             )
             overlayState.size = targetSize
             overlayState.position = WindowPosition.Absolute(location.x.dp, location.y.dp)
+            // Compose just re-parked the window at AWT's visible-clamped spot
+            // (30pt low on macOS). Ask the Cocoa policy to re-adhere it to the
+            // true top right after the placement lands instead of waiting for
+            // its next reconcile tick.
+            delay(120)
+            macPolicy?.update(config.alwaysOnTop, metrics.edgeGapDp)
         }
 
         QuickNotchTheme(darkTheme = config.themeDark) {
@@ -314,7 +357,8 @@ private fun NotchOverlayWindow(
                 battery = battery,
                 deviceBattery = deviceBattery,
                 pager = pager,
-                onTouchTargetChange = { passthrough?.update(it) }
+                onTouchTargetChange = { passthrough?.update(it) },
+                awtWindow = awtWindow
             )
         }
     }

@@ -119,6 +119,7 @@ import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
+import com.starkdroid.quicknotch.datasource.MacAppKit
 import com.starkdroid.quicknotch.datasource.SystemAccent
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioBattery
@@ -144,6 +145,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import java.awt.MouseInfo
+import java.awt.Point
 import org.jetbrains.compose.resources.stringResource
 
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -315,9 +317,14 @@ private fun Modifier.sharingHover(onHoverChanged: (Boolean) -> Unit): Modifier =
  * macOS and Windows alike — with media ticking its progress under the pointer,
  * trusting the raw event made the notch flap open/closed while hovering.
  *
+ * [awtDrift] is the live difference between the window's real CG origin and
+ * AWT's cached `locationOnScreen` (see `MacAppKit.screenOriginDelta`): Compose's
+ * `localToScreen` rides the stale AWT position, which the above-menu-bar
+ * placement invalidates by exactly the menu-bar height. Null means no drift.
+ *
  * Unknown footprint or pointer position errs toward keeping the notch open.
  */
-private fun cursorOverNotch(coordinates: LayoutCoordinates?): Boolean {
+private fun cursorOverNotch(coordinates: LayoutCoordinates?, awtDrift: Point?): Boolean {
     val coords = coordinates ?: return true
     if (!coords.isAttached) return true
     val pointer = MouseInfo.getPointerInfo()?.location ?: return true
@@ -326,7 +333,10 @@ private fun cursorOverNotch(coordinates: LayoutCoordinates?): Boolean {
     val bottomRight = coords.localToScreen(
         Offset(size.width.toFloat(), size.height.toFloat())
     )
-    return Rect(topLeft, bottomRight).contains(
+    val drift = awtDrift
+    val shiftedTopLeft = if (drift != null) Offset(topLeft.x + drift.x, topLeft.y + drift.y) else topLeft
+    val shiftedBottomRight = if (drift != null) Offset(bottomRight.x + drift.x, bottomRight.y + drift.y) else bottomRight
+    return Rect(shiftedTopLeft, shiftedBottomRight).contains(
         Offset(pointer.x.toFloat(), pointer.y.toFloat())
     )
 }
@@ -399,12 +409,35 @@ internal fun FloatingNotchOverlay(
      * fixed footprint never swallows clicks on the app/desktop around the pill
      * (see `WindowPassthrough`).
      */
-    onTouchTargetChange: (java.awt.Rectangle?) -> Unit = {}
+    onTouchTargetChange: (java.awt.Rectangle?) -> Unit = {},
+    /**
+     * The host AWT window (undecorated transparent overlay). Used on macOS to
+     * reconcile the screen-origin drift caused by the above-menu-bar placement.
+     */
+    awtWindow: java.awt.Window? = null
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+
+    // AWT's `locationOnScreen` goes stale as soon as the macOS window policy
+    // parks the island above the menu bar with direct Cocoa moves (AWT's y=0
+    // sits at the bottom of the menu bar and never learns about the real frame).
+    // Compose's `localToScreen` inherits that stale number, so screen-space
+    // collapse gating would find the island ~30pt below where it actually is.
+    // Track the live drift off-frame and shift the hover box by it; null =
+    // no drift known (non-mac, bridge missing) → gate on AWT's coordinates.
+    var screenOriginDrift by remember { mutableStateOf<Point?>(null) }
+    LaunchedEffect(awtWindow) {
+        if (awtWindow != null && HostPlatform.isMac) {
+            while (true) {
+                screenOriginDrift = runCatching { MacAppKit.screenOriginDelta(awtWindow) }
+                    .getOrNull()
+                delay(350)
+            }
+        }
+    }
 
     val iconBitmaps = remember { mutableStateMapOf<String, ImageBitmap>() }
     LoadFavoriteIcons(favorites, iconBitmaps)
@@ -520,7 +553,7 @@ internal fun FloatingNotchOverlay(
                         // this path no longer wedges.
                         coords == null || !coords.isAttached -> continue
                         // Cursor confirmed out of the footprint: retract.
-                        !cursorOverNotch(coords) -> {
+                        !cursorOverNotch(coords, screenOriginDrift) -> {
                             onExpandedChange(false)
                             break
                         }

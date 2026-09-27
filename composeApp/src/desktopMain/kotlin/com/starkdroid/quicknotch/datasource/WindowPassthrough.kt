@@ -1,13 +1,11 @@
 package com.starkdroid.quicknotch.datasource
 
-import com.sun.jna.Function
-import com.sun.jna.NativeLibrary
 import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.GDI32
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
-import com.starkdroid.quicknotch.media.NativeResources
 import java.awt.MouseInfo
+import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Window
 import java.awt.event.MouseEvent
@@ -162,7 +160,7 @@ private fun resolvePeerLong(peer: Any?, methodName: String): Long? {
  * `getNSWindowPtr` on JDK 17. Resolve it via `peer.getPlatformWindow()` and
  * read that field by reflection.
  */
-private fun resolveMacWindowPtr(window: Window): Long? {
+internal fun resolveMacWindowPtr(window: Window): Long? {
     val peer = windowPeer(window) ?: return null
     val platform = try {
         peer.javaClass.getMethod("getPlatformWindow").invoke(peer)
@@ -194,11 +192,38 @@ private fun resolveMacWindowPtr(window: Window): Long? {
  * when replaced), so passing a fresh `CreateRectRgn` every tick is safe and the
  * OS cleans up the previous one. A null region restores a fully interactive
  * window.
+ *
+ * The window also gets the tool-window + no-activate extended styles once, so
+ * the notch never occupies a taskbar slot or steals focus (Windows' analogue of
+ * "the app belongs in the Dock only when the Settings page is open": the
+ * Settings window stays a normal taskbar window, the overlay does not).
  */
 private class Win32Region(private val window: Window) : WindowPassthroughPlatform {
     private val hwnd = resolvePeerLong(windowPeer(window), "getHWnd").also {
         if (it == null || it == 0L) {
             System.err.println("QuickNotch: Windows overlay passthrough off (HWND resolve failed)")
+        }
+    }
+
+    init {
+        val h = hwnd
+        if (h != null && h != 0L) {
+            try {
+                // WS_EX_TOOLWINDOW hides it from the taskbar and Alt+Tab;
+                // WS_EX_NOACTIVATE keeps a click on the island from yanking
+                // focus off whatever the user was typing into.
+                val GWL_EXSTYLE = -20
+                val wsExToolWindow = 0x00000080
+                val wsExNoActivate = 0x08000000
+                val style = User32.INSTANCE.GetWindowLong(WinDef.HWND(Pointer(h)), GWL_EXSTYLE)
+                User32.INSTANCE.SetWindowLong(
+                    WinDef.HWND(Pointer(h)),
+                    GWL_EXSTYLE,
+                    style or wsExToolWindow or wsExNoActivate
+                )
+            } catch (t: Throwable) {
+                System.err.println("QuickNotch: Windows overlay taskbar removal failed: ${t.message}")
+            }
         }
     }
 
@@ -231,12 +256,16 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
  * kept mouse-transparent unless the real cursor sits over the island's
  * rectangle; the toggle is a simple reconcile against `MouseInfo` each tick.
  *
- * The actual AppKit toggle runs through the compiled `passthrough_bridge.m`
- * dylib (`quicknotch_set_ignores_mouse_events`, loaded via JNA): it flips the
- * property on AppKit's main queue from a plain C symbol, which is far more
- * reliable than driving objc_msgSend straight from JVM land (void-return /
- * BOOL-arg sends crash with SIGTRAP on Apple silicon). Missing native bridge =
- * fail soft.
+ * The AppKit toggle runs through the compiled `passthrough_bridge.m` dylib via
+ * [MacAppKit] (`quicknotch_set_ignores_mouse_events`) rather than driving
+ * objc_msgSend straight from JVM land (void-return / BOOL-arg sends crash with
+ * SIGTRAP on Apple silicon). Missing native bridge = fail soft.
+ *
+ * The cursor-over math uses the *real* NSWindow origin from the bridge
+ * (`quicknotch_get_window_cg_origin`) because the overlay policy parks the
+ * window above the menu bar with direct Cocoa frame moves that AWT's cached
+ * `locationOnScreen` never sees — relying on AWT's coordinates would drift the
+ * island's hit target down by exactly the menu-bar height.
  */
 private class MacClickThrough(private val window: Window) : WindowPassthroughPlatform {
     private val nsWindowPtr: Long? = run {
@@ -249,18 +278,7 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
             ptr
         }
     }
-    private val bridge: NativeLibrary? = NativeResources
-        .extract("macos/passthrough-bridge.dylib", ".dylib")
-        ?.let { lib ->
-            try {
-                NativeLibrary.getInstance(lib.absolutePath)
-            } catch (_: Throwable) {
-                null
-            }
-        }
-    private val setIgnoreFn: Function? = bridge?.getFunction("quicknotch_set_ignores_mouse_events")
-    private val respondsFn: Function? = runCatching { bridge?.getFunction("quicknotch_window_responds") }.getOrNull()
-    private val unavailable = bridge == null || setIgnoreFn == null
+    private val unavailable by lazy { nsWindowPtr == null || !MacAppKit.windowResponds(nsWindowPtr!!) }
     private var reported = false
 
     /** Log the fail-soft reason once; never spam a 30 ms poll. */
@@ -293,6 +311,16 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
         }
     }
 
+    /**
+     * The window's top-left in real CG screen coordinates, or AWT's cached
+     * location when the native side can't answer (bridge missing, first frames).
+     */
+    private fun realOrigin(): Point {
+        val ptr = nsWindowPtr
+        val cg = if (ptr != null) MacAppKit.windowCgOrigin(ptr) else null
+        return cg ?: window.locationOnScreen
+    }
+
     private fun cursorOver(rect: Rectangle): Boolean {
         val cursor = try {
             MouseInfo.getPointerInfo()?.location
@@ -300,12 +328,14 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
             return false
         } ?: return false
         val origin = try {
-            window.locationOnScreen
+            realOrigin()
         } catch (_: Throwable) {
             return false
         }
         // Content origin = window origin + frame insets (macOS keeps shadow
-        // insets even for undecorated windows).
+        // insets even for undecorated windows). Invariant now that the anchor
+        // is the real CG origin: `window.insets` stays the same regardless of
+        // how far above the menu bar the window actually parks.
         val x = cursor.x - origin.x - window.insets.left
         val y = cursor.y - origin.y - window.insets.top
         val pad = 4
@@ -315,12 +345,7 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
 
     private fun setIgnoring(ptr: Long, ignore: Boolean) {
         if (ignore == ignoring) return
-        val respond = try {
-            respondsFn?.invokeInt(arrayOf(ptr)) ?: 1
-        } catch (_: Throwable) {
-            -1
-        }
-        if (respond == 0) {
+        if (!MacAppKit.windowResponds(ptr)) {
             // Never trust the peer friendship: a non-NSWindow pointer must not
             // receive the setter (an unrecognised selector aborts the JVM).
             if (!reported) {
@@ -329,7 +354,7 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
             }
             return
         }
-        setIgnoreFn?.invoke(java.lang.Void::class.java, arrayOf(ptr, if (ignore) 1 else 0))
+        MacAppKit.setIgnoresMouseEvents(ptr, ignore)
         ignoring = ignore
         if (!ignore) {
             // The cursor is already over the (now interactive) island, but
@@ -342,7 +367,7 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
     private fun synthesizeEnter() {
         try {
             val cursor = MouseInfo.getPointerInfo()?.location ?: return
-            val origin = window.locationOnScreen
+            val origin = realOrigin()
             val event = MouseEvent(
                 window,
                 MouseEvent.MOUSE_MOVED,
