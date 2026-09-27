@@ -38,7 +38,8 @@ import kotlinx.coroutines.launch
  */
 internal object NotificationCount {
 
-    private const val PollIntervalMs = 3_000L
+    private const val WatchTickMs = 250L
+    private const val BackstopTicks = 12L // every 12 ticks = 3s, in case a store change slips the stat watch
     private const val ProcTimeoutMs = 3_000L
 
     private val _count = MutableStateFlow<Int?>(null)
@@ -63,9 +64,27 @@ internal object NotificationCount {
         val active = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = active
         job = active.launch {
+            // Near-instant badge updates, not a blind N-second poll: usernoted's
+            // store file only changes when a notification actually arrives or is
+            // dismissed, and in WAL mode the write lands in `db-wal` (the main
+            // `db` is static between checkpoints). We stat the three store files
+            // on a tight 250 ms tick — a couple of syscalls, no sqlite spawn —
+            // and only run the full query when a signature actually changes. A
+            // slower 3s backstop still runs so a signal we miss (a same-size
+            // rewrite, a permission change from a fresh FDA grant) converges on
+            // its own.
+            var lastSignature: Long? = null
+            var ticks = 0L
             while (isActive) {
-                query()?.let { _count.value = it }
-                delay(PollIntervalMs)
+                val signature = storeSignature()
+                if (signature != lastSignature) {
+                    lastSignature = signature
+                    query()?.let { _count.value = it }
+                } else if (ticks % BackstopTicks == BackstopTicks - 1L) {
+                    query()?.let { _count.value = it }
+                }
+                ticks += 1
+                delay(WatchTickMs)
             }
         }
     }
@@ -160,6 +179,27 @@ internal object NotificationCount {
 
     private fun jsEscape(value: String): String =
         value.replace("\\", "\\\\").replace("\"", "\\\"")
+
+    /**
+     * A cheap fingerprint of the store so a change can be detected without
+     * reading it: (mtime, size, fileKey) hashed across `db`, `db-wal` and
+     * `db-shm`. Inserts/dismissals land in the WAL, checkpoints touch the main
+     * `db`, and `-shm` changes with every session regression. A null fingerprint
+     * means the files are unreadable (no Full Disk Access yet, or the store is
+     * gone) — the callers keep the last count and the backstop tick retries.
+     */
+    private fun storeSignature(): Long? {
+        val dir = System.getProperty("user.home") +
+            "/Library/Group Containers/group.com.apple.usernoted/db2"
+        var h = 0L
+        for (name in listOf("db", "db-wal", "db-shm")) {
+            val file = try { File(dir, name) } catch (_: Throwable) { return null }
+            val mtime = try { java.nio.file.Files.getLastModifiedTime(file.toPath()).toMillis() } catch (_: Throwable) { return null }
+            val size = try { file.length() } catch (_: Throwable) { return null }
+            h = h * 31 + mtime xor size
+        }
+        return h
+    }
 
     private fun query(): Int? = runCatching {
         val db = System.getProperty("user.home") +

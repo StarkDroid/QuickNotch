@@ -167,16 +167,20 @@ window sizer (`NotchOverlayWindow` in `main.kt`) and the overlay content derive 
 collapsed footprint from it, so the rings are never clipped against the window edge.
 The notification bell + red count badge (`notification.svg`, `AccentRed`) cap the row
 farthest right, gated by the `showCollapsedNotifications` widget toggle; the count is
-polled from the macOS Notification Center store
-(`~/Library/Group Containers/group.com.apple.usernoted/db2/db` via `sqlite3`) every 3s —
-the store holds one row per notification still present in Notification Center and prunes
-rows on dismissal (rec ids get reused), so **the badge is the plain `record` row count**,
-not a `delivered`-column filter: current schemas have no boolean `delivered` column (only
-`delivered_date` / `presented`, and `presented` reads 0 even for a just-delivered banner),
-so the old `where delivered = 1` query always errored and the indicator stayed "needs Full
-Disk Access" no matter what. The settings window re-pokes the store on focus regain
-(`NotificationCount.poke()`), so a grant made in System Settings is detected as soon as the
-user comes back, not on the next 3s tick. A store falling Full Disk Access leaves the count
+read from the macOS Notification Center store
+(`~/Library/Group Containers/group.com.apple.usernoted/db2/db` via `sqlite3`) and updated
+**near-instantly**: the poller stat fingerprints `db`, `db-wal` and `db-shm` on a 250 ms
+tick (a few syscalls, no sqlite spawn) and only runs the query when a signature changes —
+the store is in WAL mode, so an arriving/dismissed notification churns `db-wal`, not the
+main `db`, hence all three files are watched. A 3s backstop query still runs so a missed
+signal converges. The store holds one row per notification still present in Notification
+Center and prunes rows on dismissal (rec ids get reused), so **the badge is the plain
+`record` row count**, not a `delivered`-column filter: current schemas have no boolean
+`delivered` column (only `delivered_date` / `presented`, and `presented` reads 0 even for a
+just-delivered banner), so the old `where delivered = 1` query always errored and the
+indicator stayed "needs Full Disk Access" no matter what. The settings window re-pokes the
+store on focus regain (`NotificationCount.poke()`), so a grant made in System Settings is
+detected as soon as the user comes back. A store falling Full Disk Access leaves the count
 null and hides the indicator. Settings' QuickView
 Indicators card mirrors the toggle (bell + badge cell instead of a ring — a notification has
 no level to preview) and, while the toggle is on, shows a helper row underneath: macOS
