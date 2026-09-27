@@ -121,39 +121,11 @@ val compileMacPassthroughBridge by tasks.registering(Exec::class) {
     )
 }
 
-// macOS app-icon badge setter: a dylib (`badge_bridge.m`) that reaches
-// `UNUserNotificationCenter setBadgeCount:` on the main queue so the "Send
-// test notification" button can move QuickNotch's own badge (and therefore the
-// quickview unread total) deterministically. Loaded by `NotificationCount`
-// with JNA; same rationale as the passthrough bridge (no objc_msgSend from JVM
-// land). Only built on macOS hosts.
-val compileMacBadgeBridge by tasks.registering(Exec::class) {
-    onlyIf {
-        val os = System.getProperty("os.name").lowercase()
-        os.contains("mac") || os.contentEquals("darwin")
-    }
-    doFirst {
-        project.file("src/desktopMain/resources/macos").mkdirs()
-    }
-    workingDir = project.file("native/macos")
-    commandLine(
-        "cc",
-        "-O2",
-        "-mmacosx-version-min=12.0",
-        "-fobjc-arc",
-        "-dynamiclib",
-        "-framework", "Foundation",
-        "-framework", "UserNotifications",
-        "badge_bridge.m",
-        "-o", project.file("src/desktopMain/resources/macos/badge-bridge.dylib")
-    )
-}
-
 tasks.named("desktopJar") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacBadgeBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge)
 }
 tasks.named("desktopProcessResources") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacBadgeBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge)
 }
 
 compose.resources {
