@@ -42,6 +42,8 @@ import com.starkdroid.quicknotch.ui.quickViewIndicatorSlots
 import kotlinx.coroutines.delay
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
+import java.awt.event.WindowEvent
+import java.awt.event.WindowFocusListener
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 import kotlin.math.roundToInt
@@ -149,6 +151,23 @@ fun main() {
                 icon = BitmapPainter(appIcon),
                 resizable = true
             ) {
+                val settingsWindow = window
+                DisposableEffect(settingsWindow) {
+                    val listener = object : WindowFocusListener {
+                        override fun windowGainedFocus(e: WindowEvent?) {
+                            // The user just came back from System Settings
+                            // (possibly after granting Full Disk Access): re-read
+                            // the notification store right now instead of waiting
+                            // for the next 3s poll tick, so the helper row swaps
+                            // to "Send test notification" as soon as access lands.
+                            NotificationCount.poke()
+                        }
+                        override fun windowLostFocus(e: WindowEvent?) {
+                        }
+                    }
+                    settingsWindow.addWindowFocusListener(listener)
+                    onDispose { settingsWindow.removeWindowFocusListener(listener) }
+                }
                 QuickNotchTheme(darkTheme = true) {
                     SettingsScreen(
                         repository = repository,

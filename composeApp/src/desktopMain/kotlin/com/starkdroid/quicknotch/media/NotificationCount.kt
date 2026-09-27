@@ -16,19 +16,20 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Unread notification count for the quickview's notification indicator — the
- * same number the macOS Dock shows as red badges, fed into a bell glyph + badge
- * bubble at the far right of the pill.
+ * Unread notification count for the quickview's notification indicator — fed
+ * into a bell glyph + badge bubble at the far right of the pill.
  *
- * macOS keeps its Notification Center store (the delivered-but-unread
+ * macOS keeps its Notification Center store (the delivered-but-uncleared
  * notifications) in a sqlite database at
- * `~/Library/Group Containers/group.com.apple.usernoted/db2/db`; we count the
- * delivered `record` rows through `sqlite3`. That path is guarded by Full Disk
- * Access, so until a user grants it (or TCC otherwise permits the read) the
- * query fails and the count stays null — the indicator hides exactly like any
- * other unreadable probe, and settings offers a "Grant Full Disk Access" button
- * that deep-links into the Privacy pane. A transient failure keeps the previous
- * count rather than flashing the indicator away.
+ * `~/Library/Group Containers/group.com.apple.usernoted/db2/db`. The store
+ * holds one row per notification still present in Notification Center and
+ * *prunes* rows as they are dismissed (record ids get reused), so the plain
+ * row count is the badge-like total. That path is guarded by Full Disk Access,
+ * so until a user grants it the query fails and the count stays null — the
+ * indicator hides exactly like any other unreadable probe, and settings offers
+ * a "Grant Full Disk Access" button that deep-links into the Privacy pane. A
+ * transient failure keeps the previous count rather than flashing the indicator
+ * away.
  *
  * Windows exposes no public unread store, so the count there is a session-local
  * tally of the notifications QuickNotch itself posts (the test button), which
@@ -74,6 +75,22 @@ internal object NotificationCount {
         job = null
         scope?.cancel()
         scope = null
+    }
+
+    /**
+     * Forces an immediate store re-read instead of waiting for the next poll
+     * tick, so a Full Disk Access grant made in System Settings is picked up
+     * as soon as the user returns to the app (the settings window pokes on
+     * focus regain). No-op off macOS.
+     */
+    fun poke() {
+        if (!HostPlatform.isMac) return
+        val active = scope ?: run {
+            val created = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            scope = created
+            created
+        }
+        if (active.isActive) active.launch { query()?.let { _count.value = it } }
     }
 
     /**
@@ -147,9 +164,15 @@ internal object NotificationCount {
     private fun query(): Int? = runCatching {
         val db = System.getProperty("user.home") +
             "/Library/Group Containers/group.com.apple.usernoted/db2/db"
+        // Count the store's rows: one per notification still present in
+        // Notification Center, pruned on dismissal. Do NOT filter on a
+        // "delivered" boolean — older macOS schemas had one, current ones do
+        // not (only `delivered_date` / `presented`, and `presented` reads 0
+        // even for a just-delivered banner), so the old `where delivered = 1`
+        // always errored and the indicator acted as if FDA were never granted.
         val process = ProcessBuilder(
             "/usr/bin/sqlite3", "-noheader", "-batch", db,
-            "select count(*) from record where delivered = 1;"
+            "select count(*) from record;"
         ).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText().trim()
         process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)

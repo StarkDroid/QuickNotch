@@ -169,7 +169,15 @@ The notification bell + red count badge (`notification.svg`, `AccentRed`) cap th
 farthest right, gated by the `showCollapsedNotifications` widget toggle; the count is
 polled from the macOS Notification Center store
 (`~/Library/Group Containers/group.com.apple.usernoted/db2/db` via `sqlite3`) every 3s —
-a store falling Full Disk Access leaves it null and hides the indicator. Settings' QuickView
+the store holds one row per notification still present in Notification Center and prunes
+rows on dismissal (rec ids get reused), so **the badge is the plain `record` row count**,
+not a `delivered`-column filter: current schemas have no boolean `delivered` column (only
+`delivered_date` / `presented`, and `presented` reads 0 even for a just-delivered banner),
+so the old `where delivered = 1` query always errored and the indicator stayed "needs Full
+Disk Access" no matter what. The settings window re-pokes the store on focus regain
+(`NotificationCount.poke()`), so a grant made in System Settings is detected as soon as the
+user comes back, not on the next 3s tick. A store falling Full Disk Access leaves the count
+null and hides the indicator. Settings' QuickView
 Indicators card mirrors the toggle (bell + badge cell instead of a ring — a notification has
 no level to preview) and, while the toggle is on, shows a helper row underneath: macOS
 without Full Disk Access offers a **Grant Full Disk Access** button that deep-links the
@@ -379,7 +387,7 @@ composeApp/
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
-| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — macOS badge still hidden until Full Disk Access is granted; visual pass + Windows toast (needs MSI AUMID) pending |
+| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — the count query was fixed to `select count(*) from record` (the old `delivered = 1` column never existed on current schemas, so the badge/grant-swap never resolved even with FDA); macOS visual pass + Windows toast (needs MSI AUMID) pending |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
