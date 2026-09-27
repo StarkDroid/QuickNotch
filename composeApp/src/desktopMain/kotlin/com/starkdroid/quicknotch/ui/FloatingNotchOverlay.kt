@@ -25,6 +25,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,6 +87,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -182,6 +185,20 @@ private fun pageSpring() = spring(
 // while the window is growing, which is what removed the open-time frame drops.
 private val DockFadeIn = tween<Float>(170, easing = FastOutSlowInEasing)
 private val DockFadeOut = tween<Float>(90)
+
+// The idle "curtain" expansion moves: the quickview slides down the growing
+// island while the pinned apps scale up from behind it, as if the dock surges
+// forward under the sliding pill. Live music deliberately skips both — its
+// content flies to the detail page through the shared-element morph, so the
+// pill keeps its plain fade (sliding the source would fight the flight).
+private val QuickViewSlideIn = tween<IntOffset>(160, easing = FastOutSlowInEasing)
+private val QuickViewSlideOut = tween<IntOffset>(190, easing = FastOutSlowInEasing)
+private val QuickViewFadeOut = tween<Float>(140)
+/** Entry size for the idle dock: far enough below 1 to read as "coming to the
+ * front", not so small it feels like a locket pop. Growth is anchored near the
+ * top edge where the pill sits, so the apps rise from behind the quickview. */
+private const val IdleDockEntryScale = 0.82f
+private val IdleDockOrigin = TransformOrigin(0.5f, 0.08f)
 
 private fun dockRevealSpring() = spring(
     dampingRatio = 0.9f,
@@ -602,14 +619,23 @@ internal fun FloatingNotchOverlay(
                 contentAlignment = Alignment.Center
             ) {
                 // Keep the quickview on screen until the dock is actually
-                // visible while a track is live, so the two surfaces cross at
-                // the same instant and Compose can morph the shared disc/title
-                // between them. Without a live session there is nothing to
-                // morph, so the pill retracts immediately as before.
+                // visible, so the two surfaces cross at the same instant. Live
+                // music does this so Compose can morph the shared disc/title
+                // between them (the pill retracts with a plain fade); the idle
+                // pill crosses too, but as a "curtain": it slides DOWN the
+                // growing island while the pinned apps scale up from behind it,
+                // which reads as the pill being pushed past the dock coming to
+                // the front.
+                val quickEnter =
+                    if (musicLive) fadeIn(tween(120))
+                    else fadeIn(tween(120)) + slideInVertically(QuickViewSlideIn) { it }
+                val quickExit =
+                    if (musicLive) fadeOut(tween(80))
+                    else fadeOut(QuickViewFadeOut) + slideOutVertically(QuickViewSlideOut) { it }
                 AnimatedVisibility(
-                    visible = if (musicLive) !showDock else !isExpanded,
-                    enter = fadeIn(tween(120)),
-                    exit = fadeOut(tween(80))
+                    visible = !showDock,
+                    enter = quickEnter,
+                    exit = quickExit
                 ) {
                     val collapsedScope = this
                     QuickView(
@@ -651,6 +677,26 @@ internal fun FloatingNotchOverlay(
             // state doubles as the shared-element transition scope, so the
             // now-playing morph runs in lockstep with the reveal and the
             // island's "hold expanded" gate above.
+            //
+            // Idle expansion uses a pronounced entry: the pinned apps scale up
+            // from a small size (+ fade) anchored near the top edge, rising from
+            // behind the quickview that is sliding down past them — the "curtain"
+            // cross. Live music keeps the gentle 0.97 pop (scale centred), since
+            // the dock there carries the music page that the pill's content is
+            // actively morphing into.
+            val dockReveal = dockRevealSpring()
+            val dockEntryScale = if (musicLive) 0.97f else IdleDockEntryScale
+            val dockOrigin = if (musicLive) TransformOrigin.Center else IdleDockOrigin
+            val dockEnter = fadeIn(DockFadeIn) + scaleIn(
+                initialScale = dockEntryScale,
+                transformOrigin = dockOrigin,
+                animationSpec = dockReveal
+            )
+            val dockExit = fadeOut(DockFadeOut) + scaleOut(
+                targetScale = dockEntryScale,
+                transformOrigin = dockOrigin,
+                animationSpec = dockReveal
+            )
             Box(
                 modifier = composeScrollModifier
                     .size(metrics.dockArea.width, metrics.dockArea.height),
@@ -658,8 +704,8 @@ internal fun FloatingNotchOverlay(
             ) {
                 AnimatedVisibility(
                     visibleState = dockState,
-                    enter = fadeIn(DockFadeIn) + scaleIn(initialScale = 0.97f, animationSpec = dockRevealSpring()),
-                    exit = fadeOut(DockFadeOut) + scaleOut(targetScale = 0.97f, animationSpec = dockRevealSpring())
+                    enter = dockEnter,
+                    exit = dockExit
                 ) {
                     val dockScope = this
                     WidgetPages(

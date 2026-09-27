@@ -144,9 +144,13 @@ settling; one content scaled to the travelling bounds avoids that for all four k
 The dock reveal is driven by a `MutableTransitionState` (`dockState`) so the visibility
 transition doubles as the shared-transition scope.
 
-Quickview visibility while a track is live is `!showDock` (pill stays until the
-dock is visible → both surfaces cross in the same frame → morph triggers). Idle/clock
-retracts immediately.
+Quickview visibility is `!showDock` on both branches: while a track is live the pill
+stays until the dock is visible → both surfaces cross in the same frame → morph triggers.
+The idle pill uses the same cross but as an "curtain": it stays centred as the island
+grows (drifting down with the box's centering), then slides down past the revealed dock
+(`QuickViewSlideIn/Out`, 160/190ms) while the pinned apps scale up from behind it
+(`IdleDockEntryScale=0.82`, anchored `IdleDockOrigin≈top`). Live music deliberately skips
+both — its plain fade exits while the music page pops in with the old gentle 0.97 scale.
 
 ### 5.5 Quickview (`QuickView`)
 
@@ -324,6 +328,7 @@ composeApp/
 | Pinned-apps drag reorder (handle at left, `animateItem`, `onMove` committed on release) | done (`a4e4576`) |
 | Now-playing pill + detailed music page + transport | done |
 | Expand-into-music + shared-element morph | done (`a02cdc1`, tuned `0c9a9a7`) |
+| Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
@@ -522,6 +527,7 @@ composeApp/
 | `FisheyeRadiusFactor` / `IconLift` | 1.5× / 8dp | overlay |
 | `HoverGlow` / `IslandSettleTimeoutMs` | 10dp / 650ms | overlay |
 | springs | notch 0.9/340, sharedBounds 0.9/320, icon 0.8/1000 | overlay |
+| Idle curtain | quickview slide 160/190ms, fade 140ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5, 0.08) | overlay |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |
