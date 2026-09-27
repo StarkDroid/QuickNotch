@@ -80,7 +80,7 @@ If a Windows `.ps1` script is edited in `native/windows`, the copy into
 ### 5.1 Process & windows (`main.kt`)
 
 - One `application {}`; `FavoritesRepository` + `MediaController` are singletons owned here.
-- **Overlay window**: undecorated, transparent, `alwaysOnTop`, non-resizable, top-centred. Its native window is explicitly re-sized and **atomically repositioned** (size+position written together in one `LaunchedEffect`) after the AWT window maps — this keeps the notch perfectly still while growing/shrinking. `LaunchedEffect(config.style, targetSize)` handles placement; never re-place on the window's own live dimensions (feedback loop).
+- **Overlay window**: undecorated, transparent, `alwaysOnTop`, non-resizable, top-centred. The native window holds a **single fixed footprint — the expanded dock size — for its whole life** and is never resized while the notch opens or collapses; expanding is purely drawn growth of the island inside that stable window. This is what kills the macOS resize flash: a transparent AWT window that resizes white-flashes/skips a frame (known Compose Desktop + Skiko issue, see pitfall 17). The trade-off is that the fixed window's transparent margin swallows clicks on the desktop directly around the collapsed pill. It is still **atomically positioned** (size+position written together in one `LaunchedEffect`) after the AWT window maps, and re-centred whenever the target footprint changes (favourites count, the widened now-playing page). `LaunchedEffect(config.style, targetSize)` handles placement; never re-place on the window's own live dimensions (feedback loop).
 - **Tray** (Windows) / menu-bar extra (macOS): show/hide notch, open Settings, reset defaults, quit.
 - **Settings window**: 880×660, normal window, `SettingsScreen`.
 
@@ -100,11 +100,11 @@ because it's the same thread.
 - `overlayScreenLocation(...)` pins the top-centred position, hugging the screen edge (macOS hugs the menu bar; capsule styles float off it by `edgeGapDp`).
 
 Collapse choreography (`FloatingNotchOverlay.kt`):
-- `isExpanded` (user-facing expand request) vs `isWindowExpanded` (native window is actually expanded).
-- Hover gated by `cursorOverNotch(...)`: real cursor position check, because transparent overlay windows re-fire Enter/Exit while resizing under a stationary cursor. Debounced by `config.collapseDelayMs` (400). Only ever suppresses collapse, never forces expand.
+- `isExpanded` (user-facing expand request) is purely drawn growth inside the fixed native window — no `isWindowExpanded`/window-resize step anymore.
+- Hover gated by `cursorOverNotch(...)`: real cursor position check, because transparent overlay windows re-fire Enter/Exit while content resizes under a stationary cursor. Debounced by `config.collapseDelayMs` (400). Only ever suppresses collapse, never forces expand.
 - The **island** keeps growing until `isExpanded || dockState.currentState || dockState.targetState` (dock is a *sibling*, not child — the fading dock is never clipped by the shrinking pill).
 - Springs: `notchSizeSpring` (damping 0.9, stiffness 340), `dockRevealSpring`, `pageSpring`, `sharedBoundsSpring` (0.9/320). `DockFadeIn=170ms`, `DockFadeOut=90ms`, `IslandSettleTimeoutMs=650`.
-- Open/close waits on the size spring settling (with timeout) before showing the dock / shrinking the window — never resize while content draws.
+- Open waits on the size spring settling (with timeout) before showing the dock; close lets the island spring back first. The window itself never resizes (pitfall 17).
 
 ### 5.3 Widget system & pager
 
@@ -329,6 +329,7 @@ composeApp/
 | Now-playing pill + detailed music page + transport | done |
 | Expand-into-music + shared-element morph | done (`a02cdc1`, tuned `0c9a9a7`) |
 | Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
+| Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — trade-off: transparent margin still swallows clicks around the collapsed pill |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
@@ -461,6 +462,17 @@ composeApp/
     routes in/out, which is what `btwatch_bridge.m` uses to poke the poller. Lowering
     the `system_profiler` cadence instead would cost ~5–7% of a core (≈150 ms/probe), so
     keep the 10 s poll as the backstop and the watcher as the trigger.
+17. **Never resize the transparent overlay window during open/collapse** — resizing a
+    transparent AWT/Compose window on macOS white-flashes / skips a frame (known Compose
+    Desktop + Skiko artifact; jetsniff `compose-multiplatform` #3760, #3420, #4153) and
+    reads as a blink. The overlay window now keeps one fixed footprint — the expanded dock
+    size — for its whole life (see `NotchOverlayWindow` in `main.kt`); expanding is only
+    drawn growth of the island inside it. Cost: the fixed window's transparent margin
+    swallows clicks on the desktop directly around the collapsed pill (renders as a
+    tappable no-op instead of passing through); hover gating is unaffected because it
+    checks the real cursor against the island box's coordinates. If a future change needs
+    a tighter footprint, the trade-off must be revisited deliberately — don't reintroduce a
+    per-open/collapse native resize.
 
 ---
 
@@ -513,6 +525,11 @@ composeApp/
   (battery/charging/volume) so every level-ring icon tints fully on macOS — the old
   32%-opacity stroke battery casing was nearly invisible once tinted. Volume ring now
   uses the packaged `volume.svg` instead of Material icons.
+- (this session → HEAD): the overlay's native window stopped resizing during open/collapse —
+  it now keeps one fixed (expanded) footprint for its whole life and the island is drawn
+  growth inside it, killing the macOS transparent-window resize flash that read as a blink
+  (pitfall 17). The clockwise `isWindowExpanded`/`onWindowExpandedChange` plumbing that used
+  to drive that resize is gone.
 
 ---
 

@@ -95,7 +95,6 @@ fun main() {
         var showSettings by remember { mutableStateOf(false) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
-        var isWindowExpanded by remember { mutableStateOf(false) }
 
         val appIcon = remember { loadQuickNotchIcon() }
         Tray(
@@ -122,13 +121,11 @@ fun main() {
                 musicLive = musicLive,
                 appIcon = appIcon,
                 isExpanded = isExpanded,
-                isWindowExpanded = isWindowExpanded,
                 volumePercent = volumePercent,
                 battery = battery,
                 deviceBattery = deviceBattery,
                 notificationCount = notificationCount,
-                onExpandedChange = { isExpanded = it },
-                onWindowExpandedChange = { isWindowExpanded = it }
+                onExpandedChange = { isExpanded = it }
             )
         }
 
@@ -159,12 +156,21 @@ fun main() {
 /**
  * Hosts the transparent overlay window and pins it to the top of the screen.
  *
+ * The native window adopts a single fixed footprint — the expanded dock size —
+ * and never resizes while the notch opens or collapses. On macOS a transparent
+ * AWT window that resizes flashes white / skips frames for a frame (a known
+ * Compose Desktop + Skiko issue), which reads as a blink; keeping the window
+ * size stable and drawing the growing/shrinking island inside it eliminates
+ * that entirely. The trade-off: the fixed window is wider/taller than the
+ * collapsed pill, so its transparent margin swallows clicks on the desktop
+ * directly around the pill until the notch expands.
+ *
  * Size and position are both written to [androidx.compose.ui.window.WindowState]
  * within a single effect so Compose applies them atomically in one pass — this is
- * what keeps the notch perfectly still (no shift, no flash) while it grows and
- * shrinks. The effect re-runs only when the style or the target footprint
- * changes, never in response to the window's own live dimensions, so there is
- * no feedback loop and no second corrective placement.
+ * what keeps the notch perfectly still while it grows and shrinks. The effect
+ * re-runs only when the style or the target footprint changes (favourites count,
+ * the widened now-playing page), never in response to the window's own live
+ * dimensions, so there is no feedback loop and no second corrective placement.
  */
 @Composable
 private fun NotchOverlayWindow(
@@ -173,13 +179,11 @@ private fun NotchOverlayWindow(
     musicLive: Boolean,
     appIcon: ImageBitmap,
     isExpanded: Boolean,
-    isWindowExpanded: Boolean,
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
     notificationCount: Int?,
-    onExpandedChange: (Boolean) -> Unit,
-    onWindowExpandedChange: (Boolean) -> Unit
+    onExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
@@ -191,7 +195,10 @@ private fun NotchOverlayWindow(
     val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
         computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
     }
-    val targetSize = metrics.sizeFor(isWindowExpanded)
+    // The native window keeps the expanded footprint at all times (see class
+    // doc): opening/collapsing never resizes the transparent window, which is
+    // what would flash on macOS. The visible island animates inside it instead.
+    val targetSize = metrics.expanded
 
     val overlayState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.TopCenter),
@@ -260,7 +267,6 @@ private fun NotchOverlayWindow(
                 media = media,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
-                onWindowExpandedChange = onWindowExpandedChange,
                 volumePercent = volumePercent,
                 battery = battery,
                 deviceBattery = deviceBattery,

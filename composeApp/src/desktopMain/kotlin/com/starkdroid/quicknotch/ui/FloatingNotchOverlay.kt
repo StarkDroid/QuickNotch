@@ -383,7 +383,6 @@ internal fun FloatingNotchOverlay(
     media: MediaController,
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
-    onWindowExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     /** System master-volume percentage (0-100); null hides the volume chip. */
     volumePercent: Int? = null,
@@ -571,23 +570,25 @@ internal fun FloatingNotchOverlay(
 
     // The island keeps the dock as its *sibling*, so the fading dock is not
     // clipped by the shrinking pill; the pill holds its expanded size until the
-    // dock fade is done, then contracts. For a top-centred notch the island
-    // footprint matches the window, so no extra gutter is needed.
+    // dock fade is done, then contracts. Everything sits top-centred inside the
+    // fixed (expanded) native window, so the collapsed pill nests into the
+    // window's top edge and needs no gutter.
     val islandExpanded = isExpanded || dockState.currentState || dockState.targetState
     val targetSize = metrics.islandFor(islandExpanded)
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
 
-    // Open: grow the native window first, hold the dock hidden until the size
-    // spring has actually settled, then fade it in. Close: fade the dock out,
-    // let the island spring back, then shrink the window. Waiting on the spring
-    // itself (with a timeout) rather than fixed delays keeps the window from
-    // ever resizing while content is being drawn or measured, and guarantees
-    // the notch never gets stuck open-but-empty.
+    // Open: hold the dock hidden until the size spring has actually settled,
+    // then fade it in. Close: fade the dock out and let the island spring back.
+    // Waiting on the spring itself (with a timeout) rather than fixed delays
+    // guarantees the dock never appears mid-measure and the notch never gets
+    // stuck open-but-empty. The native window stays at its one fixed footprint
+    // the entire time (see NotchOverlayWindow) — "expanding" is purely drawn
+    // growth inside that fixed window, so the overlay's native surface is never
+    // resized and there is no resize flash on any platform.
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
-            onWindowExpandedChange(true)
             val island = metrics.islandFor(true)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
@@ -609,7 +610,6 @@ internal fun FloatingNotchOverlay(
                     animatedWidth <= collapsed.width + 1.dp && animatedHeight <= collapsed.height + 1.dp
                 }.first { settled -> settled }
             }
-            onWindowExpandedChange(false)
         }
     }
 
