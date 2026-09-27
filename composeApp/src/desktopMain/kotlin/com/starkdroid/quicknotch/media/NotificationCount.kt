@@ -46,15 +46,11 @@ import kotlinx.coroutines.launch
  * the query fails and the count stays null — the indicator hides exactly like
  * any other unreadable probe, and settings offers a "Grant Full Disk Access"
  * button that deep-links into the Privacy pane (and re-pokes on focus regain).
+ * Once the store reads, the badge is live and nothing else is configured, so the
+ * settings row disappears.
  *
- * Windows exposes no such store, so the count there is a session-local tally of
- * the notifications QuickNotch itself posts (the test button), which keeps the
- * badge demo identical on both platforms; the OS toast itself is a best-effort
- * WinRT post that needs the installed Start Menu shortcut/AUMID.
- *
- * On macOS the "Send test notification" flow posts a real banner through
- * `osascript` (unique body), which usernoted accepts into `record` just like any
- * other delivered notification — the store watch then picks the increment up.
+ * Windows exposes no such store, so the count stays null there too — the bell
+ * hides rather than showing a meaningless always-zero badge.
  */
 internal object NotificationCount {
 
@@ -66,21 +62,16 @@ internal object NotificationCount {
     /** Latest notification count from the OS store; null while unreadable. */
     val count: StateFlow<Int?> = _count.asStateFlow()
 
-    @Volatile
-    private var toastScript: File? = null
     private var scope: CoroutineScope? = null
     private var job: Job? = null
 
     fun start() {
         stop()
-        if (HostPlatform.isWindows) {
-            // No OS store to read: the badge counts our own posts, starting at
-            // a clean zero so the bell is visible (badge grows on each test).
-            toastScript = NativeResources.extract("windows/toast.ps1", ".ps1")
-            _count.value = 0
+        if (!HostPlatform.isMac) {
+            // Windows has no OS unread store and no test flow posts local
+            // counts anymore — stay null so the bell never shows a dead zero.
             return
         }
-        if (!HostPlatform.isMac) return
         val active = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = active
         job = active.launch {
@@ -132,10 +123,10 @@ internal object NotificationCount {
     }
 
     /**
-     * Opens the OS pane where the required permission is granted. macOS asks for
+     * Opens the pane where the required permission is granted. macOS asks for
      * Full Disk Access (to read the Notification Center store) and lands on that
      * Privacy &amp; Security pane; Windows has no equivalent grantable permission,
-     * so this is a no-op there — the test-notification button is offered directly.
+     * so this is a no-op there.
      */
     fun openPermissionSettings() {
         if (HostPlatform.isMac) {
@@ -146,58 +137,6 @@ internal object NotificationCount {
             }
         }
     }
-
-    /**
-     * Posts one test notification so users can watch the bell count. macOS posts
-     * a real Notification Center banner through `osascript` (unique body, no
-     * extra permission) which usernoted accepts into the store — the watch then
-     * shows the increment like any delivered notification. Windows has no store,
-     * so the session-local count advances directly and a best-effort WinRT toast
-     * is attempted for the visual confirmation.
-     */
-    fun postTestNotification(title: String, body: String) {
-        when {
-            HostPlatform.isMac -> postMac(title, body)
-            HostPlatform.isWindows -> {
-                _count.value = (_count.value ?: 0) + 1
-                postWindows(title, body)
-            }
-        }
-    }
-
-    private fun postMac(title: String, body: String) {
-        val launch = scope ?: run {
-            val active = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            scope = active
-            active
-        }
-        launch.launch {
-            runCatching {
-                val script = "display notification \"${jsEscape(body)}\" with title \"${jsEscape(title)}\""
-                val process = ProcessBuilder("osascript", "-e", script).start()
-                process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)
-                process.destroyForcibly()
-            }
-        }
-    }
-
-    private fun postWindows(title: String, body: String) {
-        val file = toastScript ?: return
-        runCatching {
-            val process = ProcessBuilder(
-                "powershell.exe",
-                "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                "-File", file.absolutePath,
-                "-Title", title,
-                "-Message", body
-            ).redirectErrorStream(true).start()
-            process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)
-            process.destroyForcibly()
-        }
-    }
-
-    private fun jsEscape(value: String): String =
-        value.replace("\\", "\\\\").replace("\"", "\\\"")
 
     /**
      * A cheap fingerprint of the store so a change can be detected without

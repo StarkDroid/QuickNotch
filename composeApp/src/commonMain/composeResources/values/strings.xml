@@ -53,10 +53,6 @@
     <string name="notification_indicator">Unread notifications</string>
     <string name="notification_grant_button">Grant Full Disk Access</string>
     <string name="notification_grant_hint">QuickNotch needs Full Disk Access to read macOS notification counts.</string>
-    <string name="notification_test_button">Send Test Notifications</string>
-    <string name="notification_test_hint">Press repeatedly to stack notifications on the quickview badge.</string>
-    <string name="notification_test_title">QuickNotch</string>
-    <string name="notification_test_body">QuickNotch test notification %1$d</string>
 
     <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>

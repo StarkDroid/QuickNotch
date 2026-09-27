@@ -35,9 +35,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,14 +72,10 @@ internal fun DockSizingTab(
     val hasDeviceBattery by SystemBattery.hasBattery.collectAsState()
 
     // Live unread count drives the notification helper row below the indicator
-    // grid: null on macOS means Full Disk Access is still missing (offer the
-    // grant button); any Int means the source is readable (offer the test
-    // button). Windows feeds a session-local counter, so it reads as 0 → test
-    // button immediately.
+    // grid: null on macOS means Full Disk Access is still missing, so the row
+    // offers the Grant button that opens the Privacy &amp; Security pane. Once the
+    // store is readable there is nothing left to configure, so the row hides.
     val notificationCount by NotificationCount.count.collectAsState()
-    var testNotificationSequence by remember { mutableStateOf(0) }
-    val notificationTestTitle = stringResource(Res.string.notification_test_title)
-    val notificationTestBody = stringResource(Res.string.notification_test_body)
     val notificationNeedsPermission = HostPlatform.isMac && notificationCount == null
 
     LazyColumn(
@@ -279,35 +272,18 @@ internal fun DockSizingTab(
                         )
                     }
 
-                    // Permission / test-notification helper for the notification
-                    // indicator. Hidden entirely while the toggle is off. macOS
-                    // without Full Disk Access offers a button that opens the
-                    // Privacy & Security pane; once the store becomes readable
-                    // (or on Windows, where nothing needs granting) the button
-                    // swaps to one that posts test notifications so the badge's
-                    // 99+ stacking can be watched live.
-                    if (config.widgets.showCollapsedNotifications) {
+                    // Permission helper for the notification indicator, shown
+                    // only while it actually applies: macOS with Full Disk
+                    // Access still missing. The button opens the Privacy &
+                    // Security pane; once the store reads the row disappears.
+                    if (config.widgets.showCollapsedNotifications && notificationNeedsPermission) {
                         Spacer(modifier = Modifier.height(14.dp))
                         HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
                         Spacer(modifier = Modifier.height(12.dp))
-                        NotificationHelperRow(
-                            needsPermission = notificationNeedsPermission,
-                            permissionButton = stringResource(Res.string.notification_grant_button),
-                            permissionHint = stringResource(Res.string.notification_grant_hint),
-                            testButton = stringResource(Res.string.notification_test_button),
-                            testHint = stringResource(Res.string.notification_test_hint),
-                            onGrant = { NotificationCount.openPermissionSettings() },
-                            onTest = {
-                                testNotificationSequence += 1
-                                NotificationCount.postTestNotification(
-                                    title = notificationTestTitle,
-                                    body = String.format(
-                                        Locale.ROOT,
-                                        notificationTestBody,
-                                        testNotificationSequence
-                                    )
-                                )
-                            }
+                        NotificationGrantRow(
+                            hint = stringResource(Res.string.notification_grant_hint),
+                            button = stringResource(Res.string.notification_grant_button),
+                            onGrant = { NotificationCount.openPermissionSettings() }
                         )
                     }
                 }
@@ -540,41 +516,42 @@ private fun IndicatorCell(
 }
 
 /**
- * Helper row under the indicators grid: a short hint plus one action button.
- * While the notification store is unreadable (macOS missing Full Disk Access)
- * the button opens the Privacy &amp; Security pane; once readable — or on
- * Windows, where nothing needs granting — it posts test notifications instead,
- * so pressing it repeatedly stacks the quickview badge.
+ * Helper row under the indicators grid for the one thing that still needs the
+ * user's action: granting QuickNotch Full Disk Access so the quickview can read
+ * the macOS Notification Center count. A short hint on the left, a compact
+ * rectangular button on the right that deep-links straight to the Privacy &amp;
+ * Security pane. Rendered only while the store is unreadable.
  */
 @Composable
-private fun NotificationHelperRow(
-    needsPermission: Boolean,
-    permissionButton: String,
-    permissionHint: String,
-    testButton: String,
-    testHint: String,
-    onGrant: () -> Unit,
-    onTest: () -> Unit
+private fun NotificationGrantRow(
+    hint: String,
+    button: String,
+    onGrant: () -> Unit
 ) {
+    val darkText = Color(0xFF1A1B25)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (needsPermission) permissionHint else testHint,
+            text = hint,
             style = AppTypography.bodySmall,
             color = TextSecondary,
             modifier = Modifier.weight(1f)
         )
-        TextButton(
-            onClick = if (needsPermission) onGrant else onTest,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+        Spacer(modifier = Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(AccentIndigoLight)
+                .clickable(onClick = onGrant)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Text(
-                text = if (needsPermission) permissionButton else testButton,
+                text = button,
                 style = AppTypography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = AccentIndigoLight
+                color = darkText
             )
         }
     }

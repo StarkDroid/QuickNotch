@@ -190,15 +190,13 @@ the indicator hides like any other unreadable probe, and settings offers a **Gra
 Disk Access** button that deep-links the Privacy &amp; Security pane
 (`x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`); the settings
 window re-pokes the store on focus regain (`NotificationCount.poke()`), so a grant made in
-System Settings is detected as soon as the user comes back. Once the store reads (or on
-Windows, which needs no grant) the button swaps to **Send Test Notifications** — macOS
-posts a real banner via `osascript` (unique bodies are accepted into `record`; the
-watch picks the increment up within a store-lag tick), Windows advances a
-session-local counter and attempts a best-effort WinRT toast
-(`toast.ps1`) that needs the installed MSI Start Menu shortcut/AUMID. Pressing repeatedly
-stacks the count so it can be watched live (see `NotificationCount`). Windows has no
-public unread store — the badge there counts QuickNotch's own posts, a faithful demo but
-never real per-app counts.
+System Settings is detected as soon as the user comes back. Once the store reads there is
+nothing left to configure, so the helper row disappears. (An earlier **Send Test
+Notifications** flow — `osascript` banners on macOS, a session-local tally + WinRT toast on
+Windows — shared that row slot; it was removed by request: the badge is a real NC ledger,
+not a demo surface, so Windows now stays null and its bell hides rather than show an
+always-zero dead icon. The `toast.ps1` bridge was deleted with it.) Windows has no
+public unread store — no live per-app counts there.
 Settings' QuickView Indicators card mirrors the toggle (bell + badge cell instead of a ring —
 a notification has no level to preview) and, while the toggle is on, shows the helper row
 described above.
@@ -329,7 +327,7 @@ window's interactive area to exactly the drawn island each tick:
 composeApp/
 ├── build.gradle.kts                      # KMP + Compose Desktop config, bridge sync tasks
 ├── native/
-│   ├── windows/{smtc,volume,system-battery,battery,accent,toast}.ps1   # source of truth for bridges
+│   ├── windows/{smtc,volume,system-battery,battery,accent}.ps1   # source of truth for bridges
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
 │   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
 │   └── macos/passthrough_bridge.m        # ObjC setIgnoresMouseEvents on main queue (WindowPassthrough dylib)
@@ -400,7 +398,7 @@ composeApp/
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
-| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — value is now `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The "15 after clearing" number is honest: macOS keeps unread-badge apps' notifications until read/dismissed, same as the Dock badges. macOS visual pass + Windows toast (needs MSI AUMID) still pending |
+| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with a compact rectangular **Grant Full Disk Access** button (deep-links the Privacy &amp; Security pane; the helper row disappears once the count reads) | done (this session) — value is `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The residual count after a Clear All is honest: macOS keeps unread-badge apps' notifications (WhatsApp) *and* genuinely persistent rows (Screen Time weekly report) until read/dismissed, same as the Dock badges. A one-time **Send Test Notifications** flow (osascript banners / WinRT `toast.ps1`) was removed by request — the badge is a real NC ledger, not a demo surface. Windows has no store, so its bell stays hidden (`count` null). App version bumped to **3.0.0** |
 | Fresh manual launch opens the Settings window alongside the notch; login/boot auto-start stays quietly behind the tray (distinguished by `--quicknotch-launched-at-login`, written into the LaunchAgent/Run-key command) | done (this session) — verified on macOS via CGWindowList on both paths (manual = overlay + settings; marker = overlay only); Windows launch still unverified |
 
 **Verification matrix (important!):**
@@ -606,6 +604,12 @@ composeApp/
   the Notification Center" count: `count(*)` on the usernoted `record` table (adds on
   delivery, removes on dismiss/clear), replacing both the `sum(app.badge)` and the
   `delivered = 1` dead-column attempts.
+- (this session → HEAD): the settings helper for the notification indicator stopped
+  pretending to be a demo surface — the **Send Test Notifications** flow (osascript
+  banners / `toast.ps1`) is gone, leaving only the compact rectangular **Grant Full
+  Disk Access** button (deep-links to Privacy &amp; Security, hidden once the count
+  reads). Windows no longer fakes a session count; its bell stays hidden. App version
+  jumped **1.0.0 → 3.0.0** across the feature line.
 
 ---
 
