@@ -69,6 +69,7 @@ command line matches `MainKt|quicknotch`.
 - `compileMacNowPlayingBridge` — builds `native/macos/nowplaying_bridge.m` with `cc` (macOS hosts only).
 - `compileMacBtWatchBridge` — builds `native/macos/btwatch_bridge.m` with Foundation + CoreAudio (macOS hosts only).
 - `compileMacPassthroughBridge` — builds `native/macos/passthrough_bridge.m` into a dylib with Foundation (macOS hosts only; loaded by `WindowPassthrough`).
+- `compileMacBadgeBridge` — builds `native/macos/badge_bridge.m` into a dylib with Foundation + UserNotifications (macOS hosts only; loaded by `NotificationCount` for the test-notification badge bump).
 
 If a Windows `.ps1` script is edited in `native/windows`, the copy into
 `resources/windows` is refreshed automatically at jar time — but **during a plain
@@ -166,33 +167,39 @@ the notification bell when its unread count is readable and the toggle is on) an
 window sizer (`NotchOverlayWindow` in `main.kt`) and the overlay content derive the
 collapsed footprint from it, so the rings are never clipped against the window edge.
 The notification bell + red count badge (`notification.svg`, `AccentRed`) cap the row
-farthest right, gated by the `showCollapsedNotifications` widget toggle; the count is
-read from the macOS Notification Center store
+farthest right, gated by the `showCollapsedNotifications` widget toggle; the value is read
+from the macOS Notification Center store
 (`~/Library/Group Containers/group.com.apple.usernoted/db2/db` via `sqlite3`) and updated
 **near-instantly**: the poller stat fingerprints `db`, `db-wal` and `db-shm` on a 250 ms
 tick (a few syscalls, no sqlite spawn) and only runs the query when a signature changes —
 the store is in WAL mode, so an arriving/dismissed notification churns `db-wal`, not the
 main `db`, hence all three files are watched. A 3s backstop query still runs so a missed
-signal converges. The store holds one row per notification still present in Notification
-Center and prunes rows on dismissal (rec ids get reused), so **the badge is the plain
-`record` row count**, not a `delivered`-column filter: current schemas have no boolean
-`delivered` column (only `delivered_date` / `presented`, and `presented` reads 0 even for a
-just-delivered banner), so the old `where delivered = 1` query always errored and the
-indicator stayed "needs Full Disk Access" no matter what. The settings window re-pokes the
-store on focus regain (`NotificationCount.poke()`), so a grant made in System Settings is
-detected as soon as the user comes back. A store falling Full Disk Access leaves the count
-null and hides the indicator. Settings' QuickView
-Indicators card mirrors the toggle (bell + badge cell instead of a ring — a notification has
-no level to preview) and, while the toggle is on, shows a helper row underneath: macOS
-without Full Disk Access offers a **Grant Full Disk Access** button that deep-links the
-Privacy &amp; Security pane (`x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`);
-once the store reads (or on Windows, which needs no grant) the button swaps to **Send Test
-Notifications** — macOS posts a real banner via `osascript -e 'display notification …'` so
-the store count grows, Windows advances a session-local counter and attempts a best-effort
-WinRT toast (`toast.ps1`) that needs the installed MSI Start Menu shortcut/AUMID. Pressing
-repeatedly stacks the badge so its 99+ cap can be watched live (see `NotificationCount`).
-Windows has no public unread store — the badge there counts QuickNotch's own posts, a
-faithful demo but never real per-app counts.
+signal converges.
+
+The value shown is **`sum(app.badge)` where badge is not null** — the OS's per-app icon
+badges, i.e. the same unread numbers the Dock shows. There is no public "notifications
+currently in Notification Center" count on macOS; the store's `record` rows don't track it
+(dismissed rows are only pruned lazily and badge-worthy apps keep them after a Clear All,
+so a row count never reflected removals), while `app.badge` is bumped by usernoted on
+arrival and dropped when an app clears its badge — real-time adds and removes. The store
+is guarded by Full Disk Access, so until a grant the query fails and the count stays null —
+the indicator hides like any other unreadable probe, and settings offers a **Grant Full
+Disk Access** button that deep-links the Privacy &amp; Security pane
+(`x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`); the settings
+window re-pokes the store on focus regain (`NotificationCount.poke()`), so a grant made in
+System Settings is detected as soon as the user comes back. Once the store reads (or on
+Windows, which needs no grant) the button swaps to **Send Test Notifications** — macOS
+makes the demo deterministic by bumping QuickNotch's *own* app badge per press through the
+compiled `badge_bridge.m` (`setBadgeCount:`, macOS 13+; osascript banners don't reliably
+insert into the store, so without the own-badge bump the demo count would sometimes not
+move), Windows advances a session-local counter and attempts a best-effort WinRT toast
+(`toast.ps1`) that needs the installed MSI Start Menu shortcut/AUMID. Pressing repeatedly
+stacks the badge so its cap can be watched live (see `NotificationCount`). Windows has no
+public unread store — the badge there counts QuickNotch's own posts, a faithful demo but
+never real per-app counts.
+Settings' QuickView Indicators card mirrors the toggle (bell + badge cell instead of a ring —
+a notification has no level to preview) and, while the toggle is on, shows the helper row
+described above.
 
 ### 5.6 Media pipeline
 
@@ -324,6 +331,7 @@ composeApp/
 │   └── macos/nowplaying_bridge.m         # ObjC MediaRemote supervisor
 │   └── macos/btwatch_bridge.m            # ObjC CoreAudio route/BT connect watcher
 │   └── macos/passthrough_bridge.m        # ObjC setIgnoresMouseEvents on main queue (WindowPassthrough dylib)
+│   └── macos/badge_bridge.m              # ObjC UNUserNotificationCenter setBadgeCount (NotificationCount dylib)
 └── src/
     ├── commonMain/composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
@@ -391,7 +399,7 @@ composeApp/
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
-| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — the count query was fixed to `select count(*) from record` (the old `delivered = 1` column never existed on current schemas, so the badge/grant-swap never resolved even with FDA); macOS visual pass + Windows toast (needs MSI AUMID) pending |
+| Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with permission grant + test-notification flow; Windows counts its own posts (`NotificationCount`) | done (this session) — value is now `sum(app.badge)` (live OS per-app unread, the Dock's numbers) watched near-instantly via a 250ms store-fingerprint poll; the earlier bugs were `delivered = 1` (a column that never existed → badge stayed "needs FDA") and the `record` row count (survives Clear All → the "15 after clearing" lie). macOS test-button bumps QuickNotch's own badge via `badge_bridge.m`; Windows toast (needs MSI AUMID) still pending |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
