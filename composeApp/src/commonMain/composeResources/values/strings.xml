@@ -12,6 +12,8 @@
     <string name="menu_hide_notch">Hide Notch</string>
     <string name="menu_show_notch">Show Notch</string>
     <string name="reset_defaults">Reset Defaults</string>
+    <string name="menu_always_on_top">Always on top</string>
+    <string name="menu_always_on_top_checked">✓ Always on top</string>
     <string name="menu_quit">Quit QuickNotch</string>
 
     <!-- Tabs -->

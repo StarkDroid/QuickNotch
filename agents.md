@@ -80,8 +80,8 @@ If a Windows `.ps1` script is edited in `native/windows`, the copy into
 ### 5.1 Process & windows (`main.kt`)
 
 - One `application {}`; `FavoritesRepository` + `MediaController` are singletons owned here.
-- **Overlay window**: undecorated, transparent, `alwaysOnTop`, non-resizable, top-centred. The native window holds a **single fixed footprint — the expanded dock size — for its whole life** and is never resized while the notch opens or collapses; expanding is purely drawn growth of the island inside that stable window. This is what kills the macOS resize flash: a transparent AWT window that resizes white-flashes/skips a frame (known Compose Desktop + Skiko issue, see pitfall 17). The trade-off is that the fixed window's transparent margin swallows clicks on the desktop directly around the collapsed pill. It is still **atomically positioned** (size+position written together in one `LaunchedEffect`) after the AWT window maps, and re-centred whenever the target footprint changes (favourites count, the widened now-playing page). `LaunchedEffect(config.style, targetSize)` handles placement; never re-place on the window's own live dimensions (feedback loop).
-- **Tray** (Windows) / menu-bar extra (macOS): show/hide notch, open Settings, reset defaults, quit.
+- **Overlay window**: undecorated, transparent, `alwaysOnTop`, non-resizable, top-centred. The native window holds a **single fixed footprint — the expanded dock size — for its whole life** and is never resized while the notch opens or collapses; expanding is purely drawn growth of the island inside that stable window. This is what kills the macOS resize flash: a transparent AWT window that resizes white-flashes/skips a frame (known Compose Desktop + Skiko issue, see pitfall 17). The fixed window's transparent margin previously swallowed clicks on the desktop around the collapsed pill; `WindowPassthrough` (see 5.10) now clips the hit-test to exactly the drawn island, so the margin is click-through unless the cursor actually sits over the island (see pitfall 17). It is still **atomically positioned** (size+position written together in one `LaunchedEffect`) after the AWT window maps, and re-centred whenever the target footprint changes (favourites count, the widened now-playing page). `LaunchedEffect(config.style, targetSize)` handles placement; never re-place on the window's own live dimensions (feedback loop).
+- **Tray** (Windows) / menu-bar extra (macOS): show/hide notch, an **Always on top** toggle (mirrors the Behavior-tab switch; drives `config.alwaysOnTop`, re-applied to the overlay at next open), open Settings, reset defaults, quit.
 - **Settings window**: 880×660, normal window, `SettingsScreen`.
 
 Threading: `Dispatchers.IO` for all pollers/bridges; UI observes `StateFlow`s on the
@@ -260,6 +260,38 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   audio-battery poller re-probes instantly on each marker. Same build gating as the
   now-playing bridge (`compileMacBtWatchBridge`).
 
+### 5.10 Window passthrough (`WindowPassthrough.kt`)
+
+Because the overlay native window keeps one fixed (expanded) footprint for its whole
+life, its transparent margin would swallow clicks on whatever app or desktop sits
+around the collapsed pill. `WindowPassthrough` (datasource, `main.kt`) clips the
+window's interactive area to exactly the drawn island each tick:
+
+- The overlay publishes the hover box's bounds (a `java.awt.Rectangle` in window-client
+  *physical* pixels, from `localToWindow(Offset.Zero)` × `density.density`) via
+  `onTouchTargetChange`; the rectangle is already in physical px so native APIs need no
+  further scaling. `null` = "whole window interactive" (measured/first frame).
+- **Windows**: `SetWindowRgn(GDI32.CreateRectRgn(...))` — the region clips both painting
+  and hit-testing; the OS frees the previous region when replaced, so a fresh region per
+  tick is safe. `null` region = full window.
+- **macOS**: `[NSWindow setIgnoresMouseEvents:]` (whole-window, no per-region variant),
+  driven cursor-first each 30 ms poll: the window is mouse-transparent unless the *real*
+  cursor (via `MouseInfo`) sits within the island rect (with a 4px pad). The opposite of
+  the Compose gate: a suppressed hover plays no role here — this is a raw
+  AppKit-level hit-test, and poll cadence is what reactivates clicks. When the window is
+  flipped back to interactive, a synthetic `MOUSE_MOVED` is dispatched so Compose's hover
+  machinery sees the "enter" it never received while mouse-transparent.
+- Both platforms resolve the native handle by reflecting the AWT peer (`getPeer` →
+  `LWWindowPeer.getNSWindowPtr` / `WComponentPeer.getHWnd`); the `java.awt.peer`/peer
+  implementation packages are opened via `--add-opens java.desktop/sun.lwawt=ALL-UNNAMED`
+  and `--add-opens java.desktop/sun.awt.windows=ALL-UNNAMED` (added to
+  `compose.desktop.application` so they apply to `run` and the packaged app).
+- **Fail-soft by design**: `install()` never throws; if the peer method is missing or the
+  handle can't be resolved (logs `QuickNotch: overlay passthrough off (...)`), the window
+  simply stays fully interactive — the old fixed-footprint margin behaviour, degraded but
+  never broken. JNA ObjC goes through the raw `Function` API
+  (`objc_msgSend`/`sel_registerName`) because jna-platform no longer ships a typed `ObjC`.
+
 ---
 
 ## 6. Repo map (where things live)
@@ -281,7 +313,7 @@ composeApp/
             ├── main.kt                   # app entry: tray + overlay + settings windows, poller lifecycle
             ├── theme/                    # Color.kt (central palette), Theme.kt, Typography.kt
             ├── model/                    # AppItem, NotchConfig (+WidgetsConfig, enums), FavoritesRepository
-            ├── datasource/               # HostPlatform, SystemAccent, scanners/icon loaders/launchers/startup
+            ├── datasource/               # HostPlatform, SystemAccent, WindowPassthrough, scanners/icon loaders/launchers/startup
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
@@ -329,7 +361,9 @@ composeApp/
 | Now-playing pill + detailed music page + transport | done |
 | Expand-into-music + shared-element morph | done (`a02cdc1`, tuned `0c9a9a7`) |
 | Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
-| Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — trade-off: transparent margin still swallows clicks around the collapsed pill |
+| Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
+| Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — Windows path unverified; macOS smoke ran |
+| Tray/menu-bar "Always on top" toggle (mirrors Behavior-tab switch, drives `config.alwaysOnTop`) | done (this session) |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
@@ -467,12 +501,14 @@ composeApp/
     Desktop + Skiko artifact; jetsniff `compose-multiplatform` #3760, #3420, #4153) and
     reads as a blink. The overlay window now keeps one fixed footprint — the expanded dock
     size — for its whole life (see `NotchOverlayWindow` in `main.kt`); expanding is only
-    drawn growth of the island inside it. Cost: the fixed window's transparent margin
-    swallows clicks on the desktop directly around the collapsed pill (renders as a
-    tappable no-op instead of passing through); hover gating is unaffected because it
-    checks the real cursor against the island box's coordinates. If a future change needs
-    a tighter footprint, the trade-off must be revisited deliberately — don't reintroduce a
-    per-open/collapse native resize.
+    drawn growth of the island inside it. The margin cost is now mitigated: the window's
+    interactive area is clipped to exactly the drawn island by `WindowPassthrough`
+    (see 5.10) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents:` on macOS —
+    so the surrounding desktop/app stays click-through; if the native handle can't be
+    resolved it fails soft to the old fully-interactive margin. Hover gating is unaffected
+    because it checks the real cursor against the island box's coordinates.
+    If a future change needs a tighter footprint, the trade-off must be revisited
+    deliberately — don't reintroduce a per-open/collapse native resize.
 
 ---
 
@@ -529,7 +565,9 @@ composeApp/
   it now keeps one fixed (expanded) footprint for its whole life and the island is drawn
   growth inside it, killing the macOS transparent-window resize flash that read as a blink
   (pitfall 17). The clockwise `isWindowExpanded`/`onWindowExpandedChange` plumbing that used
-  to drive that resize is gone.
+  to drive that resize is gone. The fixed window's click-swallowing margin is clipped away
+  by `WindowPassthrough` (5.10) — the island is the only touch target; a tray/menu-bar
+  "Always on top" toggle mirrors the Behavior-tab switch.
 
 ---
 

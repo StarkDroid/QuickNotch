@@ -110,6 +110,15 @@ compose.desktop {
     application {
         mainClass = "com.starkdroid.quicknotch.MainKt"
 
+        // Open the AWT peer packages so WindowPassthrough can resolve the
+        // native window handle (sun.lwawt.LWWindowPeer.getNSWindowPtr on macOS,
+        // sun.awt.windows.WComponentPeer.getHWnd on Windows) and clip its hit
+        // target to the island. Both apply to `run` and the packaged app.
+        jvmArgs += listOf(
+            "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",
+            "--add-opens", "java.desktop/sun.awt.windows=ALL-UNNAMED"
+        )
+
         // Renderer selection is platform-specific and handled in `main()`:
         // macOS forces SOFTWARE at runtime because Skiko's Metal backend can
         // crash on transparent overlay windows. Everywhere else we keep Skiko's

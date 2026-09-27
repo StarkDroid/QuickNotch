@@ -21,6 +21,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.datasource.HostPlatform
+import com.starkdroid.quicknotch.datasource.WindowPassthrough
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
@@ -106,6 +107,13 @@ fun main() {
                     if (isNotchVisible) stringResource(Res.string.menu_hide_notch)
                     else stringResource(Res.string.menu_show_notch),
                     onClick = { isNotchVisible = !isNotchVisible }
+                )
+                Item(
+                    if (config.alwaysOnTop) stringResource(Res.string.menu_always_on_top_checked)
+                    else stringResource(Res.string.menu_always_on_top),
+                    onClick = {
+                        repository.updateConfig { it.copy(alwaysOnTop = !it.alwaysOnTop) }
+                    }
                 )
                 Separator()
                 Item(stringResource(Res.string.reset_defaults), onClick = { repository.resetToDefaults() })
@@ -217,6 +225,15 @@ private fun NotchOverlayWindow(
     ) {
         val awtWindow = window
 
+        // Keep the fixed window's transparent margin click-through: only the
+        // drawn island is a touch target (SetWindowRgn on Windows, cursor-gated
+        // ignoresMouseEvents on macOS). Fails soft — no passthrough if the
+        // native handle can't be resolved.
+        val passthrough = remember(awtWindow) { WindowPassthrough.install(awtWindow) }
+        DisposableEffect(awtWindow) {
+            onDispose { passthrough?.close() }
+        }
+
         // Shared widget-pager state; on Windows the wheel listener below drives
         // it straight from AWT because the unfocused overlay window never sees
         // scroll through Compose's pointer pipeline (which macOS' trackpad does).
@@ -270,7 +287,8 @@ private fun NotchOverlayWindow(
                 volumePercent = volumePercent,
                 battery = battery,
                 deviceBattery = deviceBattery,
-                pager = pager
+                pager = pager,
+                onTouchTargetChange = { passthrough?.update(it) }
             )
         }
     }

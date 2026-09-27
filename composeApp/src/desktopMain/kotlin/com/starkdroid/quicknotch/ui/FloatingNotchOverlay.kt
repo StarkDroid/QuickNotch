@@ -391,7 +391,15 @@ internal fun FloatingNotchOverlay(
     /** The machine's own (laptop) battery; null hides the quickview device ring. */
     deviceBattery: SystemBattery? = null,
     /** Shared widget-pager state (also driven by the Windows AWT wheel listener). */
-    pager: OverlayPager
+    pager: OverlayPager,
+    /**
+     * Reports the overlay's current touch-target rectangle in window-client
+     * pixels (the hover box = island + glow), or null until it has been sized.
+     * Lets the native window keep its transparent margin click-through, so the
+     * fixed footprint never swallows clicks on the app/desktop around the pill
+     * (see `WindowPassthrough`).
+     */
+    onTouchTargetChange: (java.awt.Rectangle?) -> Unit = {}
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
@@ -450,6 +458,36 @@ internal fun FloatingNotchOverlay(
     // Screen-anchored footprint of the hover zone (island + glow), kept alive by
     // the hover Box below so collapse can be gated on the *real* cursor position.
     var hoverCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    // The fixed native window's transparent margin must not swallow clicks on
+    // whatever app or desktop sits around the collapsed pill (see
+    // WindowPassthrough). The true touch target is exactly the hover box, so
+    // publish its bounds in window-client pixels; null (not measured yet) means
+    // "whole window interactive", the old behaviour.
+    LaunchedEffect(hoverCoordinates) {
+        val coords = hoverCoordinates
+        if (coords == null || !coords.isAttached) {
+            onTouchTargetChange(null)
+        } else {
+            // Window-client *pixels* for the hover box, scaled to physical
+            // pixels (Retina etc.) which is what the native hit-test wants.
+            val windowOffset = coords.localToWindow(Offset.Zero)
+            val sizePx = coords.size
+            val scale = density.density
+            val left = windowOffset.x * scale
+            val top = windowOffset.y * scale
+            val right = (windowOffset.x + sizePx.width) * scale
+            val bottom = (windowOffset.y + sizePx.height) * scale
+            onTouchTargetChange(
+                java.awt.Rectangle(
+                    left.roundToInt(),
+                    top.roundToInt(),
+                    (right - left).roundToInt(),
+                    (bottom - top).roundToInt()
+                )
+            )
+        }
+    }
     fun setHovered(hovered: Boolean) {
         collapseJob?.cancel()
         if (hovered) {
