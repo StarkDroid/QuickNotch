@@ -527,7 +527,7 @@ composeApp/
 | `FisheyeRadiusFactor` / `IconLift` | 1.5× / 8dp | overlay |
 | `HoverGlow` / `IslandSettleTimeoutMs` | 10dp / 650ms | overlay |
 | springs | notch 0.9/340, sharedBounds 0.9/320, icon 0.8/1000 | overlay |
-| Idle curtain | quickview slide 160/190ms, fade 140ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5, 0.08) | overlay |
+| Idle curtain | quickview slide 360/420ms ×3 height, fade 300ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5,0.08) on `idleDockRevealSpring` 0.92/150 | overlay |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |

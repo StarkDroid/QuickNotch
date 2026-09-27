@@ -191,18 +191,34 @@ private val DockFadeOut = tween<Float>(90)
 // forward under the sliding pill. Live music deliberately skips both — its
 // content flies to the detail page through the shared-element morph, so the
 // pill keeps its plain fade (sliding the source would fight the flight).
-private val QuickViewSlideIn = tween<IntOffset>(160, easing = FastOutSlowInEasing)
-private val QuickViewSlideOut = tween<IntOffset>(190, easing = FastOutSlowInEasing)
-private val QuickViewFadeOut = tween<Float>(140)
+//
+// The motion is deliberately gradual: the pill glides most of the way down the
+// expanded island ({ it * 3 } ≈ three of its own heights, carrying it off the
+// bottom edge) over a long, eased tween while the dock rises on a slow spring,
+// so the whole cross reads as one unbroken descent rather than a snap-and-pop.
+private val QuickViewSlideIn = tween<IntOffset>(360, easing = FastOutSlowInEasing)
+private val QuickViewSlideOut = tween<IntOffset>(420, easing = FastOutSlowInEasing)
+private val QuickViewFadeOut = tween<Float>(300)
 /** Entry size for the idle dock: far enough below 1 to read as "coming to the
  * front", not so small it feels like a locket pop. Growth is anchored near the
  * top edge where the pill sits, so the apps rise from behind the quickview. */
 private const val IdleDockEntryScale = 0.82f
 private val IdleDockOrigin = TransformOrigin(0.5f, 0.08f)
+private val IdleDockFadeIn = tween<Float>(300, easing = FastOutSlowInEasing)
+private val IdleDockFadeOut = tween<Float>(180)
 
 private fun dockRevealSpring() = spring(
     dampingRatio = 0.9f,
     stiffness = 300f,
+    visibilityThreshold = 0.001f
+)
+
+/** The idle dock's slower, near-critically-damped rise (no bounce, no snap) —
+ * deliberately separate from [dockRevealSpring] so the music page keeps its
+ * faster, slightly springier 0.97 pop. */
+private fun idleDockRevealSpring() = spring(
+    dampingRatio = 0.92f,
+    stiffness = 150f,
     visibilityThreshold = 0.001f
 )
 
@@ -628,10 +644,10 @@ internal fun FloatingNotchOverlay(
                 // the front.
                 val quickEnter =
                     if (musicLive) fadeIn(tween(120))
-                    else fadeIn(tween(120)) + slideInVertically(QuickViewSlideIn) { it }
+                    else fadeIn(tween(120)) + slideInVertically(QuickViewSlideIn) { it * 3 }
                 val quickExit =
                     if (musicLive) fadeOut(tween(80))
-                    else fadeOut(QuickViewFadeOut) + slideOutVertically(QuickViewSlideOut) { it }
+                    else fadeOut(QuickViewFadeOut) + slideOutVertically(QuickViewSlideOut) { it * 3 }
                 AnimatedVisibility(
                     visible = !showDock,
                     enter = quickEnter,
@@ -687,16 +703,34 @@ internal fun FloatingNotchOverlay(
             val dockReveal = dockRevealSpring()
             val dockEntryScale = if (musicLive) 0.97f else IdleDockEntryScale
             val dockOrigin = if (musicLive) TransformOrigin.Center else IdleDockOrigin
-            val dockEnter = fadeIn(DockFadeIn) + scaleIn(
-                initialScale = dockEntryScale,
-                transformOrigin = dockOrigin,
-                animationSpec = dockReveal
-            )
-            val dockExit = fadeOut(DockFadeOut) + scaleOut(
-                targetScale = dockEntryScale,
-                transformOrigin = dockOrigin,
-                animationSpec = dockReveal
-            )
+            val dockEnter =
+                if (musicLive) {
+                    fadeIn(DockFadeIn) + scaleIn(
+                        initialScale = dockEntryScale,
+                        transformOrigin = dockOrigin,
+                        animationSpec = dockReveal
+                    )
+                } else {
+                    fadeIn(IdleDockFadeIn) + scaleIn(
+                        initialScale = IdleDockEntryScale,
+                        transformOrigin = IdleDockOrigin,
+                        animationSpec = idleDockRevealSpring()
+                    )
+                }
+            val dockExit =
+                if (musicLive) {
+                    fadeOut(DockFadeOut) + scaleOut(
+                        targetScale = dockEntryScale,
+                        transformOrigin = dockOrigin,
+                        animationSpec = dockReveal
+                    )
+                } else {
+                    fadeOut(IdleDockFadeOut) + scaleOut(
+                        targetScale = IdleDockEntryScale,
+                        transformOrigin = IdleDockOrigin,
+                        animationSpec = idleDockRevealSpring()
+                    )
+                }
             Box(
                 modifier = composeScrollModifier
                     .size(metrics.dockArea.width, metrics.dockArea.height),
