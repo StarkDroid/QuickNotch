@@ -1,7 +1,15 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -37,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -213,19 +222,47 @@ private fun MusicContent(
     Row(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds()
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        VinylDisc(
-            art = session.artwork,
-            playing = playing,
-            size = 56.dp,
-            modifier = discModifier,
-            onClick = {
-                AppLauncher.openMediaProvider(session.sourceId, session.source)
+        // The vinyl slot morphs between pill and page (discModifier on the
+        // slot), and swaps records on a track change: the old cover slides out
+        // through the notch's left edge (the Row above clips at the island
+        // bounds) and the new one slides in from the left with a springy
+        // settle. Keyed on the artwork itself, so the entrance fires exactly
+        // when the next cover has decoded — a cover that lands a poll late
+        // gets its own entrance instead of popping in.
+        Box(
+            modifier = discModifier.size(56.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            AnimatedContent(
+                targetState = session.artwork,
+                transitionSpec = {
+                    (slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f)
+                    ) + fadeIn(tween(200))) togetherWith (
+                        slideOutHorizontally(
+                            targetOffsetX = { -it },
+                            animationSpec = tween(260, easing = FastOutSlowInEasing)
+                        ) + fadeOut(tween(200))
+                    )
+                },
+                label = "vinylSwap"
+            ) { art ->
+                VinylDisc(
+                    art = art,
+                    playing = playing,
+                    size = 56.dp,
+                    onClick = {
+                        AppLauncher.openMediaProvider(session.sourceId, session.source)
+                    }
+                )
             }
-        )
+        }
 
         // Title/artist float in the space above the progress strip, and the
         // strip hugs the bottom edge — mirroring the transport cluster's own

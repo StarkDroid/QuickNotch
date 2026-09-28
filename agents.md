@@ -485,7 +485,13 @@ composeApp/
 - **Level ring**: 20% open at the bottom; full 288°; 0–100; accepts a `Painter`.
 - **Vinyl disc** (`VinylDisc`): art clipped to a disc + spindle hub; rotates while
   playing (12s/turn), frozen at its current angle when paused. Used 20dp (pill) and
-  56dp (music page) — **both must stay the same visual treatment**.
+  56dp (music page) — **both must stay the same visual treatment**. In the expanded
+  page the disc slot is an `AnimatedContent` keyed on the artwork bitmap: a track
+  change slides the old cover out through the notch's left edge and springs the new
+  one in from the left (MusicContent; the page Row clips at the island bounds so the
+  slide never draws outside the capsule, and keying on the bitmap means the entrance
+  fires exactly when the next cover has decoded). The pill's 20dp disc swaps in place
+  (it morphs between surfaces, so no second animation there).
 - **MarqueeText**: single-line title that scrolls when overflowing, speed scaled to
   overflow, 48px gap.
 - **Progress bar** (expanded): hairline track + cyan gradient fill + white head ringed
@@ -916,6 +922,16 @@ composeApp/
   stays non-interactive. Verified on macOS: ring click flips `output muted`
   true/false live. Windows mute write compiles but is unverified (no Windows
   machine here).
+- (this session → HEAD): the expanded page's vinyl got a track-change swap —
+  `AnimatedContent` keyed on the artwork bitmap inside the shared-element slot:
+  the old cover slides out through the notch's left edge (MusicContent's Row now
+  clips at the island bounds so the slide never draws outside the capsule) and
+  the new cover springs in from the left the moment its bitmap decodes. Keying
+  on the bitmap (not the content id) is what makes the entrance wait for the
+  art; repeated publishes for the same track reuse the cached instance, so the
+  2s heartbeat never re-triggers the swap. The pill's 20dp disc stays an
+  in-place swap. Track changes under a held-open expanded notch run
+  exception-free; the visual feel itself needs eyeballs on a live machine.
 
 ---
 
