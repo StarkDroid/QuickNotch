@@ -89,6 +89,8 @@ internal fun FloatingNotchOverlay(
     modifier: Modifier = Modifier,
     /** System master-volume percentage (0-100); null hides the volume chip. */
     volumePercent: Int? = null,
+    /** Device mute flag; null when unreadable (no mute affordance). */
+    volumeMuted: Boolean? = null,
     /** Connected audio device battery (0-100); null hides the battery chip. */
     battery: AudioDeviceBattery? = null,
     /** The machine's own (laptop) battery; null hides the quickview device ring. */
@@ -547,6 +549,7 @@ internal fun FloatingNotchOverlay(
                         nowMs = nowMs,
                         battery = battery,
                         volumePercent = volumePercent,
+                        volumeMuted = volumeMuted,
                         density = density,
                         interactive = showDock,
                         discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, dockScope),

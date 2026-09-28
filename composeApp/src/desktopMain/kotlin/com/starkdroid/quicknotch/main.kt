@@ -85,6 +85,7 @@ fun main(args: Array<String>) {
         // no volume) and simply stays hidden whenever a query fails. The same
         // goes for the connected audio device's battery level.
         val volumePercent by SystemVolume.percent.collectAsState()
+        val volumeMuted by SystemVolume.muted.collectAsState()
         val battery by AudioBattery.info.collectAsState()
         val deviceBattery by SystemBattery.state.collectAsState()
         val notificationCount by NotificationCount.count.collectAsState()
@@ -161,6 +162,7 @@ fun main(args: Array<String>) {
                 appIcon = appIcon,
                 isExpanded = isExpanded,
                 volumePercent = volumePercent,
+                volumeMuted = volumeMuted,
                 battery = battery,
                 deviceBattery = deviceBattery,
                 notificationCount = notificationCount,
@@ -236,6 +238,7 @@ private fun NotchOverlayWindow(
     appIcon: ImageBitmap,
     isExpanded: Boolean,
     volumePercent: Int?,
+    volumeMuted: Boolean?,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
     notificationCount: Int?,
@@ -355,6 +358,7 @@ private fun NotchOverlayWindow(
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
                 volumePercent = volumePercent,
+                volumeMuted = volumeMuted,
                 battery = battery,
                 deviceBattery = deviceBattery,
                 pager = pager,

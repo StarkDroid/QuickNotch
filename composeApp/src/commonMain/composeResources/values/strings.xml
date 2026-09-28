@@ -91,6 +91,8 @@ Add apps from the list on the right.</string>
     <string name="music_play">Play</string>
     <string name="music_pause">Pause</string>
     <string name="music_volume">System volume</string>
+    <string name="music_mute">Mute</string>
+    <string name="music_unmute">Unmute</string>
     <string name="music_battery">Audio device battery: %1$s</string>
     <string name="music_audio_device">audio device</string>
     <string name="device_battery">Device battery: %1$d%%</string>

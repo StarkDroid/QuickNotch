@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,11 +59,14 @@ import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.music_audio_device
 import com.starkdroid.quicknotch.generated.resources.music_battery
+import com.starkdroid.quicknotch.generated.resources.music_mute
+import com.starkdroid.quicknotch.generated.resources.music_unmute
 import com.starkdroid.quicknotch.generated.resources.music_volume
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
+import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.model.AppItem
 
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -94,6 +98,7 @@ internal fun WidgetPages(
     nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
+    volumeMuted: Boolean?,
     density: Density,
     interactive: Boolean,
     discModifier: Modifier,
@@ -130,6 +135,7 @@ internal fun WidgetPages(
                             nowMs = nowMs,
                             battery = battery,
                             volumePercent = volumePercent,
+                            volumeMuted = volumeMuted,
                             interactive = interactive && isActive,
                             discModifier = discModifier,
                             titleModifier = titleModifier,
@@ -150,6 +156,7 @@ private fun MusicPage(
     nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
+    volumeMuted: Boolean?,
     interactive: Boolean,
     discModifier: Modifier,
     titleModifier: Modifier,
@@ -166,6 +173,7 @@ private fun MusicPage(
             nowMs = nowMs,
             battery = battery,
             volumePercent = volumePercent,
+            volumeMuted = volumeMuted,
             interactive = interactive,
             discModifier = discModifier,
             titleModifier = titleModifier,
@@ -190,6 +198,7 @@ private fun MusicContent(
     nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
+    volumeMuted: Boolean?,
     interactive: Boolean,
     discModifier: Modifier,
     titleModifier: Modifier,
@@ -287,12 +296,31 @@ private fun MusicContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (volumePercent != null) {
-                    LevelRing(
-                        level = volumePercent,
-                        icon = volumePainter(),
-                        contentDescription = stringResource(Res.string.music_volume),
-                        modifier = volumeRingModifier.size(28.dp)
+                    // The expanded volume ring doubles as the mute toggle: one
+                    // click flips the OS device mute, and the ring empties to
+                    // level 0 (with a dimmed glyph) while muted so the state
+                    // reads at a glance. The sharedElement modifier rides the
+                    // wrapping Box, so the morph bounds stay the ring's 28dp.
+                    val mutedNow = volumeMuted == true
+                    val muteLabel = stringResource(
+                        if (mutedNow) Res.string.music_unmute else Res.string.music_mute
                     )
+                    Box(
+                        modifier = volumeRingModifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .clickable(role = Role.Button) { SystemVolume.toggleMute() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LevelRing(
+                            level = if (mutedNow) 0 else volumePercent,
+                            icon = volumePainter(),
+                            contentDescription = muteLabel,
+                            modifier = Modifier.size(28.dp),
+                            tint = if (mutedNow) LevelRingGlyph.copy(alpha = 0.4f) else LevelRingGlyph,
+                            ringColor = if (mutedNow) LevelRingGlyph.copy(alpha = 0.3f) else LevelRingGlyph
+                        )
+                    }
                 }
                 if (battery != null) {
                     LevelRing(

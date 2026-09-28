@@ -246,7 +246,14 @@ the island itself) and, while the toggle is on, shows the helper row described a
   **0–100 over a full 288° arc**, takes a `Painter` (volumePainter / batteryPainter /
   systemBatteryPainter). Used at 22dp in the pill, 28dp in the expanded music page.
 - `SystemVolume` (2s): `volume.ps1` over the CoreAudio COM API (Windows) / AppleScript
-  `output volume` (macOS). Null hides the chip.
+  `output volume` (macOS). Each poll spawns ONE process that answers
+  `"<percent>,<muted>"` (the PS script takes `-Action get|mute|unmute` for writes);
+  both values are exposed as flows and null hides the chip. `toggleMute()` flips the
+  OS mute (fire-and-forget on IO) + pokes an immediate re-read; the **expanded music
+  page's volume ring doubles as the mute toggle** (click → mute/unmute, ring empties
+  to level 0 with a dimmed glyph while muted; contentDescription from
+  `music_mute`/`music_unmute`). The collapsed pill's ring stays non-interactive and
+  keeps showing the raw percent.
 - `AudioBattery` (audio device): presence via WinRT `BluetoothDevice.ConnectionStatus`
   (poll 1s), level via `DEVPKEY_Device_BatteryLevel` (live probe timeout 8s); macOS
   reads `system_profiler SPBluetoothDataType` (≈100 ms — carries both presence + battery,
@@ -898,6 +905,17 @@ composeApp/
   immediate fire lost the enter intermittently. Live verified on this Mac at
   density 2: the scale conversion (gate ÷ graphics-config scale, publish
   without re-multiply) is exercised for real.
+- (this session → HEAD): the expanded music page's volume ring became the mute
+  toggle — one click flips the OS device mute (`SystemVolume.toggleMute`,
+  fire-and-forget on IO + immediate re-read poke), the ring empties to level 0
+  with a dimmed glyph while muted, and its contentDescription flips between the
+  new `music_mute`/`music_unmute` strings. `SystemVolume` now answers
+  `<percent>,<muted>` from ONE spawn per poll (macOS AppleScript concatenation,
+  Windows `volume.ps1` `GetState()` + `-Action mute|unmute` writes via the
+  already-declared `IAudioEndpointVolume.SetMute`); the collapsed pill's ring
+  stays non-interactive. Verified on macOS: ring click flips `output muted`
+  true/false live. Windows mute write compiles but is unverified (no Windows
+  machine here).
 
 ---
 
