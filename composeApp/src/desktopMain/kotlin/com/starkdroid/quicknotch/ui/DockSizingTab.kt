@@ -48,6 +48,7 @@ import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
+import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
@@ -61,10 +62,33 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun DockSizingTab(
-    config: NotchConfig,
-    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit,
-    onResetDefaults: () -> Unit
+    repository: FavoritesRepository
 ) {
+    // The tab owns its config subscription so a slider drag (or any other
+    // config write) recomposes only this tab — never the settings screen or
+    // the other tabs.
+    val config by repository.config.collectAsState()
+    val onUpdate: ((NotchConfig) -> NotchConfig) -> Unit = { transform ->
+        repository.updateConfig(transform)
+    }
+    val onResetDefaults = {
+        repository.updateConfig {
+            it.copy(
+                style = NotchStyle.DYNAMIC_ISLAND,
+                surface = NotchSurface.SOLID,
+                dockScaleFactor = 1.35f,
+                baseIconSizeDp = 38,
+                quickViewWidthDp = 150,
+                quickViewHeightDp = 30,
+                expandedNotchHeightDp = 78,
+                clockDate = true,
+                clockTime = true,
+                clock24Hour = false,
+                clockDateFormat = ClockDateFormat.DD_MMM
+            )
+        }
+    }
+
     // A desktop has no battery; only offer the device-battery toggle where it
     // can actually do something.
     val hasDeviceBattery by SystemBattery.hasBattery.collectAsState()
@@ -369,170 +393,6 @@ internal fun DockSizingTab(
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * Card section header: a small accent icon beside the title. Used across every
- * Dock & Sizing card so each section reads as one scannable unit.
- */
-@Composable
-private fun SectionHeader(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = AccentIndigoLight,
-            modifier = Modifier.size(15.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = AppTypography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
-        )
-    }
-}
-
-/**
- * One cell in the quickview indicators grid (Volume / Audio Battery /
- * Laptop Battery): a square toggle that previews the level-ring glyph and its
- * level, with the label centered underneath. The on-state reads as an
- * accent-cased selected cell with a full-bright ring; off is a neutral card
- * with a dimmed ring.
- */
-@Composable
-private fun IndicatorToggleBox(
-    title: String,
-    icon: Painter,
-    level: Int,
-    checked: Boolean,
-    onClick: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
-        LevelRing(
-            level = level,
-            icon = icon,
-            contentDescription = title,
-            modifier = Modifier.size(42.dp),
-            tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
-            ringColor = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.35f),
-            trackColor = if (checked) LevelRingTrack else LevelRingTrack.copy(alpha = 0.7f),
-            strokeWidth = 2.5.dp,
-            iconFraction = 0.5f
-        )
-    }
-}
-
-/**
- * The notifications entry of the same quickview indicators grid: identical
- * chrome to [IndicatorToggleBox] but the preview is the real bell glyph — a
- * notification has no level percentage to show inside a ring. Deliberately
- * badge-free: a hardcoded "3" here would misrepresent the live Notification
- * Center count the notch itself reads; the real badge only ever renders on the
- * island.
- */
-@Composable
-private fun NotificationToggleBox(
-    title: String,
-    checked: Boolean,
-    onClick: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
-        Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
-            Icon(
-                painter = notificationPainter(),
-                contentDescription = null,
-                tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
-                modifier = Modifier.size(29.dp)
-            )
-        }
-    }
-}
-
-/**
- * Shared chrome for one indicator-grid cell: the accent-outlined square toggle
- * with the caller-provided preview sitting above the centered label. The whole
- * cell toggles on the next click.
- */
-@Composable
-private fun IndicatorCell(
-    title: String,
-    checked: Boolean,
-    onClick: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    preview: @Composable () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (checked) FlatSurfaceSelected else FlatCard)
-            .border(
-                width = 1.dp,
-                color = if (checked) AccentIndigoLight.copy(alpha = 0.9f) else FlatBorder,
-                shape = RoundedCornerShape(10.dp)
-            )
-            .clickable { onClick(!checked) }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            preview()
-            Spacer(modifier = Modifier.height(7.dp))
-            Text(
-                text = title,
-                style = AppTypography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = if (checked) TextPrimary else TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-/**
- * Helper row under the indicators grid for the one thing that still needs the
- * user's action: granting QuickNotch Full Disk Access so the quickview can read
- * the macOS Notification Center count. A short hint on the left, a compact
- * rectangular button on the right that deep-links straight to the Privacy &amp;
- * Security pane. Rendered only while the store is unreadable.
- */
-@Composable
-private fun NotificationGrantRow(
-    hint: String,
-    button: String,
-    onGrant: () -> Unit
-) {
-    val darkText = Color(0xFF1A1B25)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = hint,
-            style = AppTypography.bodySmall,
-            color = TextSecondary,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(AccentIndigoLight)
-                .clickable(onClick = onGrant)
-                .padding(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = button,
-                style = AppTypography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = darkText
-            )
         }
     }
 }

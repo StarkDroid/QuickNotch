@@ -343,6 +343,12 @@ window's interactive area to exactly the drawn island each tick:
   the window simply stays fully interactive — the old fixed-footprint margin behaviour,
   degraded but never broken. A one-shot `QuickNotch: macOS overlay passthrough
   armed/off (...)` line is logged at startup.
+- **Threading (critical — see pitfall 21)**: the 30ms tick runs on `Dispatchers.IO`.
+  macOS `apply()` runs **off the AWT EDT** (the dylib marshals onto AppKit's main
+  queue itself; running the tick on the EDT first cost a 33Hz EDT→main-queue
+  `dispatch_sync` and deadlocked against AWT's own hops — the "not responding"
+  beachball). Windows still applies its region on the EDT (owner-thread courtesy);
+  macOS's synthetic MOUSE_MOVED re-arm is the only EDT hop, via `invokeLater`.
 
 ### 5.11 Platform integration study (Windows/macOS KMP desktop)
 
@@ -417,16 +423,30 @@ composeApp/
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
             └── ui/
-                ├── FloatingNotchOverlay.kt   # THE overlay: island, dock, quickview, morph, music page
-                ├── OverlayGeometry.kt        # metrics + screen placement + DockLayout
+                │   # The overlay is modular: root choreography in FloatingNotchOverlay.kt,
+                │   # pieces split into focused sibling files (see below). New overlay
+                │   # components belong in the file that owns their concern, not the root.
+                ├── FloatingNotchOverlay.kt   # overlay ROOT: state + choreography only (hover gate,
+                │                             # dock reveal, springs wiring, shared-transition scopes)
+                ├── QuickView.kt              # collapsed pill branches (live media / clock / dots) + LiveProgressStrip
+                ├── DockContent.kt            # widget pages + music page + fisheye dock (Dock/DockIcon/DockLabel)
+                ├── MediaWidgets.kt           # VinylDisc, MarqueeText, TrackProgress, transport, isMusicLive, tints
+                ├── NowPlayingMorph.kt        # shared-element keys + nowPlayingSharedElement (sharedElement!)
+                ├── OverlayHover.kt           # SharingHoverNode/Element + cursorOverNotch (collapse gate)
+                ├── NotchMotion.kt            # springs, timing constants, fisheyeScale
+                ├── OverlayGeometry.kt        # metrics + screen placement + DockLayout + notchShape
                 ├── OverlayPager.kt           # shared page/flip state
                 ├── LevelRing.kt              # reusable 288° ring + painters
                 ├── QuickViewClock.kt         # IdleClockRow + NotificationIndicator (+ laptop battery ring)
                 ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached per value)
-                ├── Shimmer.kt                # label shimmer (Settings/fish-labels)
+                ├── Shimmer.kt                # icon-skeleton shimmer (draw-phase-only invalidation)
+                ├── PinnedAppsPanel.kt        # Widgets-tab pinned apps: PinnedAppsTab + rows (shared AppIconSlot/AppTitleColumn)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
-                    # SettingsComponents also holds AppearanceDropdown (shared style/surface/date
-                    # dropdowns), MinimalistSliderRow, and MinimalistRectSwitch
+                    # Tabs collect their OWN state from the repository (config/favorites/session) —
+                    # the screen collects nothing, so a media tick or slider drag never recomposes
+                    # the whole window. SettingsComponents holds ALL shared chrome: AppearanceDropdown,
+                    # MinimalistSliderRow, MinimalistRectSwitch, SectionHeader, IndicatorToggleBox,
+                    # NotificationToggleBox, NotificationGrantRow, BehaviorSwitchRow, WidgetAccordion
 ```
 
 ---
@@ -664,6 +684,36 @@ composeApp/
     tests missed it: with no media playing the pollers' `StateFlow`s don't
     re-emit (unchanged values), so the body barely recomposed — always test
     focus/presence behaviour **with music live**.
+21. **Never `dispatch_sync` onto AppKit's main queue from the AWT EDT** (or
+    loop through the EDT to get there). The passthrough's 30ms tick used to
+    hop IO → `invokeLater` (EDT) → `dispatch_sync` (main queue) every tick:
+    33 EDT→main sync hops per second. AWT's own main-thread upcalls sometimes
+    wait on the EDT, so the two threads can end up waiting on each other —
+    the macOS "not responding" beachball, most reproducible with music
+    playing + the settings window open (max EDT load). macOS native calls
+    already marshal onto the main queue inside the dylib, so the EDT hop is
+    pointless: macOS `apply()` runs directly on the IO worker; only the rare
+    synthetic MOUSE_MOVED re-arm uses `invokeLater`. Same rule for the
+    overlay's screen-origin drift poll: `MacAppKit.screenOriginDelta` runs in
+    `withContext(Dispatchers.IO)` inside its `LaunchedEffect`. Windows keeps
+    its EDT hop only because `SetWindowRgn` is an owner-thread courtesy.
+22. **Never keep an `InfiniteTransition` alive when its visual is static** —
+    `VinylDisc` used to spin its 60fps transition even while paused (frozen
+    angle), and `MarqueeText` ran its scroll even when the text fit. On the
+    SOFTWARE renderer every invalidation is a full-window CPU repaint, so a
+    paused track burned a constant redraw of the overlay (competing with the
+    settings window for the single AWT EDT). Rotation now accumulates real
+    frame deltas inside a `LaunchedEffect(playing)` (cancelled by the pause),
+    and the marquee transition only exists while the text overflows. General
+    rule: gate continuous animations on the state that makes them visible.
+23. **Settings tabs collect their OWN state; the screen collects none.** The
+    settings window recomposed end-to-end on every media heartbeat (a new
+    `MediaSession` object every ~2s) and every slider-drag frame because
+    `SettingsScreen` read `config`/`favorites`/`liveSession` at the top. Now
+    each tab (`DockSizingTab`/`WidgetsTab`/`BehaviorTab`) collects from the
+    repository itself, and `NowPlayingStatus` collects the session — a media
+    tick only recomposes that tiny row. Keep new settings UI following this
+    rule; passing whole-state params back up re-couples the window.
 
 ---
 
@@ -781,6 +831,26 @@ composeApp/
   title (pitfall 10 rewritten). Verified: repeated hover expand/collapse cycles
   with music live run exception-free; the visual seamlessness itself still needs
   eyeballs on a live machine.
+- (this session → HEAD): the settings freeze + low-fps scrolling were tracked to
+  three compounding causes, all fixed. (1) The passthrough's 30ms tick rode
+  IO → EDT → `dispatch_sync` (main queue) — 33 sync hops/s that deadlocked
+  against AWT's own EDT-hopping upcalls ("not responding" with music + settings
+  open); macOS now applies off the EDT (pitfall 21), and the overlay's
+  `screenOriginDelta` poll moved to `Dispatchers.IO` too. (2) `VinylDisc` ran a
+  60fps `InfiniteTransition` even while paused and `MarqueeText` even when the
+  text fit — on the SOFTWARE renderer each invalidation is a full-window CPU
+  repaint (pitfall 22); both now animate only when their visual actually moves.
+  (3) `SettingsScreen` collected config/favorites/liveSession at the top, so
+  every media heartbeat and slider-drag frame recomposed the whole window
+  (pitfall 23) — tabs now collect their own state. The same session also split
+  the 1870-line `FloatingNotchOverlay.kt` into root + six focused files
+  (`QuickView`, `DockContent`, `MediaWidgets`, `NowPlayingMorph`, `OverlayHover`,
+  `NotchMotion`), moved all shared settings chrome into `SettingsComponents`, and
+  split `WidgetsTab` into `WidgetsTab` + `PinnedAppsPanel` with the two app rows
+  deduped onto shared `AppIconSlot`/`AppTitleColumn` pieces. Metal was re-tested
+  as a renderer escape hatch (SKIKO_RENDER_API=METAL) and still SIGTRAPs at
+  startup (exit 133) — SOFTWARE stays, per the existing macOS-only runtime
+  override.
 
 ---
 

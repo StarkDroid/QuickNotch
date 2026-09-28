@@ -16,6 +16,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,15 +28,21 @@ import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.theme.*
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun BehaviorTab(
-    config: NotchConfig,
-    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit
+    repository: FavoritesRepository
 ) {
+    // The tab owns its config subscription so toggling a switch recomposes
+    // only this tab.
+    val config by repository.config.collectAsState()
+    val onUpdate: ((NotchConfig) -> NotchConfig) -> Unit = { transform ->
+        repository.updateConfig(transform)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -88,50 +96,5 @@ internal fun BehaviorTab(
                 }
             }
         }
-    }
-}
-
-@Composable
-internal fun BehaviorSwitchRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    icon: ImageVector? = null
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        if (icon != null) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FlatSurfaceElevated)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = AccentIndigoLight,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-        }
-        Text(
-            text = title,
-            style = AppTypography.bodyLarge,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
-        MinimalistRectSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
     }
 }

@@ -58,15 +58,30 @@ internal class WindowPassthrough private constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * Whether the per-tick apply must run on the AWT event thread. Windows'
+     * `SetWindowRgn` is dispatched there out of courtesy to the window's owning
+     * thread; macOS must NOT ride the EDT — its native calls are marshalled
+     * onto AppKit's main queue inside the dylib, and hopping through the EDT
+     * first turned every tick into an EDT→main-queue `dispatch_sync` ping-pong
+     * (33 per second) that could deadlock both threads against each other and
+     * beachball the app while the UI was busy (music + settings).
+     */
+    private val applyOnEventThread = HostPlatform.isWindows
+
     init {
         scope.launch {
             while (isActive) {
                 try {
                     val rect = islandRect
-                    // AppKit (macOS) and the owning thread (Windows region)
-                    // both require native window calls on the event thread:
-                    // Compose Desktop renders on the EDT, so dispatch there.
-                    SwingUtilities.invokeLater { impl.apply(rect) }
+                    if (applyOnEventThread) {
+                        SwingUtilities.invokeLater { impl.apply(rect) }
+                    } else {
+                        // Off-EDT: cursor math (MouseInfo, cached AWT geometry)
+                        // and the dylib's own main-queue dispatch are all
+                        // thread-safe from here.
+                        impl.apply(rect)
+                    }
                 } catch (_: Throwable) {
                     // Fail soft: a single bad tick must never take the overlay down.
                 }
@@ -378,7 +393,10 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
                 0,
                 false
             )
-            window.dispatchEvent(event)
+            // AWT events belong on the event thread; everything else in this
+            // class deliberately runs off it. The synthetic enter is rare (only
+            // on a mouse-transparency re-arm), so the hop costs nothing.
+            SwingUtilities.invokeLater { window.dispatchEvent(event) }
         } catch (_: Throwable) {
         }
     }

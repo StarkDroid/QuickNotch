@@ -3,6 +3,8 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.SystemBattery
@@ -193,4 +195,20 @@ fun overlayScreenLocation(
     val centerX = left + ((right - left) - windowWidthPx) / 2
 
     return Point(centerX, top + edgeGapPx)
+}
+
+/**
+ * Rounds only the two corners facing away from the anchored edge; the corners
+ * touching the screen edge stay square so the notch reads as flush with the
+ * display, like the hardware Dynamic Island.
+ */
+internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape {
+    if (style.capsule) {
+        // Round all four corners; a generous radius clamps to a stadium at the
+        // slim collapsed height and a soft pill when expanded.
+        val corner = if (expanded) 18.dp else 14.dp
+        return RoundedCornerShape(corner)
+    }
+    val corner = if (expanded) 18.dp else 13.dp
+    return RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
 }

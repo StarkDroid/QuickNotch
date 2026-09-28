@@ -40,10 +40,12 @@ fun SettingsScreen(
     media: MediaController,
     onClose: () -> Unit
 ) {
-    val config by repository.config.collectAsState()
-    val favorites by repository.favorites.collectAsState()
-    val liveSession by media.session.collectAsState()
-
+    // Deliberately NO screen-level config/favorites/session collects here: the
+    // settings window used to recompose end-to-end on every media heartbeat
+    // (a new MediaSession object every ~2s) and on every slider-drag frame,
+    // which read as low-fps scrolling. Each tab collects exactly the state it
+    // renders (see the tab signatures), so a media tick only touches the tiny
+    // now-playing status row and a slider drag only touches its own card.
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(
         stringResource(Res.string.tab_dock_sizing),
@@ -148,46 +150,16 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedTab) {
-                    0 -> DockSizingTab(
-                        config = config,
-                        onUpdate = { repository.updateConfig(it) },
-                        onResetDefaults = {
-                            repository.updateConfig {
-                                it.copy(
-                                    style = NotchStyle.DYNAMIC_ISLAND,
-                                    surface = NotchSurface.SOLID,
-                                    dockScaleFactor = 1.35f,
-                                    baseIconSizeDp = 38,
-                                    quickViewWidthDp = 150,
-                                    quickViewHeightDp = 30,
-                                    expandedNotchHeightDp = 78,
-                                    clockDate = true,
-                                    clockTime = true,
-                                    clock24Hour = false,
-                                    clockDateFormat = ClockDateFormat.DD_MMM
-                                )
-                            }
-                        }
-                    )
+                    0 -> DockSizingTab(repository = repository)
                     1 -> WidgetsTab(
-                        config = config,
-                        favorites = favorites,
+                        repository = repository,
+                        media = media,
                         scannedApps = scannedApps,
                         searchQuery = searchQuery,
                         isScanning = isScanning,
-                        liveSession = liveSession,
-                        media = media,
-                        onSearchQueryChange = { searchQuery = it },
-                        onAddFavorite = { repository.addFavorite(it) },
-                        onRemoveFavorite = { repository.removeFavorite(it) },
-                        onMove = { from, to -> repository.reorderFavorites(from, to) },
-                        onUpdate = { repository.updateConfig(it) },
-                        onResetDefaults = { repository.resetToDefaults() }
+                        onSearchQueryChange = { searchQuery = it }
                     )
-                    2 -> BehaviorTab(
-                        config = config,
-                        onUpdate = { repository.updateConfig(it) }
-                    )
+                    2 -> BehaviorTab(repository = repository)
                 }
             }
         }

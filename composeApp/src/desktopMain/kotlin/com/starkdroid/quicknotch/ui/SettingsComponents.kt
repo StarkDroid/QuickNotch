@@ -1,7 +1,14 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +29,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +48,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -264,3 +275,289 @@ internal fun MinimalistRectSwitch(
     }
 }
 
+
+// ── Shared section chrome (used by multiple tabs) ────────────────────────────
+
+/**
+ * Card section header: a small accent icon beside the title. Used across every
+ * Dock & Sizing card so each section reads as one scannable unit.
+ */
+@Composable
+internal fun SectionHeader(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = AccentIndigoLight,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title,
+            style = AppTypography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary
+        )
+    }
+}
+
+/**
+ * One cell in the quickview indicators grid (Volume / Audio Battery /
+ * Laptop Battery): a square toggle that previews the level-ring glyph and its
+ * level, with the label centered underneath. The on-state reads as an
+ * accent-cased selected cell with a full-bright ring; off is a neutral card
+ * with a dimmed ring.
+ */
+@Composable
+internal fun IndicatorToggleBox(
+    title: String,
+    icon: Painter,
+    level: Int,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
+        LevelRing(
+            level = level,
+            icon = icon,
+            contentDescription = title,
+            modifier = Modifier.size(42.dp),
+            tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
+            ringColor = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.35f),
+            trackColor = if (checked) LevelRingTrack else LevelRingTrack.copy(alpha = 0.7f),
+            strokeWidth = 2.5.dp,
+            iconFraction = 0.5f
+        )
+    }
+}
+
+/**
+ * The notifications entry of the same quickview indicators grid: identical
+ * chrome to [IndicatorToggleBox] but the preview is the real bell glyph — a
+ * notification has no level percentage to show inside a ring. Deliberately
+ * badge-free: a hardcoded "3" here would misrepresent the live Notification
+ * Center count the notch itself reads; the real badge only ever renders on the
+ * island.
+ */
+@Composable
+internal fun NotificationToggleBox(
+    title: String,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
+        Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                painter = notificationPainter(),
+                contentDescription = null,
+                tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
+                modifier = Modifier.size(29.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Shared chrome for one indicator-grid cell: the accent-outlined square toggle
+ * with the caller-provided preview sitting above the centered label. The whole
+ * cell toggles on the next click.
+ */
+@Composable
+private fun IndicatorCell(
+    title: String,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    preview: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (checked) FlatSurfaceSelected else FlatCard)
+            .border(
+                width = 1.dp,
+                color = if (checked) AccentIndigoLight.copy(alpha = 0.9f) else FlatBorder,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .clickable { onClick(!checked) }
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            preview()
+            Spacer(modifier = Modifier.height(7.dp))
+            Text(
+                text = title,
+                style = AppTypography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = if (checked) TextPrimary else TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * Helper row under the indicators grid for the one thing that still needs the
+ * user's action: granting QuickNotch Full Disk Access so the quickview can read
+ * the macOS Notification Center count. A short hint on the left, a compact
+ * rectangular button on the right that deep-links straight to the Privacy &
+ * Security pane. Rendered only while the store is unreadable.
+ */
+@Composable
+internal fun NotificationGrantRow(
+    hint: String,
+    button: String,
+    onGrant: () -> Unit
+) {
+    val darkText = Color(0xFF1A1B25)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = hint,
+            style = AppTypography.bodySmall,
+            color = TextSecondary,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(AccentIndigoLight)
+                .clickable(onClick = onGrant)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = button,
+                style = AppTypography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = darkText
+            )
+        }
+    }
+}
+
+/**
+ * The switch row used across the Behavior tab and the widget accordions:
+ * optional leading icon chip, title, and a [MinimalistRectSwitch].
+ */
+@Composable
+internal fun BehaviorSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(FlatSurfaceElevated)
+                    .border(1.dp, FlatBorder, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = AccentIndigoLight,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+        }
+        Text(
+            text = title,
+            style = AppTypography.bodyLarge,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        MinimalistRectSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+/**
+ * A collapsible widget card: header row (icon chip, title, enable switch,
+ * expand chevron) over an animated content area. Used by the Widgets tab.
+ */
+@Composable
+internal fun WidgetAccordion(
+    icon: ImageVector,
+    title: String,
+    enabled: Boolean,
+    onToggleEnabled: (Boolean) -> Unit,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = FlatSurface),
+        border = BorderStroke(1.dp, FlatBorder),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(FlatSurfaceElevated)
+                        .border(1.dp, FlatBorder, RoundedCornerShape(9.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = AccentIndigoLight,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = title,
+                    style = AppTypography.titleSmall,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                MinimalistRectSwitch(checked = enabled, onCheckedChange = onToggleEnabled)
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(tween(160)),
+                exit = shrinkVertically() + fadeOut(tween(120))
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) { content() }
+            }
+        }
+    }
+}
