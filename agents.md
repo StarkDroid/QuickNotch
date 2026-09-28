@@ -210,9 +210,10 @@ Windows — shared that row slot; it was removed by request: the badge is a real
 not a demo surface, so Windows now stays null and its bell hides rather than show an
 always-zero dead icon. The `toast.ps1` bridge was deleted with it.) Windows has no
 public unread store — no live per-app counts there.
-Settings' QuickView Indicators card mirrors the toggle (bell + badge cell instead of a ring —
-a notification has no level to preview) and, while the toggle is on, shows the helper row
-described above.
+Settings' QuickView Indicators card mirrors the toggle (a bell cell instead of a ring —
+a notification has no level to preview, and deliberately **no numeric badge**: a hardcoded
+count would misrepresent the live Notification Center number, which only ever renders on
+the island itself) and, while the toggle is on, shows the helper row described above.
 
 ### 5.6 Media pipeline
 
@@ -466,7 +467,7 @@ composeApp/
 | Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with a compact rectangular **Grant Full Disk Access** button (deep-links the Privacy &amp; Security pane; the helper row disappears once the count reads) | done (this session) — value is `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The residual count after a Clear All is honest: macOS keeps unread-badge apps' notifications (WhatsApp) *and* genuinely persistent rows (Screen Time weekly report) until read/dismissed, same as the Dock badges. A one-time **Send Test Notifications** flow (osascript banners / WinRT `toast.ps1`) was removed by request — the badge is a real NC ledger, not a demo surface. Windows has no store, so its bell stays hidden (`count` null). App version bumped to **3.0.0** |
 | Fresh manual launch opens the Settings window alongside the notch; login/boot auto-start stays quietly behind the tray (distinguished by `--quicknotch-launched-at-login`, written into the LaunchAgent/Run-key command) | done (this session) — verified on macOS via CGWindowList on both paths (manual = overlay + settings; marker = overlay only); Windows launch still unverified |
 | macOS above-menu-bar placement: overlay parked **flush at the true top of the screen** (level `NSStatusWindowLevel` 25, collection `canJoinAllSpaces|stationary|fullScreenAuxiliary|ignoresCycle`, top-gap = style edge gap) via `MacOverlayWindowPolicy` + the AppKit dylib; AWT would park it under the menu bar (its alwaysOnTop tops out at floating level 3 and placement clamps to the visible area) | done (this session) — **verified live**: `CGWindowList` shows the overlay at `kCGWindowLayer=25`, bounds `y=0`. Off-state (Always-on-top off) drops to level 0 and re-parks below the menu bar. Windows analog is AWT `alwaysOnTop` alone (unchanged) |
-| macOS Dock presence tied to the Settings window: accessory agent (no Dock icon, no app menu bar) while only the notch runs; Regular + activate while Settings is open — `MacDockPresence` via `setActivationPolicy` + reconcile loop | done (this session) — **verified live**: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` (Dock icon, in front) with Settings open; closing Settings returns to accessory. Activation is **one-shot on the open transition** — the reconcile loop only re-asserts the policy, so another app keeps focus (verified: TextEdit stays frontmost across ~12 ticks with Settings open). Windows analog: overlay built with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar/Alt+Tab slot, no focus steal) — unverified until a Windows run |
+| macOS Dock presence tied to the Settings window: accessory agent (no Dock icon, no app menu bar) while only the notch runs; Regular + activate while Settings is open — `MacDockPresence` via `setActivationPolicy` + reconcile loop | done (this session) — **verified live**: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` (Dock icon, in front) with Settings open; closing Settings returns to accessory. Activation is **one-shot on the open transition** — the reconcile loop only re-asserts the policy, so another app keeps focus (verified: TextEdit stays frontmost across ~12 ticks with Settings open, and stays front while media ticks fire with music playing — the presence controller lives in `DisposableEffect(Unit)`, not the composition body, see pitfall 20). Windows analog: overlay built with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar/Alt+Tab slot, no focus steal) — unverified until a Windows run |
 
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
@@ -634,6 +635,21 @@ composeApp/
     next policy pass). Verified: with the fix, `osascript ... "TextEdit" to
     activate` keeps TextEdit frontmost across ~12 reconcile ticks with Settings
     open, while the one-shot at launch still fronts the Settings window.
+20. **Never put native side effects in the `application {}` / composable BODY** —
+    Compose re-executes a composable body on every state it reads. The Dock
+    presence controller was initially started straight from the body
+    (`MacDockPresence.start()` + `setSettingsVisible(...)`), so every media
+    sample (new `MediaSession` object ≈ every 2s with music playing, plus
+    volume/notification ticks) re-ran them: each recomposition re-armed
+    `pendingActivate`, the one-shot activation fired ~every second and the app
+    stole focus back from whatever the user was using — and the pointer churn
+    around those activations also killed the macOS wheel paging on the notch.
+    Side effects belong in `DisposableEffect(Unit)`/`LaunchedEffect`. Verified
+    by instrumenting the toggles (`pendingActivate=true` fired 4× in 12s before,
+    0× after; TextEdit keeps focus while music plays). Note why earlier smoke
+    tests missed it: with no media playing the pollers' `StateFlow`s don't
+    re-emit (unchanged values), so the body barely recomposed — always test
+    focus/presence behaviour **with music live**.
 
 ---
 
@@ -730,6 +746,18 @@ composeApp/
   armed on the closed→open transition (`MacDockPresence.pendingActivate`); the
   loop re-asserts only the policy (pitfall 19). Notch above-menu-bar placement and
   the accessory↔Regular flip are unchanged and still verified live.
+- (this session → HEAD): fixed the *second* focus bug — the Dock-presence
+  controller was being started + `setSettingsVisible(true)` imperatively from the
+  `application {}` body, and since that body re-runs on every media/volume/
+  notification tick, the one-shot activation was re-armed and fired ~every
+  second while music played (it also disrupted the notch's wheel paging, which
+  the churn was the only suspect for after the top-edge placement). Both now
+  live in `DisposableEffect(Unit)`/`LaunchedEffect` (pitfall 20); instrumented
+  proof: `pendingActivate` fired 4×/12s before → 0× after, TextEdit keeps focus
+  with music live, and a synthetic scroll over the expanded dock flips pages
+  0→1→0 with the island parked at the true top. The Settings quickview-indicators
+  card's notification cell lost its hardcoded "3" badge — the live count only
+  belongs on the island.
 
 ---
 

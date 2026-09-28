@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -431,9 +429,11 @@ private fun IndicatorToggleBox(
 
 /**
  * The notifications entry of the same quickview indicators grid: identical
- * chrome to [IndicatorToggleBox] but the preview is the real indicator — a lit
- * bell wearing a red "3" badge on its corner — since a notification has no
- * level percentage to show inside a ring.
+ * chrome to [IndicatorToggleBox] but the preview is the real bell glyph — a
+ * notification has no level percentage to show inside a ring. Deliberately
+ * badge-free: a hardcoded "3" here would misrepresent the live Notification
+ * Center count the notch itself reads; the real badge only ever renders on the
+ * island.
  */
 @Composable
 private fun NotificationToggleBox(
@@ -450,26 +450,6 @@ private fun NotificationToggleBox(
                 tint = if (checked) LevelRingGlyph else LevelRingGlyph.copy(alpha = 0.45f),
                 modifier = Modifier.size(29.dp)
             )
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = 2.dp)
-                    .height(11.dp)
-                    .defaultMinSize(minWidth = 11.dp)
-                    .clip(RoundedCornerShape(5.5.dp))
-                    .background(AccentRed.copy(alpha = if (checked) 1f else 0.55f))
-                    .padding(horizontal = 3.dp)
-            ) {
-                Text(
-                    text = "3",
-                    color = Color.White,
-                    fontSize = 7.sp,
-                    lineHeight = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-            }
         }
     }
 }

@@ -71,16 +71,6 @@ fun main(args: Array<String>) {
     val loginItemLaunch = args.contains(StartupManager.LAUNCHED_AT_LOGIN_ARG)
 
     application {
-        // Dock presence is a function of the Settings window, never of the
-        // notch: the resting QuickNotch is a silent agent (no Dock icon, no app
-        // menu bar — the overlay layers over full-screen apps), and the Dock
-        // icon + app activation appear only while the Settings page is open.
-        // Configured before the first window maps so the accessory policy is
-        // what shows the overlay in. Windows analogues are handled per-window
-        // (the overlay is a tool-window, Settings is a normal taskbar window).
-        MacDockPresence.start()
-        MacDockPresence.setSettingsVisible(!loginItemLaunch)
-
         val repository = remember { FavoritesRepository() }
         val config by repository.config.collectAsState()
         val favorites by repository.favorites.collectAsState()
@@ -110,7 +100,6 @@ fun main(args: Array<String>) {
                 AudioBattery.stop()
                 SystemBattery.stop()
                 NotificationCount.stop()
-                MacDockPresence.stop()
             }
         }
 
@@ -127,6 +116,18 @@ fun main(args: Array<String>) {
             MacDockPresence.setSettingsVisible(showSettings)
         }
 
+        // Dock presence is a function of the Settings window, never of the
+        // notch: the resting QuickNotch is a silent agent (no Dock icon, no app
+        // menu bar — the overlay layers over full-screen apps), and the Dock
+        // icon + app activation appear only while the Settings page is open.
+        // Started from a DisposableEffect(Unit), NOT the composition body: the
+        // body re-executes on every media/volume/battery tick, and a raw call
+        // here re-armed the one-shot activation on each recomposition — the app
+        // then yanked focus back to itself ~every second while music played.
+        DisposableEffect(Unit) {
+            MacDockPresence.start()
+            onDispose { MacDockPresence.stop() }
+        }
         val appIcon = remember { loadQuickNotchIcon() }
         Tray(
             icon = BitmapPainter(appIcon),
