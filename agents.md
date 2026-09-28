@@ -149,14 +149,19 @@ NowPlayingDiscKey="nowPlayingDisc"  NowPlayingTitleKey="nowPlayingTitle"
 NowPlayingVolumeKey="nowPlayingVolume"  NowPlayingBatteryKey="nowPlayingBattery"
 ```
 
-`SharedTransitionScope.nowPlayingSharedBounds(key, scope)` builds the `sharedBounds`
-modifier for every morphing key — the disc, the title and both level rings all use
-`scaleInSharedContentToBounds()` / `scaleOutSharedContentToBounds()` (no crossfade —
-the default fade enter/exit draws the pill copy and the page copy over each other
-mid-flight, so the marquee scrolls twice and the disc/rings flash a duplicate before
-settling; one content scaled to the travelling bounds avoids that for all four keys).
-The dock reveal is driven by a `MutableTransitionState` (`dockState`) so the visibility
-transition doubles as the shared-transition scope.
+`SharedTransitionScope.nowPlayingSharedElement(key, scope)` builds the `sharedElement`
+modifier for every morphing key — the disc, the title and both level rings. It must stay
+`sharedElement` and never regress to `sharedBounds`: sharedBounds *by design* keeps both
+the entering and the exiting content visible inside the travelling frame (its enter/exit
+only style them — bytecode-verified: `scaleInSharedContentToBounds()` is literally
+`EnterTransition.None + ContentScaleTransitionEffect`), so the pill copy and the page
+copy double-draw mid-flight — two covers, two titles (the marquees also scroll out of
+register), rings printed twice. `sharedElement` renders only the target content in the
+transforming bounds, so there is always exactly one cover and one title; it is the
+correct primitive here because both sides render the *same content* at different sizes
+(disc 20↔56dp, title 11↔14sp, rings 22↔28dp). The dock reveal is driven by a
+`MutableTransitionState` (`dockState`) so the visibility transition doubles as the
+shared-transition scope.
 
 Quickview visibility is `!showDock` on both branches: while a track is live the pill
 stays until the dock is visible → both surfaces cross in the same frame → morph triggers.
@@ -453,7 +458,7 @@ composeApp/
 | Dock app launcher + fisheye wave + labels | done, mature |
 | Pinned-apps drag reorder (handle at left, `animateItem`, `onMove` committed on release) | done (`a4e4576`) |
 | Now-playing pill + detailed music page + transport | done |
-| Expand-into-music + shared-element morph | done (`a02cdc1`, tuned `0c9a9a7`) |
+| Expand-into-music + shared-element morph (single-content: `sharedElement`, no mid-flight dual copy) | done (`a02cdc1`, `0c9a9a7`, de-duplicated this session) |
 | Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
 | Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — macOS live on Apple silicon via a compiled `passthrough_bridge.m` dylib (direct objc_msgSend with a BOOL arg crashes the JVM); Windows path unverified |
@@ -542,12 +547,21 @@ composeApp/
 8. **Artwork**: never re-rasterize per poll — cache by content id, downscale to ≤256px.
 9. **`AnimatedVisibility` + morph crossing**: the pill must stay visible until `showDock`
    flips while a track is live (`if (musicLive) !showDock else !isExpanded`).
-10. **Shared-element morph must not crossfade contents**: the default fade
-    enter/exit draws the pill copy and the page copy over each other mid-flight
-    (marquee scrolls twice, disc/rings flash a duplicate before settling). Every
-    morphing key uses `scaleInSharedContentToBounds`/`scaleOutSharedContentToBounds`
-    (one content scaled to the travelling bounds); also keeps the shared-element
-    keys/scope shape in section 5.4 intact — never reintroduce a fade on `sharedBounds`.
+10. **Same-content morphs must use `sharedElement`, never `sharedBounds`**:
+    `sharedBounds` *by design* renders BOTH the entering and the exiting content
+    inside the travelling frame — its enter/exit only style them, they never
+    remove the second copy (bytecode-verified:
+    `scaleInSharedContentToBounds()` = `EnterTransition.None +
+    ContentScaleTransitionEffect`), so the pill copy and the page copy
+    double-draw mid-flight: two covers, two titles (the marquees also scroll
+    out of register), rings printed twice — the "duplicate album cover of 2
+    sizes and song title of 2 sizes" the user sees while expanding/collapsing.
+    The disc/title/rings are the *same content* at different sizes, which is
+    exactly `sharedElement`'s contract: only the target content is rendered in
+    the transforming bounds — always one cover and one title on screen. The
+    earlier `scaleInSharedContentToBounds` attempt (0c9a9a7) reduced the fade
+    artifact but kept the dual render; the fix that actually kills it is the
+    primitive switch itself (`nowPlayingSharedElement`, section 5.4).
 11. **Settings slider spam**: rely on `FavoritesRepository` coalescing; don't add
     per-tick persistence.
 12. **Expanded page vertical budget**: `expandedNotchHeightDp` is 70–86 (+6 margin). The
@@ -758,6 +772,15 @@ composeApp/
   0→1→0 with the island parked at the true top. The Settings quickview-indicators
   card's notification cell lost its hardcoded "3" badge — the live count only
   belongs on the island.
+- (this session → HEAD): the morph's mid-flight duplicates were finally killed —
+  the four morphing keys (disc/title/rings) moved from `sharedBounds` to
+  `sharedElement` (`nowPlayingSharedElement`). sharedBounds keeps BOTH contents
+  inside the travelling frame by design (`scaleInSharedContentToBounds` is only
+  a style effect, bytecode-verified), so the pill copy and page copy double-drew
+  at 2 sizes; sharedElement renders only the target content — one cover, one
+  title (pitfall 10 rewritten). Verified: repeated hover expand/collapse cycles
+  with music live run exception-free; the visual seamlessness itself still needs
+  eyeballs on a live machine.
 
 ---
 

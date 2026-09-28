@@ -356,29 +356,30 @@ private const val NowPlayingBatteryKey = "nowPlayingBattery"
 private const val SystemAccentPollMs = 3000L
 
 /**
- * Bounds one quickview element to its expanded-page counterpart (the
- * vinyl disc, the marquee title, the level rings). The pair are different
- * composables, so this is a [SharedTransitionScope.sharedBounds] morph under
- * one shared moving frame rather than a strict
- * [SharedTransitionScope.sharedElement]. The enter/exit scale between bounds
- * (via [SharedTransitionScope.scaleInSharedContentToBounds] /
- * [SharedTransitionScope.scaleOutSharedContentToBounds]) instead of
- * crossfading: the default fade crossfade draws the pill copy and the page
- * copy over each other mid-flight — the marquee scrolls twice and the
- * disc/rings read as a duplicate element before settling. One content scaled
- * to the travelling bounds avoids that entirely, so this applies to every
- * morphing element, not just the title.
+ * Flies one quickview element into its expanded-page counterpart (the vinyl
+ * disc, the marquee title, the level rings) under one shared moving frame.
+ * The pair are different composables, but they render the *same content* at
+ * different sizes — exactly the contract of
+ * [SharedTransitionScope.sharedElement], which renders ONLY the target content
+ * inside the transforming bounds.
+ *
+ * That single-content guarantee is why this must not be
+ * [SharedTransitionScope.sharedBounds]: sharedBounds deliberately keeps BOTH
+ * the entering and the exiting content visible inside the travelling frame
+ * (its enter/exit only style them), so the pill copy and the page copy
+ * double-draw over each other mid-flight — two covers, two titles (the
+ * marquees also scroll out of register), rings printed twice — before the
+ * morph settles. `sharedElement` suppresses the source and moves the target,
+ * so there is always exactly one album cover and one title on screen.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun SharedTransitionScope.nowPlayingSharedBounds(
+private fun SharedTransitionScope.nowPlayingSharedElement(
     key: String,
     animatedVisibilityScope: AnimatedVisibilityScope
-): Modifier = Modifier.sharedBounds(
-    sharedContentState = rememberSharedContentState(key),
+): Modifier = Modifier.sharedElement(
+    state = rememberSharedContentState(key),
     animatedVisibilityScope = animatedVisibilityScope,
-    enter = scaleInSharedContentToBounds(),
-    exit = scaleOutSharedContentToBounds(),
     boundsTransform = object : BoundsTransform {
         override fun transform(initialBounds: Rect, targetBounds: Rect) = sharedBoundsSpring()
     }
@@ -737,10 +738,10 @@ internal fun FloatingNotchOverlay(
                         showVolume = config.widgets.showCollapsedVolume,
                         showBattery = config.widgets.showCollapsedBattery,
                         showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
-                        discModifier = sharedScope.nowPlayingSharedBounds(NowPlayingDiscKey, collapsedScope),
-                        titleModifier = sharedScope.nowPlayingSharedBounds(NowPlayingTitleKey, collapsedScope),
-                        volumeRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingVolumeKey, collapsedScope),
-                        batteryRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingBatteryKey, collapsedScope),
+                        discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, collapsedScope),
+                        titleModifier = sharedScope.nowPlayingSharedElement(NowPlayingTitleKey, collapsedScope),
+                        volumeRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingVolumeKey, collapsedScope),
+                        batteryRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingBatteryKey, collapsedScope),
                         clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
                             ClockPrefs(
                                 showDate = config.clockDate,
@@ -826,10 +827,10 @@ internal fun FloatingNotchOverlay(
                         volumePercent = volumePercent,
                         density = density,
                         interactive = showDock,
-                        discModifier = sharedScope.nowPlayingSharedBounds(NowPlayingDiscKey, dockScope),
-                        titleModifier = sharedScope.nowPlayingSharedBounds(NowPlayingTitleKey, dockScope),
-                        volumeRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingVolumeKey, dockScope),
-                        batteryRingModifier = sharedScope.nowPlayingSharedBounds(NowPlayingBatteryKey, dockScope),
+                        discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, dockScope),
+                        titleModifier = sharedScope.nowPlayingSharedElement(NowPlayingTitleKey, dockScope),
+                        volumeRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingVolumeKey, dockScope),
+                        batteryRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingBatteryKey, dockScope),
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)
