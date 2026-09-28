@@ -233,11 +233,19 @@ internal class MacOverlayWindowPolicy private constructor(
  * resting state is an accessory agent — no Dock icon, no app menu bar, no
  * focus stealing, and the overlay can layer over full-screen apps. As soon as
  * the Settings window is open the app flips to a regular application (Dock
- * icon + app switcher + activation) so launching/settings feels like a real
- * app; closing Settings returns it to the quiet tray agent.
+ * icon + app switcher) and is brought to the front **once** so launching/
+ * settings feels like a real app; closing Settings returns it to the quiet tray
+ * agent.
  *
- * A reconcile loop re-asserts the policy every tick because AWT initialises the
- * process as a regular application and can fight a one-shot flip mid-session.
+ * A reconcile loop re-asserts the activation *policy* every tick because AWT
+ * initialises the process as a regular application and can fight a one-shot
+ * flip mid-session. It deliberately never re-activates: `activateIgnoringOther
+ * Apps` called on each tick would keep yanking focus back to the Settings
+ * window and make every other app unclickable (the front-most app would snap
+ * back to QuickNotch within one tick). Activation is therefore a one-shot
+ * request consumed on the next policy pass, armed only when Settings transitions
+ * to visible.
+ *
  * No-op off macOS. Mirrors the "the app belongs in the Dock only when the
  * Settings page is open" requirement.
  */
@@ -245,6 +253,13 @@ internal object MacDockPresence {
 
     @Volatile private var settingsVisible = false
     @Volatile private var running = false
+
+    /**
+     * One-shot focus request: armed when Settings opens, consumed by the next
+     * [applyPolicy] pass. Kept false during the steady state so the reconcile
+     * loop never steals focus from another application.
+     */
+    @Volatile private var pendingActivate = false
     private var scope: CoroutineScope? = null
 
     fun start() {
@@ -267,17 +282,21 @@ internal object MacDockPresence {
 
     private fun applyPolicy() {
         if (!running) return
-        val regular = settingsVisible
-        MacAppKit.setActivationPolicy(if (regular) MacAppKit.ACTIVATION_REGULAR else MacAppKit.ACTIVATION_ACCESSORY)
-        if (regular) {
-            // An accessory app cannot bring its (now regular) window to the
-            // front on its own; don't leave the Settings window buried.
+        MacAppKit.setActivationPolicy(if (settingsVisible) MacAppKit.ACTIVATION_REGULAR else MacAppKit.ACTIVATION_ACCESSORY)
+        if (settingsVisible && pendingActivate) {
+            // Front the app exactly once per open transition. An accessory app
+            // can't surface its (now regular) Settings window on its own, but
+            // re-firing this every tick would make other apps unclickable.
+            pendingActivate = false
             MacAppKit.activateApp()
         }
     }
 
     fun setSettingsVisible(visible: Boolean) {
         settingsVisible = visible
+        // Only a transition into "visible" asks for a single activation; staying
+        // open never re-activates (that's what blocked focus on other apps).
+        if (visible) pendingActivate = true
         scope?.launch { applyPolicy() }
     }
 
