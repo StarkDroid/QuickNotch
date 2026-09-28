@@ -291,6 +291,10 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
  * island's hit target down by exactly the menu-bar height.
  */
 private class MacClickThrough(private val window: Window) : WindowPassthroughPlatform {
+
+    // Owns the delayed synthetic-enter hops (see setIgnoring).
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val nsWindowPtr: Long? = run {
         val ptr = resolveMacWindowPtr(window)
         if (ptr == null || ptr == 0L) {
@@ -326,6 +330,7 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
     }
 
     override fun close() {
+        scope.cancel()
         val ptr = nsWindowPtr ?: return
         if (unavailable) return
         try {

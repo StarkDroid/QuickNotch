@@ -78,6 +78,10 @@ internal object MacAppKit {
         call("quicknotch_set_ignores_mouse_events", ptr, if (ignore) 1 else 0)
     }
 
+    /** Live `ignoresMouseEvents` read-back (diagnostics). */
+    fun ignoresMouseEvents(ptr: Long): Boolean =
+        (fn("quicknotch_get_ignores_mouse_events")?.invokeInt(arrayOf(ptr)) ?: -1) == 1
+
     fun setWindowLevel(ptr: Long, level: Int) {
         call("quicknotch_set_window_level", ptr, level)
     }

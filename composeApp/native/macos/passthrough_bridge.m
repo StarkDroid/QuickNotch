@@ -42,6 +42,22 @@ void quicknotch_set_ignores_mouse_events(void *nsWindow, int ignore) {
     });
 }
 
+// Synchronous read-back of the live flag (main-thread safe). Debug/diagnostic
+// helper for the passthrough's reconcile logic.
+int quicknotch_get_ignores_mouse_events(void *nsWindow) {
+    if (nsWindow == NULL) return -1;
+    NSWindow *window = (__bridge NSWindow *)nsWindow;
+    __block BOOL flag = NO;
+    if ([NSThread isMainThread]) {
+        flag = window.ignoresMouseEvents;
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            flag = window.ignoresMouseEvents;
+        });
+    }
+    return flag ? 1 : 0;
+}
+
 // Stacking order of the overlay window. AWT's alwaysOnTop only reaches
 // NSFloatingWindowLevel (3), which sits BELOW the menu bar (24) — a window
 // parked at screen-y=0 would still read as "below the screen". The notch needs

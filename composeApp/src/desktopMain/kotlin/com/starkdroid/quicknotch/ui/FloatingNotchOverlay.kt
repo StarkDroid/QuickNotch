@@ -203,30 +203,37 @@ internal fun FloatingNotchOverlay(
     // underneath (taskbar/menu-bar items sitting next to the notch).
     var islandCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    // Publish the island's bounds in window-client pixels for the native
+    // Publishes the island's bounds in window-client pixels for the native
     // click-through (see WindowPassthrough); null (not measured yet) means
     // "whole window interactive", the fail-soft default.
+    //
+    // Called straight from `onGloballyPositioned` — NOT from an effect keyed on
+    // the state: the coordinates object is a stable instance across layout
+    // passes, so a keyed effect would run exactly once and freeze the touch
+    // target at whatever the island's first size was (the collapsed pill) —
+    // leaving everything outside it click-through once the notch expanded.
+    // The callback itself fires on every position/size change, which is
+    // precisely when the target must be republished.
     //
     // `localToWindow` already returns PHYSICAL pixels (Compose px = dp ×
     // density), so no further scaling happens here — multiplying again used to
     // double-scale the touch target on every display above 100%, turning the
     // transparent margin into an invisible click-swallowing band.
-    LaunchedEffect(islandCoordinates) {
-        val coords = islandCoordinates
+    fun publishTouchTarget(coords: LayoutCoordinates?) {
         if (coords == null || !coords.isAttached) {
             onTouchTargetChange(null)
-        } else {
-            val windowOffset = coords.localToWindow(Offset.Zero)
-            val sizePx = coords.size
-            onTouchTargetChange(
-                java.awt.Rectangle(
-                    windowOffset.x.roundToInt(),
-                    windowOffset.y.roundToInt(),
-                    sizePx.width,
-                    sizePx.height
-                )
-            )
+            return
         }
+        val windowOffset = coords.localToWindow(Offset.Zero)
+        val sizePx = coords.size
+        onTouchTargetChange(
+            java.awt.Rectangle(
+                windowOffset.x.roundToInt(),
+                windowOffset.y.roundToInt(),
+                sizePx.width,
+                sizePx.height
+            )
+        )
     }
     fun setHovered(hovered: Boolean) {
         collapseJob?.cancel()
@@ -412,7 +419,10 @@ internal fun FloatingNotchOverlay(
                 modifier = Modifier
                     .width(animatedWidth)
                     .height(animatedHeight)
-                    .onGloballyPositioned { islandCoordinates = it }
+                    .onGloballyPositioned { coords ->
+                        islandCoordinates = coords
+                        publishTouchTarget(coords)
+                    }
                     .clip(shape)
                     .islandSurface(config.surface)
                     .border(surface.borderWidth.dp, surface.border, shape),

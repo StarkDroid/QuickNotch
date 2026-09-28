@@ -315,6 +315,14 @@ window's interactive area to exactly the drawn island each tick:
   An earlier version multiplied the rect by `density` again — double-scaling the
   interactive area on every display above 100% into an invisible click-swallowing band
   (invisible on the scale-1.0 dev Mac, which is why it hid so long).
+  **Publishing is inline in the island Box's `onGloballyPositioned`** — never key an
+  effect on the coordinates state: the `LayoutCoordinates` instance is stable across
+  layout passes, so a keyed effect ran exactly once and froze the touch target at the
+  collapsed pill forever — once the notch expanded, every control outside the stale
+  rect (transport buttons!) passed clicks through to the apps below. The callback
+  itself fires on every position/size change, which is exactly when the target must be
+  republished. The synthetic MOUSE_MOVED re-arm is also delayed ~40ms so it cannot race
+  the async AppKit flip (an immediate fire lost the enter intermittently).
 - **Windows**: `SetWindowRgn(GDI32.CreateRectRgn(...))` — the region clips both painting
   and hit-testing; the OS frees the previous region when replaced, so a fresh region per
   tick is safe (inflated by 2px so a click grazing the pill's edge lands on the island).
@@ -876,6 +884,20 @@ composeApp/
   (probe-verified: on-pill hover expands, just-outside hover now exits and
   lets the click-through through). Windows region coordinates were never
   live-verifiable from this Mac.
+- (this session → HEAD): the expanded music page's transport buttons passed
+  clicks through to the apps below — the published touch target was FROZEN at
+  the collapsed pill. `onGloballyPositioned` hands back a stable
+  `LayoutCoordinates` instance, so the `LaunchedEffect(islandCoordinates)`
+  keyed on it ran exactly once and never republished as the island grew; the
+  native gate then ignored everything outside the stale collapsed rect —
+  every expanded control (transport!) was click-through. Publishing moved
+  inline into the position callback, which fires on every layout change
+  (rect-logging proof: collapsed 472×68 → expanded 712×168 at density 2, and
+  both play/pause click directions now toggle the OS player). The synthetic
+  MOUSE_MOVED re-arm is also delayed ~40ms past the async AppKit flip — an
+  immediate fire lost the enter intermittently. Live verified on this Mac at
+  density 2: the scale conversion (gate ÷ graphics-config scale, publish
+  without re-multiply) is exercised for real.
 
 ---
 

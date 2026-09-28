@@ -86,9 +86,6 @@ internal val VinylRing = Color(0xFF343A45)
 private val ProgressGradientStart = Color(0xFF0EA5E9)
 private val ProgressGradientEnd = Color(0xFF7DD3FC)
 
-internal val BatteryLowTint = Color(0xFFF87171)
-internal const val BatteryLowThreshold = 20
-
 // ── Media state helpers ──────────────────────────────────────────────────────
 
 /**
