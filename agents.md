@@ -932,6 +932,30 @@ composeApp/
   2s heartbeat never re-triggers the swap. The pill's 20dp disc stays an
   in-place swap. Track changes under a held-open expanded notch run
   exception-free; the visual feel itself needs eyeballs on a live machine.
+- (this session → HEAD): the transport buttons got three fixes. (1) The macOS
+  `send()` ran `ProcessBuilder.waitFor(2s)` ON the calling thread — every
+  press blocked the Compose UI thread for the osascript spawn duration; the
+  command is now fire-and-forget on the controller's IO scope (Windows already
+  was). (2) The play/pause icon is optimistic: `pendingPlay` flips it the
+  instant the button is pressed and reconciles when the session state changes
+  (or after 3s if a command was lost) — the OS player reacts through the 2s
+  bridge poll, and without the flip the icon sat on the old state the whole
+  window. (3) The buttons stopped being Material `IconButton`s: their 48dp
+  min-touch-target inflation overflowed the 30/34dp slots symmetrically, so
+  the drawn buttons and the hit geometry disagreed (measured: prev clickable
+  -9..39dp, next 57..105dp row-local, both overflowing the 98dp row; clicks
+  near an edge landed in the neighbour's zone or nowhere) — and
+  `LocalMinimumInteractiveComponentEnforcement provides false` does NOT stick
+  in this material3 version (bounds still 96×96px @2x). They are plain
+  sized-`Box` clickables (`TransportButton`, hit area = drawn area) now.
+  Verified live: NEXT/PREV change the OS track and PLAY toggles both
+  directions at the drawn button centres.
+- (this session → HEAD): the vinyl swap was tuned to read as a slow record
+  conveyor — travel is 3× the disc width (the cover visibly exits past the
+  island's left clip), the exit runs 460ms with the fade delayed to its last
+  third, and the enter is a soft 0.72/130 spring with a matched 0.85 scale-in;
+  everything animates offset/alpha/scale only (graphicsLayer-backed, no
+  relayout mid-swap).
 
 ---
 
@@ -947,6 +971,7 @@ composeApp/
 | `HoverGlow` / `IslandSettleTimeoutMs` | 10dp / 650ms | overlay |
 | springs | notch 0.9/340, sharedBounds 0.9/320, icon 0.8/1000 | overlay |
 | Idle curtain | quickview slide 360/620ms ×3 height, fade 420ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5,0.08) on `idleDockRevealSpring` 0.92/150 | overlay |
+| Vinyl swap | exit slide ×3 width 460ms (fade delayed 220ms/240ms) + scale 0.85; enter spring 0.72/130 ×3 width + scale-in, fade 260ms @120ms | `DockContent` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |

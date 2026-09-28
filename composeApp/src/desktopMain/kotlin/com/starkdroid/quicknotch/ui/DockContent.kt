@@ -4,12 +4,17 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -33,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -42,6 +48,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
@@ -200,6 +210,7 @@ private fun MusicPage(
  * text. Every transport control stays visible here; collapsing the play/pause
  * only affects the slim quickview.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MusicContent(
     session: MediaSession,
@@ -241,14 +252,34 @@ private fun MusicContent(
             AnimatedContent(
                 targetState = session.artwork,
                 transitionSpec = {
+                    // A record-swap conveyor: both covers travel LEFT, so the
+                    // eye reads one continuous motion — the old disc glides
+                    // out through the notch's left edge (the Row above clips
+                    // at the island bounds) while the new one slides in from
+                    // beyond it and settles with a soft spring. Travel is 3x
+                    // the disc width so the exit/enter are unmistakable, the
+                    // exit fades only in its last third (the cover stays
+                    // readable while it travels), and everything animates
+                    // offset/alpha/scale — all graphicsLayer-backed, so the
+                    // SOFTWARE renderer never relayouts mid-swap.
                     (slideInHorizontally(
-                        initialOffsetX = { -it },
-                        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f)
-                    ) + fadeIn(tween(200))) togetherWith (
+                        initialOffsetX = { -it * 3 },
+                        animationSpec = spring(
+                            dampingRatio = 0.72f,
+                            stiffness = 130f,
+                            visibilityThreshold = IntOffset.VisibilityThreshold
+                        )
+                    ) + scaleIn(
+                        initialScale = 0.85f,
+                        animationSpec = spring(dampingRatio = 0.72f, stiffness = 130f)
+                    ) + fadeIn(tween(260, delayMillis = 120))) togetherWith (
                         slideOutHorizontally(
-                            targetOffsetX = { -it },
-                            animationSpec = tween(260, easing = FastOutSlowInEasing)
-                        ) + fadeOut(tween(200))
+                            targetOffsetX = { -it * 3 },
+                            animationSpec = tween(460, easing = FastOutSlowInEasing)
+                        ) + scaleOut(
+                            targetScale = 0.85f,
+                            animationSpec = tween(460, easing = FastOutSlowInEasing)
+                        ) + fadeOut(tween(240, delayMillis = 220))
                     )
                 },
                 label = "vinylSwap"

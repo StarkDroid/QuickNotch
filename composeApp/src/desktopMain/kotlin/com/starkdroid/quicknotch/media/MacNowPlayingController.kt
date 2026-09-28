@@ -71,12 +71,23 @@ internal class MacNowPlayingController : MediaControllerBase() {
     override fun previous() = send("previoustrack")
     override fun seekTo(positionMs: Long) = Unit
 
+    /**
+     * Transport commands spawn a short-lived `osascript` helper (~100-300ms,
+     * 2s deadline) — that MUST NOT run on the calling thread: clicks arrive on
+     * the Compose UI thread, and blocking it made every press freeze the
+     * overlay + settings windows for the spawn duration (very visible on the
+     * SOFTWARE renderer, which paints both windows on that same thread). The
+     * command is fire-and-forget on the controller's IO scope; the session
+     * feed reflects the outcome on its own.
+     */
     private fun send(command: String) {
         val binary = bridge ?: return
-        runCatching {
-            ProcessBuilder(binary.absolutePath, "--cmd", command)
-                .start()
-                .waitFor(2, TimeUnit.SECONDS)
+        ioScope.launch {
+            runCatching {
+                ProcessBuilder(binary.absolutePath, "--cmd", command)
+                    .start()
+                    .waitFor(2, TimeUnit.SECONDS)
+            }
         }
     }
 }

@@ -4,7 +4,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -36,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -43,12 +48,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
@@ -74,6 +82,7 @@ import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.TextPrimary
 import org.jetbrains.compose.resources.stringResource
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -403,6 +412,7 @@ internal fun TrackProgress(
 
 // ── Transport ────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TransportControls(
     state: PlaybackState,
@@ -410,55 +420,115 @@ internal fun TransportControls(
     media: MediaController
 ) {
     val tint = TextPrimary.copy(alpha = if (enabled) 0.9f else 0.3f)
+    // Optimistic play/pause: the OS player reacts through the media bridge's
+    // next poll (up to ~2s), and without this the icon sat on the old state
+    // for that whole window — read as "the button is laggy". The flip happens
+    // the instant the button is pressed and reconciles when the session state
+    // changes (or after 3s, if a command was lost).
+    var pendingPlay by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(state) { pendingPlay = null }
+    LaunchedEffect(pendingPlay) {
+        if (pendingPlay != null) {
+            delay(3_000)
+            pendingPlay = null
+        }
+    }
+    val showPlaying = pendingPlay ?: (state == PlaybackState.PLAYING)
+    // Material3 inflates every IconButton to a 48dp touch target — on this
+    // tightly packed 30/34dp row (2dp apart) those targets overlapped each
+    // other and the neighbouring buttons, so clicks near an edge landed on the
+    // wrong control. Pin the targets to the visible buttons.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        IconButton(
-            onClick = { media.previous() },
+        // Plain sized-Box clickables instead of IconButton: Material3's
+        // IconButton inflates its touch target to 48dp (overflowing its slot
+        // symmetrically), which on this tightly packed row made the drawn
+        // buttons and the hit geometry disagree — clicks near an edge landed
+        // in the neighbour's inflated zone or nowhere at all. With these, the
+        // hit area is exactly the drawn button.
+        TransportButton(
+            onClick = {
+                media.previous()
+            },
             enabled = enabled,
-            modifier = Modifier.size(30.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.SkipPrevious,
-                contentDescription = stringResource(Res.string.music_previous),
-                tint = tint,
-                modifier = Modifier.size(19.dp)
-            )
-        }
+            size = 30.dp,
+            iconSize = 19.dp,
+            icon = Icons.Default.SkipPrevious,
+            contentDescription = stringResource(Res.string.music_previous),
+            tint = tint
+        )
         Box(
             modifier = Modifier
                 .size(34.dp)
                 .clip(CircleShape)
-                .background(LiveAccent.copy(alpha = if (enabled) 0.92f else 0.35f)),
+                .background(LiveAccent.copy(alpha = if (enabled) 0.92f else 0.35f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = enabled,
+                    role = Role.Button
+                ) {
+                    pendingPlay = !(state == PlaybackState.PLAYING)
+                    media.playPause()
+                },
             contentAlignment = Alignment.Center
         ) {
-            IconButton(
-                onClick = { media.playPause() },
-                enabled = enabled,
-                modifier = Modifier.size(34.dp)
-            ) {
-                Icon(
-                    imageVector = if (state == PlaybackState.PLAYING) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = stringResource(
-                        if (state == PlaybackState.PLAYING) Res.string.music_pause else Res.string.music_play
-                    ),
-                    tint = Color.Black.copy(alpha = 0.85f),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        IconButton(
-            onClick = { media.next() },
-            enabled = enabled,
-            modifier = Modifier.size(30.dp)
-        ) {
             Icon(
-                imageVector = Icons.Default.SkipNext,
-                contentDescription = stringResource(Res.string.music_next),
-                tint = tint,
-                modifier = Modifier.size(19.dp)
+                imageVector = if (showPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = stringResource(
+                    if (showPlaying) Res.string.music_pause else Res.string.music_play
+                ),
+                tint = Color.Black.copy(alpha = 0.85f),
+                modifier = Modifier.size(22.dp)
             )
         }
+        TransportButton(
+            onClick = {
+                media.next()
+            },
+            enabled = enabled,
+            size = 30.dp,
+            iconSize = 19.dp,
+            icon = Icons.Default.SkipNext,
+            contentDescription = stringResource(Res.string.music_next),
+            tint = tint
+        )
+    }
+}
+
+/**
+ * One flat transport button: a fixed-size hit target with a centred glyph —
+ * hit area = drawn area, no Material touch-target inflation.
+ */
+@Composable
+private fun TransportButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    size: Dp,
+    iconSize: Dp,
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(iconSize)
+        )
     }
 }
