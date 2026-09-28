@@ -190,34 +190,40 @@ internal fun FloatingNotchOverlay(
     var collapseJob by remember { mutableStateOf<Job?>(null) }
 
     // Screen-anchored footprint of the hover zone (island + glow), kept alive by
-    // the hover Box below so collapse can be gated on the *real* cursor position.
+    // the hover Box below. It only fires hover Enter/Exit; the native gate and
+    // the collapse hysteresis both key off the tighter island footprint, so the
+    // outer glow band stays click-through for whatever sits underneath.
     var hoverCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    // The fixed native window's transparent margin must not swallow clicks on
-    // whatever app or desktop sits around the collapsed pill (see
-    // WindowPassthrough). The true touch target is exactly the hover box, so
-    // publish its bounds in window-client pixels; null (not measured yet) means
-    // "whole window interactive", the old behaviour.
-    LaunchedEffect(hoverCoordinates) {
-        val coords = hoverCoordinates
+    // The DRAWN island's footprint. This — not the wider hover box — is the
+    // native touch target: the fixed (expanded) window keeps a transparent
+    // margin around the collapsed pill for its whole life (pitfall 17: resizing
+    // a transparent window on macOS flashes), and the margin must stay
+    // click-through right up to the pill's edge so it never blocks the UI
+    // underneath (taskbar/menu-bar items sitting next to the notch).
+    var islandCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    // Publish the island's bounds in window-client pixels for the native
+    // click-through (see WindowPassthrough); null (not measured yet) means
+    // "whole window interactive", the fail-soft default.
+    //
+    // `localToWindow` already returns PHYSICAL pixels (Compose px = dp ×
+    // density), so no further scaling happens here — multiplying again used to
+    // double-scale the touch target on every display above 100%, turning the
+    // transparent margin into an invisible click-swallowing band.
+    LaunchedEffect(islandCoordinates) {
+        val coords = islandCoordinates
         if (coords == null || !coords.isAttached) {
             onTouchTargetChange(null)
         } else {
-            // Window-client *pixels* for the hover box, scaled to physical
-            // pixels (Retina etc.) which is what the native hit-test wants.
             val windowOffset = coords.localToWindow(Offset.Zero)
             val sizePx = coords.size
-            val scale = density.density
-            val left = windowOffset.x * scale
-            val top = windowOffset.y * scale
-            val right = (windowOffset.x + sizePx.width) * scale
-            val bottom = (windowOffset.y + sizePx.height) * scale
             onTouchTargetChange(
                 java.awt.Rectangle(
-                    left.roundToInt(),
-                    top.roundToInt(),
-                    (right - left).roundToInt(),
-                    (bottom - top).roundToInt()
+                    windowOffset.x.roundToInt(),
+                    windowOffset.y.roundToInt(),
+                    sizePx.width,
+                    sizePx.height
                 )
             )
         }
@@ -247,7 +253,13 @@ internal fun FloatingNotchOverlay(
                 // the cursor is confirmed out.
                 while (true) {
                     delay(config.collapseDelayMs)
-                    val coords = hoverCoordinates
+                    // The gate uses the DRAWN island's footprint — the same
+                    // rectangle the native click-through keeps interactive — so
+                    // the collapse hysteresis can never disagree with the
+                    // native gate (a cursor parked in the click-through glow
+                    // band used to hold the notch open while the window there
+                    // was already ignoring the mouse).
+                    val coords = islandCoordinates
                     when {
                         // Unknown or still-detached footprint (window mid-resize):
                         // keep the notch open without flapping, but keep polling —
@@ -400,6 +412,7 @@ internal fun FloatingNotchOverlay(
                 modifier = Modifier
                     .width(animatedWidth)
                     .height(animatedHeight)
+                    .onGloballyPositioned { islandCoordinates = it }
                     .clip(shape)
                     .islandSurface(config.surface)
                     .border(surface.borderWidth.dp, surface.border, shape),

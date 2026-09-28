@@ -306,18 +306,26 @@ life, its transparent margin would swallow clicks on whatever app or desktop sit
 around the collapsed pill. `WindowPassthrough` (datasource, `main.kt`) clips the
 window's interactive area to exactly the drawn island each tick:
 
-- The overlay publishes the hover box's bounds (a `java.awt.Rectangle` in window-client
-  *physical* pixels, from `localToWindow(Offset.Zero)` × `density.density`) via
-  `onTouchTargetChange`; the rectangle is already in physical px so native APIs need no
-  further scaling. `null` = "whole window interactive" (measured/first frame).
+- The overlay publishes the **drawn island's** bounds (a `java.awt.Rectangle` in
+  window-client *physical* pixels, straight from `localToWindow(Offset.Zero)` — Compose
+  px are already physical, so no further scaling) via `onTouchTargetChange`; `null` =
+  "whole window interactive" (measured/first frame). Deliberately NOT the wider hover
+  box (island + `HoverGlow`): the glow stays a hover-only comfort margin, while the
+  native touch target hugs the pill so the click-through starts right at its edge.
+  An earlier version multiplied the rect by `density` again — double-scaling the
+  interactive area on every display above 100% into an invisible click-swallowing band
+  (invisible on the scale-1.0 dev Mac, which is why it hid so long).
 - **Windows**: `SetWindowRgn(GDI32.CreateRectRgn(...))` — the region clips both painting
   and hit-testing; the OS frees the previous region when replaced, so a fresh region per
-  tick is safe. `null` region = full window. On construction the overlay also gets
+  tick is safe (inflated by 2px so a click grazing the pill's edge lands on the island).
+  `null` region = full window. On construction the overlay also gets
   `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (via `User32.GetWindowLong/SetWindowLong`,
   `GWL_EXSTYLE`), so it never occupies a taskbar slot or steals focus.
 - **macOS**: `[NSWindow setIgnoresMouseEvents:]` (whole-window, no per-region variant),
   driven cursor-first each 30 ms poll: the window is mouse-transparent unless the *real*
-  cursor (via `MouseInfo`) sits within the island rect (with a 4px pad). The opposite of
+  cursor (via `MouseInfo`) sits within the island rect (brought back to logical
+  points via the graphics configuration's scale — a no-op on non-scaled displays —
+  plus a 4px pad). The opposite of
   the Compose gate: a suppressed hover plays no role here — this is a raw
   AppKit-level hit-test, and poll cadence is what reactivates clicks. When the window is
   flipped back to interactive, a synthetic `MOUSE_MOVED` is dispatched so Compose's hover
@@ -640,6 +648,9 @@ composeApp/
     because it checks the real cursor against the island box's coordinates.
     If a future change needs a tighter footprint, the trade-off must be revisited
     deliberately — don't reintroduce a per-open/collapse native resize.
+    (Update: the touch target is now the *drawn island* in raw physical px — the
+    hover-glow margin stays hover-only, and the density re-multiply that
+    double-scaled the interactive area on >100% displays is gone; see 5.10.)
 18. **AWT can't park a window above the menu bar and its `locationOnScreen` goes
     stale the moment Cocoa moves the window** (both verified live + in JDK 17
     source). `setAlwaysOnTop(true)` maps to `NSFloatingWindowLevel` (3) — below
@@ -851,6 +862,20 @@ composeApp/
   as a renderer escape hatch (SKIKO_RENDER_API=METAL) and still SIGTRAPs at
   startup (exit 133) — SOFTWARE stays, per the existing macOS-only runtime
   override.
+- (this session → HEAD): the invisible click-swallowing band around the
+  collapsed notch was traced to the published touch target, not to a mystery
+  window. Two defects: the target was the *hover* box (island + 10dp glow,
+  deliberate hover comfort) instead of the drawn island, and it was multiplied
+  by `density` again after `localToWindow` had already produced physical px —
+  double-scaling the interactive area on every display above 100% (invisible
+  on the scale-1.0 dev Mac). The native target is now the drawn island
+  (physical px, no re-multiply; Windows inflates the region by 2px, macOS
+  compares in logical points via the graphics-config scale with its 4px pad),
+  and the collapse gate uses the same island footprint so it can never
+  disagree with the native gate. Hover expansion still starts at the pill
+  (probe-verified: on-pill hover expands, just-outside hover now exits and
+  lets the click-through through). Windows region coordinates were never
+  live-verifiable from this Mac.
 
 ---
 

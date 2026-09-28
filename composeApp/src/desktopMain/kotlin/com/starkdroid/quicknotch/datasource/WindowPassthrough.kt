@@ -244,13 +244,21 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
 
     override fun apply(rect: Rectangle?) {
         val h = hwnd ?: return
-        // Rect comes in the window's *physical* pixels (Compose density on
-        // desktop is the window DPI scale), exactly what the Win32 region wants.
-        // An empty rect behaves like no region at all.
+        // Rect comes in the window's *physical* pixels (Compose px = dp ×
+        // density), exactly what the Win32 region wants on a DPI-aware
+        // process. A couple of points of slack on every side keep a click
+        // that grazes the pill's edge on the island instead of dropping
+        // through to whatever sits underneath.
+        val pad = 2
         val rgn = if (rect == null || rect.width <= 0 || rect.height <= 0) {
             null
         } else {
-            GDI32.INSTANCE.CreateRectRgn(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height)
+            GDI32.INSTANCE.CreateRectRgn(
+                rect.x - pad,
+                rect.y - pad,
+                rect.x + rect.width + pad,
+                rect.y + rect.height + pad
+            )
         }
         User32.INSTANCE.SetWindowRgn(WinDef.HWND(Pointer(h)), rgn, true)
     }
@@ -351,11 +359,24 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
         // insets even for undecorated windows). Invariant now that the anchor
         // is the real CG origin: `window.insets` stays the same regardless of
         // how far above the menu bar the window actually parks.
+        //
+        // The rect arrives in PHYSICAL pixels (Compose px = dp × density) while
+        // the cursor and origin are in AWT logical points, so the rect is
+        // brought back to logical space with the graphics configuration's
+        // scale (1.0 on non-scaled displays — no-op there, correct on Retina).
+        val scale = try {
+            window.graphicsConfiguration.defaultTransform.scaleX.toFloat()
+        } catch (_: Throwable) {
+            1f
+        }.coerceAtLeast(0.25f)
         val x = cursor.x - origin.x - window.insets.left
         val y = cursor.y - origin.y - window.insets.top
         val pad = 4
-        return x >= rect.x - pad && x <= rect.x + rect.width + pad &&
-            y >= rect.y - pad && y <= rect.y + rect.height + pad
+        val left = (rect.x / scale).toInt() - pad
+        val top = (rect.y / scale).toInt() - pad
+        val right = ((rect.x + rect.width) / scale).toInt() + pad
+        val bottom = ((rect.y + rect.height) / scale).toInt() + pad
+        return x >= left && x <= right && y >= top && y <= bottom
     }
 
     private fun setIgnoring(ptr: Long, ignore: Boolean) {
