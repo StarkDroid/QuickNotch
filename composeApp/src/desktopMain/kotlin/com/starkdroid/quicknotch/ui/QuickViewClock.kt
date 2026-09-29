@@ -122,7 +122,7 @@ internal fun IdleClockRow(
         if (battery != null) {
             LevelRing(
                 level = battery.levelPercent,
-                icon = batteryPainter(battery.isAudio),
+                icon = batteryPainter(battery.levelPercent),
                 contentDescription = stringResource(
                     Res.string.music_battery,
                     battery.name?.takeIf { it.isNotBlank() }
@@ -138,7 +138,7 @@ internal fun IdleClockRow(
         if (deviceBattery != null) {
             LevelRing(
                 level = deviceBattery.levelPercent,
-                icon = systemBatteryPainter(deviceBattery.levelPercent, deviceBattery.charging),
+                icon = batteryPainter(deviceBattery.levelPercent, deviceBattery.charging),
                 contentDescription = stringResource(
                     if (deviceBattery.charging) Res.string.device_battery_charging
                     else Res.string.device_battery,

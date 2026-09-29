@@ -31,6 +31,10 @@ internal val LevelRingTrack = Color.White.copy(alpha = 0.16f)
 internal val BatteryLowTint = Color(0xFFF59E0B)
 internal const val BatteryLowThreshold = 20
 
+/** Fill thresholds for the battery silhouette: full / mid / low sliver. */
+internal const val BatteryFullThreshold = 80
+internal const val BatteryMidThreshold = 3
+
 // The ring sweeps 288° of the circle — 360° minus a 72° gap (20% of the
 // circle) held at the bottom, so the indicator never reads as a full, closed
 // ring. The level still maps the whole 0..100: at 100% the sweep closes the
@@ -120,27 +124,27 @@ internal fun LevelRing(
 internal fun volumePainter(): Painter = painterResource(Res.drawable.volume)
 
 /**
- * Battery/device glyph as a painter: the headphone drawable for a connected
- * audio device, the bluetooth drawable for any other connected device. Both
- * come from packaged compose resources — no icon data lives in code.
+ * Battery glyph for **every** level ring that reports a charge: the connected
+ * device's battery (audio or not) and the machine's own battery share this one
+ * function and one dedicated asset set — the charging bolt while the OS is
+ * filling the battery, otherwise a silhouette whose fill tracks the level
+ * (full ≥ 80%, mid ≥ 3%, a low sliver below 3%).
+ *
+ * Both rings previously drew something else here: the device battery showed a
+ * headphone or a bluetooth mark, which is a *device* glyph wearing a battery
+ * ring's clothes — and it made the settings cell labelled "Audio Battery" render
+ * a pair of headphones. "Which device?" is already answered by the ring's
+ * position, its content description and the settings row name, so the glyph
+ * only has to say "how much charge". Using one asset set for both is also why
+ * `headphone.svg` and `bluetooth.svg` are no longer needed. All glyphs come
+ * from packaged compose resources; no icon data lives in code.
  */
 @Composable
-internal fun batteryPainter(isAudio: Boolean): Painter =
-    if (isAudio) painterResource(Res.drawable.headphone)
-    else painterResource(Res.drawable.bluetooth)
-
-/**
- * System (laptop) battery glyph: the charging bolt while the OS is filling
- * the battery, otherwise a battery silhouette whose fill tracks the level
- * (full ≥ 80%, mid ≥ 3%, a low sliver below 3%). All four come from packaged
- * compose resources.
- */
-@Composable
-internal fun systemBatteryPainter(level: Int, charging: Boolean): Painter =
+internal fun batteryPainter(level: Int, charging: Boolean = false): Painter =
     when {
         charging -> painterResource(Res.drawable.charging)
-        level >= 80 -> painterResource(Res.drawable.battery_full)
-        level >= 3 -> painterResource(Res.drawable.battery_mid)
+        level >= BatteryFullThreshold -> painterResource(Res.drawable.battery_full)
+        level >= BatteryMidThreshold -> painterResource(Res.drawable.battery_mid)
         else -> painterResource(Res.drawable.battery_low)
     }
 

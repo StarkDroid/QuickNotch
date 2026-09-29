@@ -293,7 +293,10 @@ waveform can take the album's colour without sampling pixels in composition.
   (poll 1s), level via `DEVPKEY_Device_BatteryLevel` (live probe timeout 8s); macOS
   reads `system_profiler SPBluetoothDataType` (≈100 ms — carries both presence + battery,
   polled at 10 s to keep the laptop quiet, `poke()` re-probes instantly on notch-open).
-  A compiled watcher (`btwatch_bridge.m`) makes the slow poll event-driven: CoreAudio
+  Both battery rings (device and machine) share one `batteryPainter(level, charging)`
+over the dedicated asset set — the ring's position, label and content description
+say *which* device, so the glyph only reports charge. A compiled watcher
+(`btwatch_bridge.m`) makes the slow poll event-driven: CoreAudio
   default-output/device-change listeners (plus best-effort bluetoothd distributed /
   Darwin connect notifications) fire the instant a headset routes in or out, and each
   marker triggers an immediate probe (+ one settling re-probe ~1.2 s later), so the ring
@@ -466,7 +469,8 @@ composeApp/
 └── src/
     ├── commonMain/composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
-    │   └── drawable/                     # headphone/bluetooth/charging/battery_* SVGs, quicknotch_icon.png
+    │   └── drawable/                     # battery_{full,mid,low}/charging/volume/notification SVGs,
+    │                                     #   quicknotch_icon.png
     └── desktopMain/
         ├── resources/                    # tray icon, synced windows/*.ps1, (mac) macos/nowplaying-bridge,
         │                                #   btwatch-bridge, passthrough-bridge.dylib
@@ -571,7 +575,7 @@ composeApp/
 | Pill animations no longer freeze when Settings opens (the notch sits above the menu bar, so it is always visible); they are rate-capped instead | done (this session) — pitfall 29 |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
-| Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
+| Every battery ring — the connected device's *and* the machine's — uses the dedicated battery SVGs (full/mid/low + charging bolt), so the settings cell labelled "Audio Battery" no longer draws a pair of headphones; `headphone.svg`/`bluetooth.svg` deleted as unused | done (this session) |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
 | Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
@@ -1250,6 +1254,18 @@ composeApp/
   recomposes only that tab. *Verified by compile and layout only: synthetic
   clicks do not reach normal (non-always-on-top) windows in this environment —
   no Accessibility permission — so the click itself needs a human.*
+
+- (this session → HEAD): the device-battery ring stopped wearing the wrong
+  glyph. It drew `headphone.svg` / `bluetooth.svg` — a *device* mark inside a
+  battery ring, which is also why the settings cell labelled "Audio Battery"
+  rendered a pair of headphones. Both battery rings now share one
+  `batteryPainter(level, charging)` over the dedicated set (`battery_full` /
+  `battery_mid` / `battery_low` / `charging`), with the fill thresholds
+  (`BatteryFullThreshold` 80, `BatteryMidThreshold` 3) named alongside the
+  existing `BatteryLowThreshold`; the audio-vs-other distinction is carried by
+  ring position, label and content description, so the two device glyphs had no
+  remaining job and `headphone.svg` and `bluetooth.svg` are deleted. Every
+  drawable in the project is referenced again.
 
 ---
 
