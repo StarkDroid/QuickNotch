@@ -13,6 +13,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +59,29 @@ fun SettingsScreen(
 
     var showAboutDialog by remember { mutableStateOf(false) }
 
+    // Restore the appearance/sizing/clock defaults. This is the same set the tab
+    // used to own; it now lives here because the button sits in the top bar, and
+    // the screen already holds the repository. Widgets and Behavior keep their
+    // own state (pinned apps, toggles) — resetting the notch's look must not
+    // silently undo a user's widget choices.
+    val onResetDefaults: () -> Unit = {
+        repository.updateConfig {
+            it.copy(
+                style = NotchStyle.DYNAMIC_ISLAND,
+                surface = NotchSurface.SOLID,
+                dockScaleFactor = 1.35f,
+                baseIconSizeDp = 38,
+                quickViewWidthDp = 150,
+                quickViewHeightDp = 30,
+                expandedNotchHeightDp = 78,
+                clockDate = true,
+                clockTime = true,
+                clock24Hour = false,
+                clockDateFormat = ClockDateFormat.DD_MMM
+            )
+        }
+    }
+
     var scannedApps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isScanning by remember { mutableStateOf(false) }
@@ -89,7 +114,11 @@ fun SettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 SettingsTopBar(
-                    onOpenAbout = { showAboutDialog = true }
+                    onOpenAbout = { showAboutDialog = true },
+                    // Reset only exists on the page it affects: the defaults it
+                    // restores are the appearance/sizing/clock ones, so offering
+                    // it on Widgets or Behavior would be a lie.
+                    onReset = if (selectedTab == 0) onResetDefaults else null
                 )
             }
         ) { innerPadding ->
@@ -173,7 +202,9 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsTopBar(
-    onOpenAbout: () -> Unit
+    onOpenAbout: () -> Unit,
+    /** Null hides the reset button (any tab but Appearance). */
+    onReset: (() -> Unit)?
 ) {
     Row(
         modifier = Modifier
@@ -207,21 +238,59 @@ private fun SettingsTopBar(
             }
         }
 
-        IconButton(
-            onClick = onOpenAbout,
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(FlatSurfaceElevated)
-                .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+        // The window-level actions share one chrome so they read as a pair: the
+        // same 32dp square, elevated surface and hairline border as About, at
+        // the same 8dp corner radius.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = stringResource(Res.string.about),
-                tint = TextSecondary,
-                modifier = Modifier.size(16.dp)
-            )
+            if (onReset != null) {
+                TopBarActionButton(
+                    onClick = onReset,
+                    contentDescription = stringResource(Res.string.reset_defaults)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = AccentRed,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+            TopBarActionButton(
+                onClick = onOpenAbout,
+                contentDescription = stringResource(Res.string.about)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
+    }
+}
+
+/** One square top-bar action: 32dp, elevated fill, hairline border, 8dp radius. */
+@Composable
+private fun TopBarActionButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    icon: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(FlatSurfaceElevated)
+            .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center
+    ) {
+        icon()
     }
 }
 

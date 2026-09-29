@@ -138,6 +138,9 @@ static NSString *const kJxaArtScript =
     @"write artData to f\n"
     @"close access f\n";
 
+static void ArtFetched(void);
+static void Poll(void);
+static volatile BOOL artFetchInFlight;
 static NSString *artContentId;
 static NSString *artCacheB64;
 
@@ -193,13 +196,41 @@ static void AttachMusicArt(NSString **line) {
         }
         return;
     }
-    NSString *art = RunMusicArtScript();
+    // A fetch is already running for an older track: let it finish (it will see
+    // the id moved and drop its result) rather than stacking a second
+    // osascript on top of it.
+    if (artFetchInFlight) return;
+    // Kick the fetch and emit without art. The fetch is an osascript call into
+    // Music that can take hundreds of milliseconds, and it used to run inline
+    // here - i.e. on the poll callback - so every track change stalled the
+    // whole metadata feed (title, state, position) behind an AppleScript, and
+    // that AppleScript competed with every other app on the machine exactly
+    // when a track started. Detaching it costs nothing: the poll emits now, and
+    // ArtFetched() re-emits the moment the art lands.
     artContentId = idKey;
-    artCacheB64 = art;
-    if (art) {
-        *line = [*line stringByReplacingOccurrencesOfString:@"\"art\":null"
-                                                 withString:[NSString stringWithFormat:@"\"art\":\"%@\"", art]];
+    artCacheB64 = nil;
+    artFetchInFlight = YES;
+    NSString *requestedId = idKey;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSString *art = RunMusicArtScript();
+        if ([requestedId isEqualToString:artContentId]) {
+            artCacheB64 = art;
+        }
+        artFetchInFlight = NO;
+        ArtFetched();
+    });
+}
+
+/** Called once a detached art fetch completed (whatever its outcome). */
+static void ArtFetched(void) {
+    if (artCacheB64) {
+        // Force an immediate re-emit so the art appears without waiting up to 2s
+        // for the heartbeat to notice the changed line.
+        lastEmittedKey = nil;
     }
+    // Always poll: if the track changed while this fetch was running, the new id
+    // is waiting for its own fetch and should not wait a whole poll cycle for it.
+    Poll();
 }
 
 // Runs `osascript -l JavaScript <jxa> <args…>`, captures stdout, and calls

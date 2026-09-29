@@ -183,12 +183,17 @@ internal fun FloatingNotchOverlay(
 
     var showDock by pager.dockVisible
 
-    // Connectivity is polled every second in the background; re-probe the
-    // moment the notch opens or the music goes live so the battery chip never
-    // shows a stale read (or a ghost after the device disconnected).
-    LaunchedEffect(isExpanded, musicLive) {
-        AudioBattery.poke()
-        SystemBattery.poke()
+    // Re-probe connectivity when the dock OPENS, so the battery chip never shows
+    // a stale read. Deliberately not keyed on musicLive: on macOS a probe is a
+    // `system_profiler` launch (~150ms of system-wide CPU) and firing one on
+    // every track start was a visible source of machine-wide stutter. The 10s
+    // poll plus the event-driven connect/disconnect bridge already keep the ring
+    // correct without it (pitfall 31).
+    LaunchedEffect(isExpanded) {
+        if (isExpanded) {
+            AudioBattery.poke()
+            SystemBattery.poke()
+        }
     }
 
     // Collapse is debounced so a cursor briefly clipping the edge does not

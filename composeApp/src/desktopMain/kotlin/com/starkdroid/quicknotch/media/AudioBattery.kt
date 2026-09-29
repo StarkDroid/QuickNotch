@@ -192,13 +192,35 @@ internal object AudioBattery {
      * Forces an immediate connectivity probe (and a battery re-read when a
      * device is present), so the chip right after the notch opens is fresh.
      */
+    /**
+     * Force an immediate re-probe (notch opened, etc).
+     *
+     * Coalesced, because a probe is a *process launch*: on macOS it is
+     * `system_profiler`, which costs ~150ms of system-wide CPU. Without the
+     * guard, every track start (musicLive flipping) fired one exactly when the
+     * user was least likely to want a system-wide stall, and rapid open/close
+     * cycles stacked more on top. Probes that started within
+     * [pokeCooldownMs] are dropped instead: the 10s poll and the event-driven
+     * connect/disconnect bridge already keep the chip honest, so a poke more
+     * often than that buys nothing a user could see.
+     */
     fun poke() {
         val active = scope ?: return
+        val now = System.nanoTime()
+        synchronized(lock = pokeLock) {
+            val last = lastPokeNanos
+            if (last != 0L && (now - last) / 1_000_000L < pokeCooldownMs) return
+            lastPokeNanos = now
+        }
         active.launch {
             probePresence()
             refreshBattery()
         }
     }
+
+    private val pokeLock = Any()
+    private var lastPokeNanos = 0L
+    private val pokeCooldownMs = 4_000L
 
     private fun kickRefresh() {
         val active = scope ?: return

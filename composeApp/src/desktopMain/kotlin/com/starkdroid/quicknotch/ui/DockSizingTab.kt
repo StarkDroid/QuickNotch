@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Straighten
@@ -30,7 +29,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,23 +71,7 @@ internal fun DockSizingTab(
     val onUpdate: ((NotchConfig) -> NotchConfig) -> Unit = { transform ->
         repository.updateConfig(transform)
     }
-    val onResetDefaults = {
-        repository.updateConfig {
-            it.copy(
-                style = NotchStyle.DYNAMIC_ISLAND,
-                surface = NotchSurface.SOLID,
-                dockScaleFactor = 1.35f,
-                baseIconSizeDp = 38,
-                quickViewWidthDp = 150,
-                quickViewHeightDp = 30,
-                expandedNotchHeightDp = 78,
-                clockDate = true,
-                clockTime = true,
-                clock24Hour = false,
-                clockDateFormat = ClockDateFormat.DD_MMM
-            )
-        }
-    }
+
 
     // A desktop has no battery; only offer the device-battery toggle where it
     // can actually do something.
@@ -107,29 +89,6 @@ internal fun DockSizingTab(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        // Tab Header with Reset Defaults action (the tab label already names it)
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = onResetDefaults,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = AccentRed,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(Res.string.reset_defaults), style = AppTypography.labelSmall, color = AccentRed)
-                }
-            }
-        }
-
         // Section 1: Appearance — silhouette picker, then the surface theme
         item {
             Card(

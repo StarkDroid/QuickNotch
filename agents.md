@@ -259,8 +259,10 @@ the island itself) and, while the toggle is on, shows the helper row described a
 - `MediaControllerBase.publish()` decodes + **extrapolates pinned progress**: browsers
   register with SMTC but never pump `Position` while playing, so when a PLAYING sample
   repeats the previous raw position for the same content id it becomes a "keep
-  advancing from where the last sample extrapolated to" marker. Artwork is cached per content id and downscaled to ≤256px (`MediaJson.artworkMaxPx`);
-the same decode pass also derives `MediaSession.artTint` — the cover's dominant colour
+  advancing from where the last sample extrapolated to" marker. Artwork is cached per content id and decoded **straight to** ≤256px
+(`MediaJson.artworkMaxPx`) via ImageIO `sourceSubsampling`, so a 1200px JPEG never
+materialises at full size (the old decode-then-copy-then-scale path cost 19–49ms of
+pure copying per track, 131ms cold); the same decode pass also derives `MediaSession.artTint` — the cover's dominant colour
 (`dominantArtTint`: a coarse population×chroma histogram over a sampled grid) computed
 **once per track on the poller's worker thread** and cached with the bitmap, so the
 waveform can take the album's colour without sampling pixels in composition.
@@ -565,6 +567,7 @@ composeApp/
 | Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — macOS live on Apple silicon via a compiled `passthrough_bridge.m` dylib (direct objc_msgSend with a BOOL arg crashes the JVM); Windows path unverified |
 | Tray/menu-bar "Always on top" toggle (mirrors Behavior-tab switch, drives `config.alwaysOnTop`) | done (this session) |
 | Collapsed-pill waveform: equalizer bars under the title (or alone in the title's frame when `waveformHidesTitle` is on), progress strip yields to it, album-art or white tint, flat line on pause | done (this session) — visual feel needs eyes; the pill ticks at 30fps via `delay`, measured ~9-10% of a core playing (was ~20-25% on display-rate frame clocks) and ~2% paused; the pause ramp verified 0.57→0.00 then the clock stops |
+| Music-start jank fixed: artwork decoded at target size, the macOS BT probe no longer spawns `system_profiler` on every track, and the bridge's inline art fetch detached from the poll loop | done (this session) — measured 131ms→66ms cold / 50–60ms→5–11ms per track of process CPU, 0 main-thread stalls (pitfall 31) |
 | Pill animations no longer freeze when Settings opens (the notch sits above the menu bar, so it is always visible); they are rate-capped instead | done (this session) — pitfall 29 |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
@@ -903,6 +906,32 @@ composeApp/
    clock) be read in the draw scope. When a crash appears only after the ring
    toggles change the slot width, suspect exactly this layout-time skew.
 
+31. **Never do per-track heavy work on the poll thread, and never spawn a probe
+    on a state flip.** "The apps stutter when music starts" had three unrelated
+    causes, all measured rather than guessed (an EDT stall watcher found *zero*
+    main-thread stalls, which is what ruled out the UI entirely):
+    - **Artwork**: decode → wrap as a Compose bitmap → unwrap → scale → wrap
+      again was 19–49ms of copying per track and 131ms cold. `sourceSubsampling`
+      cuts it to a single decode at the size we use (4–10ms warm).
+    - **`AudioBattery.poke()` keyed on `musicLive`**: on macOS that is a
+      `system_profiler` process launch (~150ms) firing at the exact moment a
+      track starts. The 10s poll and the event-driven CoreAudio watcher already
+      keep the ring correct, so the musicLive trigger was pure cost; it is gone,
+      and `poke()` is coalesced so open/close churn cannot stack spawns either.
+    - **The bridge fetched artwork inline**: `AttachMusicArt` ran its
+      `osascript` *on the poll callback*, so the whole metadata feed (title,
+      state, position) stalled behind an AppleScript on every track change. It
+      now dispatches the fetch and re-emits when the art lands, with the in-
+      flight guard and a stale-id check so a fast track change cannot stack two
+      osascripts or cache art for the wrong track.
+
+    General rules: keep per-track work proportional to the *display* size we
+    actually draw, never let a "refresh now" API run on every state transition
+    when a poll already covers it, and never block a polling loop on a
+    subprocess. Note the visible trade-off of the detached art fetch: a new
+    track's cover can arrive one poll late (~100–300ms), so the disc may show
+    its blank face for a beat before the art lands.
+
 ---
 
 ## 11. Git workflow
@@ -1210,6 +1239,17 @@ composeApp/
   track costs nothing at all (measured floor unchanged at ~2%), and the ramp
   itself is a `presence` scalar the draw blends between the flat line and the
   dynamic shape — no per-bar state, still one write per tick.
+
+- (this session → HEAD): the settings page's reset action moved out of the
+  Appearance tab and into the top bar, beside the About icon and sharing its
+  chrome (32dp square, elevated fill, hairline border, 8dp radius). It is shown
+  only on the tab it actually affects — the defaults it restores are the
+  notch's look, size and clock, so offering it on Widgets or Behavior would be a
+  lie. The action now lives in `SettingsScreen` (which owns the bar and the
+  repository); `DockSizingTab` keeps its own subscription so a slider drag still
+  recomposes only that tab. *Verified by compile and layout only: synthetic
+  clicks do not reach normal (non-always-on-top) windows in this environment —
+  no Accessibility permission — so the click itself needs a human.*
 
 ---
 
