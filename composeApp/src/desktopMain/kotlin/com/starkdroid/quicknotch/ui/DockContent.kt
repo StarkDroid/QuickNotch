@@ -404,7 +404,8 @@ private fun MusicContent(
                 if (battery != null) {
                     LevelRing(
                         level = battery.levelPercent,
-                        icon = batteryPainter(battery.levelPercent),
+                        icon = batteryPainter(battery.isAudio),
+                        badgeCount = battery.connectedCount.takeIf { it > 1 },
                         contentDescription = stringResource(
                             Res.string.music_battery,
                             battery.name?.takeIf { it.isNotBlank() }

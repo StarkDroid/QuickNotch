@@ -47,7 +47,7 @@
     <string name="value_scale">%1$sx</string>
     <string name="quickview_indicators_title">QuickView Indicators</string>
     <string name="indicator_volume">Volume</string>
-    <string name="indicator_audio_battery">Audio Battery</string>
+    <string name="indicator_bluetooth_battery">Bluetooth Battery</string>
     <string name="indicator_laptop_battery">Laptop Battery</string>
     <string name="indicator_notifications">Notifications</string>
     <string name="indicator_waveform">Waveform</string>

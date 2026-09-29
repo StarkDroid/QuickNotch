@@ -3,9 +3,16 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -14,11 +21,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.theme.AccentRed
 import org.jetbrains.compose.resources.painterResource
 
 /**
@@ -30,10 +42,6 @@ internal val LevelRingGlyph = Color.White.copy(alpha = 0.95f)
 internal val LevelRingTrack = Color.White.copy(alpha = 0.16f)
 internal val BatteryLowTint = Color(0xFFF59E0B)
 internal const val BatteryLowThreshold = 20
-
-/** Fill thresholds for the battery silhouette: full / mid / low sliver. */
-internal const val BatteryFullThreshold = 80
-internal const val BatteryMidThreshold = 3
 
 // The ring sweeps 288° of the circle — 360° minus a 72° gap (20% of the
 // circle) held at the bottom, so the indicator never reads as a full, closed
@@ -67,7 +75,14 @@ internal fun LevelRing(
     strokeWidth: Dp = 2.5.dp,
     iconFraction: Float = 0.48f,
     lowTint: Color? = null,
-    lowThreshold: Int = BatteryLowThreshold
+    lowThreshold: Int = BatteryLowThreshold,
+    /**
+     * Optional count badge on the ring's top-right corner — how many devices the
+     * reading covers, when that is more than one (e.g. several Bluetooth devices
+     * connected while the ring shows one of their levels). Null or ≤ 1 draws
+     * nothing, so a single device looks exactly as it did before.
+     */
+    badgeCount: Int? = null
 ) {
     val clamped = level.coerceIn(0, 100)
     val levelColor = if (lowTint != null && clamped <= lowThreshold) lowTint else tint
@@ -111,6 +126,14 @@ internal fun LevelRing(
             tint = levelColor,
             modifier = Modifier.fillMaxSize(iconFraction)
         )
+        if (badgeCount != null && badgeCount > 1) {
+            CountBadge(
+                count = badgeCount,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 3.dp, y = (-3).dp)
+            )
+        }
     }
 }
 
@@ -124,27 +147,29 @@ internal fun LevelRing(
 internal fun volumePainter(): Painter = painterResource(Res.drawable.volume)
 
 /**
- * Battery glyph for **every** level ring that reports a charge: the connected
- * device's battery (audio or not) and the machine's own battery share this one
- * function and one dedicated asset set — the charging bolt while the OS is
- * filling the battery, otherwise a silhouette whose fill tracks the level
- * (full ≥ 80%, mid ≥ 3%, a low sliver below 3%).
- *
- * Both rings previously drew something else here: the device battery showed a
- * headphone or a bluetooth mark, which is a *device* glyph wearing a battery
- * ring's clothes — and it made the settings cell labelled "Audio Battery" render
- * a pair of headphones. "Which device?" is already answered by the ring's
- * position, its content description and the settings row name, so the glyph
- * only has to say "how much charge". Using one asset set for both is also why
- * `headphone.svg` and `bluetooth.svg` are no longer needed. All glyphs come
- * from packaged compose resources; no icon data lives in code.
+ * Connected-device glyph as a painter: the headphone drawable for anything the
+ * OS classifies as an audio stack, the bluetooth drawable for every other
+ * device. Both come from packaged compose resources — no icon data lives in
+ * code. The ring's sweep already carries the level, so the mark only says which
+ * kind of thing the charge belongs to.
  */
 @Composable
-internal fun batteryPainter(level: Int, charging: Boolean = false): Painter =
+internal fun batteryPainter(isAudio: Boolean): Painter =
+    if (isAudio) painterResource(Res.drawable.headphone)
+    else painterResource(Res.drawable.bluetooth)
+
+/**
+ * Machine (laptop) battery glyph: the charging bolt while the OS is filling the
+ * battery, otherwise a battery silhouette whose fill tracks the level
+ * (full ≥ 80%, mid ≥ 3%, a low sliver below 3%). All four come from packaged
+ * compose resources.
+ */
+@Composable
+internal fun systemBatteryPainter(level: Int, charging: Boolean): Painter =
     when {
         charging -> painterResource(Res.drawable.charging)
-        level >= BatteryFullThreshold -> painterResource(Res.drawable.battery_full)
-        level >= BatteryMidThreshold -> painterResource(Res.drawable.battery_mid)
+        level >= 80 -> painterResource(Res.drawable.battery_full)
+        level >= 3 -> painterResource(Res.drawable.battery_mid)
         else -> painterResource(Res.drawable.battery_low)
     }
 
@@ -154,3 +179,33 @@ internal fun batteryPainter(level: Int, charging: Boolean = false): Painter =
  */
 @Composable
 internal fun notificationPainter(): Painter = painterResource(Res.drawable.notification)
+
+/**
+ * The small count pill: shape, colour and type ramp only, so the ring badge and
+ * the notification badge are literally the same component. Placement is the
+ * caller's job via [modifier].
+ */
+@Composable
+internal fun CountBadge(
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .height(11.dp)
+            .defaultMinSize(minWidth = 11.dp)
+            .clip(RoundedCornerShape(5.5.dp))
+            .background(AccentRed)
+            .padding(horizontal = 3.dp)
+    ) {
+        Text(
+            text = if (count >= 100) "99+" else count.toString(),
+            color = Color.White,
+            fontSize = 7.sp,
+            lineHeight = 8.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+    }
+}

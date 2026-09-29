@@ -224,8 +224,8 @@ internal fun DockSizingTab(
                             }
                         )
                         IndicatorToggleBox(
-                            title = stringResource(Res.string.indicator_audio_battery),
-                            icon = batteryPainter(level = 68),
+                            title = stringResource(Res.string.indicator_bluetooth_battery),
+                            icon = batteryPainter(isAudio = true),
                             level = 68,
                             checked = config.widgets.showCollapsedBattery,
                             modifier = Modifier.weight(1f),
@@ -236,7 +236,7 @@ internal fun DockSizingTab(
                         if (hasDeviceBattery) {
                             IndicatorToggleBox(
                                 title = stringResource(Res.string.indicator_laptop_battery),
-                                icon = batteryPainter(level = 58),
+                                icon = systemBatteryPainter(level = 58, charging = false),
                                 level = 58,
                                 checked = config.widgets.showCollapsedDeviceBattery,
                                 modifier = Modifier.weight(1f),

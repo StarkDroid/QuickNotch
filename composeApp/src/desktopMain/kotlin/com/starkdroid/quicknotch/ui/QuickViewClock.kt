@@ -122,7 +122,8 @@ internal fun IdleClockRow(
         if (battery != null) {
             LevelRing(
                 level = battery.levelPercent,
-                icon = batteryPainter(battery.levelPercent),
+                icon = batteryPainter(battery.isAudio),
+                        badgeCount = battery.connectedCount.takeIf { it > 1 },
                 contentDescription = stringResource(
                     Res.string.music_battery,
                     battery.name?.takeIf { it.isNotBlank() }
@@ -138,7 +139,7 @@ internal fun IdleClockRow(
         if (deviceBattery != null) {
             LevelRing(
                 level = deviceBattery.levelPercent,
-                icon = batteryPainter(deviceBattery.levelPercent, deviceBattery.charging),
+                icon = systemBatteryPainter(deviceBattery.levelPercent, deviceBattery.charging),
                 contentDescription = stringResource(
                     if (deviceBattery.charging) Res.string.device_battery_charging
                     else Res.string.device_battery,
@@ -179,26 +180,12 @@ internal fun NotificationIndicator(
             modifier = Modifier.size(17.dp)
         )
         if (count > 0) {
-            Box(
-                contentAlignment = Alignment.Center,
+            CountBadge(
+                count = count,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .offset(x = 2.dp)
-                    .height(11.dp)
-                    .defaultMinSize(minWidth = 11.dp)
-                    .clip(RoundedCornerShape(5.5.dp))
-                    .background(AccentRed)
-                    .padding(horizontal = 3.dp)
-            ) {
-                Text(
-                    text = if (count >= 100) "99+" else count.toString(),
-                    color = Color.White,
-                    fontSize = 7.sp,
-                    lineHeight = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-            }
+            )
         }
     }
 }

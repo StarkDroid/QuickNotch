@@ -9,7 +9,7 @@
 #  values the OS may still hand out after a device unplugs never confuse it,
 #  and nothing here ever reads the slow battery property.
 #
-#    {"present":true,"instance":"BTHENUM\\...","name":"...","address":"840F2A94240A","audio":true}
+#    {"present":true,"instance":"BTHENUM\\...","name":"...","address":"840F2A94240A","audio":true,"count":2}
 #    {"present":false}
 #
 #  With -InstanceId (the slow ~30-second refresh) it reads that device's
@@ -153,6 +153,9 @@ if ([string]::IsNullOrWhiteSpace($InstanceId)) {
                 name     = Get-DeviceName $entry.Device
                 address  = $entry.Address
                 audio    = (Test-IsAudioInstance $entry.Device.InstanceId $entry.Device.Class)
+                # How many Bluetooth devices the OS reports connected, so the
+                # ring can badge a count when more than one is around.
+                count    = $connected.Count
             }
             $payload | ConvertTo-Json -Compress
             exit 0

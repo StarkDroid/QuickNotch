@@ -35,7 +35,14 @@ data class AudioDeviceBattery(
     /** Device name as reported by the OS; null when unknown. */
     val name: String?,
     val levelPercent: Int,
-    val isAudio: Boolean = true
+    val isAudio: Boolean = true,
+    /**
+     * How many Bluetooth devices the OS reports as connected right now,
+     * including the one this ring reads its level from. The ring only shows a
+     * count badge above 1, so a single connected device looks exactly as it did
+     * before this field existed.
+     */
+    val connectedCount: Int = 1
 )
 
 /** Output of [battery.ps1] (both the fast probe and the slow refresh). */
@@ -45,7 +52,9 @@ private data class BatteryProbe(
     @SerialName("instance") val instance: String? = null,
     @SerialName("name") val name: String? = null,
     @SerialName("level") val level: Int? = null,
-    @SerialName("audio") val audio: Boolean = false
+    @SerialName("audio") val audio: Boolean = false,
+    /** Connected-device count (mode A only); null when the script didn't say. */
+    @SerialName("count") val count: Int? = null
 )
 
 /** Last-known level persisted per device instance (Windows). */
@@ -130,6 +139,8 @@ internal object AudioBattery {
     // from the probe alongside identity so the UI's level-ring glyph matches.
     @Volatile
     private var cachedAudio = false
+    /** Connected-device count from the last presence probe (Windows). */
+    private var cachedCount = 1
 
     // True while the last probe (mode A, real connection state) saw an audio
     // device connected. The slow refresh consults this before publishing — a
@@ -263,12 +274,18 @@ internal object AudioBattery {
             // kicks an immediate refresh so the percentage shows up quickly.
             if (appeared || cachedLevel == null) kickRefresh()
             val level = if (cachedInstance == instance) cachedLevel else null
-            _info.value = if (level != null) AudioDeviceBattery(cachedName, level, cachedAudio) else null
+            if (snap.count != null) cachedCount = snap.count
+            _info.value = if (level != null) {
+                AudioDeviceBattery(cachedName, level, cachedAudio, cachedCount)
+            } else {
+                null
+            }
         } else {
             // The WinRT connected set is empty — the device is gone. Hide now;
             // the cached level is kept for an instant restore on reconnect.
             isPresent = false
             activeInstance = null
+            cachedCount = 1
             _info.value = null
         }
     }
@@ -306,7 +323,7 @@ internal object AudioBattery {
         cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
         cachedAudio = snap.audio
         persistCache(instance, cachedName, level)
-        _info.value = AudioDeviceBattery(cachedName, level, cachedAudio)
+        _info.value = AudioDeviceBattery(cachedName, level, cachedAudio, cachedCount)
     }
 
     // ── macOS (10 s cadence, system_profiler carries presence + battery) ────
@@ -482,7 +499,11 @@ internal object AudioBattery {
         }
         val pick = candidates.firstOrNull { it.third } ?: return null
         val name = pick.first.name.takeIf { it.isNotBlank() }
-        return AudioDeviceBattery(name, pick.second, pick.third)
+        // Every entry under "Connected:" counts, audio or not: the badge answers
+        // "how many Bluetooth devices do I have around right now?", which is a
+        // question about the OS's connected set rather than about the one
+        // device whose battery this ring happens to show.
+        return AudioDeviceBattery(name, pick.second, pick.third, devices.size)
     }
 
     private class MacDevice(val name: String, val attrs: MutableMap<String, String> = mutableMapOf())
