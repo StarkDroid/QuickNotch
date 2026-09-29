@@ -4,12 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -30,6 +32,7 @@ import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.model.NotchSurface
 import org.jetbrains.compose.resources.stringResource
 
@@ -56,6 +59,14 @@ internal fun QuickView(
     showVolume: Boolean,
     showBattery: Boolean,
     showDeviceBattery: Boolean,
+    /**
+     * Equalizer bars under the title (live media only, collapsed only). The
+     * caller also hides the edge progress strip while this is on, so the bars
+     * get that band to themselves.
+     */
+    showWaveform: Boolean = false,
+    /** Album-art-derived or white; see [WaveformTint]. */
+    waveformColor: Color = WaveformWhite,
     /** Shared-element morph modifiers for the live-activity disc/title/rings. */
     discModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
@@ -99,21 +110,48 @@ internal fun QuickView(
                 )
                 // The title shares the exact 22dp frame the level rings use, so
                 // the disc, text and rings all sit on one vertical centreline.
+                // With the waveform on, that same frame stacks the title over the
+                // bars — 13sp line + 1.5dp + 7dp of bars still fits inside it, so
+                // the group stays on the shared centreline and the collapsed
+                // footprint (and every morph key) is untouched.
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(22.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    MarqueeText(
-                        text = media.title,
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 11.sp,
-                        lineHeight = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = titleModifier.fillMaxWidth(),
-                        animate = animate
-                    )
+                    if (showWaveform) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            MarqueeText(
+                                text = media.title,
+                                color = Color.White.copy(alpha = 0.92f),
+                                fontSize = 11.sp,
+                                lineHeight = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = titleModifier.fillMaxWidth(),
+                                animate = animate
+                            )
+                            Spacer(modifier = Modifier.height(1.5.dp))
+                            MusicWaveform(
+                                playing = media.state == PlaybackState.PLAYING,
+                                animate = animate,
+                                color = waveformColor,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(7.dp)
+                            )
+                        }
+                    } else {
+                        MarqueeText(
+                            text = media.title,
+                            color = Color.White.copy(alpha = 0.92f),
+                            fontSize = 11.sp,
+                            lineHeight = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = titleModifier.fillMaxWidth(),
+                            animate = animate
+                        )
+                    }
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

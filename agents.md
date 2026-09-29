@@ -197,15 +197,20 @@ both — its plain fade exits while the music page pops in with the old gentle 0
 ### 5.5 Quickview (`QuickView`)
 
 Three branches by state: **live media** (vinyl disc 20dp → art+hub, marquee title 11sp,
-volume ring + device-battery ring — each gated by its own collapsed-only toggle),
+volume ring + device-battery ring — each gated by its own collapsed-only toggle, and
+optionally the `MusicWaveform` bar lane stacked *under* the title inside the same 22dp
+title slot),
 **idle clock** (`IdleClockRow`, date/time + optional rings), else the **idle dots**.
 The drag-handle style shows only a slim grabber line. `LiveProgressStrip` hugs the pill
 edge facing the screen centre while playing (collapsed only; auto-hidden behind the
-expanded dock). The idle pill widens by one indicator slot (28dp) per visible indicator —
+expanded dock, and hidden outright while `widgets.showCollapsedWaveform` is on — the bars
+take that band, so the two never compete for the same pixels). The idle pill widens by one indicator slot (28dp) per visible indicator —
 the count comes from `quickViewIndicatorSlots(...)` (device + laptop battery rings, plus
 the notification bell when its unread count is readable and the toggle is on) and **both** the native
 window sizer (`NotchOverlayWindow` in `main.kt`) and the overlay content derive the
-collapsed footprint from it, so the rings are never clipped against the window edge.
+collapsed footprint from it, so the rings are never clipped against the window edge. The
+waveform deliberately lives inside the title's existing 22dp slot rather than claiming an
+indicator slot, so the collapsed footprint (and every morph key) is untouched by it.
 The notification bell + red count badge (`notification.svg`, `AccentRed`) cap the row
 farthest right, gated by the `showCollapsedNotifications` widget toggle; the value is read
 from the macOS Notification Center store
@@ -252,8 +257,11 @@ the island itself) and, while the toggle is on, shows the helper row described a
 - `MediaControllerBase.publish()` decodes + **extrapolates pinned progress**: browsers
   register with SMTC but never pump `Position` while playing, so when a PLAYING sample
   repeats the previous raw position for the same content id it becomes a "keep
-  advancing from where the last sample extrapolated to" marker. Artwork is cached per
-  content id and downscaled to ≤256px (`MediaJson.artworkMaxPx`).
+  advancing from where the last sample extrapolated to" marker. Artwork is cached per content id and downscaled to ≤256px (`MediaJson.artworkMaxPx`);
+the same decode pass also derives `MediaSession.artTint` — the cover's dominant colour
+(`dominantArtTint`: a coarse population×chroma histogram over a sampled grid) computed
+**once per track on the poller's worker thread** and cached with the bitmap, so the
+waveform can take the album's colour without sampling pixels in composition.
 - Windows: `WindowsSmtcController` reads SMTC through `smtc.ps1` (PowerShell 5.1
   projection — this was a hard-won fix). Supports seek.
 - macOS: `MacNowPlayingController` runs the compiled `nowplaying-bridge` binary, which
@@ -502,8 +510,9 @@ composeApp/
 
 - Palette in `theme/Color.kt`: `NotchDeepBlack`, `NotchSurface`, `NotchCard`,
   `NotchBorder`, accents (`AccentCyan=#38BDF8`, indigo/purple/pink/green/red),
-  `TextPrimary/Secondary/Muted`. Overlay-local accents in `FloatingNotchOverlay.kt`:
-  `LiveAccent=#38BDF8`, `VinylDiscFill`, `VinylRing`, `ProgressGradientStart/End`.
+  `TextPrimary/Secondary/Muted`. Overlay-local accents live in `MediaWidgets.kt`:
+  `LiveAccent=#38BDF8`, `VinylDiscFill`, `VinylRing`, `ProgressGradientStart/End`,
+  `WaveformWhite`.
 - Rounded capsules everywhere, thin borders, dark glass. `LiveAccent` tints live
   media UI. SVG glyphs are tinted via `ColorFilter.tint` (SrcIn) — no hardcoded path data.
 - **Level ring**: 20% open at the bottom; full 288°; 0–100; accepts a `Painter`.
@@ -516,6 +525,14 @@ composeApp/
   slide never draws outside the capsule, and keying on the bitmap means the entrance
   fires exactly when the next cover has decoded). The pill's 20dp disc swaps in place
   (it morphs between surfaces, so no second animation there).
+- **MusicWaveform** (`MediaWidgets.kt`): the collapsed pill's faux analyser — capsule
+  bars that grow/shrink around their vertical centre (both ends move), bass-weighted,
+  sharing one slow loudness envelope. Bar count is derived from the slot width
+  (`barPitch` 6dp, 8..40), the clock is capped at 30 updates/s, one coroutine + one state
+  write for the whole row, read in the draw scope only. Tint is `WaveformTint.WHITE` or
+  `WaveformTint.ALBUM_ART` (`MediaSession.artTint`, falling back to white with no cover).
+  Collapsed view only, frozen on pause, and held entirely by `pillAnimationsLive` when
+  the settings window is in front.
 - **MarqueeText**: single-line title that scrolls when overflowing, speed scaled to
   overflow, 48px gap.
 - **Progress bar** (expanded): hairline track + cyan gradient fill + white head ringed
@@ -538,6 +555,7 @@ composeApp/
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
 | Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — macOS live on Apple silicon via a compiled `passthrough_bridge.m` dylib (direct objc_msgSend with a BOOL arg crashes the JVM); Windows path unverified |
 | Tray/menu-bar "Always on top" toggle (mirrors Behavior-tab switch, drives `config.alwaysOnTop`) | done (this session) |
+| Collapsed-pill waveform: equalizer bars under the title, progress strip yields to it, album-art or white tint, 30Hz budgeted clock | done (this session) — visual feel needs eyes; measured 13.7% CPU playing with bars vs 16.1% before (hiding the strip pays for the lane), 1.5% frozen on pause, 3.9% gated behind settings |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
@@ -847,10 +865,23 @@ composeApp/
     doing. `pillAnimationsLive(settingsOpen, expanded)` (in `NotchMotion.kt`)
     now holds those two animations *only* while settings is open and the notch
     is collapsed; expanding the notch hands them straight back, so the default
-    experience is unchanged. Same shape as pitfall 22: gate continuous
-    animations on the state that makes them visible — including "visible to
-    whom".
+    experience is unchanged. `MusicWaveform` is the third animation under the
+    same `animate` flag. Same shape as pitfall 22: gate continuous animations
+    on the state that makes them visible — including "visible to whom".
 
+
+30. **Never size a table from a state write that the draw phase reads.** The
+   waveform's bar count started life as `onSizeChanged { resolved = count }`
+   with `remember(resolved) { WaveformBands(resolved) }` and a draw loop
+   `for (index in 0 until resolved)`. Writing `resolved` invalidates the *draw*
+   scope immediately, but the `remember` table is only rebuilt on the next
+   *recomposition* — so for one frame the loop iterated 20 bands against a
+   16-entry table and the app died with `ArrayIndexOutOfBoundsException` on the
+   main thread. Resolve anything a table is built from **in composition**
+   (`BoxWithConstraints`/`constraints.maxWidth`), pass the count down as a plain
+   parameter, and let only values that need no matching allocation (the phase
+   clock) be read in the draw scope. When a crash appears only after the ring
+   toggles change the slot width, suspect exactly this layout-time skew.
 
 ---
 
@@ -1108,6 +1139,27 @@ composeApp/
   no `CGEvent` scroll of any flavour reaches this overlay window, so the
   wheel pager can't be driven synthetically (pitfalls 25/26).
 
+- (this session → HEAD): the collapsed pill grew a **waveform** — a lane of capsule
+  bars stacked under the title, each growing from its vertical centre, replacing the
+  edge progress strip while the toggle is on (collapsed view only; the expanded music
+  page is untouched, and never renders bars). It is honestly *state-driven*, not an
+  FFT: `MediaRemote`/SMTC publish metadata only, and reading the system mix would mean
+  a ScreenCaptureKit stream plus a Screen Recording grant — so the bars come from two
+  slow sines per band plus a shared loudness envelope, bass-weighted, every parameter
+  hashed deterministically from the band index. Cost discipline: one coroutine and one
+  state write for the whole row (read in the draw scope, `shimmer`-style), capped at
+  30 updates/s instead of display rate, frozen on pause like the disc, and held by
+  `pillAnimationsLive` behind the settings window. Measured 13.7% of a core playing
+  with bars versus 16.1% before (hiding the 4Hz strip pays for the lane); 1.5% paused.
+  Tint is `WaveformTint.WHITE` or `ALBUM_ART`, the latter coming from `dominantArtTint`
+  — a coarse population×chroma histogram run **once per track on the poller's worker
+  thread** and cached with the bitmap, so composition never samples pixels; a missing
+  cover falls back to white. The first attempt sized the band table from an
+  `onSizeChanged` write and died with `ArrayIndexOutOfBoundsException` the moment a
+  ring toggle changed the slot width (pitfall 30). Settings gets an indicator cell
+  whose preview *is* the component (frozen, 7 bars) plus a colour dropdown that only
+  appears while the toggle is on.
+
 ---
 
 ## 15. Quick constants reference
@@ -1124,6 +1176,7 @@ composeApp/
 | Idle curtain | quickview slide 360/620ms ×3 height, fade 420ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5,0.08) on `idleDockRevealSpring` 0.92/150 | overlay |
 | Vinyl swap | exit slide ×3 width 460ms (fade delayed 220ms/240ms) + scale 0.85; enter spring 0.72/130 ×3 width + scale-in, fade 260ms @120ms | `DockContent` |
 | Transport hover | prev/next scale 1.16, play circle 1.12, spring 0.6/380 | `MediaWidgets` |
+| Waveform | 30 updates/s cap, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title, 2 sines/band + shared envelope | `MediaWidgets` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |

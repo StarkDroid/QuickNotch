@@ -1,6 +1,8 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,7 +55,9 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -63,6 +67,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -88,7 +93,10 @@ import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.theme.TextPrimary
 import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.delay
+import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
@@ -594,5 +602,168 @@ private fun TransportButton(
             tint = tint,
             modifier = Modifier.size(iconSize)
         )
+    }
+}
+
+
+// ── Waveform ─────────────────────────────────────────────────────────────────
+
+/** Default bar tint: the same brightness the collapsed title uses. */
+internal val WaveformWhite = Color(0xEBFFFFFF)
+
+private const val WaveformUpdateHz = 30f
+private const val TAU = 6.2831855f
+
+/**
+ * The collapsed pill's faux analyser: side-by-side capsules that each grow and
+ * shrink around their vertical centre, so every bar breathes from both ends the
+ * way a real spectrum does.
+ *
+ * Deliberately NOT an FFT. Nothing in the media pipeline can hear the audio —
+ * `MediaRemote` (and SMTC on Windows) publish metadata only, and reading the
+ * system mix would need a ScreenCaptureKit stream plus a permission grant, so
+ * this is motion driven by playback state instead. It reads like a visualiser
+ * and costs nothing the pill was not already paying:
+ *
+ * - One coroutine for the whole bar set (not one per bar) and one state write
+ *   per update, read inside the draw scope: the node invalidates its draw phase
+ *   only, exactly like [shimmer] — no recomposition, no extra layer.
+ * - The clock is capped at [WaveformUpdateHz]. Bars look fluid at 30 updates a
+ *   second; running them at display rate would add invalidations for no visual
+ *   gain whenever the disc is not spinning.
+ * - `playing && animate` gates the loop, so a paused track freezes the bars
+ *   (same contract as [VinylDisc], resumed from the frozen phase so it never
+ *   jumps), and the whole thing is held by `pillAnimationsLive` while the
+ *   settings window has the user.
+ *
+ * Heights come from two slow sines per band plus a shared loudness envelope,
+ * all parameters hashed deterministically from the band index: the pattern is
+ * stable across frames (it reads as one coherent wave, not per-bar noise),
+ * bass-weighted like a real spectrum, and allocates nothing per frame.
+ */
+@Composable
+internal fun MusicWaveform(
+    playing: Boolean,
+    animate: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color = WaveformWhite,
+    /** 0 derives the count from the available width, so the lane reads as an
+     *  analyser at any slot size; pass a fixed number for a compact preview. */
+    bars: Int = 0,
+    barPitch: Dp = 6.dp
+) {
+    // The bar count is resolved in composition (not in the draw scope, and not
+    // from an onSizeChanged write): the band table and the draw loop must be
+    // built from the *same* value, or a width change lets the loop index past a
+    // table that has not been rebuilt yet — an ArrayIndexOutOfBounds that takes
+    // the whole app with it.
+    BoxWithConstraints(modifier) {
+        val count = if (bars > 0) {
+            bars
+        } else {
+            val pitchPx = with(LocalDensity.current) { barPitch.toPx() }
+            (constraints.maxWidth / pitchPx).roundToInt().coerceIn(8, 40)
+        }
+        val shape = remember(count) { WaveformBands(count) }
+        WaveformCanvas(
+            count = count,
+            shape = shape,
+            playing = playing,
+            animate = animate,
+            color = color,
+            modifier = Modifier.matchParentSize()
+        )
+    }
+}
+
+@Composable
+private fun WaveformCanvas(
+    count: Int,
+    shape: WaveformBands,
+    playing: Boolean,
+    animate: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    var phase by remember { mutableFloatStateOf(0f) }
+    val running = playing && animate
+    LaunchedEffect(running) {
+        if (!running) return@LaunchedEffect
+        var seconds = phase
+        var last = withFrameNanos { it }
+        // Primed so the first frame after a resume pushes immediately.
+        var sincePush = 1f / WaveformUpdateHz
+        while (true) {
+            val now = withFrameNanos { it }
+            val dt = (now - last) / 1_000_000_000f
+            last = now
+            seconds += dt
+            sincePush += dt
+            if (sincePush >= 1f / WaveformUpdateHz) {
+                sincePush = 0f
+                phase = seconds
+            }
+        }
+    }
+    Canvas(modifier) {
+        val t = phase
+        val envelope = shape.envelope(t)
+        val pitch = size.width / count
+        val barWidth = pitch * 0.46f
+        val radius = CornerRadius(barWidth / 2f, barWidth / 2f)
+        for (index in 0 until count) {
+            val level = (shape.level(index, t) * envelope).coerceIn(0.14f, 1f)
+            val barHeight = level * size.height
+            drawRoundRect(
+                color = color.copy(alpha = color.alpha * (0.58f + 0.42f * level)),
+                topLeft = Offset(
+                    x = index * pitch + (pitch - barWidth) / 2f,
+                    y = (size.height - barHeight) / 2f
+                ),
+                size = Size(barWidth, barHeight),
+                cornerRadius = radius
+            )
+        }
+    }
+}
+
+/**
+ * Precomputed band parameters: two frequencies, their phases, and a bass-leaning
+ * weight per bar. All derived from a cheap deterministic hash of the index, so
+ * the set is identical on every machine and every launch.
+ */
+private class WaveformBands(private val count: Int) {
+    private val freqA = FloatArray(count)
+    private val freqB = FloatArray(count)
+    private val phaseA = FloatArray(count)
+    private val phaseB = FloatArray(count)
+    private val weight = FloatArray(count)
+
+    init {
+        for (index in 0 until count) {
+            val position = (index + 1) / count.toFloat()
+            freqA[index] = TAU * (0.42f + 0.85f * hash(index, 1))
+            freqB[index] = TAU * (1.25f + 1.7f * hash(index, 2))
+            phaseA[index] = TAU * hash(index, 3)
+            phaseB[index] = TAU * hash(index, 4)
+            // Left bands (bass) sit taller, jittered so it is a slope, not a ramp.
+            weight[index] = (1.04f - 0.44f * position) * (0.78f + 0.44f * hash(index, 5))
+        }
+    }
+
+    /** Instantaneous bar height for [index] at time [t] (seconds), pre-envelope. */
+    fun level(index: Int, t: Float): Float {
+        val sum = sin(freqA[index] * t + phaseA[index]) * 0.62f +
+            sin(freqB[index] * t + phaseB[index]) * 0.38f
+        return (abs(sum) * 0.86f + 0.14f) * weight[index]
+    }
+
+    /** Shared slow wander: the whole row rises and falls like loudness does. */
+    fun envelope(t: Float): Float =
+        0.7f + 0.3f * sin(TAU * 0.19f * t + 0.9f) * sin(TAU * 0.055f * t + 0.3f)
+
+    private fun hash(index: Int, salt: Int): Float {
+        val x = sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453
+        return (x - floor(x)).toFloat()
     }
 }

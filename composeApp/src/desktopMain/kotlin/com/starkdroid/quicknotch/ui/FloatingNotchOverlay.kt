@@ -58,6 +58,7 @@ import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchSurface
+import com.starkdroid.quicknotch.model.WaveformTint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -453,6 +454,16 @@ internal fun FloatingNotchOverlay(
                 val quickExit =
                     if (musicLive) fadeOut(tween(80))
                     else fadeOut(QuickViewFadeOut) + slideOutVertically(QuickViewSlideOut) { it * 3 }
+                // Waveform tint: the cover's dominant colour when asked for
+                // (derived once per track in the media layer), white otherwise
+                // and whenever there is no artwork to read.
+                val waveformColor = if (
+                    config.widgets.waveformTint == WaveformTint.ALBUM_ART
+                ) {
+                    liveSession?.artTint ?: WaveformWhite
+                } else {
+                    WaveformWhite
+                }
                 AnimatedVisibility(
                     visible = !showDock,
                     enter = quickEnter,
@@ -472,6 +483,8 @@ internal fun FloatingNotchOverlay(
                         showVolume = config.widgets.showCollapsedVolume,
                         showBattery = config.widgets.showCollapsedBattery,
                         showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
+                        showWaveform = config.widgets.showCollapsedWaveform,
+                        waveformColor = waveformColor,
                         discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, collapsedScope),
                         titleModifier = sharedScope.nowPlayingSharedElement(NowPlayingTitleKey, collapsedScope),
                         volumeRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingVolumeKey, collapsedScope),
@@ -488,9 +501,10 @@ internal fun FloatingNotchOverlay(
                 }
                 // Live progress hugs the pill's inner border (the edge facing
                 // the nearest screen centre), thinning while the pill itself is
-                // thin.
+                // thin. The waveform takes this band over when it is enabled —
+                // one or the other, never both fighting for the same pixels.
                 val liveNow = if (musicLive) liveSession else null
-                if (!isExpanded && liveNow != null) {
+                if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
                     LiveProgressStrip(fraction = liveNow.progressFraction(nowMs))
                 }
             }

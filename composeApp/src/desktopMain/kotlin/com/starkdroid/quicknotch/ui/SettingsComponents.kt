@@ -359,6 +359,30 @@ internal fun NotificationToggleBox(
     }
 }
 
+@Composable
+internal fun WaveformToggleBox(
+    title: String,
+    checked: Boolean,
+    onClick: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IndicatorCell(title = title, checked = checked, onClick = onClick, modifier = modifier) {
+        Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+            // The real component, parked at its frozen phase: the preview is the
+            // widget, not a redrawn copy of it, so it can never drift from what
+            // the pill actually draws.
+            MusicWaveform(
+                playing = true,
+                animate = false,
+                color = if (checked) WaveformWhite else WaveformWhite.copy(alpha = 0.42f),
+                bars = 7,
+                modifier = Modifier
+                    .size(width = 34.dp, height = 14.dp)
+            )
+        }
+    }
+}
+
 /**
  * Shared chrome for one indicator-grid cell: the accent-outlined square toggle
  * with the caller-provided preview sitting above the centered label. The whole

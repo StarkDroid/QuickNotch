@@ -1,6 +1,7 @@
 package com.starkdroid.quicknotch.media
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 
 /** State of the host media session, normalized across platforms. */
@@ -30,6 +31,12 @@ data class MediaSession(
     val durationMs: Long,
     val sampledAt: Long,
     val artwork: ImageBitmap?,
+    /**
+     * Dominant colour of [artwork], derived once per track on the controller's
+     * worker thread (never in composition). Null when there is no artwork or the
+     * cover is effectively achromatic — callers fall back to their own default.
+     */
+    val artTint: Color? = null,
     val contentId: String,
     /** Whether the backend can seek to an arbitrary position (Windows SMTC). */
     val canSeek: Boolean = false

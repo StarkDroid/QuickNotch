@@ -29,6 +29,7 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
+import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.theme.*
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
@@ -241,6 +242,14 @@ internal fun NotchSurface.label(): String = stringResource(
         NotchSurface.SOLID -> Res.string.surface_solid
         NotchSurface.TRANSLUCENT -> Res.string.surface_translucent
         NotchSurface.SYSTEM_ACCENT -> Res.string.surface_system_accent
+    }
+)
+
+@Composable
+internal fun WaveformTint.label(): String = stringResource(
+    when (this) {
+        WaveformTint.ALBUM_ART -> Res.string.waveform_tint_album_art
+        WaveformTint.WHITE -> Res.string.waveform_tint_white
     }
 )
 

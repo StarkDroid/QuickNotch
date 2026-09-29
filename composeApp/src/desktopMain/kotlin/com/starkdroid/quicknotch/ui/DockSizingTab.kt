@@ -52,6 +52,7 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
+import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AccentRed
 import com.starkdroid.quicknotch.theme.AppTypography
@@ -284,6 +285,14 @@ internal fun DockSizingTab(
                                 }
                             )
                         }
+                        WaveformToggleBox(
+                            title = stringResource(Res.string.indicator_waveform),
+                            checked = config.widgets.showCollapsedWaveform,
+                            modifier = Modifier.weight(1f),
+                            onClick = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedWaveform = checked)) }
+                            }
+                        )
                         NotificationToggleBox(
                             title = stringResource(Res.string.indicator_notifications),
                             checked = config.widgets.showCollapsedNotifications,
@@ -291,6 +300,24 @@ internal fun DockSizingTab(
                             onClick = { checked ->
                                 onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedNotifications = checked)) }
                             }
+                        )
+                    }
+
+                    // The waveform's colour choice belongs right beside its
+                    // toggle and only matters while the toggle is on.
+                    if (config.widgets.showCollapsedWaveform) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AppearanceDropdown(
+                            label = stringResource(Res.string.waveform_tint_title),
+                            options = WaveformTint.entries.toList(),
+                            selected = config.widgets.waveformTint,
+                            optionLabel = { it.label() },
+                            onSelect = { tint ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(waveformTint = tint)) }
+                            },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
 

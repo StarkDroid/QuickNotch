@@ -27,7 +27,7 @@ enum class NotchStyle(
 
 /**
  * The body's material. All entries resolve to brushes built once and cached, so
- * none adds per-frame shader work on the software renderer. [TRANSLUCENT] and
+ * none is rebuilt per frame while the island animates. [TRANSLUCENT] and
  * [SYSTEM_ACCENT] are deliberately texture-free glass: a tinted body that lets
  * the desktop bleed through the transparent window plus a smooth light sheen.
  * A literal blur of the pixels behind a borderless window is unreachable from
@@ -45,6 +45,21 @@ enum class NotchSurface {
     /** Glass tinted with the desktop's accent colour (macOS/Windows). */
     @SerialName("SYSTEM_ACCENT")
     SYSTEM_ACCENT
+}
+
+/**
+ * What colour the collapsed pill's waveform bars take. [ALBUM_ART] derives a
+ * tint from the current cover once per track (see `dominantArtTint`); [WHITE]
+ * keeps them a constant white. A missing or unreadable cover falls back to
+ * white rather than inventing a colour.
+ */
+@Serializable
+enum class WaveformTint {
+    /** Dominant colour of the album artwork, pushed into a legible band. */
+    ALBUM_ART,
+
+    /** Plain white bars. */
+    WHITE
 }
 
 /**
@@ -66,7 +81,16 @@ data class WidgetsConfig(
      * Unread-notification indicator (bell + red badge, quickview only). The
      * slot also drives the permission/test-notification helpers in settings.
      */
-    val showCollapsedNotifications: Boolean = true
+    val showCollapsedNotifications: Boolean = true,
+    /**
+     * Equalizer bars under the collapsed title while a track is live. Lives in
+     * the title's own slot (no new indicator slot, so the footprint math is
+     * untouched) and hides the edge progress strip for as long as it is on.
+     * Never rendered in the expanded music page.
+     */
+    val showCollapsedWaveform: Boolean = true,
+    /** Album-art-derived or constant white; see [WaveformTint]. */
+    val waveformTint: WaveformTint = WaveformTint.ALBUM_ART
 )
 
 /**

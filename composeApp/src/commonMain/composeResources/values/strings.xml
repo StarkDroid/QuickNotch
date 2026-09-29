@@ -50,6 +50,10 @@
     <string name="indicator_audio_battery">Audio Battery</string>
     <string name="indicator_laptop_battery">Laptop Battery</string>
     <string name="indicator_notifications">Notifications</string>
+    <string name="indicator_waveform">Waveform</string>
+    <string name="waveform_tint_title">Waveform Color</string>
+    <string name="waveform_tint_album_art">Album Art</string>
+    <string name="waveform_tint_white">White</string>
     <string name="notification_indicator">Unread notifications</string>
     <string name="notification_grant_button">Grant Full Disk Access</string>
     <string name="notification_grant_hint">QuickNotch needs Full Disk Access to read macOS notification counts.</string>
