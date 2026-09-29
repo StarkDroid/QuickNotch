@@ -89,6 +89,12 @@ internal fun FloatingNotchOverlay(
     media: MediaController,
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    /**
+     * Whether the settings window is currently open. Only used to decide if the
+     * *collapsed* pill's display-rate animations are worth running (see
+     * [pillAnimationsLive]); nothing about the notch's behaviour depends on it.
+     */
+    settingsOpen: Boolean = false,
     modifier: Modifier = Modifier,
     /** System master-volume percentage (0-100); null hides the volume chip. */
     volumePercent: Int? = null,
@@ -456,6 +462,7 @@ internal fun FloatingNotchOverlay(
                     QuickView(
                         style = config.style,
                         surface = config.surface,
+                        animate = pillAnimationsLive(settingsOpen, isExpanded),
                         media = if (musicLive) liveSession else null,
                         volumePercent = volumePercent,
                         battery = battery,

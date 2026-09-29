@@ -187,3 +187,17 @@ compose.desktop {
         }
     }
 }
+
+// Skiko is pinned to a version whose macOS Metal backend actually works (see
+// the `skiko` entry in gradle/libs.versions.toml and pitfall 28 in agents.md).
+// Every artifact in the group has to move together: skiko, skiko-awt and the
+// platform runtime jar the Compose plugin pulls in, otherwise the JNI layer
+// and the native half disagree.
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.skiko") {
+            useVersion(libs.versions.skiko.get())
+            because("macOS hardware rendering requires the fixed Metal backend")
+        }
+    }
+}

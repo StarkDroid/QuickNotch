@@ -20,6 +20,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.starkdroid.quicknotch.datasource.AppPaths
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.datasource.MacDockPresence
@@ -57,11 +58,25 @@ fun main(args: Array<String>) {
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
         System.setProperty("apple.awt.application.appearance", "system")
-        // Skiko's Metal backend can crash on transparent overlay windows on newer
-        // macOS releases; the software pipeline keeps the notch stable.
-        if (System.getProperty("skiko.renderApi").isNullOrBlank()) {
-            System.setProperty("skiko.renderApi", "SOFTWARE")
-        }
+        // Skiko backend selection — the single biggest performance lever in the
+        // app. Measured on the settings list, one scroll frame costs ~70ms of
+        // process CPU on the SOFTWARE rasterizer (14fps, visibly unsmooth)
+        // versus ~3.4ms on Metal (vsync-capped 60fps), so macOS now defaults to
+        // METAL. The old comment here claimed Metal crashed on the transparent
+        // overlay window; that was skiko 0.8.18's MetalRedrawer running on the
+        // AWT EDT and tripping the macOS 26/27 main-thread assertion, fixed in
+        // the pinned skiko (agents.md pitfall 28).
+        //
+        // Precedence: an explicit -Dskiko.renderApi / SKIKO_RENDER_API wins, then
+        // the `software-render` marker file, then METAL. The marker exists
+        // because a backend problem is a native crash, so it must be fixable
+        // without a UI the crash may prevent from appearing.
+        val marker = AppPaths.configDir.resolve("software-render")
+        val backend = System.getProperty("skiko.renderApi")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("SKIKO_RENDER_API")?.takeIf { it.isNotBlank() }
+            ?: (if (marker.exists()) "SOFTWARE" else "METAL")
+        System.setProperty("skiko.renderApi", backend)
+        println("QuickNotch: skiko render backend = $backend${if (marker.exists()) " (marker file)" else ""}")
     }
     // A fresh manual launch (Spotlight/Dock/Finder/Launchpad) opens the Settings
     // window alongside the notch so the app's presence is obvious and the user
@@ -166,6 +181,7 @@ fun main(args: Array<String>) {
                 battery = battery,
                 deviceBattery = deviceBattery,
                 notificationCount = notificationCount,
+                settingsOpen = showSettings,
                 onExpandedChange = { isExpanded = it }
             )
         }
@@ -242,6 +258,7 @@ private fun NotchOverlayWindow(
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
     notificationCount: Int?,
+    settingsOpen: Boolean,
     onExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
@@ -357,6 +374,10 @@ private fun NotchOverlayWindow(
                 media = media,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
+                // Only feeds the pill's animation budget: while settings is in
+                // front and the notch is collapsed, the disc/marquee stop
+                // turning so they stop stealing frames from the scroll.
+                settingsOpen = settingsOpen,
                 volumePercent = volumePercent,
                 volumeMuted = volumeMuted,
                 battery = battery,

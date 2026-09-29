@@ -132,3 +132,21 @@ internal fun fisheyeScale(
     val factor = cos(normalized) * cos(normalized)
     return 1f + (peakScale - 1f) * factor
 }
+
+/**
+ * Whether the collapsed pill's display-rate animations should be running.
+ *
+ * A playing track keeps the whole overlay redrawing at display rate — a 20dp
+ * disc turning and a marquee crawling across a 236dp pill. That is worth it when
+ * the pill is the thing being looked at, and pure waste when it is not: with
+ * the settings window in front, those frames land on the same AWT EDT and
+ * render pipeline the user is scrolling with, and cost roughly a sixth of a
+ * core for an animation nobody can see.
+ *
+ * The rule is deliberately narrow so the default experience never changes:
+ * animations are held only while settings is open *and* the notch is
+ * collapsed. Expanding the notch hands the animations straight back, so a user
+ * watching the dock always sees it live.
+ */
+internal fun pillAnimationsLive(settingsOpen: Boolean, expanded: Boolean): Boolean =
+    !settingsOpen || expanded

@@ -54,7 +54,7 @@ to the app build, ignore it unless explicitly asked.
 | Concurrency | kotlinx-coroutines-core 1.10.1 + kotlinx-coroutines-swing (AWT/EDT == the Compose render thread) |
 | Serialization | kotlinx-serialization-json 1.7.3 |
 | Native | JNA 5.16.0 + jna-platform (Win32), PowerShell 5.1 bridges, macOS ObjC MediaRemote bridge |
-| Renderer | Skiko default (DIRECT3D on Windows); **SOFTWARE is forced at runtime on macOS only** |
+| Renderer | **Skiko 0.8.25 pinned** (see pitfall 28) — METAL on macOS, DIRECT3D on Windows. `software-render` marker file in the app-data dir forces the CPU rasterizer |
 | Build | plain KMP `jvm("desktop")` target; no Android/iOS |
 
 ---
@@ -68,6 +68,21 @@ cd G:\QuickNotch
 .\gradlew.bat :composeApp:run                     # launch the app (overlay + tray)
 .\gradlew.bat :composeApp:packageDistributionForCurrentOS   # .msi/.exe or .dmg
 ```
+
+**Rendering backend (macOS).** The app renders with Skiko's METAL backend; the
+startup line `QuickNotch: skiko render backend = METAL` confirms it. This is the
+single biggest performance lever in the app (~3.4ms of CPU per settings scroll
+frame vs ~70ms on the CPU rasterizer), so before suspecting any composable of
+being slow, check that line says `METAL` — see pitfall 28. To A/B test
+backends without editing code:
+
+```bash
+SKIKO_RENDER_API=SOFTWARE .\gradlew.bat :composeApp:run    # force the rasterizer once
+```
+
+and as a durable escape hatch, drop an empty `software-render` file in the
+app-data dir (`~/Library/Application Support/QuickNotch/`), which forces
+SOFTWARE on every launch.
 
 **Smoke-test with `:composeApp:run`, never `java -jar`**: the plain desktop jar
 carries no main manifest. To stop a `run` session, kill the `java` process whose
@@ -447,7 +462,8 @@ composeApp/
             ├── main.kt                   # app entry: tray + overlay + settings windows, poller lifecycle
             ├── theme/                    # Color.kt (central palette), Theme.kt, Typography.kt
             ├── model/                    # AppItem, NotchConfig (+WidgetsConfig, enums), FavoritesRepository
-            ├── datasource/               # HostPlatform, SystemAccent, WindowPassthrough, MacAppKit
+            ├── datasource/               # HostPlatform, AppPaths (app-data dir), SystemAccent,
+            │                             #   WindowPassthrough, MacAppKit
             │                             # (appkit/level/dock-policy front), scanners/icon loaders/
             │                             # launchers/startup
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
@@ -464,7 +480,7 @@ composeApp/
                 ├── MediaWidgets.kt           # VinylDisc, MarqueeText, TrackProgress, transport, isMusicLive, tints
                 ├── NowPlayingMorph.kt        # shared-element keys + nowPlayingSharedElement (sharedElement!)
                 ├── OverlayHover.kt           # SharingHoverNode/Element + cursorOverNotch (collapse gate)
-                ├── NotchMotion.kt            # springs, timing constants, fisheyeScale
+                ├── NotchMotion.kt            # springs, timing constants, fisheyeScale, pillAnimationsLive
                 ├── OverlayGeometry.kt        # metrics + screen placement + DockLayout + notchShape
                 ├── OverlayPager.kt           # shared page/flip state
                 ├── LevelRing.kt              # reusable 288° ring + painters
@@ -514,6 +530,7 @@ composeApp/
 | --- | --- |
 | Dock app launcher + fisheye wave + labels | done, mature |
 | Pinned-apps drag reorder (handle at left, `animateItem`, `onMove` committed on release) | done (`a4e4576`) |
+| Settings scrolling is smooth: METAL (skiko 0.8.25) renders the window, so a scroll frame costs ~3.4ms of process CPU instead of ~70ms on the software rasterizer — measured 61fps (vsync-capped) vs 14.5fps; the collapsed pill also stops animating while settings is in front (16.1% → 3.9% of a core) | done (this session) — the "Metal crashes" conclusion was wrong (the forced-SOFTWARE property shadowed the env var, and skiko 0.8.18's Metal really does SIGTRAP; pitfall 28) |
 | Now-playing pill + detailed music page + transport | done |
 | Transport hit areas are exactly the drawn controls: prev/next = flat 30dp `Box` clickables, play/pause = one 34dp clickable circle (`clip` **before** `clickable` so the hit area is the circle), each with a hover scale (1.16 / 1.12, spring 0.6/380) | done (this session) — measured by a synthetic point sweep on the installed build: prev 774–800, play 803–837, next 844–868 all fire, everything outside is dead (pitfalls 24/25) |
 | Expand-into-music + shared-element morph (single-content: `sharedElement`, no mid-flight dual copy) | done (`a02cdc1`, `0c9a9a7`, de-duplicated this session) |
@@ -535,7 +552,7 @@ composeApp/
 **Verification matrix (important!):**
 - **Windows desktop (the dev machine)**: fully testable — build, run, dock, settings, wheel paging. Media needs a playing track (browsers/SMTC or a music app).
 - **Laptop battery UI**: testable on the macOS dev machine (built-in battery → `SystemBattery` talks through `pmset -g batt`). On the Windows desktop it stays null by design.
-- **macOS (this machine)**: now a live test surface — above-menu-bar island placement (`CGWindowList` layer 25, y=0) and the Dock-presence flip (`lsappinfo` UIElement → Foreground) verified live; idle clock + laptop battery ring, volume ring (SVG glyphs), audio-device battery ring (via `system_profiler`), SOFTWARE renderer all verified in-session. Still untestable here: the physical hover/click-through feel at the true top edge (needs a live cursor on this machine), Win32 paths, Windows wheel paging, SMTC seek, and the `WS_EX_TOOLWINDOW` taskbar hiding. The very first pull of this repo may have had no macOS hardware; that is no longer true.
+- **macOS (this machine)**: now a live test surface — above-menu-bar island placement (`CGWindowList` layer 25, y=0) and the Dock-presence flip (`lsappinfo` UIElement → Foreground) verified live; idle clock + laptop battery ring, volume ring (SVG glyphs), audio-device battery ring (via `system_profiler`), the METAL renderer and the `software-render` fallback (frame-synced scroll bench: 61fps/3.4ms vs 14.5fps/70ms) all verified in-session. Still untestable here: the physical hover/click-through feel at the true top edge (needs a live cursor on this machine), Win32 paths, Windows wheel paging, SMTC seek, and the `WS_EX_TOOLWINDOW` taskbar hiding. The very first pull of this repo may have had no macOS hardware; that is no longer true.
 - **Shared-element morph / expand-into-music look**: cannot be judged from code; needs a live session + hover expansion on a real machine. When in doubt, run the app and watch it.
 
 ---
@@ -559,8 +576,12 @@ composeApp/
 - Gate pollers behind `HostPlatform.is...` and make failed probes leave last value.
 
 **DON'T**
-- Don't force Skiko `SOFTWARE` renderer globally (`build.gradle.kts`): macOS-only at
-  runtime; a global override made the Settings window laggy.
+- Don't force the Skiko `SOFTWARE` renderer: it costs ~70ms of CPU per settings
+  scroll frame (~14fps) versus ~3.4ms on METAL, and the escape hatch is the
+  `software-render` marker file, not a build-wide default (pitfall 28).
+- Don't set `skiko.renderApi` without checking who else has an opinion: an
+  unconditional assignment shadows both the `SKIKO_RENDER_API` env var and the
+  marker file, which is how "let's try Metal" silently stayed on CPU.
 - Don't trust PnP presence for Bluetooth audio battery — use
   `BluetoothDevice.ConnectionStatus` for presence, `DEVPKEY_Device_BatteryLevel` for level.
 - Don't treat "charging" as anything but actively-charging status (6/7/8/9).
@@ -598,7 +619,7 @@ composeApp/
 6. **macOS entitlements**: since macOS 15.4 MediaRemote only answers `com.apple.*`
    processes — the ObjC bridge must route through `osascript -l JavaScript`. Never "simplify"
    it to a direct MediaRemote call.
-7. **Gradients/brushes on the SOFTWARE renderer**: cache brushes per surface at class
+7. **Gradients/brushes must not be rebuilt per frame**: cache brushes per surface at class
    load (see `IslandSurface`, `surface`); the `SYSTEM_ACCENT` style is rebuilt only when
    the OS accent value changes (a rare, user-driven event) and cached per value — no
    per-frame allocation while animating. Never rebuild it per poll tick.
@@ -740,13 +761,15 @@ composeApp/
     its EDT hop only because `SetWindowRgn` is an owner-thread courtesy.
 22. **Never keep an `InfiniteTransition` alive when its visual is static** —
     `VinylDisc` used to spin its 60fps transition even while paused (frozen
-    angle), and `MarqueeText` ran its scroll even when the text fit. On the
-    SOFTWARE renderer every invalidation is a full-window CPU repaint, so a
-    paused track burned a constant redraw of the overlay (competing with the
-    settings window for the single AWT EDT). Rotation now accumulates real
-    frame deltas inside a `LaunchedEffect(playing)` (cancelled by the pause),
-    and the marquee transition only exists while the text overflows. General
-    rule: gate continuous animations on the state that makes them visible.
+    angle), and `MarqueeText` ran its scroll even when the text fit, so a paused
+    track burned a constant redraw of the overlay. Rotation now accumulates
+    real frame deltas inside a `LaunchedEffect(spinning)` (cancelled by the
+    pause), and the marquee transition only exists while the text overflows.
+    General rule: gate continuous animations on the state that makes them
+    visible. The same rule now also covers visibility off-screen — see
+    `pillAnimationsLive` (pitfall 29), which stops the collapsed pill's
+    display-rate animations while the settings window is in front (measured
+    16.1% → 3.9% of a core with a track playing).
 24. **A disabled Compose control is still hit-testable — gate the whole modifier.**
    The "only the active page receives input" rule cannot be implemented with
    `enabled = false`: `clickable(enabled = false)` still registers a
@@ -788,6 +811,46 @@ composeApp/
     repository itself, and `NowPlayingStatus` collects the session — a media
     tick only recomposes that tiny row. Keep new settings UI following this
     rule; passing whole-state params back up re-couples the window.
+28. **macOS rendering: METAL is the default, and skiko must be new enough for
+    it.** The renderer is the single biggest performance lever in this app, and
+    it was accidentally left on the CPU rasterizer for a long time. Measured on
+    the settings list, one scroll frame costs **~70ms of process CPU on
+    SOFTWARE (~14fps, visibly unsmooth) versus ~3.4ms on METAL (vsync-capped
+    ~61fps)** — 20x. Two separate mistakes kept it on SOFTWARE, and both are
+    easy to repeat:
+    - `main()` used to set `skiko.renderApi=SOFTWARE` *unconditionally on
+      macOS*, which silently shadowed the `SKIKO_RENDER_API` environment
+      variable. Every "let's just try Metal" test ran the CPU rasterizer and
+      looked like Metal crashing. The property is now only set when nothing
+      else has an opinion, and the chosen backend is logged at startup.
+    - Metal on skiko 0.8.18 (CMP 1.7.3's transitive default) really does
+      **SIGTRAP at launch (exit 133)**: its `MetalRedrawer.createMetalDevice`
+      runs on the AWT EDT and triggers a WindowServer transaction, which macOS
+      26/27 rejects with `EXC_BREAKPOINT` / "Must only be used from the main
+      thread" (from the crash report's `asi.libsystem_c.dylib`). **0.8.25 fixes
+      it**; skiko is pinned in `gradle/libs.versions.toml` and forced for the
+      whole `org.jetbrains.skiko` group (skiko + skiko-awt + the per-platform
+      runtime jar must all move together, or the JNI layer and the native half
+      disagree). OPENGL is not an option: skiko throws
+      "MacOS does not support OPENGL rendering API" outright.
+      Never downgrade skiko without re-running the settings scroll bench.
+    - Escape hatch: because a backend fault is a *native* crash that can happen
+      before any UI exists, the fallback must not depend on the settings
+      window. Dropping an empty `software-render` file in the app-data dir
+      (`AppPaths.configDir`) forces SOFTWARE on the next launch;
+      `-Dskiko.renderApi` / `SKIKO_RENDER_API` override both.
+
+29. **A hidden window's 60fps animation is not free — budget it.** A playing
+    track kept the collapsed pill (a 20dp disc and a crawling marquee) redrawing
+    at display rate even while the settings window was in front, costing
+    ~16% of a core and stealing frames from the very scroll the user was
+    doing. `pillAnimationsLive(settingsOpen, expanded)` (in `NotchMotion.kt`)
+    now holds those two animations *only* while settings is open and the notch
+    is collapsed; expanding the notch hands them straight back, so the default
+    experience is unchanged. Same shape as pitfall 22: gate continuous
+    animations on the state that makes them visible — including "visible to
+    whom".
+
 
 ---
 
@@ -912,8 +975,9 @@ composeApp/
   open); macOS now applies off the EDT (pitfall 21), and the overlay's
   `screenOriginDelta` poll moved to `Dispatchers.IO` too. (2) `VinylDisc` ran a
   60fps `InfiniteTransition` even while paused and `MarqueeText` even when the
-  text fit — on the SOFTWARE renderer each invalidation is a full-window CPU
-  repaint (pitfall 22); both now animate only when their visual actually moves.
+  text fit — each invalidation is a full-window repaint (a full CPU raster back
+  then, see pitfall 28); both now animate only when their visual actually
+  moves.
   (3) `SettingsScreen` collected config/favorites/liveSession at the top, so
   every media heartbeat and slider-drag frame recomposed the whole window
   (pitfall 23) — tabs now collect their own state. The same session also split
@@ -998,6 +1062,33 @@ composeApp/
   third, and the enter is a soft 0.72/130 spring with a matched 0.85 scale-in;
   everything animates offset/alpha/scale only (graphicsLayer-backed, no
   relayout mid-swap).
+- (this session → HEAD): **the settings window was never slow in its own code —
+  it was rendering on the CPU rasterizer.** Measured with a frame-synced scroll
+  bench inside the app (one `LazyListState.scrollBy` per display frame, so the
+  rate is bounded by the pipeline exactly like a real wheel fling): **~70ms of
+  process CPU per frame and 14.5fps on SOFTWARE, versus ~3.4ms and 61fps on
+  METAL** — the same widgets, the same code. `main()`'s measure/layout is cheap
+  (scroll p95 ≈ 150–270µs); essentially all of the frame was rasterization.
+  Two long-standing mistakes kept the app on SOFTWARE: the renderer property
+  was set unconditionally on macOS, which silently shadowed
+  `SKIKO_RENDER_API` and made every "just try Metal" run a no-op; and Metal on
+  skiko 0.8.18 genuinely does SIGTRAP on macOS 26/27
+  (`MetalRedrawer.createMetalDevice` on the AWT EDT trips the WindowServer
+  main-thread assertion). skiko is now pinned to 0.8.25 for the whole
+  `org.jetbrains.skiko` group, macOS defaults to METAL, the chosen backend is
+  logged at startup, and a `software-render` marker file in the app-data dir
+  remains the escape hatch — deliberately not UI-dependent, because a backend
+  fault is a native crash that can happen before any window exists (pitfall 28).
+  OPENGL is not an option: skiko rejects it outright on macOS. The renderer
+  change also made the overlay cheaper, so the second half of the work spent
+  the newly available headroom on wasted frames: the collapsed pill's disc and
+  marquee used to redraw at display rate even with the settings window in
+  front, and `pillAnimationsLive(settingsOpen, expanded)` now holds them while
+  settings is open and the notch is collapsed (16.1% → 3.9% of a core with a
+  track playing; expanding the notch hands them straight back, so the default
+  experience is unchanged). App-data path resolution moved into `AppPaths` so
+  the startup backend check can read the marker before `FavoritesRepository`
+  exists (pitfall 29).
 - (this session → HEAD): the transport controls got a hover affordance and the
   "only the active page receives input" rule was fixed for real. Prev/next and
   the play circle scale up on hover (1.16 / 1.12, spring 0.6/380) and the

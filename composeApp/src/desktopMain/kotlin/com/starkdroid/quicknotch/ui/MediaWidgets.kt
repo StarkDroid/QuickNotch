@@ -146,14 +146,18 @@ internal fun VinylDisc(
     playing: Boolean,
     size: Dp,
     modifier: Modifier = Modifier,
+    // Rotation is the one animation here that runs at display rate, so callers
+    // can stop it (see [pillAnimationsLive]) without losing the disc itself.
+    animate: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
     var angle by remember { mutableFloatStateOf(0f) }
-    if (playing) {
+    val spinning = playing && animate
+    if (spinning) {
         // Accumulate frame deltas so pause/resume is seamless: cancelling the
-        // effect (playing → false) simply stops the disc where it is, and a
+        // effect (spinning → false) simply stops the disc where it is, and a
         // later resume continues from that exact angle.
-        LaunchedEffect(playing) {
+        LaunchedEffect(spinning) {
             var last = withFrameNanos { it }
             while (true) {
                 val now = withFrameNanos { it }
@@ -230,7 +234,10 @@ internal fun MarqueeText(
     fontSize: TextUnit,
     fontWeight: FontWeight,
     modifier: Modifier = Modifier,
-    lineHeight: TextUnit = TextUnit.Unspecified
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    // The scroll is a display-rate animation; callers can hold it still (see
+    // [pillAnimationsLive]) while nothing on screen is being watched.
+    animate: Boolean = true
 ) {
     val measurer = rememberTextMeasurer()
     val measured = remember(text, color, fontSize, fontWeight, lineHeight, measurer) {
@@ -254,7 +261,7 @@ internal fun MarqueeText(
     // Scroll rate keeps a roughly constant pixel speed regardless of length.
     val travelPx = overflowPx + gapPx
     val durationMs = (travelPx * 1000 / 30).coerceIn(2500, 20000)
-    val scrollX = if (needsMarquee) {
+    val scrollX = if (needsMarquee && animate) {
         val transition = rememberInfiniteTransition(label = "titleMarquee")
         val x by transition.animateFloat(
             initialValue = 0f,

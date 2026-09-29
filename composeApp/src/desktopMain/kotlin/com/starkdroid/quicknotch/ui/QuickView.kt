@@ -44,6 +44,11 @@ internal fun QuickView(
     style: NotchStyle,
     surface: NotchSurface,
     media: MediaSession?,
+    /**
+     * False only while the pill is off screen behind the settings window: the
+     * disc and marquee then stop turning (see [pillAnimationsLive]).
+     */
+    animate: Boolean = true,
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
@@ -89,7 +94,8 @@ internal fun QuickView(
                     art = media.artwork,
                     playing = media.state == PlaybackState.PLAYING,
                     size = 20.dp,
-                    modifier = discModifier
+                    modifier = discModifier,
+                    animate = animate
                 )
                 // The title shares the exact 22dp frame the level rings use, so
                 // the disc, text and rings all sit on one vertical centreline.
@@ -105,7 +111,8 @@ internal fun QuickView(
                         fontSize = 11.sp,
                         lineHeight = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = titleModifier.fillMaxWidth()
+                        modifier = titleModifier.fillMaxWidth(),
+                        animate = animate
                     )
                 }
                 Row(
