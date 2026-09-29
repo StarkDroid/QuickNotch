@@ -130,6 +130,14 @@ page stays reachable via the wheel.
 - Pages are **always composed** (each in a full-size Box with alpha/translationY layer
   transforms by page offset) so the pager never measures the music page mid-animation;
   only the page under the cursor receives input.
+- "Only the active page receives input" must be enforced by **not composing the pointer
+  modifiers at all**, not by disabling them: `clickable(enabled = false)` /
+  `pointerInput(enabled = false)` still register a hit-testable node, so an inactive
+  (alpha 0) page would keep occupying the hit path of the page stacked beneath it. Every
+  control inside `WidgetPages` therefore gates its modifier behind `interactive` — the
+  dock icons (`DockIcon`), the transport buttons + play circle, the mute ring
+  (`.then(if (interactive) Modifier.clickable … else Modifier)`) and the vinyl disc
+  (`onClick = null`, which is how `VinylDisc` drops its own clickable).
 - `OverlayPager` owns `pageIndex`/`dockVisible`/accumulator. `pagePosition` is an
   animated float from `pageIndex` (`pageSpring`).
 - Wheel paging: **Windows** = AWT `MouseWheelListener` on the overlay window (Compose never
@@ -507,6 +515,7 @@ composeApp/
 | Dock app launcher + fisheye wave + labels | done, mature |
 | Pinned-apps drag reorder (handle at left, `animateItem`, `onMove` committed on release) | done (`a4e4576`) |
 | Now-playing pill + detailed music page + transport | done |
+| Transport hit areas are exactly the drawn controls: prev/next = flat 30dp `Box` clickables, play/pause = one 34dp clickable circle (`clip` **before** `clickable` so the hit area is the circle), each with a hover scale (1.16 / 1.12, spring 0.6/380) | done (this session) — measured by a synthetic point sweep on the installed build: prev 774–800, play 803–837, next 844–868 all fire, everything outside is dead (pitfalls 24/25) |
 | Expand-into-music + shared-element morph (single-content: `sharedElement`, no mid-flight dual copy) | done (`a02cdc1`, `0c9a9a7`, de-duplicated this session) |
 | Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
@@ -738,7 +747,40 @@ composeApp/
     frame deltas inside a `LaunchedEffect(playing)` (cancelled by the pause),
     and the marquee transition only exists while the text overflows. General
     rule: gate continuous animations on the state that makes them visible.
-23. **Settings tabs collect their OWN state; the screen collects none.** The
+24. **A disabled Compose control is still hit-testable — gate the whole modifier.**
+   The "only the active page receives input" rule cannot be implemented with
+   `enabled = false`: `clickable(enabled = false)` still registers a
+   hit-testable node, so an inactive (alpha 0) page keeps occupying the hit
+   path of the page composed beneath it. Build the pointer modifier
+   conditionally instead (`.then(if (interactive) Modifier.clickable(…) else
+   Modifier)`), or pass `onClick = null` where the component already supports
+   it (that is how `VinylDisc` drops its clickable). Same rule for
+   `pointerInput(enabled = false)` and for `onPointerEvent` hover probes —
+   an Enter/Exit probe on an inactive page consumes nothing but still
+   participates in the hit path.
+
+25. **Never verify the prev-track button by comparing track names.** On macOS
+   the ⏮/previous-track command *restarts* the current track whenever playback
+   position > ~3s, and only steps back below that. A synthetic click 20s into a
+   track therefore "does nothing" as far as `get name of current track` is
+   concerned while the button is working perfectly — the symptom looks
+   identical to a dead click area and cost a long debugging detour (it
+   masqueraded as a hit-test/z-order problem, and an inactive-page icon
+   blocking theory was chased on top of it). Verify with
+   `get player position` (expect a reset to <4s) or click within 3s of the
+   track start. Same for verification of a media command generally: assert the
+   observable that the command actually changes (position, track name, player
+   state) rather than assuming a name change means "nothing happened".
+
+26. **The overlay window ignores synthetic scroll events on macOS.** A
+   `CGEvent(mouseType: .scrollWheel)` / `CGEvent(scrollWheelEvent…)` posted at
+   the island never reaches Compose — the status-level window with
+   `ignoresMouseEvents` flipping does not accept injected scroll from a
+   non-foreground process. Wheel paging therefore cannot be exercised
+   synthetically; it must be tested with a real trackpad/mouse. Do not
+   conclude the pager is broken from a synthetic-scroll test.
+
+27. **Settings tabs collect their OWN state; the screen collects none.** The
     settings window recomposed end-to-end on every media heartbeat (a new
     `MediaSession` object every ~2s) and every slider-drag frame because
     `SettingsScreen` read `config`/`favorites`/`liveSession` at the top. Now
@@ -956,6 +998,24 @@ composeApp/
   third, and the enter is a soft 0.72/130 spring with a matched 0.85 scale-in;
   everything animates offset/alpha/scale only (graphicsLayer-backed, no
   relayout mid-swap).
+- (this session → HEAD): the transport controls got a hover affordance and the
+  "only the active page receives input" rule was fixed for real. Prev/next and
+  the play circle scale up on hover (1.16 / 1.12, spring 0.6/380) and the
+  play/pause circle is clipped *before* its clickable, so the hit area is
+  exactly the drawn circle (one surface: icon + background). Every pointer
+  modifier inside `WidgetPages` — dock icons, transport buttons, play circle,
+  mute ring, vinyl disc (`onClick = null`) — is now built conditionally on
+  `interactive`, because a disabled clickable is still hit-testable and an
+  inactive (alpha-0) page kept occupying the hit path of the page below it
+  (pitfall 24). `MacNowPlayingController.send` also got the mandated
+  `destroyForcibly` after its 4s wait. Verified on the installed DMG by
+  synthetic point sweep: prev 774–800, play 803–837, next 844–868 pt all
+  fire and everything outside is dead; play toggles both directions, next
+  changes track, prev resets the position. The long detour that got us here
+  is worth remembering: the "dead" prev button was **Music's own ⏮ semantics**
+  (restart when elapsed > ~3s), which made a working button look broken, and
+  no `CGEvent` scroll of any flavour reaches this overlay window, so the
+  wheel pager can't be driven synthetically (pitfalls 25/26).
 
 ---
 
@@ -972,6 +1032,7 @@ composeApp/
 | springs | notch 0.9/340, sharedBounds 0.9/320, icon 0.8/1000 | overlay |
 | Idle curtain | quickview slide 360/620ms ×3 height, fade 420ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5,0.08) on `idleDockRevealSpring` 0.92/150 | overlay |
 | Vinyl swap | exit slide ×3 width 460ms (fade delayed 220ms/240ms) + scale 0.85; enter spring 0.72/130 ×3 width + scale-in, fade 260ms @120ms | `DockContent` |
+| Transport hover | prev/next scale 1.16, play circle 1.12, spring 0.6/380 | `MediaWidgets` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |

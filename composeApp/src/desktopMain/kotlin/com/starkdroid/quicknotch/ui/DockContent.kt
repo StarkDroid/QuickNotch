@@ -288,8 +288,13 @@ private fun MusicContent(
                     art = art,
                     playing = playing,
                     size = 56.dp,
-                    onClick = {
-                        AppLauncher.openMediaProvider(session.sourceId, session.source)
+                    // null (not a no-op lambda) while the page is inactive: the
+                    // clickable modifier only exists when onClick != null, so an
+                    // inactive page contributes no hit-testable node at all.
+                    onClick = if (interactive) {
+                        { AppLauncher.openMediaProvider(session.sourceId, session.source) }
+                    } else {
+                        null
                     }
                 )
             }
@@ -377,7 +382,13 @@ private fun MusicContent(
                         modifier = volumeRingModifier
                             .size(28.dp)
                             .clip(CircleShape)
-                            .clickable(role = Role.Button) { SystemVolume.toggleMute() },
+                            .then(
+                                if (interactive) {
+                                    Modifier.clickable(role = Role.Button) { SystemVolume.toggleMute() }
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         LevelRing(
@@ -570,12 +581,22 @@ private fun DockIcon(
                 translationY = (animatedScale - 1f) * liftPx
             }
             .clip(RoundedCornerShape(11.dp))
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                enabled = enabled,
-                role = Role.Button,
-                onClick = onClick
+            .then(
+                // Only install the clickable while the dock page is
+                // interactive: `clickable(enabled = false)` still registers a
+                // hit-testable node, so a disabled icon would keep occupying
+                // the hit path of the page stacked beneath it. Dropping the
+                // modifier leaves an inactive page with no hit nodes.
+                if (enabled) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onClick
+                    )
+                } else {
+                    Modifier
+                }
             ),
         contentAlignment = Alignment.Center
     ) {

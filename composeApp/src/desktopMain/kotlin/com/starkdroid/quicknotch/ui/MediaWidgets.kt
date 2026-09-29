@@ -39,12 +39,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -412,7 +417,7 @@ internal fun TrackProgress(
 
 // ── Transport ────────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 internal fun TransportControls(
     state: PlaybackState,
@@ -459,20 +464,45 @@ internal fun TransportControls(
             contentDescription = stringResource(Res.string.music_previous),
             tint = tint
         )
+        var playHovered by remember { mutableStateOf(false) }
+        val playScale by animateFloatAsState(
+            targetValue = if (playHovered && enabled) 1.12f else 1f,
+            animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
+            label = "playHover"
+        )
         Box(
             modifier = Modifier
                 .size(34.dp)
+                .graphicsLayer {
+                    scaleX = playScale
+                    scaleY = playScale
+                }
+                // clip BEFORE clickable: the hit area is exactly the drawn
+                // circle (clip also clips pointer input), so the whole icon
+                // plus its background is one clickable surface.
                 .clip(CircleShape)
-                .background(LiveAccent.copy(alpha = if (enabled) 0.92f else 0.35f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    enabled = enabled,
-                    role = Role.Button
-                ) {
-                    pendingPlay = !(state == PlaybackState.PLAYING)
-                    media.playPause()
-                },
+                .background(
+                    LiveAccent.copy(
+                        alpha = if (enabled) (if (playHovered) 1f else 0.92f) else 0.35f
+                    )
+                )
+                .then(
+                    if (enabled) {
+                        Modifier
+                            .onPointerEvent(PointerEventType.Enter) { playHovered = true }
+                            .onPointerEvent(PointerEventType.Exit) { playHovered = false }
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                role = Role.Button
+                            ) {
+                                pendingPlay = !(state == PlaybackState.PLAYING)
+                                media.playPause()
+                            }
+                    } else {
+                        Modifier
+                    }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -502,6 +532,7 @@ internal fun TransportControls(
  * One flat transport button: a fixed-size hit target with a centred glyph —
  * hit area = drawn area, no Material touch-target inflation.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun TransportButton(
     onClick: () -> Unit,
@@ -512,15 +543,41 @@ private fun TransportButton(
     contentDescription: String,
     tint: Color
 ) {
+    var hovered by remember { mutableStateOf(false) }
+    // Slight spring scale-up on hover: the affordance that the button is
+    // clickable, matching the play button's hover.
+    val scale by animateFloatAsState(
+        targetValue = if (hovered && enabled) 1.16f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
+        label = "transportHover"
+    )
     Box(
         modifier = Modifier
             .size(size)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                role = Role.Button,
-                onClick = onClick
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(
+                // The pointer modifiers exist ONLY while the page is
+                // interactive. `clickable(enabled = false)` still registers a
+                // hit-testable node, so an inactive page (alpha 0, composed
+                // above the music page) would keep intercepting pointer input
+                // in its slot; dropping the modifiers entirely guarantees an
+                // inactive page contributes no hit node at all.
+                if (enabled) {
+                    Modifier
+                        .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                        .onPointerEvent(PointerEventType.Exit) { hovered = false }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onClick
+                        )
+                } else {
+                    Modifier
+                }
             ),
         contentAlignment = Alignment.Center
     ) {

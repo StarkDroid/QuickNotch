@@ -84,9 +84,11 @@ internal class MacNowPlayingController : MediaControllerBase() {
         val binary = bridge ?: return
         ioScope.launch {
             runCatching {
-                ProcessBuilder(binary.absolutePath, "--cmd", command)
-                    .start()
-                    .waitFor(2, TimeUnit.SECONDS)
+                // The bridge reports the command's outcome as its exit status, and
+                // the osascript it supervises needs a moment; a generous timeout
+                // plus destroyForcibly keeps a wedged helper from lingering.
+                val helper = ProcessBuilder(binary.absolutePath, "--cmd", command).start()
+                if (!helper.waitFor(4, TimeUnit.SECONDS)) helper.destroyForcibly()
             }
         }
     }
