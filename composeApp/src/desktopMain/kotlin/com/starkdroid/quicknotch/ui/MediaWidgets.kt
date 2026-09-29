@@ -638,6 +638,16 @@ internal val WaveformWhite = Color(0xEBFFFFFF)
 private const val TAU = 6.2831855f
 
 /**
+ * Fraction of the band every bar keeps once the track is paused: a flat line
+ * across the middle of the lane, the way a real analyser bottoms out at
+ * silence. It is the resting state the bars fall to, not a placeholder.
+ */
+private const val WaveformFlatFraction = 0.12f
+
+/** Seconds for the bars to fall to (or climb back from) the flat line. */
+private const val WaveformRampSec = 0.25f
+
+/**
  * The collapsed pill's faux analyser: side-by-side capsules that each grow and
  * shrink around their vertical centre, so every bar breathes from both ends the
  * way a real spectrum does.
@@ -708,18 +718,36 @@ private fun WaveformCanvas(
     modifier: Modifier = Modifier
 ) {
     var phase by remember { mutableFloatStateOf(0f) }
-    val running = playing && animate
-    LaunchedEffect(running) {
-        if (!running) return@LaunchedEffect
-        // See the vinyl: a delayed tick, never a frame-clock subscription.
+    // 0 = flat line (paused), 1 = full motion. A paused track does not merely
+    // freeze: the bars fall to an even line, which is what a real level meter
+    // does when the signal stops and the only honest way to say "no audio".
+    var presence by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(animate, playing) {
+        if (!animate) {
+            // Frozen preview (the settings cell): show the playing shape, held.
+            if (playing) presence = 1f
+            return@LaunchedEffect
+        }
+        val target = if (playing) 1f else 0f
         var seconds = phase
+        var level = presence
         var last = System.nanoTime()
         while (true) {
+            // See the vinyl: a delayed tick, never a frame-clock subscription.
             delay(PillAnimationStepMillis)
             val now = System.nanoTime()
-            seconds += (now - last) / 1_000_000_000f
+            val dt = (now - last) / 1_000_000_000f
             last = now
+            seconds += dt
             phase = seconds
+            level += (target - level) * (dt / WaveformRampSec).coerceIn(0f, 1f)
+            if (target == 0f && level <= 0.01f) {
+                // Flat and quiet: stop ticking entirely, so a paused track costs
+                // nothing at all. Waking on the next play restarts from here.
+                presence = 0f
+                return@LaunchedEffect
+            }
+            presence = level
         }
     }
     Canvas(modifier) {
@@ -728,8 +756,12 @@ private fun WaveformCanvas(
         val pitch = size.width / count
         val barWidth = pitch * 0.46f
         val radius = CornerRadius(barWidth / 2f, barWidth / 2f)
+        val loud = presence
         for (index in 0 until count) {
-            val level = (shape.level(index, t) * envelope).coerceIn(0.14f, 1f)
+            val dynamic = (shape.level(index, t) * envelope).coerceIn(0.14f, 1f)
+            // At loud = 0 every bar collapses onto the same height, which is
+            // what draws the flat line; at 1 it is the untouched analyser shape.
+            val level = WaveformFlatFraction + (dynamic - WaveformFlatFraction) * loud
             val barHeight = level * size.height
             drawRoundRect(
                 color = color.copy(alpha = color.alpha * (0.58f + 0.42f * level)),

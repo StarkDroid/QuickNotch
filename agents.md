@@ -200,7 +200,8 @@ Three branches by state: **live media** (vinyl disc 20dp → art+hub, marquee ti
 volume ring + device-battery ring — each gated by its own collapsed-only toggle, and
 optionally the `MusicWaveform` bar lane stacked *under* the title inside the same 22dp
 title slot, which `widgets.waveformHidesTitle` can turn into a title-less layout where
-the analyser owns the whole 18dp frame and the pill reads as disc + bars + rings),
+the analyser owns the whole 18dp frame and the pill reads as disc + bars + rings — and
+which settles onto a flat line whenever the track pauses),
 **idle clock** (`IdleClockRow`, date/time + optional rings), else the **idle dots**.
 The drag-handle style shows only a slim grabber line. `LiveProgressStrip` hugs the pill
 edge facing the screen centre while playing (collapsed only; auto-hidden behind the
@@ -532,8 +533,10 @@ composeApp/
   (`barPitch` 6dp, 8..40), the clock is capped at 30 updates/s, one coroutine + one state
   write for the whole row, read in the draw scope only. Tint is `WaveformTint.WHITE` or
   `WaveformTint.ALBUM_ART` (`MediaSession.artTint`, falling back to white with no cover).
-  Collapsed view only and frozen on pause. With the title shown it takes a 7dp band
-  under the 11sp line; with `waveformHidesTitle` it owns 18dp of the title's 22dp frame.
+  Collapsed view only. With the title shown it takes a 7dp band under the 11sp line;
+  with `waveformHidesTitle` it owns 18dp of the title's 22dp frame. On pause the bars
+  ramp down over ~250ms onto a flat line (`WaveformFlatFraction`) and the clock stops
+  entirely, so a paused track costs nothing; on play they climb back to full motion.
   It keeps animating while the settings window has focus — the notch sits *above* the
   menu bar, so nothing ever covers it (pitfall 29).
 - **Animation budget**: every continuous pill animation (vinyl, marquee, waveform)
@@ -561,7 +564,7 @@ composeApp/
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
 | Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — macOS live on Apple silicon via a compiled `passthrough_bridge.m` dylib (direct objc_msgSend with a BOOL arg crashes the JVM); Windows path unverified |
 | Tray/menu-bar "Always on top" toggle (mirrors Behavior-tab switch, drives `config.alwaysOnTop`) | done (this session) |
-| Collapsed-pill waveform: equalizer bars under the title (or alone in the title's frame when `waveformHidesTitle` is on), progress strip yields to it, album-art or white tint | done (this session) — visual feel needs eyes; the pill now ticks at 30fps via `delay`, measured ~9-10% of a core playing (was ~20-25% on display-rate frame clocks) and ~2% paused |
+| Collapsed-pill waveform: equalizer bars under the title (or alone in the title's frame when `waveformHidesTitle` is on), progress strip yields to it, album-art or white tint, flat line on pause | done (this session) — visual feel needs eyes; the pill ticks at 30fps via `delay`, measured ~9-10% of a core playing (was ~20-25% on display-rate frame clocks) and ~2% paused; the pause ramp verified 0.57→0.00 then the clock stops |
 | Pill animations no longer freeze when Settings opens (the notch sits above the menu bar, so it is always visible); they are rate-capped instead | done (this session) — pitfall 29 |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
@@ -1199,6 +1202,15 @@ composeApp/
   and repaints once per tick: ~9-10% of a core playing (was ~20-25%), ~2%
   paused, and the pill stays alive with settings open (pitfall 29).
 
+- (this session → HEAD): the waveform now *settles* instead of freezing. On pause
+  the bars ramp down over ~250ms onto an even line across the middle of the lane
+  (`WaveformFlatFraction`), which is what a real analyser does when the signal
+  stops and the only honest way to read "no audio"; on play they climb back to
+  full motion. The clock stops entirely once the line is reached, so a paused
+  track costs nothing at all (measured floor unchanged at ~2%), and the ramp
+  itself is a `presence` scalar the draw blends between the flat line and the
+  dynamic shape — no per-bar state, still one write per tick.
+
 ---
 
 ## 15. Quick constants reference
@@ -1215,7 +1227,7 @@ composeApp/
 | Idle curtain | quickview slide 360/620ms ×3 height, fade 420ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5,0.08) on `idleDockRevealSpring` 0.92/150 | overlay |
 | Vinyl swap | exit slide ×3 width 460ms (fade delayed 220ms/240ms) + scale 0.85; enter spring 0.72/130 ×3 width + scale-in, fade 260ms @120ms | `DockContent` |
 | Transport hover | prev/next scale 1.16, play circle 1.12, spring 0.6/380 | `MediaWidgets` |
-| Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope | `MediaWidgets` |
+| Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope, pause ramp 250ms to a 12% flat line | `MediaWidgets` |
 | Pill animation tick | `PillAnimationFps` 30 via `delay` + nanoTime deltas (never `withFrameNanos`) | `NotchMotion` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
