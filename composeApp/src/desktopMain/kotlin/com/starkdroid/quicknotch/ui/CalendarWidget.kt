@@ -35,6 +35,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_connect
 import com.starkdroid.quicknotch.generated.resources.calendar_connected_as
 import com.starkdroid.quicknotch.generated.resources.calendar_disconnect
 import com.starkdroid.quicknotch.generated.resources.calendar_error_auth
+import com.starkdroid.quicknotch.generated.resources.calendar_error_cancelled
 import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
@@ -181,6 +182,7 @@ private fun CalendarConnectRow(
                     error != null -> stringResource(
                         when (error.reason) {
                             GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
+                            GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
                             GoogleCalendar.REASON_REVOKED -> Res.string.calendar_error_revoked
                             else -> Res.string.calendar_error_auth
                         }

@@ -64,8 +64,9 @@
     <string name="calendar_connected_as">Connected as %1$s</string>
     <string name="calendar_never_synced">Not synced yet</string>
     <string name="calendar_last_sync">Updated %1$s</string>
-    <string name="calendar_error_auth">Sign-in didn\'t finish. Try connecting again.</string>
-    <string name="calendar_error_network">Couldn\'t reach Google. Showing the last known day.</string>
+    <string name="calendar_error_auth">Sign-in didn&#39;t finish. Try connecting again.</string>
+    <string name="calendar_error_network">Couldn&#39;t reach Google. Showing the last known day.</string>
+    <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
     <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
     <string name="calendar_today_count">%1$s events today</string>
     <string name="calendar_ticker_label">Calendar event</string>

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Launches pinned applications. Windows uses cmd/UWP shell; macOS uses `open`.
@@ -123,13 +124,32 @@ object AppLauncher {
      */
     fun browse(url: String) {
         if (HostPlatform.isMac) {
-            ProcessBuilder("open", url).start()
+            spawnAndReap("open", url)
             return
         }
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
             Desktop.getDesktop().browse(java.net.URI(url))
         } else {
-            ProcessBuilder("cmd.exe", "/c", "start", "", url).start()
+            spawnAndReap("cmd.exe", "/c", "start", "", url)
+        }
+    }
+
+    /**
+     * Hand a URL to the OS and let the child die on its own, reaped either way.
+     * The `waitFor` is not about the work — `open` returns as soon as the
+     * browser is launched — it is so the child is never left as a zombie, and
+     * so a shell that refuses to open anything is noticed instead of silently
+     * leaving the user staring at a button that did nothing.
+     */
+    private fun spawnAndReap(vararg command: String) {
+        runCatching {
+            val process = ProcessBuilder(*command).start()
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                System.err.println("QuickNotch: handing a link to the browser timed out: ${command.first()}")
+            }
+        }.onFailure {
+            System.err.println("QuickNotch: could not hand a link to the browser: ${it.message}")
         }
     }
 }

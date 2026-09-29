@@ -38,6 +38,8 @@ import java.time.ZoneId
 import java.util.Base64
 import java.util.EnumSet
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -140,10 +142,21 @@ object GoogleCalendar {
     private const val TOKEN_SKEW_MS = 60_000L
     private const val CONNECT_TIMEOUT_MS = 5 * 60 * 1000L
 
+    /**
+     * Per-stage tracing for the consent handshake, the one flow that is opaque
+     * from the outside (a browser is involved, and a failure used to look the
+     * same as every other failure). On by default: it only ever prints while
+     * the user is deliberately connecting, and it is the difference between
+     * "it did not work" and a fixable sentence.
+     */
+    private const val VERBOSE = true
+
     /** Reason keys; the UI maps them to localized strings. */
     const val REASON_AUTH = "auth"
     const val REASON_NETWORK = "network"
     const val REASON_REVOKED = "revoked"
+    /** The user closed the consent screen or declined the app. */
+    const val REASON_CANCELLED = "cancelled"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -164,6 +177,13 @@ object GoogleCalendar {
     private val eventsFile: File get() = File(AppPaths.configDir, "calendar-events.json")
 
     private var cached: Tokens? = null
+
+    /**
+     * Why the last [connect] attempt gave up, as one of the REASON_ keys. A
+     * field rather than a return value because [authorize] is where the detail
+     * lives and it already returns null for every outcome.
+     */
+    private var connectFailure: String = REASON_AUTH
     private var tickerJob: Job? = null
     private var pollJob: Job? = null
 
@@ -224,9 +244,9 @@ object GoogleCalendar {
         if (_state.value is CalendarState.Connecting) return
         scope.launch {
             _state.value = CalendarState.Connecting
-            val tokens = runCatching { authorize() }.getOrNull()
+            val tokens = authorize()
             if (tokens == null) {
-                _state.value = CalendarState.Error(REASON_AUTH)
+                _state.value = CalendarState.Error(connectFailure)
                 return@launch
             }
             cached = tokens
@@ -262,22 +282,30 @@ object GoogleCalendar {
         val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
         val redirect = "http://127.0.0.1:${server.address.port}/"
         val received = CompletableFuture<String>()
+        val started = System.currentTimeMillis()
 
         server.createContext("/") { exchange ->
-            val code = exchange.requestURI.rawQuery.orEmpty()
-                .split("&")
-                .firstOrNull { it.startsWith("code=") }
-                ?.removePrefix("code=")
-                ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrNull() }
+            val query = queryParams(exchange.requestURI.rawQuery)
             val body = CONSENT_PAGE.toByteArray()
             exchange.responseHeaders.add("Content-Type", "text/html; charset=utf-8")
             runCatching {
                 exchange.sendResponseHeaders(200, body.size.toLong())
                 exchange.responseBody.use { it.write(body) }
             }
-            if (code != null) received.complete(code)
+            when {
+                // Google bounces the browser back with `error=...` when consent
+                // was declined, the client is unknown, or the grant is blocked.
+                // Read it instead of sitting out the whole timeout on a callback
+                // that will never carry a code — that wait is what made a
+                // declined sign-in and a broken one look identical.
+                query["error"] != null -> received.completeExceptionally(
+                    GoogleAuthException(query.getValue("error"), query["error_description"])
+                )
+                query["code"] != null -> received.complete(query.getValue("code"))
+            }
         }
         server.start()
+        log("consent server on $redirect")
         return try {
             AppLauncher.browse(
                 AUTH_ENDPOINT + "?" + listOf(
@@ -294,9 +322,39 @@ object GoogleCalendar {
                     "code_challenge_method" to "S256"
                 ).joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
             )
+            log("browser handed off, waiting for the callback (${CONNECT_TIMEOUT_MS / 60_000} min budget)")
             val code = received.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            log("callback carried a code after ${(System.currentTimeMillis() - started) / 1000}s")
             exchangeCode(code, redirect, verifier)
-        } catch (_: Exception) {
+        } catch (e: ExecutionException) {
+            val cause = e.cause
+            if (cause is GoogleAuthException) {
+                // access_denied is the user closing the tab or picking "Cancel";
+                // anything else is Google's refusal and needs a real reason shown.
+                connectFailure = if (cause.error == "access_denied") {
+                    REASON_CANCELLED
+                } else {
+                    REASON_AUTH
+                }
+                log("consent refused: ${cause.error} ${cause.description.orEmpty()}".trim())
+                System.err.println("QuickNotch: Google consent failed (${cause.error}): ${cause.description.orEmpty()}")
+            } else {
+                connectFailure = REASON_AUTH
+                log("consent wait failed: $cause")
+            }
+            null
+        } catch (e: TimeoutException) {
+            connectFailure = REASON_AUTH
+            log("no callback after ${CONNECT_TIMEOUT_MS / 60_000} min")
+            System.err.println(
+                "QuickNotch: Google sign-in got no callback within " +
+                    "${CONNECT_TIMEOUT_MS / 60_000} min"
+            )
+            null
+        } catch (e: Exception) {
+            connectFailure = REASON_AUTH
+            log("consent failed: $e")
+            System.err.println("QuickNotch: Google sign-in failed: $e")
             null
         } finally {
             server.stop(0)
@@ -313,7 +371,20 @@ object GoogleCalendar {
                 "grant_type" to "authorization_code",
                 "redirect_uri" to redirect
             )
-        ) ?: return null
+        )
+        if (response == null) {
+            // No JSON back at all, or unparseable: the only honest report is
+            // that the exchange itself produced nothing usable.
+            System.err.println("QuickNotch: Google token exchange returned no usable response")
+            return null
+        }
+        if (response.str("error") != null) {
+            System.err.println(
+                "QuickNotch: Google token exchange rejected the code: " +
+                    "${response.str("error")} ${response.str("error_description").orEmpty()}".trim()
+            )
+            return null
+        }
         val access = response.str("access_token") ?: return null
         return Tokens(
             accessToken = access,
@@ -540,6 +611,21 @@ object GoogleCalendar {
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
+
+    /** Google answering a consent redirect with a refusal. */
+    private class GoogleAuthException(val error: String, val description: String?) : Exception(error)
+
+    /** `a=1&b=2` to a map, decoding percent-escapes. */
+    private fun queryParams(raw: String?): Map<String, String> =
+        raw.orEmpty().split("&").filter { it.isNotBlank() }.associate { pair ->
+            val key = pair.substringBefore("=")
+            val value = pair.substringAfter("=", "")
+            key to runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value)
+        }
+
+    private fun log(message: String) {
+        if (VERBOSE) System.err.println("QuickNotch: calendar $message")
+    }
 
     private fun JsonObject.str(key: String): String? =
         (this[key] as? JsonPrimitive)?.contentOrNullSafe()?.takeIf { it.isNotBlank() }
