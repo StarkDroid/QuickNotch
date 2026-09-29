@@ -48,6 +48,8 @@ internal fun QuickView(
     surface: NotchSurface,
     media: MediaSession?,
     volumePercent: Int?,
+    /** Master mute flag; null when unreadable, which reads as "not muted". */
+    volumeMuted: Boolean? = null,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
     notificationCount: Int?,
@@ -167,11 +169,18 @@ internal fun QuickView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (showVolume && volumePercent != null) {
+                        // Mirror the expanded page exactly: a muted system
+                        // reads as level 0 with a dimmed glyph and ring, so the
+                        // collapsed pill and the music player never disagree
+                        // about whether you can hear anything.
+                        val mutedNow = volumeMuted == true
                         LevelRing(
-                            level = volumePercent,
+                            level = if (mutedNow) 0 else volumePercent,
                             icon = volumePainter(),
                             contentDescription = stringResource(Res.string.music_volume),
-                            modifier = volumeRingModifier.size(22.dp)
+                            modifier = volumeRingModifier.size(22.dp),
+                            tint = if (mutedNow) LevelRingGlyph.copy(alpha = 0.4f) else LevelRingGlyph,
+                            ringColor = if (mutedNow) LevelRingGlyph.copy(alpha = 0.3f) else LevelRingGlyph
                         )
                     }
                     if (showBattery && battery != null) {

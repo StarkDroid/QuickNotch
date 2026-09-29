@@ -474,6 +474,7 @@ internal fun FloatingNotchOverlay(
                         surface = config.surface,
                         media = if (musicLive) liveSession else null,
                         volumePercent = volumePercent,
+                        volumeMuted = volumeMuted,
                         battery = battery,
                         deviceBattery = deviceBattery,
                         notificationCount =

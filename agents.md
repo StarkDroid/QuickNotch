@@ -197,7 +197,9 @@ both — its plain fade exits while the music page pops in with the old gentle 0
 ### 5.5 Quickview (`QuickView`)
 
 Three branches by state: **live media** (vinyl disc 20dp → art+hub, marquee title 11sp,
-volume ring + device-battery ring — each gated by its own collapsed-only toggle, and
+volume ring + device-battery ring — each gated by its own collapsed-only toggle
+(the volume ring mirrors the expanded page's mute treatment: level 0 + dimmed
+glyph/ring), and
 optionally the `MusicWaveform` bar lane stacked *under* the title inside the same 22dp
 title slot, which `widgets.waveformHidesTitle` can turn into a title-less layout where
 the analyser owns the whole 18dp frame and the pill reads as disc + bars + rings — and
