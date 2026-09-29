@@ -90,7 +90,14 @@ data class WidgetsConfig(
      */
     val showCollapsedWaveform: Boolean = true,
     /** Album-art-derived or constant white; see [WaveformTint]. */
-    val waveformTint: WaveformTint = WaveformTint.ALBUM_ART
+    val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
+    /**
+     * While the waveform is on, drop the song name from the collapsed pill: the
+     * live view then reads as disc + analyser + level rings only, and the bars
+     * get the whole title frame (18dp instead of a 7dp band). Meaningless with
+     * the waveform off, so the settings row appears only inside that section.
+     */
+    val waveformHidesTitle: Boolean = false
 )
 
 /**

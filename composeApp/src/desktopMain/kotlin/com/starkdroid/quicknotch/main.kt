@@ -181,7 +181,6 @@ fun main(args: Array<String>) {
                 battery = battery,
                 deviceBattery = deviceBattery,
                 notificationCount = notificationCount,
-                settingsOpen = showSettings,
                 onExpandedChange = { isExpanded = it }
             )
         }
@@ -258,7 +257,6 @@ private fun NotchOverlayWindow(
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
     notificationCount: Int?,
-    settingsOpen: Boolean,
     onExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
@@ -374,10 +372,6 @@ private fun NotchOverlayWindow(
                 media = media,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
-                // Only feeds the pill's animation budget: while settings is in
-                // front and the notch is collapsed, the disc/marquee stop
-                // turning so they stop stealing frames from the scroll.
-                settingsOpen = settingsOpen,
                 volumePercent = volumePercent,
                 volumeMuted = volumeMuted,
                 battery = battery,

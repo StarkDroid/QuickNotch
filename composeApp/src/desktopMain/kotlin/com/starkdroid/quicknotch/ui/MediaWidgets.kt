@@ -31,11 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -145,8 +141,8 @@ internal fun islandTint(surface: NotchSurface): Color =
  * clipped to a disc that rotates while playing — frozen at its current angle
  * when paused. The rotation accumulates real frame deltas and only runs while
  * playing: an `InfiniteTransition` here would keep invalidating the draw phase
- * at 60fps even with a paused track, burning a constant software-rendered
- * redraw of the whole overlay for nothing.
+ * even with a paused track, burning a constant redraw of the whole overlay for
+ * nothing. Turns are pushed at [PillAnimationFps], not at display rate.
  */
 @Composable
 internal fun VinylDisc(
@@ -154,8 +150,8 @@ internal fun VinylDisc(
     playing: Boolean,
     size: Dp,
     modifier: Modifier = Modifier,
-    // Rotation is the one animation here that runs at display rate, so callers
-    // can stop it (see [pillAnimationsLive]) without losing the disc itself.
+    // Callers can stop the turn entirely (the settings preview does); the rate
+    // itself is capped by [PillAnimationFps].
     animate: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
@@ -164,13 +160,23 @@ internal fun VinylDisc(
     if (spinning) {
         // Accumulate frame deltas so pause/resume is seamless: cancelling the
         // effect (spinning → false) simply stops the disc where it is, and a
-        // later resume continues from that exact angle.
+        // later resume continues from that exact angle. Real deltas are still
+        // summed across the skipped frames, so the [PillAnimationFps] write cap
+        // changes how often the pill repaints, never how fast it turns.
         LaunchedEffect(spinning) {
-            var last = withFrameNanos { it }
+            // A `delay` tick, deliberately NOT `withFrameNanos`: awaiting the
+            // frame clock subscribes the whole scene to display-rate frames, so
+            // the pill kept taking 60 frames a second however rarely this loop
+            // wrote (measured: even a 10 writes/s cap still cost ~16% of a core —
+            // the subscription, not the write, was the cost). Monotonic deltas
+            // keep the turn rate exact regardless of scheduler jitter.
+            var last = System.nanoTime()
             while (true) {
-                val now = withFrameNanos { it }
-                angle += (now - last) / 1e9f * (360f / 12f) // one turn per 12s
+                delay(PillAnimationStepMillis)
+                val now = System.nanoTime()
+                val dt = (now - last) / 1e9f
                 last = now
+                angle += dt * (360f / 12f) // one turn per 12s
             }
         }
     }
@@ -243,8 +249,8 @@ internal fun MarqueeText(
     fontWeight: FontWeight,
     modifier: Modifier = Modifier,
     lineHeight: TextUnit = TextUnit.Unspecified,
-    // The scroll is a display-rate animation; callers can hold it still (see
-    // [pillAnimationsLive]) while nothing on screen is being watched.
+    // Callers can hold the scroll still (the settings preview does); the travel
+    // itself ticks at [PillAnimationFps] in the draw phase.
     animate: Boolean = true
 ) {
     val measurer = rememberTextMeasurer()
@@ -269,17 +275,31 @@ internal fun MarqueeText(
     // Scroll rate keeps a roughly constant pixel speed regardless of length.
     val travelPx = overflowPx + gapPx
     val durationMs = (travelPx * 1000 / 30).coerceIn(2500, 20000)
-    val scrollX = if (needsMarquee && animate) {
-        val transition = rememberInfiniteTransition(label = "titleMarquee")
-        val x by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = -travelPx.toFloat(),
-            animationSpec = infiniteRepeatable(tween(durationMs, easing = LinearEasing), RepeatMode.Restart),
-            label = "titleScrollX"
-        )
-        x
-    } else {
-        0f
+    val speedPxPerSecond = travelPx * 1000f / durationMs
+
+    // Same clock shape as the vinyl and the waveform: the transition used to run
+    // at display rate (an InfiniteTransition cannot be throttled), so a long
+    // title forced a full overlay repaint every frame. Travelling by real frame
+    // deltas and pushing at [PillAnimationFps] keeps the exact same speed while
+    // halving the repaints.
+    var scrollX by remember(text, travelPx) { mutableFloatStateOf(0f) }
+    LaunchedEffect(needsMarquee, animate, travelPx, speedPxPerSecond) {
+        if (!needsMarquee || !animate) {
+            scrollX = 0f
+            return@LaunchedEffect
+        }
+        // See the vinyl: a delayed tick, never a frame-clock subscription.
+        var x = 0f
+        var last = System.nanoTime()
+        while (true) {
+            delay(PillAnimationStepMillis)
+            val now = System.nanoTime()
+            val dt = (now - last) / 1e9f
+            last = now
+            x -= speedPxPerSecond * dt
+            if (-x >= travelPx) x += travelPx // restart the loop without a jump
+            scrollX = x
+        }
     }
 
     Box(
@@ -305,7 +325,11 @@ internal fun MarqueeText(
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Clip,
-            modifier = Modifier.offset { IntOffset(offsetX.roundToInt(), 0) }
+            // graphicsLayer, not Modifier.offset { }: the offset lambda runs in
+            // the placement phase, so every tick of the scroll re-laid-out the
+            // pill's row. A layer translation is a draw-phase change — the same
+            // pixels, one invalidation instead of a layout pass.
+            modifier = Modifier.graphicsLayer { translationX = offsetX }
         )
     }
 }
@@ -611,7 +635,6 @@ private fun TransportButton(
 /** Default bar tint: the same brightness the collapsed title uses. */
 internal val WaveformWhite = Color(0xEBFFFFFF)
 
-private const val WaveformUpdateHz = 30f
 private const val TAU = 6.2831855f
 
 /**
@@ -628,13 +651,12 @@ private const val TAU = 6.2831855f
  * - One coroutine for the whole bar set (not one per bar) and one state write
  *   per update, read inside the draw scope: the node invalidates its draw phase
  *   only, exactly like [shimmer] — no recomposition, no extra layer.
- * - The clock is capped at [WaveformUpdateHz]. Bars look fluid at 30 updates a
- *   second; running them at display rate would add invalidations for no visual
- *   gain whenever the disc is not spinning.
+ * - The clock shares the notch-wide [PillAnimationFps] tick: bars look fluid at
+ *   30 updates a second, and every update is exactly one overlay repaint.
  * - `playing && animate` gates the loop, so a paused track freezes the bars
  *   (same contract as [VinylDisc], resumed from the frozen phase so it never
- *   jumps), and the whole thing is held by `pillAnimationsLive` while the
- *   settings window has the user.
+ *   jumps). Nothing freezes while the settings window merely has focus — a
+ *   top-centred notch stays visible above it, so a still pill reads as broken.
  *
  * Heights come from two slow sines per band plus a shared loudness envelope,
  * all parameters hashed deterministically from the band index: the pattern is
@@ -644,7 +666,7 @@ private const val TAU = 6.2831855f
 @Composable
 internal fun MusicWaveform(
     playing: Boolean,
-    animate: Boolean,
+    animate: Boolean = true,
     modifier: Modifier = Modifier,
     color: Color = WaveformWhite,
     /** 0 derives the count from the available width, so the lane reads as an
@@ -689,20 +711,15 @@ private fun WaveformCanvas(
     val running = playing && animate
     LaunchedEffect(running) {
         if (!running) return@LaunchedEffect
+        // See the vinyl: a delayed tick, never a frame-clock subscription.
         var seconds = phase
-        var last = withFrameNanos { it }
-        // Primed so the first frame after a resume pushes immediately.
-        var sincePush = 1f / WaveformUpdateHz
+        var last = System.nanoTime()
         while (true) {
-            val now = withFrameNanos { it }
-            val dt = (now - last) / 1_000_000_000f
+            delay(PillAnimationStepMillis)
+            val now = System.nanoTime()
+            seconds += (now - last) / 1_000_000_000f
             last = now
-            seconds += dt
-            sincePush += dt
-            if (sincePush >= 1f / WaveformUpdateHz) {
-                sincePush = 0f
-                phase = seconds
-            }
+            phase = seconds
         }
     }
     Canvas(modifier) {

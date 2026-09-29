@@ -47,11 +47,6 @@ internal fun QuickView(
     style: NotchStyle,
     surface: NotchSurface,
     media: MediaSession?,
-    /**
-     * False only while the pill is off screen behind the settings window: the
-     * disc and marquee then stop turning (see [pillAnimationsLive]).
-     */
-    animate: Boolean = true,
     volumePercent: Int?,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
@@ -67,6 +62,11 @@ internal fun QuickView(
     showWaveform: Boolean = false,
     /** Album-art-derived or white; see [WaveformTint]. */
     waveformColor: Color = WaveformWhite,
+    /**
+     * Waveform-only layout: the song name is dropped and the analyser takes the
+     * whole title frame, so the live pill reads as disc + bars + level rings.
+     */
+    waveformHidesTitle: Boolean = false,
     /** Shared-element morph modifiers for the live-activity disc/title/rings. */
     discModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
@@ -105,8 +105,7 @@ internal fun QuickView(
                     art = media.artwork,
                     playing = media.state == PlaybackState.PLAYING,
                     size = 20.dp,
-                    modifier = discModifier,
-                    animate = animate
+                    modifier = discModifier
                 )
                 // The title shares the exact 22dp frame the level rings use, so
                 // the disc, text and rings all sit on one vertical centreline.
@@ -120,7 +119,20 @@ internal fun QuickView(
                         .height(22.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (showWaveform) {
+                    if (showWaveform && waveformHidesTitle) {
+                        // No title, no band split: the analyser owns the frame,
+                        // 18dp of it (a hair under the full 22 so the capsules
+                        // still breathe inside the pill). The Box centre-aligns
+                        // it, so the bars sit on the same centreline as the disc
+                        // and the rings.
+                        MusicWaveform(
+                            playing = media.state == PlaybackState.PLAYING,
+                            color = waveformColor,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(18.dp)
+                        )
+                    } else if (showWaveform) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             MarqueeText(
                                 text = media.title,
@@ -128,13 +140,11 @@ internal fun QuickView(
                                 fontSize = 11.sp,
                                 lineHeight = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                modifier = titleModifier.fillMaxWidth(),
-                                animate = animate
+                                modifier = titleModifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(1.5.dp))
                             MusicWaveform(
                                 playing = media.state == PlaybackState.PLAYING,
-                                animate = animate,
                                 color = waveformColor,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -148,8 +158,7 @@ internal fun QuickView(
                             fontSize = 11.sp,
                             lineHeight = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            modifier = titleModifier.fillMaxWidth(),
-                            animate = animate
+                            modifier = titleModifier.fillMaxWidth()
                         )
                     }
                 }

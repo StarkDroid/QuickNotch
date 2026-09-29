@@ -199,7 +199,8 @@ both — its plain fade exits while the music page pops in with the old gentle 0
 Three branches by state: **live media** (vinyl disc 20dp → art+hub, marquee title 11sp,
 volume ring + device-battery ring — each gated by its own collapsed-only toggle, and
 optionally the `MusicWaveform` bar lane stacked *under* the title inside the same 22dp
-title slot),
+title slot, which `widgets.waveformHidesTitle` can turn into a title-less layout where
+the analyser owns the whole 18dp frame and the pill reads as disc + bars + rings),
 **idle clock** (`IdleClockRow`, date/time + optional rings), else the **idle dots**.
 The drag-handle style shows only a slim grabber line. `LiveProgressStrip` hugs the pill
 edge facing the screen centre while playing (collapsed only; auto-hidden behind the
@@ -488,7 +489,7 @@ composeApp/
                 ├── MediaWidgets.kt           # VinylDisc, MarqueeText, TrackProgress, transport, isMusicLive, tints
                 ├── NowPlayingMorph.kt        # shared-element keys + nowPlayingSharedElement (sharedElement!)
                 ├── OverlayHover.kt           # SharingHoverNode/Element + cursorOverNotch (collapse gate)
-                ├── NotchMotion.kt            # springs, timing constants, fisheyeScale, pillAnimationsLive
+                ├── NotchMotion.kt            # springs, timing constants, fisheyeScale, PillAnimationFps
                 ├── OverlayGeometry.kt        # metrics + screen placement + DockLayout + notchShape
                 ├── OverlayPager.kt           # shared page/flip state
                 ├── LevelRing.kt              # reusable 288° ring + painters
@@ -531,8 +532,13 @@ composeApp/
   (`barPitch` 6dp, 8..40), the clock is capped at 30 updates/s, one coroutine + one state
   write for the whole row, read in the draw scope only. Tint is `WaveformTint.WHITE` or
   `WaveformTint.ALBUM_ART` (`MediaSession.artTint`, falling back to white with no cover).
-  Collapsed view only, frozen on pause, and held entirely by `pillAnimationsLive` when
-  the settings window is in front.
+  Collapsed view only and frozen on pause. With the title shown it takes a 7dp band
+  under the 11sp line; with `waveformHidesTitle` it owns 18dp of the title's 22dp frame.
+  It keeps animating while the settings window has focus — the notch sits *above* the
+  menu bar, so nothing ever covers it (pitfall 29).
+- **Animation budget**: every continuous pill animation (vinyl, marquee, waveform)
+  ticks at `PillAnimationFps` (30) via `delay` + monotonic deltas — never a
+  `withFrameNanos` subscription, and never a placement-phase write (pitfall 29).
 - **MarqueeText**: single-line title that scrolls when overflowing, speed scaled to
   overflow, 48px gap.
 - **Progress bar** (expanded): hairline track + cyan gradient fill + white head ringed
@@ -555,7 +561,8 @@ composeApp/
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
 | Overlay click-through: only the drawn island is a touch target (margin passes input to the app below) — `SetWindowRgn` on Windows, cursor-gated `ignoresMouseEvents` on macOS | done (this session) — macOS live on Apple silicon via a compiled `passthrough_bridge.m` dylib (direct objc_msgSend with a BOOL arg crashes the JVM); Windows path unverified |
 | Tray/menu-bar "Always on top" toggle (mirrors Behavior-tab switch, drives `config.alwaysOnTop`) | done (this session) |
-| Collapsed-pill waveform: equalizer bars under the title, progress strip yields to it, album-art or white tint, 30Hz budgeted clock | done (this session) — visual feel needs eyes; measured 13.7% CPU playing with bars vs 16.1% before (hiding the strip pays for the lane), 1.5% frozen on pause, 3.9% gated behind settings |
+| Collapsed-pill waveform: equalizer bars under the title (or alone in the title's frame when `waveformHidesTitle` is on), progress strip yields to it, album-art or white tint | done (this session) — visual feel needs eyes; the pill now ticks at 30fps via `delay`, measured ~9-10% of a core playing (was ~20-25% on display-rate frame clocks) and ~2% paused |
+| Pill animations no longer freeze when Settings opens (the notch sits above the menu bar, so it is always visible); they are rate-capped instead | done (this session) — pitfall 29 |
 | Volume + audio-battery level rings (both surfaces) | done (`cf9f9be`) |
 | Laptop battery ring (collapsed, gated on `hasBattery`) | done (`096b852`) |
 | Level-ring glyphs as solid `currentColor` SVG silhouettes (battery/charging/volume), volume ring off Material icons | done |
@@ -784,10 +791,8 @@ composeApp/
     real frame deltas inside a `LaunchedEffect(spinning)` (cancelled by the
     pause), and the marquee transition only exists while the text overflows.
     General rule: gate continuous animations on the state that makes them
-    visible. The same rule now also covers visibility off-screen — see
-    `pillAnimationsLive` (pitfall 29), which stops the collapsed pill's
-    display-rate animations while the settings window is in front (measured
-    16.1% → 3.9% of a core with a track playing).
+    visible, and run the ones that stay visible on a capped tick rather than a
+    frame-clock subscription (pitfall 29).
 24. **A disabled Compose control is still hit-testable — gate the whole modifier.**
    The "only the active page receives input" rule cannot be implemented with
    `enabled = false`: `clickable(enabled = false)` still registers a
@@ -858,18 +863,30 @@ composeApp/
       (`AppPaths.configDir`) forces SOFTWARE on the next launch;
       `-Dskiko.renderApi` / `SKIKO_RENDER_API` override both.
 
-29. **A hidden window's 60fps animation is not free — budget it.** A playing
-    track kept the collapsed pill (a 20dp disc and a crawling marquee) redrawing
-    at display rate even while the settings window was in front, costing
-    ~16% of a core and stealing frames from the very scroll the user was
-    doing. `pillAnimationsLive(settingsOpen, expanded)` (in `NotchMotion.kt`)
-    now holds those two animations *only* while settings is open and the notch
-    is collapsed; expanding the notch hands them straight back, so the default
-    experience is unchanged. `MusicWaveform` is the third animation under the
-    same `animate` flag. Same shape as pitfall 22: gate continuous animations
-    on the state that makes them visible — including "visible to whom".
+29. **Don't animate a notch you think is hidden — and don't trust the frame clock
+    to be free.** Two lessons from the same measurement.
 
+    (a) The collapsed pill's disc/marquee used to be *frozen* outright while the
+    settings window was open, on the theory that nobody was looking. That is
+    wrong for this app: the island sits **above the menu bar** at the true top of
+    the screen, so the settings window floats below it and the pill is always
+    visible. A user noticed the notch had gone "dead" and asked why. Never
+    suppress an animation the user can see.
 
+    (b) The real cost was the frame clock, not the drawing. Three
+    `while (true) { withFrameNanos { … } }` loops kept the scene taking
+    display-rate frames even though they only *wrote* state occasionally — a
+    10 writes/s cap still cost ~16% of a core, because awaiting the frame clock
+    subscribes to it. The fix is `delay(PillAnimationStepMillis)` +
+    `System.nanoTime()` deltas: same exact motion rate (deltas are real), one
+    repaint per tick, ~9-10% instead of ~20-25%, and 2% when the track is
+    paused. Third leg of the same stool: never move a pixel with a
+    **placement-phase** lambda. `Modifier.offset { x }` re-runs layout on every
+    write, so `MarqueeText` now travels via `graphicsLayer { translationX }`.
+
+    General rule from pitfall 22 still holds — gate continuous animation on the
+    state that makes it visible (paused, text fits, nothing composed) — but the
+    throttle, not the freeze, is the tool for anything the user can see.
 30. **Never size a table from a state write that the draw phase reads.** The
    waveform's bar count started life as `onSizeChanged { resolved = count }`
    with `remember(resolved) { WaveformBands(resolved) }` and a draw loop
@@ -1114,10 +1131,11 @@ composeApp/
   change also made the overlay cheaper, so the second half of the work spent
   the newly available headroom on wasted frames: the collapsed pill's disc and
   marquee used to redraw at display rate even with the settings window in
-  front, and `pillAnimationsLive(settingsOpen, expanded)` now holds them while
-  settings is open and the notch is collapsed (16.1% → 3.9% of a core with a
-  track playing; expanding the notch hands them straight back, so the default
-  experience is unchanged). App-data path resolution moved into `AppPaths` so
+  front, and `pillAnimationsLive(settingsOpen, expanded)` held them while
+  settings was open and the notch was collapsed (16.1% → 3.9% of a core with a
+  track playing). *Superseded the same day by the entries below: the notch is
+  never actually covered by the settings window, so the freeze made a visible
+  island look dead; the animations are rate-capped instead.* App-data path resolution moved into `AppPaths` so
   the startup backend check can read the marker before `FavoritesRepository`
   exists (pitfall 29).
 - (this session → HEAD): the transport controls got a hover affordance and the
@@ -1148,8 +1166,7 @@ composeApp/
   slow sines per band plus a shared loudness envelope, bass-weighted, every parameter
   hashed deterministically from the band index. Cost discipline: one coroutine and one
   state write for the whole row (read in the draw scope, `shimmer`-style), capped at
-  30 updates/s instead of display rate, frozen on pause like the disc, and held by
-  `pillAnimationsLive` behind the settings window. Measured 13.7% of a core playing
+  30 updates/s instead of display rate, and frozen on pause like the disc. Measured 13.7% of a core playing
   with bars versus 16.1% before (hiding the 4Hz strip pays for the lane); 1.5% paused.
   Tint is `WaveformTint.WHITE` or `ALBUM_ART`, the latter coming from `dominantArtTint`
   — a coarse population×chroma histogram run **once per track on the poller's worker
@@ -1159,6 +1176,28 @@ composeApp/
   ring toggle changed the slot width (pitfall 30). Settings gets an indicator cell
   whose preview *is* the component (frozen, 7 bars) plus a colour dropdown that only
   appears while the toggle is on.
+
+- (this session → HEAD): the waveform learned to swallow the title. With
+  `widgets.waveformHidesTitle` on, the collapsed live pill is just disc +
+  analyser + level rings, and the bars take 18dp of the title's 22dp frame
+  instead of the 7dp band they share with the song name (settings gets a
+  switch row in the waveform section, next to the tint dropdown). The marquee
+  also stopped moving pixels through the *placement* phase: `Modifier.offset { }`
+  re-runs layout on every write, so `MarqueeText` now travels via
+  `graphicsLayer { translationX }`.
+- (this session → HEAD): **the settings-open animation freeze was a mistake and
+  the frame clock was the cost.** The notch lives above the menu bar, so the
+  settings window never covers it — freezing the pill's disc/marquee/waveform
+  while settings had focus just made the island look dead to a user who could
+  see it perfectly well. That gate (`pillAnimationsLive`) is gone. The real
+  saving was elsewhere: three `while (true) { withFrameNanos { … } }` loops kept
+  the whole scene taking display-rate frames no matter how rarely they wrote —
+  throttling the writes to 10/s still cost ~16% of a core, proving the
+  *subscription* was the cost. All three animations now tick on
+  `delay(PillAnimationStepMillis)` + `System.nanoTime()` deltas at
+  `PillAnimationFps` (30), which keeps the motion rate identical (real deltas)
+  and repaints once per tick: ~9-10% of a core playing (was ~20-25%), ~2%
+  paused, and the pill stays alive with settings open (pitfall 29).
 
 ---
 
@@ -1176,7 +1215,8 @@ composeApp/
 | Idle curtain | quickview slide 360/620ms ×3 height, fade 420ms; dock entry `IdleDockEntryScale=0.82` @ `IdleDockOrigin` (0.5,0.08) on `idleDockRevealSpring` 0.92/150 | overlay |
 | Vinyl swap | exit slide ×3 width 460ms (fade delayed 220ms/240ms) + scale 0.85; enter spring 0.72/130 ×3 width + scale-in, fade 260ms @120ms | `DockContent` |
 | Transport hover | prev/next scale 1.16, play circle 1.12, spring 0.6/380 | `MediaWidgets` |
-| Waveform | 30 updates/s cap, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title, 2 sines/band + shared envelope | `MediaWidgets` |
+| Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope | `MediaWidgets` |
+| Pill animation tick | `PillAnimationFps` 30 via `delay` + nanoTime deltas (never `withFrameNanos`) | `NotchMotion` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |

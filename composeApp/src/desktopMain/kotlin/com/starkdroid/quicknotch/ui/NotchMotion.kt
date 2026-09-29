@@ -134,19 +134,21 @@ internal fun fisheyeScale(
 }
 
 /**
- * Whether the collapsed pill's display-rate animations should be running.
+ * Ceiling for the notch's continuous animations: the vinyl, the title marquee and
+ * the waveform all push at most this many updates per second.
  *
- * A playing track keeps the whole overlay redrawing at display rate — a 20dp
- * disc turning and a marquee crawling across a 236dp pill. That is worth it when
- * the pill is the thing being looked at, and pure waste when it is not: with
- * the settings window in front, those frames land on the same AWT EDT and
- * render pipeline the user is scrolling with, and cost roughly a sixth of a
- * core for an animation nobody can see.
- *
- * The rule is deliberately narrow so the default experience never changes:
- * animations are held only while settings is open *and* the notch is
- * collapsed. Expanding the notch hands the animations straight back, so a user
- * watching the dock always sees it live.
+ * Display rate (60 or 120Hz) buys nothing here — a 12s-per-turn disc advances
+ * about 1° per frame at 30fps, and a 30px/s marquee moves 1px per frame, both
+ * visually identical to display rate — while every push is a full overlay
+ * repaint on the EDT the settings window also renders on. So the animations are
+ * *rate-capped* rather than frozen: a top-centred notch stays visible even with
+ * settings open (the window floats under it, never over it), and a notch whose
+ * disc and analyser have visibly stopped reads as broken. Freezing was the first
+ * attempt at this budget and it looked like a bug; throttling gets the same
+ * energy saving without lying to the user.
  */
-internal fun pillAnimationsLive(settingsOpen: Boolean, expanded: Boolean): Boolean =
-    !settingsOpen || expanded
+internal const val PillAnimationFps = 30f
+internal val PillAnimationStepSec = 1f / PillAnimationFps
+
+/** The matching [kotlinx.coroutines.delay] step, in milliseconds. */
+internal val PillAnimationStepMillis = (1000L / PillAnimationFps).toLong()

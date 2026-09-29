@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -318,6 +319,19 @@ internal fun DockSizingTab(
                                 onUpdate { it.copy(widgets = it.widgets.copy(waveformTint = tint)) }
                             },
                             modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Hiding the title only means something while the bars
+                        // are on screen, so it lives with them rather than as a
+                        // dead switch elsewhere in the grid.
+                        Spacer(modifier = Modifier.height(14.dp))
+                        BehaviorSwitchRow(
+                            icon = Icons.Default.VisibilityOff,
+                            title = stringResource(Res.string.waveform_hide_title),
+                            checked = config.widgets.waveformHidesTitle,
+                            onCheckedChange = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(waveformHidesTitle = checked)) }
+                            }
                         )
                     }
 
