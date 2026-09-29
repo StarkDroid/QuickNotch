@@ -20,6 +20,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.datasource.AppPaths
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
@@ -54,6 +56,7 @@ import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
 fun main(args: Array<String>) {
+
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
@@ -110,6 +113,9 @@ fun main(args: Array<String>) {
             AudioBattery.start()
             SystemBattery.start()
             NotificationCount.start()
+            // Calendar is opt-in and file-backed: with no token on disk this
+            // returns immediately, so an unconnected user pays nothing.
+            GoogleCalendar.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
@@ -261,11 +267,16 @@ private fun NotchOverlayWindow(
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
+    val calendarState by GoogleCalendar.state.collectAsState()
     // The native window and the overlay content must size the quickview
     // identically, or the indicator slots (device + laptop battery + the
-    // notification bell) clip off the far edge. Both derive the slot count
-    // through the same helper.
-    val indicatorSlots = quickViewIndicatorSlots(config, musicLive, battery, deviceBattery, notificationCount)
+    // notification bell, the calendar mail badge) clip off the far edge. Both
+    // derive the slot count through the same helper.
+    val calendarEventCount =
+        if (config.widgets.showCalendar) (calendarState as? CalendarState.Connected)?.events?.size ?: 0 else 0
+    val indicatorSlots = quickViewIndicatorSlots(
+        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
+    )
     val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
         computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
     }

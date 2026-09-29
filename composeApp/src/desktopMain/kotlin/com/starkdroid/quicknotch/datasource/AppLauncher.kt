@@ -116,7 +116,12 @@ object AppLauncher {
         }
     }
 
-    private fun browse(url: String) {
+    /**
+     * Open a URL in the user's browser. Public because the calendar's OAuth
+     * consent screen is just another link to hand to the OS — same code path,
+     * so it also inherits the Windows `start`-via-cmd handling.
+     */
+    fun browse(url: String) {
         if (HostPlatform.isMac) {
             ProcessBuilder("open", url).start()
             return

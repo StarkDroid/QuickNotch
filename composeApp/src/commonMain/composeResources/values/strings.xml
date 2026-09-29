@@ -56,6 +56,19 @@
     <string name="waveform_tint_white">White</string>
     <string name="waveform_hide_title">Hide Song Title</string>
     <string name="notification_indicator">Unread notifications</string>
+    <string name="calendar_section_title">Calendar</string>
+    <string name="calendar_hint">Show today&#39;s Google Calendar events in the notch.</string>
+    <string name="calendar_connect">Connect Google Calendar</string>
+    <string name="calendar_disconnect">Disconnect</string>
+    <string name="calendar_refresh">Refresh</string>
+    <string name="calendar_connected_as">Connected as %1$s</string>
+    <string name="calendar_never_synced">Not synced yet</string>
+    <string name="calendar_last_sync">Updated %1$s</string>
+    <string name="calendar_error_auth">Sign-in didn\'t finish. Try connecting again.</string>
+    <string name="calendar_error_network">Couldn\'t reach Google. Showing the last known day.</string>
+    <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
+    <string name="calendar_today_count">%1$s events today</string>
+    <string name="calendar_ticker_label">Calendar event</string>
     <string name="notification_grant_button">Grant Full Disk Access</string>
     <string name="notification_grant_hint">QuickNotch needs Full Disk Access to read macOS notification counts.</string>
 

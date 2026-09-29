@@ -159,14 +159,18 @@ fun quickViewIndicatorSlots(
     musicLive: Boolean,
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
-    notificationCount: Int?
+    notificationCount: Int?,
+    calendarEventCount: Int
 ): Int {
     if (musicLive || config.style == NotchStyle.DRAG_HANDLE) return 0
     val notificationSlots =
         if (notificationCount != null && config.widgets.showCollapsedNotifications) 1 else 0
-    // Dots branch (no clock): only the bell renders beside the dots.
-    if (!(config.clockDate || config.clockTime)) return notificationSlots
-    return notificationSlots + listOfNotNull(
+    // The mail badge claims a slot only when it actually draws: a connected
+    // calendar with an empty day shows nothing, so it must not widen the pill.
+    val calendarSlots = if (config.widgets.showCalendar && calendarEventCount > 0) 1 else 0
+    // Dots branch (no clock): only the bell and the mail badge sit beside the dots.
+    if (!(config.clockDate || config.clockTime)) return notificationSlots + calendarSlots
+    return notificationSlots + calendarSlots + listOfNotNull(
         battery.takeIf { config.widgets.showCollapsedBattery },
         deviceBattery.takeIf { config.widgets.showCollapsedDeviceBattery }
     ).size

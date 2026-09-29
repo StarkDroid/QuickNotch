@@ -485,6 +485,8 @@ composeApp/
             │                             #   WindowPassthrough, MacAppKit
             │                             # (appkit/level/dock-policy front), scanners/icon loaders/
             │                             # launchers/startup
+            ├── calendar/                 # GoogleCalendar: OAuth (PKCE + loopback) -> today's
+            │                             #   events, tokens in calendar.json, ticker/Connected flows
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
@@ -506,6 +508,8 @@ composeApp/
                 ├── QuickViewClock.kt         # IdleClockRow + NotificationIndicator (+ laptop battery ring)
                 ├── IslandSurface.kt          # SOLID/TRANSLUCENT/SYSTEM_ACCENT surface brushes (accent cached per value)
                 ├── Shimmer.kt                # icon-skeleton shimmer (draw-phase-only invalidation)
+                ├── CalendarWidget.kt         # Widgets-tab Google Calendar (connect/refresh/status) +
+                │                             #   CalendarDayIndicator for the collapsed pill's mail badge
                 ├── PinnedAppsPanel.kt        # Widgets-tab pinned apps: PinnedAppsTab + rows (shared AppIconSlot/AppTitleColumn)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
                     # Tabs collect their OWN state from the repository (config/favorites/session) —
@@ -585,6 +589,7 @@ composeApp/
 | Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with a compact rectangular **Grant Full Disk Access** button (deep-links the Privacy &amp; Security pane; the helper row disappears once the count reads) | done (this session) — value is `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The residual count after a Clear All is honest: macOS keeps unread-badge apps' notifications (WhatsApp) *and* genuinely persistent rows (Screen Time weekly report) until read/dismissed, same as the Dock badges. A one-time **Send Test Notifications** flow (osascript banners / WinRT `toast.ps1`) was removed by request — the badge is a real NC ledger, not a demo surface. Windows has no store, so its bell stays hidden (`count` null). App version bumped to **3.0.0** |
 | Fresh manual launch opens the Settings window alongside the notch; login/boot auto-start stays quietly behind the tray (distinguished by `--quicknotch-launched-at-login`, written into the LaunchAgent/Run-key command) | done (this session) — verified on macOS via CGWindowList on both paths (manual = overlay + settings; marker = overlay only); Windows launch still unverified |
 | macOS above-menu-bar placement: overlay parked **flush at the true top of the screen** (level `NSStatusWindowLevel` 25, collection `canJoinAllSpaces|stationary|fullScreenAuxiliary|ignoresCycle`, top-gap = style edge gap) via `MacOverlayWindowPolicy` + the AppKit dylib; AWT would park it under the menu bar (its alwaysOnTop tops out at floating level 3 and placement clamps to the visible area) | done (this session) — **verified live**: `CGWindowList` shows the overlay at `kCGWindowLayer=25`, bounds `y=0`. Off-state (Always-on-top off) drops to level 0 and re-parks below the menu bar. Windows analog is AWT `alwaysOnTop` alone (unchanged) |
+| Google Calendar in the notch: OAuth connect in Widgets, today's events fetched on a 30-min poll + manual refresh, a calendar glyph badged with the day's count in the collapsed pill, and the event title on a ticker from 2 min before to 30 min after | done (this session) — **verified against a local stub of Google's endpoints** (consent redirect -> code -> token -> userinfo -> events, `expires_in: 0` to force the refresh branch): 3 of 5 events kept (cancelled + unnamed "Busy" dropped, all-day kept), all six ticker-window assertions pass, token/event caches written, a 503 on events keeps the last known day with `staleError`, `invalid_grant` clears the token and reports revoked, disconnect drops both. **The real consent screen is unverified** (needs the user's Google login) |
 | macOS Dock presence tied to the Settings window: accessory agent (no Dock icon, no app menu bar) while only the notch runs; Regular + activate while Settings is open — `MacDockPresence` via `setActivationPolicy` + reconcile loop | done (this session) — **verified live**: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` (Dock icon, in front) with Settings open; closing Settings returns to accessory. Activation is **one-shot on the open transition** — the reconcile loop only re-asserts the policy, so another app keeps focus (verified: TextEdit stays frontmost across ~12 ticks with Settings open, and stays front while media ticks fire with music playing — the presence controller lives in `DisposableEffect(Unit)`, not the composition body, see pitfall 20). Windows analog: overlay built with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar/Alt+Tab slot, no focus steal) — unverified until a Windows run |
 
 **Verification matrix (important!):**
@@ -940,6 +945,20 @@ composeApp/
     its blank face for a beat before the art lands.
 
 ---
+
+32. **Arm a derived-state loop on the "not ready yet" path, not the ready one.**
+    The calendar ticker resolved "is an event live right now" on a 1s tick that
+    was started inside `start()` *after* the "already connected at launch" early
+    return — so it only ever existed for a user who had connected before this
+    launch. Connecting from settings is the normal case, and that user got the
+    day, the badge, and a permanently empty ticker. The loop is now armed before
+    the token check, because it resolves against whatever is connected *now*.
+    General rule: a loop whose job is to publish derived state must start
+    unconditionally and idle cheaply (one `delay` + one equality check), not on
+    the branch where its input happens to already exist. Found by a stub harness
+    that reproduced the real order (launch disconnected -> connect later) — worth
+    remembering that a harness which only tests the happy path with inputs
+    pre-populated hides exactly this class of bug.
 
 ## 11. Git workflow
 

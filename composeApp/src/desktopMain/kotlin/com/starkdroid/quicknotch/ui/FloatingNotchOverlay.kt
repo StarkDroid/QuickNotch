@@ -46,6 +46,8 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
@@ -116,6 +118,14 @@ internal fun FloatingNotchOverlay(
     awtWindow: java.awt.Window? = null
 ) {
     val config by repository.config.collectAsState()
+
+    // Two reads for the calendar, both rare: a connect/refresh emits a handful
+    // of times a day and the ticker only changes on an event boundary. Collected
+    // here because the pill is the only thing that draws them.
+    val calendarState by GoogleCalendar.state.collectAsState()
+    val calendarTicker by GoogleCalendar.ticker.collectAsState()
+    val calendarEventCount =
+        if (config.widgets.showCalendar) (calendarState as? CalendarState.Connected)?.events?.size ?: 0 else 0
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -349,7 +359,9 @@ internal fun FloatingNotchOverlay(
     // helper the native window sizer in main.kt uses, so both ever agree on
     // the footprint. Gated to the idle branches: the drag-handle style renders
     // no indicators and a live media pill grows to its own fixed width.
-    val indicatorSlots = quickViewIndicatorSlots(config, musicLive, battery, deviceBattery, notificationCount)
+    val indicatorSlots = quickViewIndicatorSlots(
+        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
+    )
 
     val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
         computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
@@ -482,6 +494,13 @@ internal fun FloatingNotchOverlay(
                         showVolume = config.widgets.showCollapsedVolume,
                         showBattery = config.widgets.showCollapsedBattery,
                         showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
+                        // Calendar stays out of the morph: it is a collapsed-only
+                        // element, and the ticker borrows the media branch's slot
+                        // rather than a shared key, so nothing about the now-playing
+                        // morph changes when a meeting starts.
+                        showCalendar = config.widgets.showCalendar,
+                        calendarEvent = calendarTicker?.summary,
+                        calendarEventCount = calendarEventCount,
                         showWaveform = config.widgets.showCollapsedWaveform,
                         waveformColor = waveformColor,
                         waveformHidesTitle =

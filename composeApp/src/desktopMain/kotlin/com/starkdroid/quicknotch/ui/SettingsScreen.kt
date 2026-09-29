@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.InstalledAppsScanner
+import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
@@ -58,6 +59,11 @@ fun SettingsScreen(
     val tabIcons = listOf(Icons.Default.Tune, Icons.Default.Apps, Icons.Default.ToggleOn)
 
     var showAboutDialog by remember { mutableStateOf(false) }
+
+    // The calendar connection is a process-wide, file-backed thing (tokens on
+    // disk), not a screen concern: the widget reads its state, the notch reads
+    // the same flow, and only the actions are handed down.
+    val calendarState by GoogleCalendar.state.collectAsState()
 
     // Restore the appearance/sizing/clock defaults. This is the same set the tab
     // used to own; it now lives here because the button sits in the top bar, and
@@ -187,7 +193,11 @@ fun SettingsScreen(
                         scannedApps = scannedApps,
                         searchQuery = searchQuery,
                         isScanning = isScanning,
-                        onSearchQueryChange = { searchQuery = it }
+                        onSearchQueryChange = { searchQuery = it },
+                        calendarState = calendarState,
+                        onConnectCalendar = GoogleCalendar::connect,
+                        onDisconnectCalendar = GoogleCalendar::disconnect,
+                        onRefreshCalendar = GoogleCalendar::refresh
                     )
                     2 -> BehaviorTab(repository = repository)
                 }

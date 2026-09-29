@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.HostPlatform
+import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaSession
@@ -69,7 +70,11 @@ internal fun WidgetsTab(
     scannedApps: List<AppItem>,
     searchQuery: String,
     isScanning: Boolean,
-    onSearchQueryChange: (String) -> Unit
+    onSearchQueryChange: (String) -> Unit,
+    calendarState: CalendarState,
+    onConnectCalendar: () -> Unit,
+    onDisconnectCalendar: () -> Unit,
+    onRefreshCalendar: () -> Unit
 ) {
     // The tab owns its state subscriptions: config drives the accordions and
     // the label switch; favorites drive the pinned list. Neither the settings
@@ -165,6 +170,29 @@ internal fun WidgetsTab(
                 }
             }
         }
+        item(key = "calendar") {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = FlatSurface),
+                border = BorderStroke(1.dp, FlatBorder),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    SectionHeader(Icons.Default.CalendarMonth, stringResource(Res.string.calendar_section_title))
+                    Spacer(modifier = Modifier.height(14.dp))
+                    CalendarWidget(
+                        state = calendarState,
+                        showInQuickView = config.widgets.showCalendar,
+                        onShowInQuickViewChange = { enabled ->
+                            onUpdate { it.copy(widgets = it.widgets.copy(showCalendar = enabled)) }
+                        },
+                        onConnect = onConnectCalendar,
+                        onDisconnect = onDisconnectCalendar,
+                        onRefresh = onRefreshCalendar
+                    )
+                }
+            }
+        }
+
     }
 }
 

@@ -69,6 +69,16 @@ internal fun QuickView(
      * whole title frame, so the live pill reads as disc + bars + level rings.
      */
     waveformHidesTitle: Boolean = false,
+    /**
+     * Calendar element (collapsed view only): [calendarEvent] is the live
+     * event's title for the ticker — null unless one is running right now — and
+     * [calendarEventCount] is how many events the day has, for the badged
+     * calendar glyph. Gated by the widget toggle in settings, which is also
+     * what decides whether a connection exists at all.
+     */
+    showCalendar: Boolean = false,
+    calendarEvent: String? = null,
+    calendarEventCount: Int = 0,
     /** Shared-element morph modifiers for the live-activity disc/title/rings. */
     discModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
@@ -168,6 +178,9 @@ internal fun QuickView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (showCalendar) {
+                        CalendarDayIndicator(count = calendarEventCount)
+                    }
                     if (showVolume && volumePercent != null) {
                         // Mirror the expanded page exactly: a muted system
                         // reads as level 0 with a dimmed glyph and ring, so the
@@ -200,6 +213,22 @@ internal fun QuickView(
                     }
                 }
             }
+        } else if (calendarEvent != null) {
+            // A calendar event takes the middle slot while it is live, so an
+            // idle pill still reads as the clock-or-dots row it always was —
+            // just with the meeting's name scrolling in the space the clock
+            // used. Sits below the media branch deliberately: music playing
+            // always wins the pill, and the ticker waits its turn.
+            MarqueeText(
+                text = calendarEvent,
+                color = LevelRingGlyph,
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp)
+            )
         } else if (clock.showDate || clock.showTime) {
             // Idle clock: date / time replace the dots while nothing plays.
             // Depending on the chosen format and pill width the whole phrase
@@ -228,6 +257,9 @@ internal fun QuickView(
                 Box(Modifier.size(5.dp).clip(CircleShape).background(dot.copy(alpha = 0.28f)))
                 if (notificationCount != null) {
                     NotificationIndicator(count = notificationCount, tint = dot.copy(alpha = 0.8f))
+                }
+                if (showCalendar) {
+                    CalendarDayIndicator(count = calendarEventCount)
                 }
             }
         }

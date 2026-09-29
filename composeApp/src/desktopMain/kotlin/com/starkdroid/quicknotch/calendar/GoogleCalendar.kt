@@ -1,0 +1,563 @@
+package com.starkdroid.quicknotch.calendar
+
+import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.AppPaths
+import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.URL
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermission
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.util.Base64
+import java.util.EnumSet
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+
+/**
+ * How early before an event the ticker appears, so a 10:00 meeting is already
+ * on screen at 9:58 rather than popping in as it starts. File scope (not on
+ * [GoogleCalendar]) because [CalendarState] reads it too.
+ */
+const val TICKER_LEAD_MS = 2 * 60 * 1000L
+
+/** How long the ticker lingers after an event ends, so a one-minute entry is
+ *  still readable instead of blinking past. */
+const val TICKER_LINGER_MS = 30 * 60 * 1000L
+
+/**
+ * One event on the user's primary calendar, reduced to what the notch shows.
+ *
+ * All-day entries still count towards the day's badge but never drive the
+ * ticker: a day-long "Team offsite" is not worth interrupting the pill for.
+ */
+data class CalendarEvent(
+    val id: String,
+    val summary: String,
+    val startMillis: Long,
+    val endMillis: Long,
+    val allDay: Boolean
+) {
+    fun containsAt(nowMillis: Long): Boolean =
+        nowMillis >= startMillis && nowMillis < maxOf(endMillis, startMillis + 1)
+}
+
+/** Everything the settings widget and the quickview need to know. */
+sealed interface CalendarState {
+    /** No tokens on disk: the user has never connected. */
+    data object Disconnected : CalendarState
+
+    /** A browser round-trip is in flight (waiting for the consent screen). */
+    data object Connecting : CalendarState
+
+    /**
+     * Connected. [events] is the most recent successful fetch — or the cached
+     * list at launch, until the first fetch lands. [staleError] marks a failed
+     * refresh that left a still-good list on screen.
+     */
+    data class Connected(
+        val account: String,
+        val events: List<CalendarEvent>,
+        val fetchedAtMillis: Long,
+        val staleError: String? = null
+    ) : CalendarState {
+        /** The timed event to put on the ticker at [nowMillis], if any. */
+        fun tickerEventAt(nowMillis: Long): CalendarEvent? = events.firstOrNull { event ->
+            !event.allDay &&
+                event.startMillis - TICKER_LEAD_MS <= nowMillis &&
+                event.endMillis + TICKER_LINGER_MS > nowMillis
+        }
+    }
+
+    /**
+     * Something failed. [reason] is a stable key the UI localises (never a raw
+     * server message, which would leak internals into the settings window).
+     */
+    data class Error(val reason: String) : CalendarState
+}
+
+/**
+ * Google Calendar, read-only, via the OAuth 2.0 authorization-code flow with
+ * PKCE and a loopback redirect — the shape Google documents for installed
+ * desktop apps, where no client secret exists and PKCE is what protects the
+ * code exchange.
+ *
+ * Everything runs in the poller's own IO scope: the consent round-trip blocks
+ * on a loopback socket, so it can never happen on the EDT.
+ *
+ * - Tokens live in `calendar.json` beside the config, and the last good event
+ *   list in `calendar-events.json`, so a cold start shows today's plan before
+ *   any network call completes.
+ * - The access token is refreshed on demand (expiry skew, or a 401 mid-flight)
+ *   and a revoked refresh token drops straight back to [CalendarState.Disconnected]
+ *   so the widget offers "Connect" instead of looping failures.
+ * - A failed refresh never clears a good list; it annotates it with
+ *   [CalendarState.Connected.staleError].
+ */
+object GoogleCalendar {
+    // Desktop-app client id from Google Cloud (APIs & Services → Credentials →
+    // OAuth client ID → Desktop app). Desktop clients are public by design:
+    // PKCE protects the exchange, so there is no secret to protect.
+    private const val CLIENT_ID = "317663226214-5mfkivfvkishd2v3bg1jhv7go2vsshgh.apps.googleusercontent.com"
+
+    private const val AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+    private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+    private const val USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
+    private const val EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+
+    /** Read-only calendar, plus the address used to label the connection. */
+    private const val SCOPE =
+        "https://www.googleapis.com/auth/calendar.readonly " +
+            "https://www.googleapis.com/auth/userinfo.email"
+
+    private const val POLL_MS = 30 * 60 * 1000L
+    private const val TOKEN_SKEW_MS = 60_000L
+    private const val CONNECT_TIMEOUT_MS = 5 * 60 * 1000L
+
+    /** Reason keys; the UI maps them to localized strings. */
+    const val REASON_AUTH = "auth"
+    const val REASON_NETWORK = "network"
+    const val REASON_REVOKED = "revoked"
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val random = SecureRandom()
+
+    private val _state = MutableStateFlow<CalendarState>(CalendarState.Disconnected)
+    val state: StateFlow<CalendarState> = _state.asStateFlow()
+
+    /**
+     * The event whose ticker is up right now, or null. Resolved here rather than
+     * in the overlay so "is an event live" is one rule next to the window that
+     * defines it — the notch only has to read a flow.
+     */
+    private val _ticker = MutableStateFlow<CalendarEvent?>(null)
+    val ticker: StateFlow<CalendarEvent?> = _ticker.asStateFlow()
+
+    private val tokenFile: File get() = File(AppPaths.configDir, "calendar.json")
+    private val eventsFile: File get() = File(AppPaths.configDir, "calendar-events.json")
+
+    private var cached: Tokens? = null
+    private var tickerJob: Job? = null
+    private var pollJob: Job? = null
+
+    // ── lifecycle ───────────────────────────────────────────────────────────
+
+    /** Start the poller. Idempotent; called once from the app. */
+    fun start() {
+        if (pollJob != null) return
+
+        // The ticker loop is armed *before* the token check on purpose: it
+        // resolves against whatever is connected right now, and connecting is
+        // something the user does from settings long after launch. Started only
+        // on the "already connected at launch" path it would never run for that
+        // user — they would get the day and the badge, and a permanently empty
+        // ticker. It is cheap when idle: one delay, one equality check.
+        startTicker()
+
+        cached = readTokens()
+        if (cached == null) {
+            _state.value = CalendarState.Disconnected
+            return
+        }
+        // Show the cached day immediately, then refresh in the background.
+        _state.value = CalendarState.Connected(
+            account = cached!!.account,
+            events = readCachedEvents(),
+            fetchedAtMillis = 0L
+        )
+        pollJob = scope.launch {
+            refreshBlocking()
+            while (isActive) {
+                delay(POLL_MS)
+                refreshBlocking()
+            }
+        }
+    }
+
+    /**
+     * A cheap 1s tick that only writes when the answer changes: event boundaries
+     * are all the ticker cares about, and an unchanged value costs no
+     * recomposition (pitfall 29's rule, applied to a flow rather than an
+     * animation). 1s is finer than the resolution any calendar UI needs.
+     */
+    private fun startTicker() {
+        if (tickerJob != null) return
+        tickerJob = scope.launch {
+            while (isActive) {
+                val next = (_state.value as? CalendarState.Connected)
+                    ?.tickerEventAt(System.currentTimeMillis())
+                if (next != _ticker.value) _ticker.value = next
+                delay(1000L)
+            }
+        }
+    }
+
+    /** Open the consent screen and wait for the code to come back on loopback. */
+    fun connect() {
+        if (_state.value is CalendarState.Connecting) return
+        scope.launch {
+            _state.value = CalendarState.Connecting
+            val tokens = runCatching { authorize() }.getOrNull()
+            if (tokens == null) {
+                _state.value = CalendarState.Error(REASON_AUTH)
+                return@launch
+            }
+            cached = tokens
+            writeTokens(tokens)
+            // Consent succeeding proves nothing; the first fetch is the real test.
+            refreshBlocking()
+        }
+    }
+
+    /** Forget the tokens and stop showing anything. */
+    fun disconnect() {
+        cached = null
+        pollJob?.cancel()
+        pollJob = null
+        runCatching { tokenFile.delete() }
+        runCatching { eventsFile.delete() }
+        _state.value = CalendarState.Disconnected
+        // Otherwise the pill keeps scrolling an event from a calendar we just
+        // unhooked; the loop itself keeps running and resolves null.
+        _ticker.value = null
+    }
+
+    /** The settings widget's "Refresh now". */
+    fun refresh() {
+        scope.launch { refreshBlocking() }
+    }
+
+    // ── OAuth ───────────────────────────────────────────────────────────────
+
+    private fun authorize(): Tokens? {
+        val verifier = randomUrlToken(64)
+        val challenge = base64Url(sha256(verifier))
+        val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
+        val redirect = "http://127.0.0.1:${server.address.port}/"
+        val received = CompletableFuture<String>()
+
+        server.createContext("/") { exchange ->
+            val code = exchange.requestURI.rawQuery.orEmpty()
+                .split("&")
+                .firstOrNull { it.startsWith("code=") }
+                ?.removePrefix("code=")
+                ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrNull() }
+            val body = CONSENT_PAGE.toByteArray()
+            exchange.responseHeaders.add("Content-Type", "text/html; charset=utf-8")
+            runCatching {
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            if (code != null) received.complete(code)
+        }
+        server.start()
+        return try {
+            AppLauncher.browse(
+                AUTH_ENDPOINT + "?" + listOf(
+                    "client_id" to CLIENT_ID,
+                    "redirect_uri" to redirect,
+                    "response_type" to "code",
+                    "scope" to SCOPE,
+                    // Offline so we get a refresh token at all. `prompt=consent`
+                    // only on a fresh connect: without it Google silently
+                    // withholds the refresh token for an already-authorised app.
+                    "access_type" to "offline",
+                    "prompt" to "consent",
+                    "code_challenge" to challenge,
+                    "code_challenge_method" to "S256"
+                ).joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
+            )
+            val code = received.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            exchangeCode(code, redirect, verifier)
+        } catch (_: Exception) {
+            null
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    private fun exchangeCode(code: String, redirect: String, verifier: String): Tokens? {
+        val response = postForm(
+            TOKEN_ENDPOINT,
+            mapOf(
+                "client_id" to CLIENT_ID,
+                "code" to code,
+                "code_verifier" to verifier,
+                "grant_type" to "authorization_code",
+                "redirect_uri" to redirect
+            )
+        ) ?: return null
+        val access = response.str("access_token") ?: return null
+        return Tokens(
+            accessToken = access,
+            refreshToken = response.str("refresh_token"),
+            expiresAtMillis = expiryFrom(response),
+            account = response.str("account_hint").orEmpty()
+        )
+    }
+
+    private fun refreshed(previous: Tokens): Tokens? {
+        val refresh = previous.refreshToken ?: return null
+        val response = postForm(
+            TOKEN_ENDPOINT,
+            mapOf(
+                "client_id" to CLIENT_ID,
+                "refresh_token" to refresh,
+                "grant_type" to "refresh_token"
+            )
+        ) ?: return null
+        val access = response.str("access_token") ?: return null
+        return previous.copy(accessToken = access, expiresAtMillis = expiryFrom(response))
+    }
+
+    private fun expiryFrom(response: JsonObject): Long =
+        System.currentTimeMillis() + (response.str("expires_in")?.toLongOrNull() ?: 3600L) * 1000L
+
+    // ── fetching ────────────────────────────────────────────────────────────
+
+    private suspend fun refreshBlocking() {
+        var tokens = cached ?: readTokens() ?: run {
+            _state.value = CalendarState.Disconnected
+            return
+        }
+        if (tokens.expiresAtMillis - TOKEN_SKEW_MS < System.currentTimeMillis()) {
+            tokens = refreshed(tokens) ?: run { revoked(); return }
+            cached = tokens
+            writeTokens(tokens)
+        }
+
+        var events = fetchToday(tokens.accessToken)
+        if (events == null && tokens.refreshToken != null) {
+            // Most likely an access token revoked server-side since we cached
+            // it: refresh once and retry before giving up.
+            tokens = refreshed(tokens) ?: run { revoked(); return }
+            cached = tokens
+            writeTokens(tokens)
+            events = fetchToday(tokens.accessToken)
+        }
+        if (events == null) {
+            val previous = _state.value as? CalendarState.Connected
+            _state.value = previous?.copy(staleError = REASON_NETWORK)
+                ?: CalendarState.Error(REASON_NETWORK)
+            return
+        }
+
+        val account = tokens.account.ifBlank {
+            accountEmail(tokens.accessToken) ?: "Google"
+        }
+        val labelled = tokens.copy(account = account)
+        cached = labelled
+        writeTokens(labelled)
+        writeCachedEvents(events)
+        _state.value = CalendarState.Connected(
+            account = account,
+            events = events,
+            fetchedAtMillis = System.currentTimeMillis()
+        )
+    }
+
+    /** Google withdrew access (refresh token dead): forget it so the UI can re-prompt. */
+    private fun revoked() {
+        cached = null
+        runCatching { tokenFile.delete() }
+        _state.value = CalendarState.Error(REASON_REVOKED)
+    }
+
+    private fun fetchToday(accessToken: String): List<CalendarEvent>? {
+        val raw = get(
+            URL(
+                EVENTS_ENDPOINT +
+                    "?timeMin=${dayStartMillis() / 1000}" +
+                    "&timeMax=${dayEndMillis() / 1000}" +
+                    "&singleEvents=true&orderBy=startTime&maxResults=50"
+            ),
+            accessToken
+        ) ?: return null
+        return runCatching {
+            val items = json.parseToJsonElement(raw).jsonObject["items"]?.jsonArray ?: return emptyList()
+            items.mapNotNull { item ->
+                val obj = item.jsonObject
+                if (obj.str("status") == "cancelled") return@mapNotNull null
+                val id = obj.str("id") ?: return@mapNotNull null
+                // Unnamed entries ("Busy") would put a meaningless word on the
+                // pill's ticker, so they are left to the count only.
+                val summary = obj.str("summary")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val start = obj["start"]?.jsonObject ?: return@mapNotNull null
+                val end = obj["end"]?.jsonObject ?: return@mapNotNull null
+                val allDay = start["date"]?.jsonPrimitive?.contentOrNullSafe() != null
+                val startMillis = (start.str("dateTime") ?: start.str("date"))
+                    ?.let { parseMillis(it, allDay) } ?: return@mapNotNull null
+                val endMillis = (end.str("dateTime") ?: end.str("date"))
+                    ?.let { parseMillis(it, allDay) } ?: (startMillis + 3_600_000L)
+                CalendarEvent(id, summary, startMillis, endMillis, allDay)
+            }
+        }.getOrNull()
+    }
+
+    private fun dayStartMillis(): Long =
+        LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    private fun dayEndMillis(): Long =
+        LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    /** `2026-09-30T10:00:00+05:30` for timed events, `2026-09-30` for all-day. */
+    private fun parseMillis(value: String, allDay: Boolean): Long? = runCatching {
+        if (allDay) {
+            LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } else {
+            OffsetDateTime.parse(value).toInstant().toEpochMilli()
+        }
+    }.getOrNull()
+
+    private fun accountEmail(accessToken: String): String? = runCatching {
+        get(URL(USERINFO_ENDPOINT), accessToken)?.let { raw ->
+            json.parseToJsonElement(raw).jsonObject.str("email")
+        }
+    }.getOrNull()
+
+    // ── HTTP ────────────────────────────────────────────────────────────────
+
+    private fun get(url: URL, accessToken: String): String? = runCatching {
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            connectTimeout = 10_000
+            readTimeout = 15_000
+        }
+        try {
+            if (connection.responseCode !in 200..299) return null
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrNull()
+
+    private fun postForm(endpoint: String, form: Map<String, String>): JsonObject? = runCatching {
+        val connection = URL(endpoint).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 20_000
+            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            val body = form.entries.joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
+            connection.outputStream.use { it.write(body.toByteArray()) }
+            val stream = if (connection.responseCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream ?: return null
+            }
+            val text = stream.bufferedReader().use { it.readText() }
+            json.parseToJsonElement(text).jsonObject
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrNull()
+
+    // ── token + event store ─────────────────────────────────────────────────
+
+    @Serializable
+    private data class Tokens(
+        val accessToken: String,
+        val refreshToken: String? = null,
+        val expiresAtMillis: Long,
+        val account: String = ""
+    )
+
+    @Serializable
+    private data class CachedEvents(val events: List<CachedEvent> = emptyList())
+
+    @Serializable
+    private data class CachedEvent(
+        val id: String,
+        val summary: String,
+        val start: Long,
+        val end: Long,
+        val allDay: Boolean
+    )
+
+    private fun readTokens(): Tokens? = runCatching {
+        if (!tokenFile.isFile) return null
+        val tokens = json.decodeFromString(Tokens.serializer(), tokenFile.readText())
+        if (tokens.accessToken.isBlank()) null else tokens
+    }.getOrNull()
+
+    private fun writeTokens(tokens: Tokens) {
+        runCatching {
+            if (!tokenFile.parentFile.exists()) tokenFile.parentFile.mkdirs()
+            tokenFile.writeText(json.encodeToString(Tokens.serializer(), tokens))
+            // Holds a bearer token: keep it to the owner.
+            Files.setPosixFilePermissions(
+                tokenFile.toPath(),
+                EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
+            )
+        }
+    }
+
+    private fun readCachedEvents(): List<CalendarEvent> = runCatching {
+        if (!eventsFile.isFile) return emptyList()
+        json.decodeFromString(CachedEvents.serializer(), eventsFile.readText()).events.map {
+            CalendarEvent(it.id, it.summary, it.start, it.end, it.allDay)
+        }
+    }.getOrElse { emptyList() }
+
+    private fun writeCachedEvents(events: List<CalendarEvent>) {
+        runCatching {
+            eventsFile.writeText(
+                json.encodeToString(
+                    CachedEvents.serializer(),
+                    CachedEvents(events.map { CachedEvent(it.id, it.summary, it.startMillis, it.endMillis, it.allDay) })
+                )
+            )
+        }
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    private fun JsonObject.str(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNullSafe()?.takeIf { it.isNotBlank() }
+
+    private fun JsonPrimitive.contentOrNullSafe(): String? = runCatching { content }.getOrNull()
+
+    private fun randomUrlToken(bytes: Int): String = base64Url(ByteArray(bytes).also { random.nextBytes(it) })
+
+    private fun sha256(value: String): ByteArray =
+        MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+
+    private fun base64Url(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+
+    private fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8")
+
+    private const val CONSENT_PAGE =
+        "<!doctype html><meta charset=utf-8><title>QuickNotch</title>" +
+            "<body style=\"font:15px system-ui;background:#111;color:#eee;padding:48px\">" +
+            "<h2 style=\"font-weight:600\">QuickNotch is connected</h2>" +
+            "<p>You can close this tab and go back to the app.</p>"
+}

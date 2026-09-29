@@ -89,6 +89,12 @@ data class WidgetsConfig(
      * Never rendered in the expanded music page.
      */
     val showCollapsedWaveform: Boolean = true,
+    /**
+     * Google Calendar in the collapsed pill: a mail glyph badged with today's
+     * event count, and the event title on a ticker while an event is live.
+     * Requires a connection (see the Calendar widget in the Widgets tab).
+     */
+    val showCalendar: Boolean = false,
     /** Album-art-derived or constant white; see [WaveformTint]. */
     val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
     /**
