@@ -946,6 +946,20 @@ composeApp/
 
 ---
 
+33. **A desktop OAuth client in Google's "Testing" consent status only lets
+    *test users* through.** A brand-new client refuses everyone else with
+    `access_denied` and the description "The developer hasn’t given you access
+    to this app. It’s currently being tested and it hasn’t been verified by
+    Google" — no loopback callback, no browser tab the user can read, and
+    nothing in the app to distinguish it from pressing Cancel. Verified by
+    decoding the `authError` parameter out of the redirect Google *did* serve.
+    Fix is in the Cloud console (add the account under OAuth consent screen →
+    Test users, or publish the app to External), never in the code. Because the
+    symptom is invisible from a packaged app, `datasource/AppLog.kt` mirrors the
+    diagnostics into `quicknotch.log` in the app-data dir: stderr is perfect for
+    a Gradle run and worthless for a `.app`, and a failure the user can only
+    describe is a failure we cannot read.
+
 32. **Arm a derived-state loop on the "not ready yet" path, not the ready one.**
     The calendar ticker resolved "is an event live right now" on a 1s tick that
     was started inside `start()` *after* the "already connected at launch" early
