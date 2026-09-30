@@ -327,10 +327,10 @@ private fun String.localized(): StringResource = when (this) {
     
 
 /**
- * The expanded notch's calendar page: the next five dates that actually have an
- * event coming, soonest first, one tile each with the day in a large size and a
- * count badge. Five rows cannot fit the island's ~84dp depth, so the dates run
- * as a single row of tiles -- the wheel flips to this page like any other.
+ * The expanded notch's calendar page: the next four dates that actually have an
+ * event coming, soonest first, one tile each with its month-labelled date over
+ * a count badge. Rows cannot fit the island's ~84dp depth, so the dates run as
+ * a single row of tiles -- the wheel flips to this page like any other.
  *
  * Loading is never blocking: while a fetch runs with nothing to show yet the
  * page is a small spinner, and an empty-but-settled calendar says so in words.

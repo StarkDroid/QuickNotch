@@ -60,12 +60,14 @@ fun todayDate(
 
 /**
  * The window the app fetches: from local midnight today through [days] days
- * ahead. One fetch serves everything -- the pill's today badge, the ticker and
- * the upcoming-days page -- so there is exactly one thing to keep in sync with
- * Google's bounds instead of three queries drifting apart.
+ * ahead. Ninety, not thirty: the dates the schedule page promises -- "10 Oct,
+ * 20 Nov, 25 Dec" -- sit months out, and a window narrower than the page's
+ * reach quietly amputates them. One fetch serves everything -- the pill badge,
+ * the ticker and the schedule page -- so there is exactly one thing to keep in
+ * sync with Google's bounds instead of three queries drifting apart.
  */
 fun upcomingWindowMillis(
-    days: Int = 30,
+    days: Int = 90,
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
     today: LocalDate = Clock.System.todayIn(timeZone)
 ): Pair<Long, Long> {
@@ -116,17 +118,17 @@ fun List<CalendarEvent>.upcomingCount(
 ): Int = count { it.endMillis >= nowMillis }
 
 /**
- * The next [maxDates] dates with an event coming, soonest first. Today comes
- * first when it has one still running or ahead -- the schedule view shows the
- * current day's events, and a page that says "No upcoming events" while this
- * evening's meeting exists is simply lying. Gaps are the point: a quiet
- * calendar should not show five empty days.
+ * The next [maxDates] dates with an event coming, soonest first -- four, one
+ * per date even when a date carries several, because the schedule row is about
+ * where the calendar is heading, not how dense today is. Today comes first
+ * when it has one still running or ahead; gaps are the point, and a quiet
+ * calendar should not show empty days.
  */
 fun List<CalendarEvent>.upcomingDateGroups(
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
     today: LocalDate = Clock.System.todayIn(timeZone),
     nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
-    maxDates: Int = 5
+    maxDates: Int = 4
 ): List<CalendarDateGroup> {
     val upcoming = filter { it.endMillis >= nowMillis }
     return upcoming

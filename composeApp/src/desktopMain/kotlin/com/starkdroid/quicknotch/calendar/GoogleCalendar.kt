@@ -114,6 +114,9 @@ object GoogleCalendar {
 
     private const val POLL_MS = 30 * 60 * 1000L
     private const val TOKEN_SKEW_MS = 60_000L
+
+    /** How far ahead one fetch reaches; the schedule page's dates live in here. */
+    private const val FETCH_WINDOW_DAYS = 90L
     private const val CONNECT_TIMEOUT_MS = 5 * 60 * 1000L
 
     /**
@@ -558,10 +561,10 @@ object GoogleCalendar {
      * of bug from an afternoon into a sentence.
      */
     private suspend fun fetchDay(tokens: Tokens): FetchOutcome {
-        val (windowStart, windowEnd) = upcomingWindowMillis()
+        val (windowStart, windowEnd) = upcomingWindowMillis(FETCH_WINDOW_DAYS.toInt())
         return when (val result = api.events(tokens.accessToken, windowStart, windowEnd)) {
             is EventsResult.Ok -> {
-                log("day fetched: ${result.events.size} events over the next 30 days")
+                log("day fetched: ${result.events.size} events over the next ${FETCH_WINDOW_DAYS} days")
                 FetchOutcome.Ok(result.events)
             }
             is EventsResult.Http -> {
