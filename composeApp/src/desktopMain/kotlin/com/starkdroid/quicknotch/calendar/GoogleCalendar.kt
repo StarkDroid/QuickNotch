@@ -3,7 +3,6 @@ package com.starkdroid.quicknotch.calendar
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.AppLog
 import com.starkdroid.quicknotch.datasource.AppPaths
-import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,7 +24,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.InetAddress
-import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -255,6 +254,12 @@ object GoogleCalendar {
     fun connect() {
         if (_state.value is CalendarState.Connecting) return
         cancelledByUser = false
+        // Each attempt starts from the generic reason. Without this the widget
+        // reported whatever the *previous* failure was whenever a path returned
+        // null without setting one (a rejected token exchange, say), so a
+        // "not verified" from two clicks ago was still on screen after an
+        // unrelated one.
+        connectFailure = REASON_AUTH
         connectJob = scope.launch {
             _state.value = CalendarState.Connecting
             val tokens = authorize()
@@ -308,38 +313,38 @@ object GoogleCalendar {
 
     // ── OAuth ───────────────────────────────────────────────────────────────
 
+    /**
+     * The whole consent handshake, in one try so that *nothing* can leave the
+     * widget spinning: a throw while setting up the listener used to escape
+     * uncaught, kill the coroutine, and strand the state on [CalendarState.Connecting]
+     * with no log line and no way out.
+     */
     private fun authorize(): Tokens? {
         val verifier = randomUrlToken(64)
         val challenge = base64Url(sha256(verifier))
-        val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
-        val redirect = "http://127.0.0.1:${server.address.port}/"
-        val received = CompletableFuture<String>()
         val started = System.currentTimeMillis()
-
-        server.createContext("/") { exchange ->
-            val query = queryParams(exchange.requestURI.rawQuery)
-            val body = CONSENT_PAGE.toByteArray()
-            exchange.responseHeaders.add("Content-Type", "text/html; charset=utf-8")
-            runCatching {
-                exchange.sendResponseHeaders(200, body.size.toLong())
-                exchange.responseBody.use { it.write(body) }
-            }
-            when {
-                // Google bounces the browser back with `error=...` when consent
-                // was declined, the client is unknown, or the grant is blocked.
-                // Read it instead of sitting out the whole timeout on a callback
-                // that will never carry a code — that wait is what made a
-                // declined sign-in and a broken one look identical.
-                query["error"] != null -> received.completeExceptionally(
-                    GoogleAuthException(query.getValue("error"), query["error_description"])
-                )
-                query["code"] != null -> received.complete(query.getValue("code"))
-            }
-        }
-        server.start()
-        pendingCallback = received
-        log("consent server on $redirect")
+        val received = CompletableFuture<String>()
+        var listener: ServerSocket? = null
+        var listenerThread: Thread? = null
+        var redirect = ""
         return try {
+            val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
+            server.soTimeout = CONNECT_TIMEOUT_MS.toInt()
+            listener = server
+            redirect = "http://127.0.0.1:${server.localPort}/"
+
+            // One request, one answer, then done: the redirect is a single GET
+            // carrying Google's answer in the query string.
+            listenerThread = Thread({
+                runCatching { serveCallback(server) }
+                    .onFailure { received.completeExceptionally(it) }
+            }, "quicknotch-oauth-callback").apply {
+                isDaemon = true
+                start()
+            }
+            pendingCallback = received
+            log("consent server on $redirect")
+
             AppLauncher.browse(
                 AUTH_ENDPOINT + "?" + listOf(
                     "client_id" to CLIENT_ID,
@@ -356,6 +361,7 @@ object GoogleCalendar {
                 ).joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
             )
             log("browser handed off, waiting for the callback (${CONNECT_TIMEOUT_MS / 60_000} min budget)")
+
             val code = received.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             log("callback carried a code after ${(System.currentTimeMillis() - started) / 1000}s")
             exchangeCode(code, redirect, verifier)
@@ -374,6 +380,7 @@ object GoogleCalendar {
             } else {
                 connectFailure = REASON_AUTH
                 log("consent wait failed: $cause")
+                AppLog.line("Google sign-in wait failed: $cause")
             }
             null
         } catch (e: TimeoutException) {
@@ -386,9 +393,77 @@ object GoogleCalendar {
             log("consent failed: $e")
             AppLog.line("Google sign-in failed: $e")
             null
+        } catch (e: Error) {
+            // NoClassDefFoundError and friends are Errors, not Exceptions, so
+            // the clause above misses them entirely — which is exactly how a
+            // missing runtime module used to vanish without a trace.
+            connectFailure = REASON_AUTH
+            log("consent died: $e")
+            AppLog.line("Google sign-in died: $e")
+            null
         } finally {
             pendingCallback = null
-            server.stop(0)
+            runCatching { listener?.close() }
+            listenerThread?.interrupt()
+        }
+    }
+
+    /**
+     * Answer one loopback request and pull the answer out of its query string.
+     *
+     * Hand-rolled on a plain [ServerSocket] rather than
+     * `com.sun.net.httpserver.HttpServer`: jlink trims the runtime jpackage
+     * bundles, and `jdk.httpserver` is not in the image Compose ships, so
+     * referencing that class threw `NoClassDefFoundError` in the packaged app
+     * and nowhere else. `ServerSocket` is `java.base`, so it is always there.
+     * The whole exchange is four headers and a small page, which is all this
+     * needs to be.
+     */
+    private fun serveCallback(server: ServerSocket) {
+        server.accept().use { socket ->
+            socket.soTimeout = 15_000
+            val reader = socket.getInputStream().bufferedReader()
+            val requestLine = reader.readLine() ?: return
+            val target = requestLine.split(" ").getOrNull(1).orEmpty()
+            // Read the headers off so the browser never writes into a full
+            // buffer while we are composing the reply.
+            while (true) {
+                val line = reader.readLine() ?: break
+                if (line.isEmpty()) break
+            }
+            val body = CONSENT_PAGE.toByteArray()
+            val head = buildString {
+                append("HTTP/1.1 200 OK\r\n")
+                append("Content-Type: text/html; charset=utf-8\r\n")
+                append("Content-Length: ").append(body.size).append("\r\n")
+                append("Cache-Control: no-store\r\n")
+                append("Connection: close\r\n\r\n")
+            }.toByteArray()
+            socket.getOutputStream().apply {
+                write(head)
+                write(body)
+                flush()
+            }
+
+            val query = queryParams(target.substringAfter('?', ""))
+            when {
+                // Google bounces the browser back with `error=...` when consent
+                // was declined, the client is unknown, or the grant is blocked.
+                // Read it instead of sitting out the whole timeout on a callback
+                // that will never carry a code — that wait is what made a
+                // declined sign-in and a broken one look identical.
+                query["error"] != null -> {
+                    log("callback carried ${query.getValue("error")}")
+                    pendingCallback?.completeExceptionally(
+                        GoogleAuthException(query.getValue("error"), query["error_description"])
+                    )
+                }
+                query["code"] != null -> {
+                    log("callback carried a code")
+                    pendingCallback?.complete(query.getValue("code"))
+                }
+                else -> log("callback carried neither a code nor an error")
+            }
         }
     }
 
@@ -404,12 +479,14 @@ object GoogleCalendar {
             )
         )
         if (response == null) {
+            connectFailure = REASON_AUTH
             // No JSON back at all, or unparseable: the only honest report is
             // that the exchange itself produced nothing usable.
             AppLog.line("Google token exchange returned no usable response")
             return null
         }
         if (response.str("error") != null) {
+            connectFailure = REASON_AUTH
             AppLog.line(
                 "Google token exchange rejected the code: " +
                     "${response.str("error")} ${response.str("error_description").orEmpty()}".trim()

@@ -946,6 +946,26 @@ composeApp/
 
 ---
 
+34. **The jpackage runtime is jlink-trimmed, so `com.sun.net.httpserver` is
+    not in it.** The OAuth loopback listener was written on `HttpServer`, which
+    works under `./gradlew run` (a full JDK) and throws
+    `NoClassDefFoundError` in the packaged `.app` — verified with
+    `jimage list Contents/runtime/Contents/Home/lib/modules | grep httpserver`,
+    which returns nothing. It failed *silently and totally*: the class reference
+    was outside `authorize()`'s try, so the coroutine died with
+    `SupervisorJob` swallowing it, the state stayed `Connecting` forever, the
+    browser never opened, and not one line was logged. Two lessons: keep
+    listener/transport setup inside the guarded block (and catch `Error`, not
+    just `Exception` — `NoClassDefFoundError` is an `Error`), and take anything
+    a jlink image might have dropped down to `java.base`. The loopback is now a
+    hand-rolled `ServerSocket` (`serveCallback`) answering a single GET, and it
+    is verified *inside the packaged runtime* by running the real consent flow
+    from the installed binary and curling the port it logs. Note also that
+    `cp -R`/`ditto` silently leave an **empty** app bundle when installing this
+    DMG (fcopyfile I/O error on the runtime); `rsync -a` is the only installer
+    that has worked. For the same reason, do not trust
+    "the app is running" as proof the build is good — check the log file.
+
 33. **A desktop OAuth client in Google's "Testing" consent status only lets
     *test users* through.** A brand-new client refuses everyone else with
     `access_denied` and the description "The developer hasn’t given you access
