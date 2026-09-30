@@ -35,6 +35,7 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 class CalendarApi(
     private val clientId: String,
+    private val clientSecret: String,
     private val client: HttpClient = defaultClient()
 ) : AutoCloseable {
 
@@ -42,12 +43,24 @@ class CalendarApi(
 
     // ── OAuth ───────────────────────────────────────────────────────────────
 
-    /** Trade the loopback code for tokens. */
+    /**
+     * Trade the loopback code for tokens.
+     *
+     * The secret goes along despite this being the documented PKCE-no-secret
+     * desktop flow, because the endpoint now rejects every code grant without
+     * it — Desktop clients included (verified 2026-09 against a real code: the
+     * identical request without the secret answers
+     * `invalid_request: client_secret is missing`, and Google's own gcloud
+     * client behaves the same). PKCE stays: it is what binds the exchange to
+     * *this* app's authorization request. The secret by itself authorizes
+     * nothing — tokens still require a real user's consent.
+     */
     suspend fun exchangeCode(code: String, redirect: String, verifier: String): OAuthResult {
         val response = postForm(
             TOKEN_ENDPOINT,
             mapOf(
                 "client_id" to clientId,
+                "client_secret" to clientSecret,
                 "code" to code,
                 "code_verifier" to verifier,
                 "grant_type" to "authorization_code",
@@ -63,6 +76,7 @@ class CalendarApi(
             TOKEN_ENDPOINT,
             mapOf(
                 "client_id" to clientId,
+                "client_secret" to clientSecret,
                 "refresh_token" to refreshToken,
                 "grant_type" to "refresh_token"
             )

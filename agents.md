@@ -996,27 +996,28 @@ composeApp/
     token calls return a sealed `OAuthResult` instead of throwing, since a
     refusal's error code is the only useful thing in the response.
 
-36. **An OAuth client registered as a *Web application* needs a `client_secret`;
-    a *Desktop app* one must not send one.** Both use the same
-    `*.apps.googleusercontent.com` id, so the type is invisible from the id — and
-    the symptom is baffling because everything the user can see works: the
-    browser opens, the sign-in completes, the loopback callback lands with a
-    code. The exchange then fails with
-    `invalid_request: client_secret is missing`, because Google treats a web
-    client as confidential and a desktop client as public, where PKCE alone *is*
-    the authentication.
-    The decisive test is Google's own token endpoint, not the console: POST a
-    fake `code` with the app's client id and no secret. A public client answers
-    `invalid_grant` (the code is bad, the client is fine); a confidential one
-    answers `client_secret is missing`, and with a dummy secret
-    `The provided client secret is invalid` — proof Google found *this* id and
-    wants a secret for it. That matters because the console can disagree with
-    the server: this exact case had the user looking at a Desktop client while
-    the id in the binary belonged to a confidential one (project selectors and
-    similar-looking ids make that easy), and a client's type cannot be edited
-    after creation anyway. Do not "fix" it by sending a secret from the binary —
-    a shipped desktop app cannot hold one. New Desktop client, new id, test
-    users re-added.
+36. **Google's token endpoint now demands a `client_secret` from Desktop-app
+    clients too.** The documented desktop flow is public-client PKCE with no
+    secret, but the endpoint no longer honours it (verified 2026-09-30 with a
+    real captured code): the identical exchange without the secret answers
+    `invalid_request: client_secret is missing`, and adding the secret Google
+    issued for the client returns tokens. Two traps around that error:
+    (a) it is NOT evidence of a Web-application client — Google's own gcloud
+    client id fails the same way with a fake code, so "client_secret is
+    missing" is the endpoint's generic answer for *any grant it cannot match*,
+    and a nonexistent client answers `invalid_client` instead. (b) The console
+    can be believed: both clients of the same project behaved identically, and
+    creating yet another Desktop client changed nothing. What actually settled
+    it was capturing a real code (a temporary debug mode logged the callback
+    query and the PKCE verifier, no exchange) and replaying the token request
+    by hand — the secret was the only variation that worked. So the app sends
+    `client_secret` on both token grants, exactly as gcloud ships its own; the
+    secret alone authorizes nothing, since every token still needs a live
+    user's consent, and PKCE is what binds the exchange to the app's own
+    authorization request. Rotate the secret in the console if it leaks beyond
+    the repo. Practical method worth keeping: capture, then replay with curl —
+    failed token requests do not consume the code, so one real consent buys a
+    whole matrix of experiments within its ~10-minute life.
 
 33. **A desktop OAuth client in Google's "Testing" consent status only lets
     *test users* through.** A brand-new client refuses everyone else with

@@ -88,7 +88,17 @@ object GoogleCalendar {
     // Desktop-app client id from Google Cloud (APIs & Services → Credentials →
     // OAuth client ID → Desktop app). Desktop clients are public by design:
     // PKCE protects the exchange, so there is no secret to protect.
-    private const val CLIENT_ID = "317663226214-5mfkivfvkishd2v3bg1jhv7go2vsshgh.apps.googleusercontent.com"
+    private const val CLIENT_ID = "317663226214-ojbngp1n0p81tttll9sjq9ou74mvjegk.apps.googleusercontent.com"
+
+    /**
+     * Google's token endpoint demands a client secret from every client type,
+     * Desktop included (see [CalendarApi.exchangeCode] for the evidence). It is
+     * extractable from any shipped binary, which is inherent to desktop OAuth —
+     * the same reason gcloud ships its own. It authorizes nothing alone: every
+     * token still needs a real user's interactive consent. Rotate it in the
+     * Cloud console if it ever leaks wider than this repo.
+     */
+    private const val CLIENT_SECRET = "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"
 
     private const val AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
     private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
@@ -141,7 +151,7 @@ object GoogleCalendar {
      * client for the process: it owns a connection pool and a selector thread,
      * and a client per request would throw both away.
      */
-    private val api = CalendarApi(CLIENT_ID)
+    private val api = CalendarApi(CLIENT_ID, CLIENT_SECRET)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
