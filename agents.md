@@ -1004,10 +1004,19 @@ composeApp/
     code. The exchange then fails with
     `invalid_request: client_secret is missing`, because Google treats a web
     client as confidential and a desktop client as public, where PKCE alone *is*
-    the authentication. Read it off the log, not by guessing: verify with
-    `jimage`-style discipline and check the Cloud console's Application type
-    before adding a secret to the binary — an embedded secret in a shipped desktop
-    app is not a fix.
+    the authentication.
+    The decisive test is Google's own token endpoint, not the console: POST a
+    fake `code` with the app's client id and no secret. A public client answers
+    `invalid_grant` (the code is bad, the client is fine); a confidential one
+    answers `client_secret is missing`, and with a dummy secret
+    `The provided client secret is invalid` — proof Google found *this* id and
+    wants a secret for it. That matters because the console can disagree with
+    the server: this exact case had the user looking at a Desktop client while
+    the id in the binary belonged to a confidential one (project selectors and
+    similar-looking ids make that easy), and a client's type cannot be edited
+    after creation anyway. Do not "fix" it by sending a secret from the binary —
+    a shipped desktop app cannot hold one. New Desktop client, new id, test
+    users re-added.
 
 33. **A desktop OAuth client in Google's "Testing" consent status only lets
     *test users* through.** A brand-new client refuses everyone else with

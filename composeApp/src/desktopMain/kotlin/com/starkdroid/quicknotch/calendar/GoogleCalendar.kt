@@ -459,8 +459,12 @@ object GoogleCalendar {
             )
             is OAuthResult.Refused -> {
                 connectFailure = classifyTokenRefusal(result)
+                // The client id rides along because it is the one thing that
+                // names the record Google is actually refusing: two consoles
+                // can show a "Desktop" client while the id in the binary belongs
+                // to another one entirely.
                 AppLog.line(
-                    "Google token exchange rejected the code: " +
+                    "Google token exchange rejected the code for client ${resultForLog()} : " +
                         "${result.error} ${result.description.orEmpty()}".trim()
                 )
                 null
@@ -614,6 +618,9 @@ object GoogleCalendar {
      * generic failure, because everything the user can see *worked*: the browser
      * opened, the sign-in went through, the callback landed.
      */
+    /** The id this build exchanges with, for correlating refusals with the console. */
+    private fun resultForLog(): String = CLIENT_ID
+
     private fun classifyTokenRefusal(refusal: OAuthResult.Refused): String {
         val description = refusal.description?.lowercase().orEmpty()
         val wantsASecret = "client_secret" in description ||
