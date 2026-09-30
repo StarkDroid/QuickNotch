@@ -32,6 +32,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Launch
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -65,12 +68,19 @@ import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
 import org.jetbrains.compose.resources.stringResource
 import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.calendar
 import com.starkdroid.quicknotch.generated.resources.onboarding_apps_subtitle
 import com.starkdroid.quicknotch.generated.resources.onboarding_apps_title
 import com.starkdroid.quicknotch.generated.resources.onboarding_calendar_note
 import com.starkdroid.quicknotch.generated.resources.onboarding_calendar_subtitle
 import com.starkdroid.quicknotch.generated.resources.onboarding_calendar_title
 import com.starkdroid.quicknotch.generated.resources.onboarding_continue
+import com.starkdroid.quicknotch.generated.resources.onboarding_feature_apps
+import com.starkdroid.quicknotch.generated.resources.onboarding_feature_calendar
+import com.starkdroid.quicknotch.generated.resources.onboarding_feature_media
+import com.starkdroid.quicknotch.generated.resources.onboarding_feature_quiet
+import com.starkdroid.quicknotch.generated.resources.onboarding_welcome_subtitle
+import com.starkdroid.quicknotch.generated.resources.onboarding_welcome_title
 import com.starkdroid.quicknotch.generated.resources.onboarding_finish
 import com.starkdroid.quicknotch.generated.resources.onboarding_skip
 import com.starkdroid.quicknotch.generated.resources.onboarding_step_of
@@ -92,17 +102,10 @@ import com.starkdroid.quicknotch.generated.resources.style_floating_pill
  * also why each screen says exactly that.
  */
 private enum class OnboardingStep(val index: Int) {
-    Style(0),
-    Calendar(1),
-    Apps(2);
-
-    /** The sample content inside the carried notch, per step. */
-    val width: Int
-        get() = when (this) {
-            Style -> 150
-            Calendar -> 236
-            Apps -> 0 // computed from the pinned count
-        }
+    Welcome(0),
+    Style(1),
+    Calendar(2),
+    Apps(3);
 }
 
 private const val SAMPLE_TICKER = "Standup with the platform team"
@@ -140,6 +143,7 @@ internal fun OnboardingScreen(
 
     fun advance() {
         step = when (step) {
+            OnboardingStep.Welcome -> OnboardingStep.Style
             OnboardingStep.Style -> OnboardingStep.Calendar
             OnboardingStep.Calendar -> OnboardingStep.Apps
             OnboardingStep.Apps -> step // finished via [finish]
@@ -185,6 +189,22 @@ internal fun OnboardingScreen(
                 ) { stepForCopy ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         when (stepForCopy) {
+                            OnboardingStep.Welcome -> {
+                                OnboardingHeading(
+                                    title = stringResource(Res.string.onboarding_welcome_title),
+                                    subtitle = stringResource(Res.string.onboarding_welcome_subtitle)
+                                )
+                                Spacer(modifier = Modifier.height(26.dp))
+                                Column(
+                                    modifier = Modifier.width(400.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    FeatureRow(Icons.Default.Launch, stringResource(Res.string.onboarding_feature_apps))
+                                    FeatureRow(Icons.Default.MusicNote, stringResource(Res.string.onboarding_feature_media))
+                                    FeatureRow(icon = null, label = stringResource(Res.string.onboarding_feature_calendar))
+                                    FeatureRow(Icons.Default.VisibilityOff, stringResource(Res.string.onboarding_feature_quiet))
+                                }
+                            }
                             OnboardingStep.Style -> {
                                 OnboardingHeading(
                                     title = stringResource(Res.string.onboarding_style_title),
@@ -280,12 +300,18 @@ private fun SharedTransitionScope.OnboardingNotchPreview(
     modifier: Modifier = Modifier
 ) {
     val islandWidth = when (step) {
-        OnboardingStep.Style -> step.width.dp
-        OnboardingStep.Calendar -> step.width.dp
+        OnboardingStep.Welcome, OnboardingStep.Style -> 150.dp
+        OnboardingStep.Calendar -> 236.dp
         OnboardingStep.Apps -> (DockLayout.ContentPadding * 2 +
             DockLayout.iconSlot(30.dp) * favorites.size.coerceAtLeast(1)).coerceAtLeast(160.dp)
     }
-    val islandHeight = if (step == OnboardingStep.Apps) 56.dp else 30.dp
+    // The drag handle collapses to a slim 8dp bar, not the taller pill -- and
+    // the preview must lie about that no more than about anything else.
+    val islandHeight = when {
+        step == OnboardingStep.Apps -> 56.dp
+        style == NotchStyle.DRAG_HANDLE -> DockLayout.DragHandleHeightDp.dp
+        else -> 30.dp
+    }
 
     Box(
         modifier = modifier
@@ -310,7 +336,30 @@ private fun SharedTransitionScope.OnboardingNotchPreview(
             transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(160)) },
             label = "onboarding-notch-content"
         ) { stepForContent ->
+            // Collapsed drag handle: a single slim grabber line, the whole
+            // point of the style -- no clock, no badges, matching QuickView.
+            if (stepForContent != OnboardingStep.Apps && style == NotchStyle.DRAG_HANDLE) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 36.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(handleTint(surface))
+                )
+                return@AnimatedContent
+            }
             when (stepForContent) {
+                OnboardingStep.Welcome -> Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "9:41",
+                        style = AppTypography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    CalendarDayIndicator(count = SAMPLE_COUNT)
+                }
                 OnboardingStep.Style -> Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -411,27 +460,55 @@ private fun StyleCards(
                     .padding(14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // The pill itself, in this style, with a sample quickview row.
+                // The pill itself, in this style, with a sample quickview row
+                // -- except the drag handle, whose collapsed design is a slim
+                // grabber bar with nothing else in it (QuickView draws exactly
+                // that), so this card previews it honestly.
                 Box(
                     modifier = Modifier
-                        .width(150.dp)
-                        .height(30.dp)
-                        .clip(notchShape(expanded = false, style = style))
-                        .islandSurface(NotchSurface.SOLID)
-                        .border(1.dp, NotchBorder, notchShape(expanded = false, style = style)),
+                        .height(30.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "9:41",
-                            style = AppTypography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
-                        )
-                        CalendarDayIndicator(count = SAMPLE_COUNT)
+                    if (style == NotchStyle.DRAG_HANDLE) {
+                        Box(
+                            modifier = Modifier
+                                .width(150.dp)
+                                .height(DockLayout.DragHandleHeightDp.dp)
+                                .clip(notchShape(expanded = false, style = style))
+                                .islandSurface(NotchSurface.SOLID)
+                                .border(1.dp, NotchBorder, notchShape(expanded = false, style = style)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(handleTint(NotchSurface.SOLID))
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .width(150.dp)
+                                .height(30.dp)
+                                .clip(notchShape(expanded = false, style = style))
+                                .islandSurface(NotchSurface.SOLID)
+                                .border(1.dp, NotchBorder, notchShape(expanded = false, style = style)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "9:41",
+                                    style = AppTypography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary
+                                )
+                                CalendarDayIndicator(count = SAMPLE_COUNT)
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
@@ -456,6 +533,45 @@ private fun StyleCards(
                 )
             }
         }
+    }
+}
+
+/** One "what the app can do" line: an icon (the calendar glyph where a
+ *  Material one would lie about the design) beside a short promise. */
+@Composable
+private fun FeatureRow(icon: androidx.compose.ui.graphics.vector.ImageVector?, label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(FlatSurfaceElevated),
+            contentAlignment = Alignment.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = AccentIndigoLight,
+                    modifier = Modifier.size(16.dp)
+                )
+            } else {
+                Icon(
+                    painter = org.jetbrains.compose.resources.painterResource(Res.drawable.calendar),
+                    contentDescription = null,
+                    tint = AccentIndigoLight,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
+        Text(
+            text = label,
+            style = AppTypography.bodyMedium,
+            color = TextSecondary
+        )
     }
 }
 

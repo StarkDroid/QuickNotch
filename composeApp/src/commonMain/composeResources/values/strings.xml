@@ -9,6 +9,12 @@
     <!-- Tray menu -->
     <string name="menu_settings">Settings</string>
     <string name="onboarding_window_title">Welcome to QuickNotch</string>
+    <string name="onboarding_welcome_title">Meet QuickNotch</string>
+    <string name="onboarding_welcome_subtitle">A Dynamic-Island-style notch that lives at the top of your screen &#8212; here is what it can do. Everything can be fine-tuned in Settings later.</string>
+    <string name="onboarding_feature_apps">Launch your pinned apps with a click</string>
+    <string name="onboarding_feature_media">See what is playing and control it</string>
+    <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
+    <string name="onboarding_feature_quiet">Stays out of the way until you hover</string>
     <string name="onboarding_skip">Skip for now</string>
     <string name="onboarding_continue">Continue</string>
     <string name="onboarding_finish">Finish setup</string>
