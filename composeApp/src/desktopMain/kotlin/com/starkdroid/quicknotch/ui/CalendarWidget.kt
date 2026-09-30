@@ -36,6 +36,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_waiting
 import com.starkdroid.quicknotch.generated.resources.calendar_connect
 import com.starkdroid.quicknotch.generated.resources.calendar_connected_as
 import com.starkdroid.quicknotch.generated.resources.calendar_disconnect
+import com.starkdroid.quicknotch.generated.resources.calendar_error_api_disabled
 import com.starkdroid.quicknotch.generated.resources.calendar_error_auth
 import com.starkdroid.quicknotch.generated.resources.calendar_error_cancelled
 import com.starkdroid.quicknotch.generated.resources.calendar_error_client_type
@@ -54,6 +55,7 @@ import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import java.time.Instant
@@ -203,9 +205,8 @@ private fun CalendarConnectRow(
                             else -> Res.string.calendar_error_auth
                         }
                     )
-                    connected != null && connected.staleError != null -> stringResource(
-                        Res.string.calendar_error_network
-                    )
+                    connected != null && connected.staleError != null ->
+                        stringResource(connected.staleError.localized())
                     connected != null && connected.fetchedAtMillis > 0L -> stringResource(
                         Res.string.calendar_last_sync,
                         relativeTime(connected.fetchedAtMillis)
@@ -283,3 +284,15 @@ private fun relativeTime(millis: Long): String {
             .format(Instant.ofEpochMilli(millis))
     }
 }
+
+/** One place that knows which failure a reason key stands for. */
+@Composable
+private fun String.localized(): StringResource = when (this) {
+    GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
+    GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
+    GoogleCalendar.REASON_CLIENT_TYPE -> Res.string.calendar_error_client_type
+    GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
+    GoogleCalendar.REASON_API_DISABLED -> Res.string.calendar_error_api_disabled
+    else -> Res.string.calendar_error_auth
+}
+    

@@ -147,6 +147,14 @@ object GoogleCalendar {
      * and only the exchange was rejected, which makes it baffling otherwise.
      */
     const val REASON_CLIENT_TYPE = "client_type"
+    /**
+     * Tokens exist and work, but the Calendar API itself is not enabled for the
+     * project, so every events read is denied with 403. The fix is the API
+     * Library in the Cloud console, not anything in this app -- and without a
+     * distinct reason the widget would say "couldn't reach Google" for a
+     * problem that has nothing to do with reaching Google.
+     */
+    const val REASON_API_DISABLED = "api_disabled"
 
     /**
      * All four Google calls, owned by the common (multiplatform) layer. One
@@ -528,25 +536,50 @@ object GoogleCalendar {
      * sign-in that had entirely succeeded -- the log is what turns that class
      * of bug from an afternoon into a sentence.
      */
-    private suspend fun fetchDay(tokens: Tokens): List<CalendarEvent>? =
+    private suspend fun fetchDay(tokens: Tokens): FetchOutcome =
         when (val result = api.eventsForDay(tokens.accessToken)) {
             is EventsResult.Ok -> {
                 log("day fetched: ${result.events.size} events")
-                result.events
+                FetchOutcome.Ok(result.events)
             }
             is EventsResult.Http -> {
-                AppLog.line("Google events request answered HTTP ${result.status}")
-                null
+                // Google's body is the diagnosis; print it verbatim so the log
+                // says "enable the API at <url>" instead of a bare status code.
+                AppLog.line(
+                    "Google events request answered HTTP ${result.status}" +
+                        (result.detail?.let { ": $it" } ?: "")
+                )
+                FetchOutcome.Failed(classifyFetchFailure(result.status, result.detail))
             }
             EventsResult.Unreachable -> {
                 AppLog.line("Google events request was unreachable")
-                null
+                FetchOutcome.Failed(REASON_NETWORK)
             }
             EventsResult.Malformed -> {
                 AppLog.line("Google events response was not parseable")
-                null
+                FetchOutcome.Failed(REASON_NETWORK)
             }
         }
+
+    /**
+     * A 403 whose body talks about a disabled or never-used API is the project
+     * missing the Calendar API enablement -- a console step, nothing in the
+     * app, and worth its own message because "couldn't reach Google" sends the
+     * user looking at their router.
+     */
+    private fun classifyFetchFailure(status: Int, detail: String?): String {
+        if (status == 403) {
+            val d = detail?.lowercase().orEmpty()
+            if ("disabled" in d || "has not been used" in d) return REASON_API_DISABLED
+        }
+        return REASON_NETWORK
+    }
+
+    /** The day, or the reason key it could not be fetched under. */
+    private sealed interface FetchOutcome {
+        data class Ok(val events: List<CalendarEvent>) : FetchOutcome
+        data class Failed(val reason: String) : FetchOutcome
+    }
 
     // ── fetching ────────────────────────────────────────────────────────────
 
@@ -572,29 +605,30 @@ object GoogleCalendar {
             writeTokens(tokens)
         }
 
-        var events = fetchDay(tokens)
-        if (events == null && tokens.refreshToken != null) {
+        var outcome = fetchDay(tokens)
+        if (outcome is FetchOutcome.Failed && tokens.refreshToken != null) {
             // Most likely an access token revoked server-side since we cached
             // it: refresh once and retry before giving up.
             tokens = refreshed(tokens) ?: run { revoked(); return }
             cached = tokens
             writeTokens(tokens)
-            events = fetchDay(tokens)
+            outcome = fetchDay(tokens)
         }
-        if (events == null) {
+        if (outcome is FetchOutcome.Failed) {
             // The caller may be mid-connect (state still Connecting), in which
             // case there is no Connected state to keep stale -- but the tokens
             // are real and on disk, so the honest state is Connected-with-a-
             // stale-day rather than an error that reads as "sign-in failed".
             val previous = _state.value as? CalendarState.Connected
-            _state.value = previous?.copy(staleError = REASON_NETWORK) ?: CalendarState.Connected(
+            _state.value = previous?.copy(staleError = outcome.reason) ?: CalendarState.Connected(
                 account = tokens.account.ifBlank { "Google" },
                 events = emptyList(),
                 fetchedAtMillis = 0L,
-                staleError = REASON_NETWORK
+                staleError = outcome.reason
             )
             return
         }
+        val events = (outcome as FetchOutcome.Ok).events
 
         val account = tokens.account.ifBlank {
             api.accountEmail(tokens.accessToken) ?: "Google"

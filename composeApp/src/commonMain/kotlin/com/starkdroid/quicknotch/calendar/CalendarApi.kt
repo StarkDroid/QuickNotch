@@ -139,7 +139,16 @@ class CalendarApi(
         //
         // No logging here on purpose: this file is commonMain, so it has no
         // business reaching for the desktop-only log file.
-        if (!response.status.isSuccess()) return EventsResult.Http(response.status.value)
+        if (!response.status.isSuccess()) {
+            // Google's error body is the most useful thing in the response and
+            // it costs nothing to read -- the 403 for a disabled API names the
+            // exact console page that fixes it.
+            val detail = runCatching {
+                json.parseToJsonElement(response.bodyAsText()).jsonObject["error"]
+                    ?.jsonObject?.string("message")
+            }.getOrNull()
+            return EventsResult.Http(response.status.value, detail)
+        }
         val body = runCatching { response.bodyAsText() }.getOrNull() ?: return EventsResult.Malformed
 
         return runCatching {
@@ -216,8 +225,14 @@ class CalendarApi(
 sealed interface EventsResult {
     data class Ok(val events: List<CalendarEvent>) : EventsResult
 
-    /** Google answered, and said no. 401/403 mean the token; 400 means our query. */
-    data class Http(val status: Int) : EventsResult
+    /**
+     * Google answered, and said no. [detail] is Google's own message from the
+     * body, because the body is the diagnosis: a 403 whose body says "Calendar
+     * API has not been used in project ... before or it is disabled" is the
+     * project's API Library, not a token problem, and the two remedies are in
+     * completely different places.
+     */
+    data class Http(val status: Int, val detail: String? = null) : EventsResult
 
     /** No usable answer at all: offline, timeout, TLS. */
     data object Unreachable : EventsResult

@@ -1002,6 +1002,18 @@ composeApp/
     Refreshes are serialized by a mutex because the button outruns the round
     trip and overlapping refreshes race the token file.
 
+38. **OAuth consent and token exchange work even when the Calendar API itself
+    is disabled for the project** -- the first events read is where it shows,
+    as 403 `PERMISSION_DENIED` whose body says "Calendar API has not been used
+    in project ... before or it is disabled. Enable it by visiting <url>". The
+    body is the diagnosis, so `EventsResult.Http` carries it and the log prints
+    it verbatim; a 403 with that shape classifies as `REASON_API_DISABLED`,
+    which the widget maps to a string naming the API Library console step.
+    Without that, a disabled API reads as "couldn't reach Google" and sends the
+    user looking at their router. Console order worth remembering: OAuth
+    consent screen -> credentials -> **API Library** (enable Calendar) -> test
+    users.
+
 34. **A failed HTTP status is not an empty response.** Porting the calendar to
     Ktor turned a revoked token into an empty calendar: Google's refusal is a
     JSON body with no `items` key, so `?: return emptyList()` reported "the day

@@ -68,6 +68,7 @@
     <string name="calendar_last_sync">Updated %1$s</string>
     <string name="calendar_error_auth">Sign-in didn&#39;t finish. Try connecting again.</string>
     <string name="calendar_error_network">Couldn&#39;t reach Google. Showing the last known day.</string>
+    <string name="calendar_error_api_disabled">The Google Calendar API is not enabled for this project yet. Enable it in the Google Cloud console (APIs &amp; Services &#8594; Library), then press Refresh.</string>
     <string name="calendar_error_client_type">This Google client is set up as a web app. Create a Desktop app client in the Google Cloud console and use its client ID instead.</string>
     <string name="calendar_error_not_verified">Google has not released this app yet. Add your Google account as a test user on the OAuth consent screen, then try again.</string>
     <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
