@@ -138,6 +138,14 @@ enum class ClockDateFormat(val pattern: String) {
 @Serializable
 data class NotchConfig(
     val style: NotchStyle = NotchStyle.DYNAMIC_ISLAND,
+
+    /**
+     * Set once the first-run onboarding has been walked through (or skipped
+     * through): the notch overlay does not exist until then, because the user
+     * is still configuring the pill it would draw. Defaults false, so a config
+     * written before this field existed runs onboarding once on next launch.
+     */
+    val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
     val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,

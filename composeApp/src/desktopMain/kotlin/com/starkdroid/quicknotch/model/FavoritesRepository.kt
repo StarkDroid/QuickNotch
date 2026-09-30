@@ -176,7 +176,10 @@ class FavoritesRepository(
         val defaults = getDefaultFavorites()
         _favorites.value = defaults
         val defaultCfg = NotchConfig()
-        _config.value = defaultCfg
+        // A deliberate reset restores the notch's look, not the product: the
+        // user has already been onboarded, and re-running the first-run flow
+        // because they reset their sizes would be a punishment.
+        _config.value = defaultCfg.copy(onboardingDone = _config.value.onboardingDone)
         persist(PersistRequest.Favorites(defaults))
         persist(PersistRequest.Config(defaultCfg))
     }

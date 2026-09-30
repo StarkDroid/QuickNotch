@@ -8,6 +8,18 @@
 
     <!-- Tray menu -->
     <string name="menu_settings">Settings</string>
+    <string name="onboarding_window_title">Welcome to QuickNotch</string>
+    <string name="onboarding_skip">Skip for now</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_finish">Finish setup</string>
+    <string name="onboarding_step_of">Step %1$s of %2$s</string>
+    <string name="onboarding_style_title">Choose your pill style</string>
+    <string name="onboarding_style_subtitle">This is how the notch sits at the top of your screen, with a sample of what it shows. You can fine-tune everything later in Settings.</string>
+    <string name="onboarding_calendar_title">Connect Google Calendar</string>
+    <string name="onboarding_calendar_subtitle">See your day on the notch: a badge with today&#39;s remaining events, and the title on a ticker while one runs.</string>
+    <string name="onboarding_calendar_note">This is just the connection &#8212; appearance, theme and every size can be adjusted later in Settings.</string>
+    <string name="onboarding_apps_title">Pin your apps</string>
+    <string name="onboarding_apps_subtitle">Pick the apps to live in the dock &#8212; they appear inside the notch above as you choose them.</string>
     <string name="settings_window_title">QuickNotch Settings</string>
     <string name="menu_hide_notch">Hide Notch</string>
     <string name="menu_show_notch">Show Notch</string>

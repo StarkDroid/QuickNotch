@@ -2,7 +2,10 @@ package com.starkdroid.quicknotch
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +24,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.ui.OnboardingScreen
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppPaths
@@ -47,6 +51,8 @@ import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
 import com.starkdroid.quicknotch.ui.quickViewIndicatorSlots
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
 import java.awt.event.WindowEvent
@@ -125,6 +131,12 @@ fun main(args: Array<String>) {
             }
         }
 
+        // Derived distinctly so the window scaffolding reacts only to the
+        // flow actually finishing, not to every config write on the way.
+        val onboardingDone by remember {
+            repository.config.map { it.onboardingDone }.distinctUntilChanged()
+        }.collectAsState(initial = repository.config.value.onboardingDone)
+
         val musicLive = isMusicLive(config, liveSession)
         var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
@@ -134,8 +146,10 @@ fun main(args: Array<String>) {
         // first Settings open forces activation (an accessory agent can't bring
         // a regular window forward on its own), and closing it returns the app
         // to its quiet agent state.
-        LaunchedEffect(showSettings) {
-            MacDockPresence.setSettingsVisible(showSettings)
+        // Onboarding counts as "settings open": the user is actively
+        // configuring, so the Dock presence and activation apply while it runs.
+        LaunchedEffect(showSettings, onboardingDone) {
+            MacDockPresence.setSettingsVisible(showSettings || !onboardingDone)
         }
 
         // Dock presence is a function of the Settings window, never of the
@@ -175,7 +189,7 @@ fun main(args: Array<String>) {
             }
         )
 
-        if (isNotchVisible) {
+        if (isNotchVisible && onboardingDone) {
             NotchOverlayWindow(
                 repository = repository,
                 media = media,
@@ -191,15 +205,29 @@ fun main(args: Array<String>) {
             )
         }
 
-        if (showSettings) {
+        // The onboarding flow lives in this same window: first-run users open
+        // straight into it (even at login launch -- a fresh install has no
+        // login item yet), and finishing hands the window to the tabbed
+        // settings while the notch, which did not exist during onboarding,
+        // appears for the first time.
+        if (showSettings || !onboardingDone) {
             val settingsState = rememberWindowState(
                 position = WindowPosition.Aligned(Alignment.Center),
                 size = DpSize(880.dp, 660.dp)
             )
             Window(
-                onCloseRequest = { showSettings = false },
+                onCloseRequest = {
+                    // Closing the window mid-onboarding finishes the flow: the
+                    // notch must exist no matter what, and the config the user
+                    // already touched stays.
+                    showSettings = false
+                    if (!onboardingDone) repository.updateConfig { it.copy(onboardingDone = true) }
+                },
                 state = settingsState,
-                title = stringResource(Res.string.settings_window_title),
+                title = stringResource(
+                    if (onboardingDone) Res.string.settings_window_title
+                    else Res.string.onboarding_window_title
+                ),
                 icon = BitmapPainter(appIcon),
                 resizable = true
             ) {
@@ -221,11 +249,21 @@ fun main(args: Array<String>) {
                     onDispose { settingsWindow.removeWindowFocusListener(listener) }
                 }
                 QuickNotchTheme(darkTheme = true) {
-                    SettingsScreen(
-                        repository = repository,
-                        media = media,
-                        onClose = { showSettings = false }
-                    )
+                    Crossfade(
+                        targetState = onboardingDone,
+                        animationSpec = tween(320),
+                        label = "onboarding-to-settings"
+                    ) { done ->
+                        if (done) {
+                            SettingsScreen(
+                                repository = repository,
+                                media = media,
+                                onClose = { showSettings = false }
+                            )
+                        } else {
+                            OnboardingScreen(repository = repository)
+                        }
+                    }
                 }
             }
         }
