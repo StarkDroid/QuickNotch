@@ -1,7 +1,6 @@
 package com.starkdroid.quicknotch.calendar
 
 import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -59,24 +58,17 @@ fun todayDate(
 ): LocalDate = Clock.System.todayIn(timeZone)
 
 /**
- * The window the app fetches: from local midnight today through [days] days
- * ahead. Ninety, not thirty: the dates the schedule page promises -- "10 Oct,
- * 20 Nov, 25 Dec" -- sit months out, and a window narrower than the page's
- * reach quietly amputates them. One fetch serves everything -- the pill badge,
- * the ticker and the schedule page -- so there is exactly one thing to keep in
- * sync with Google's bounds instead of three queries drifting apart.
+ * Where a fetch begins: local midnight today. There is deliberately no upper
+ * bound -- the API has no "schedule mode" endpoint, but omitting timeMax *is*
+ * schedule-mode semantics: everything upcoming from this instant, ordered,
+ * capped by maxResults. One fetch serves the pill badge, the ticker and the
+ * schedule page, so there is exactly one thing to keep in sync with Google's
+ * bounds instead of three queries drifting apart.
  */
-fun upcomingWindowMillis(
-    days: Int = 90,
+fun fetchFromMillis(
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
     today: LocalDate = Clock.System.todayIn(timeZone)
-): Pair<Long, Long> {
-    // atStartOfDayIn hands back the instant of local midnight, which is exactly
-    // the timeMin/timeMax Google wants, so no local-timezone arithmetic here.
-    val start = today.atStartOfDayIn(timeZone).toEpochMilliseconds()
-    val end = today.plus(days.toLong(), DateTimeUnit.DAY).atStartOfDayIn(timeZone).toEpochMilliseconds()
-    return start to end
-}
+): Long = today.atStartOfDayIn(timeZone).toEpochMilliseconds()
 
 /** One date that has events coming, with how many. */
 data class CalendarDateGroup(
