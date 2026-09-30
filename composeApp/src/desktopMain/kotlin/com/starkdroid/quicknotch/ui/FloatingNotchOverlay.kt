@@ -48,7 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
-import com.starkdroid.quicknotch.calendar.calendarTodayCount
+import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
@@ -127,7 +127,7 @@ internal fun FloatingNotchOverlay(
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
     val calendarTicker by GoogleCalendar.ticker.collectAsState()
     val calendarEventCount =
-        if (config.widgets.showCalendar) calendarTodayCount(calendarState) else 0
+        if (config.widgets.showCalendar) calendarUpcomingCount(calendarState) else 0
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -258,9 +258,32 @@ internal fun FloatingNotchOverlay(
             )
         )
     }
+    val calendarConnected = calendarState is CalendarState.Connected
+    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarConnected) {
+        buildList {
+            if (musicLive) add(WidgetPage.Music)
+            if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
+            // Last so the wheel reaches it after the dock, and only when there
+            // is a connection behind it -- an empty page would be a dead stop.
+            if (calendarConnected) add(WidgetPage.Calendar)
+        }
+    }
+
     fun setHovered(hovered: Boolean) {
         collapseJob?.cancel()
         if (hovered) {
+            // A ticker on the pill is a notification, not a status: expanding
+            // the notch over it consumes the notification -- it will not come
+            // back for this event after the next collapse -- and the expansion
+            // lands directly on the calendar page the user was just teased
+            // with. Collapsing snaps the pager back to page 0 as usual, so the
+            // next expansion opens wherever the notch always opens.
+            if (calendarTicker != null) {
+                GoogleCalendar.dismissTicker()
+                pages.indexOf(WidgetPage.Calendar).takeIf { it >= 0 }?.let { index ->
+                    pager.pageIndex.value = index
+                }
+            }
             onExpandedChange(true)
         } else {
             collapseJob = scope.launch {
@@ -307,25 +330,8 @@ internal fun FloatingNotchOverlay(
     }
 
     // Expanded content is a set of always-composed, always-expanded widget
-    // pages; the wheel moves between them. The set is derived only from things
-    // that rarely change, and a page entering/leaving mid-expansion clamps the
-    // index instead of jittering.
-    //
-    // The now-playing page leads while a track is live: expanding a collapsed
-    // notch that is already showing media should continue into the detailed
-    // music view, not the pinned-apps dock. The apps page stays available behind
-    // it for the wheel.
-    val calendarConnected = calendarState is CalendarState.Connected
-    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarConnected) {
-        buildList {
-            if (musicLive) add(WidgetPage.Music)
-            if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
-            // Last so the wheel reaches it after the dock, and only when there
-            // is a connection behind it -- an empty page would be a dead stop.
-            if (calendarConnected) add(WidgetPage.Calendar)
-        }
-    }
-    // Page switching is owned by a shared [OverlayPager]: the overlay renders
+    // pages; the wheel moves between them. Page switching is owned by a shared
+    // [OverlayPager]: the overlay renders
     // from it, and (on Windows) an AWT-level wheel listener in `Main` drives it
     // from outside the Compose pointer pipeline. One wheel notch = one page.
     LaunchedEffect(pages.size) {

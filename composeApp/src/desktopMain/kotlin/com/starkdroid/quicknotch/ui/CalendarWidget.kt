@@ -32,8 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarDateGroup
 import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.calendar.todayDate
 import com.starkdroid.quicknotch.calendar.upcomingDateGroups
-import com.starkdroid.quicknotch.calendar.calendarTodayCount
+import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_cancel
@@ -50,6 +51,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_no_events
+import com.starkdroid.quicknotch.generated.resources.calendar_upcoming_count
 import com.starkdroid.quicknotch.generated.resources.calendar_last_sync
 import com.starkdroid.quicknotch.generated.resources.calendar_never_synced
 import com.starkdroid.quicknotch.generated.resources.calendar_refresh
@@ -86,7 +88,7 @@ internal fun CalendarDayIndicator(
     Box(modifier = modifier.size(22.dp), contentAlignment = Alignment.Center) {
         Icon(
             painter = painterResource(Res.drawable.calendar),
-            contentDescription = stringResource(Res.string.calendar_today_count, count.toString()),
+            contentDescription = stringResource(Res.string.calendar_upcoming_count, count.toString()),
             tint = LevelRingGlyph,
             modifier = Modifier.size(17.dp)
         )
@@ -146,8 +148,8 @@ internal fun CalendarWidget(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(
-                            Res.string.calendar_today_count,
-                            calendarTodayCount(state).toString()
+                            Res.string.calendar_upcoming_count,
+                            calendarUpcomingCount(state).toString()
                         ),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
@@ -365,6 +367,17 @@ internal fun CalendarNotchPage(
             modifier = Modifier.fillMaxSize().padding(horizontal = DockLayout.ContentPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Today holds the left slot in the big size -- the schedule's "now"
+            // anchor -- and the five tiles to its right are strictly future
+            // dates, month included, because the next events can be months out.
+            CalendarTodayBlock()
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 10.dp)
+                    .width(1.dp)
+                    .height(34.dp)
+                    .background(NotchBorder)
+            )
             groups.forEachIndexed { index, group ->
                 if (index > 0) {
                     Box(
@@ -384,42 +397,71 @@ internal fun CalendarNotchPage(
 }
 
 /**
- * One date: the day number in the big size (accented when it is today), the
- * weekday over the event-count badge beside it -- the "date group" the badge
- * belongs to.
+ * The schedule view's left anchor: the current date in the big size, the
+ * weekday and month beside it. Plain date -- no badge -- because the badge
+ * belongs to the upcoming dates and today's running event, if any, is what the
+ * pill's ticker already announced.
+ */
+@Composable
+private fun CalendarTodayBlock() {
+    val today = remember {
+        com.starkdroid.quicknotch.calendar.todayDate()
+    }
+    val weekday = remember(today) { formatDate(today, "EEE") }
+    val month = remember(today) { formatDate(today, "MMM") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = today.dayOfMonth.toString(),
+            style = AppTypography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = LiveAccent
+        )
+        Spacer(modifier = Modifier.width(7.dp))
+        Column {
+            Text(
+                text = weekday,
+                style = AppTypography.labelSmall,
+                color = TextPrimary
+            )
+            Text(
+                text = month,
+                style = AppTypography.labelSmall,
+                color = TextMuted
+            )
+        }
+    }
+}
+
+/**
+ * One upcoming date in the schedule row: the day with its month -- "10 Oct",
+ * "20 Nov" -- over the count badge, centered. Dates here are never today; the
+ * big left block owns that.
  */
 @Composable
 private fun CalendarDateTile(
     group: CalendarDateGroup,
     modifier: Modifier = Modifier
 ) {
-    val day = group.date.dayOfMonth
-    val weekday = remember(group.date) {
-        java.time.LocalDate.of(group.date.year, group.date.monthNumber, group.date.dayOfMonth)
-            .dayOfWeek
-            .getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())
-    }
-    Row(
+    val label = remember(group.date) { formatDate(group.date, "d MMM") }
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = day.toString(),
-            style = AppTypography.titleLarge,
+            text = label,
+            style = AppTypography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = if (group.isToday) LiveAccent else TextPrimary
+            color = TextPrimary
         )
-        Spacer(modifier = Modifier.width(7.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = weekday,
-                style = AppTypography.labelSmall,
-                color = TextMuted
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            CountBadge(count = group.count)
-        }
+        Spacer(modifier = Modifier.height(4.dp))
+        CountBadge(count = group.count)
     }
 }
+
+/** Locale-aware date formatting for the notch's schedule row. */
+private fun formatDate(
+    date: kotlinx.datetime.LocalDate,
+    pattern: String
+): String = java.time.LocalDate.of(date.year, date.monthNumber, date.dayOfMonth)
+    .format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault()))
     

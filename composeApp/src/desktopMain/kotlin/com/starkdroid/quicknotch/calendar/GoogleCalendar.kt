@@ -178,6 +178,24 @@ object GoogleCalendar {
     private val _ticker = MutableStateFlow<CalendarEvent?>(null)
     val ticker: StateFlow<CalendarEvent?> = _ticker.asStateFlow()
 
+    /**
+     * Events whose ticker the user has already seen, so expanding the notch
+     * over one dismisses it until the *next* event starts. Session-scoped on
+     * purpose: after a restart an in-progress event re-announces itself, which
+     * is the honest thing for a notification to do.
+     */
+    private val seenTickerEventIds = mutableSetOf<String>()
+
+    /**
+     * Consume the ticker currently on the pill. Called when the notch expands
+     * over it: the detail lives on the calendar page the expansion lands on,
+     * and a dismissed ticker stays dismissed until a different event starts.
+     */
+    fun dismissTicker() {
+        _ticker.value?.let { seenTickerEventIds += it.id }
+        _ticker.value = null
+    }
+
     private val tokenFile: File get() = File(AppPaths.configDir, "calendar.json")
     private val eventsFile: File get() = File(AppPaths.configDir, "calendar-events.json")
 
@@ -241,6 +259,7 @@ object GoogleCalendar {
             while (isActive) {
                 val next = (_state.value as? CalendarState.Connected)
                     ?.tickerEventAt(System.currentTimeMillis())
+                    ?.takeIf { it.id !in seenTickerEventIds }
                 if (next != _ticker.value) _ticker.value = next
                 delay(1000L)
             }
@@ -310,7 +329,9 @@ object GoogleCalendar {
         runCatching { eventsFile.delete() }
         _state.value = CalendarState.Disconnected
         // Otherwise the pill keeps scrolling an event from a calendar we just
-        // unhooked; the loop itself keeps running and resolves null.
+        // unhooked; the loop itself keeps running and resolves null. Seen ids
+        // go too, so a reconnect starts the notifications fresh.
+        seenTickerEventIds.clear()
         _ticker.value = null
     }
 
@@ -789,9 +810,11 @@ object GoogleCalendar {
 }
 
 /**
- * Today's event count for the pill badge and the settings row. The fetch window
- * spans thirty days for the upcoming-days page, so the raw list size is not the
- * number the pill means -- the badge has always counted *today*.
+ * The pill badge's number: events still upcoming across the whole window. The
+ * badge used to count today's events only, which hid it entirely on any day
+ * whose calendar was empty -- indistinguishable from the feature being off.
+ * Upcoming is what the notch is announcing, and it is non-zero whenever the
+ * connected calendar has anything at all to say.
  */
-fun calendarTodayCount(state: CalendarState): Int =
-    (state as? CalendarState.Connected)?.events?.todayCount() ?: 0
+fun calendarUpcomingCount(state: CalendarState): Int =
+    (state as? CalendarState.Connected)?.events?.upcomingCount() ?: 0
