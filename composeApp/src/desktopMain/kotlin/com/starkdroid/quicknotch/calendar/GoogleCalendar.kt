@@ -536,10 +536,11 @@ object GoogleCalendar {
      * sign-in that had entirely succeeded -- the log is what turns that class
      * of bug from an afternoon into a sentence.
      */
-    private suspend fun fetchDay(tokens: Tokens): FetchOutcome =
-        when (val result = api.eventsForDay(tokens.accessToken)) {
+    private suspend fun fetchDay(tokens: Tokens): FetchOutcome {
+        val (windowStart, windowEnd) = upcomingWindowMillis()
+        return when (val result = api.events(tokens.accessToken, windowStart, windowEnd)) {
             is EventsResult.Ok -> {
-                log("day fetched: ${result.events.size} events")
+                log("day fetched: ${result.events.size} events over the next 30 days")
                 FetchOutcome.Ok(result.events)
             }
             is EventsResult.Http -> {
@@ -560,6 +561,7 @@ object GoogleCalendar {
                 FetchOutcome.Failed(REASON_NETWORK)
             }
         }
+    }
 
     /**
      * A 403 whose body talks about a disabled or never-used API is the project
@@ -590,8 +592,21 @@ object GoogleCalendar {
      */
     private val refreshMutex = Mutex()
 
-    private suspend fun refreshBlocking() = refreshMutex.withLock {
-        refreshBlockingLocked()
+    /**
+     * Observable "a day fetch is running", for the spinner that replaces the
+     * Refresh chip and for the notch page's loading state. The fetch itself
+     * never blocks any UI: it runs on the IO scope and only this flag moves.
+     */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private suspend fun refreshBlocking() {
+        _refreshing.value = true
+        try {
+            refreshMutex.withLock { refreshBlockingLocked() }
+        } finally {
+            _refreshing.value = false
+        }
     }
 
     private suspend fun refreshBlockingLocked() {
@@ -772,3 +787,11 @@ object GoogleCalendar {
             "<h2 style=\"font-weight:600\">QuickNotch is connected</h2>" +
             "<p>You can close this tab and go back to the app.</p>"
 }
+
+/**
+ * Today's event count for the pill badge and the settings row. The fetch window
+ * spans thirty days for the upcoming-days page, so the raw list size is not the
+ * number the pill means -- the badge has always counted *today*.
+ */
+fun calendarTodayCount(state: CalendarState): Int =
+    (state as? CalendarState.Connected)?.events?.todayCount() ?: 0

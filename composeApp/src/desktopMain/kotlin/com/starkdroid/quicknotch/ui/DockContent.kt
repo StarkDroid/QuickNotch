@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.datasource.AppIconLoader
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.generated.resources.Res
@@ -96,7 +97,7 @@ import kotlin.math.abs
 
 // ── Widget pages ─────────────────────────────────────────────────────────────
 
-internal enum class WidgetPage { Apps, Music }
+internal enum class WidgetPage { Apps, Music, Calendar }
 
 /**
  * Renders every active widget page as an always-composed sibling so the pager
@@ -124,6 +125,8 @@ internal fun WidgetPages(
     titleModifier: Modifier,
     volumeRingModifier: Modifier,
     batteryRingModifier: Modifier,
+    calendarState: CalendarState?,
+    calendarRefreshing: Boolean,
     onLaunch: (AppItem) -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -146,6 +149,10 @@ internal fun WidgetPages(
                         density = density,
                         interactive = interactive && isActive,
                         onLaunch = onLaunch
+                    )
+                    WidgetPage.Calendar -> CalendarNotchPage(
+                        state = calendarState,
+                        refreshing = calendarRefreshing
                     )
                     WidgetPage.Music -> if (session != null) {
                         MusicPage(

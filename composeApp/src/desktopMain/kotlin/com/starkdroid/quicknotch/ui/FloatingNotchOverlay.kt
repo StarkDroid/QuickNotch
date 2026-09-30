@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
+import com.starkdroid.quicknotch.calendar.calendarTodayCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
@@ -123,9 +124,10 @@ internal fun FloatingNotchOverlay(
     // of times a day and the ticker only changes on an event boundary. Collected
     // here because the pill is the only thing that draws them.
     val calendarState by GoogleCalendar.state.collectAsState()
+    val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
     val calendarTicker by GoogleCalendar.ticker.collectAsState()
     val calendarEventCount =
-        if (config.widgets.showCalendar) (calendarState as? CalendarState.Connected)?.events?.size ?: 0 else 0
+        if (config.widgets.showCalendar) calendarTodayCount(calendarState) else 0
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -313,10 +315,14 @@ internal fun FloatingNotchOverlay(
     // notch that is already showing media should continue into the detailed
     // music view, not the pinned-apps dock. The apps page stays available behind
     // it for the wheel.
-    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive) {
+    val calendarConnected = calendarState is CalendarState.Connected
+    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarConnected) {
         buildList {
             if (musicLive) add(WidgetPage.Music)
             if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
+            // Last so the wheel reaches it after the dock, and only when there
+            // is a connection behind it -- an empty page would be a dead stop.
+            if (calendarConnected) add(WidgetPage.Calendar)
         }
     }
     // Page switching is owned by a shared [OverlayPager]: the overlay renders
@@ -363,8 +369,8 @@ internal fun FloatingNotchOverlay(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
     )
 
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarConnected) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarConnected)
     }
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
@@ -600,6 +606,8 @@ internal fun FloatingNotchOverlay(
                         titleModifier = sharedScope.nowPlayingSharedElement(NowPlayingTitleKey, dockScope),
                         volumeRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingVolumeKey, dockScope),
                         batteryRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingBatteryKey, dockScope),
+                        calendarState = calendarState,
+                        calendarRefreshing = calendarRefreshing,
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)

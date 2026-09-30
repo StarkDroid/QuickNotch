@@ -64,6 +64,7 @@ fun SettingsScreen(
     // disk), not a screen concern: the widget reads its state, the notch reads
     // the same flow, and only the actions are handed down.
     val calendarState by GoogleCalendar.state.collectAsState()
+    val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
 
     // Restore the appearance/sizing/clock defaults. This is the same set the tab
     // used to own; it now lives here because the button sits in the top bar, and
@@ -195,6 +196,7 @@ fun SettingsScreen(
                         isScanning = isScanning,
                         onSearchQueryChange = { searchQuery = it },
                         calendarState = calendarState,
+                        calendarRefreshing = calendarRefreshing,
                         onConnectCalendar = GoogleCalendar::connect,
                         onCancelCalendar = GoogleCalendar::cancelConnect,
                         onDisconnectCalendar = GoogleCalendar::disconnect,

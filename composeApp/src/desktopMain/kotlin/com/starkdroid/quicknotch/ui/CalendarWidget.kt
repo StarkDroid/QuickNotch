@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -22,13 +23,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.starkdroid.quicknotch.calendar.CalendarDateGroup
 import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.calendar.upcomingDateGroups
+import com.starkdroid.quicknotch.calendar.calendarTodayCount
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_cancel
@@ -44,6 +49,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_error_not_verified
 import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
+import com.starkdroid.quicknotch.generated.resources.calendar_no_events
 import com.starkdroid.quicknotch.generated.resources.calendar_last_sync
 import com.starkdroid.quicknotch.generated.resources.calendar_never_synced
 import com.starkdroid.quicknotch.generated.resources.calendar_refresh
@@ -52,6 +58,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_today_count
 import com.starkdroid.quicknotch.generated.resources.calendar
 import com.starkdroid.quicknotch.theme.AccentIndigoLight
 import com.starkdroid.quicknotch.theme.AppTypography
+import com.starkdroid.quicknotch.theme.NotchBorder
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
@@ -97,6 +104,7 @@ internal fun CalendarDayIndicator(
 @Composable
 internal fun CalendarWidget(
     state: CalendarState,
+    refreshing: Boolean,
     showInQuickView: Boolean,
     onShowInQuickViewChange: (Boolean) -> Unit,
     onConnect: () -> Unit,
@@ -108,6 +116,7 @@ internal fun CalendarWidget(
     Column(modifier = Modifier.fillMaxWidth()) {
         CalendarConnectRow(
             state = state,
+            refreshing = refreshing,
             onConnect = onConnect,
             onCancel = onCancel,
             onDisconnect = onDisconnect,
@@ -136,7 +145,10 @@ internal fun CalendarWidget(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(Res.string.calendar_today_count, connected.events.size.toString()),
+                        text = stringResource(
+                            Res.string.calendar_today_count,
+                            calendarTodayCount(state).toString()
+                        ),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
@@ -163,6 +175,7 @@ internal fun CalendarWidget(
 @Composable
 private fun CalendarConnectRow(
     state: CalendarState,
+    refreshing: Boolean,
     onConnect: () -> Unit,
     onCancel: () -> Unit,
     onDisconnect: () -> Unit,
@@ -233,10 +246,23 @@ private fun CalendarConnectRow(
             }
         } else if (connected != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CalendarActionChip(
-                    text = stringResource(Res.string.calendar_refresh),
-                    onClick = onRefresh
-                )
+                // The chip becomes the spinner for exactly as long as the fetch
+                // runs, so pressing Refresh is never a silent no-op and never a
+                // second concurrent request: the datasource serializes those.
+                if (refreshing) {
+                    Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(15.dp),
+                            color = AccentIndigoLight,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                } else {
+                    CalendarActionChip(
+                        text = stringResource(Res.string.calendar_refresh),
+                        onClick = onRefresh
+                    )
+                }
                 CalendarActionChip(
                     text = stringResource(Res.string.calendar_disconnect),
                     onClick = onDisconnect,
@@ -294,5 +320,106 @@ private fun String.localized(): StringResource = when (this) {
     GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
     GoogleCalendar.REASON_API_DISABLED -> Res.string.calendar_error_api_disabled
     else -> Res.string.calendar_error_auth
+}
+    
+
+/**
+ * The expanded notch's calendar page: the next five dates that actually have an
+ * event coming, soonest first, one tile each with the day in a large size and a
+ * count badge. Five rows cannot fit the island's ~84dp depth, so the dates run
+ * as a single row of tiles -- the wheel flips to this page like any other.
+ *
+ * Loading is never blocking: while a fetch runs with nothing to show yet the
+ * page is a small spinner, and an empty-but-settled calendar says so in words.
+ */
+@Composable
+internal fun CalendarNotchPage(
+    state: CalendarState?,
+    refreshing: Boolean
+) {
+    val groups = remember(state) {
+        (state as? CalendarState.Connected)?.events.orEmpty().upcomingDateGroups()
+    }
+    when {
+        groups.isEmpty() && refreshing -> Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(15.dp),
+                color = AccentIndigoLight,
+                strokeWidth = 2.dp
+            )
+        }
+        groups.isEmpty() -> Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stringResource(Res.string.calendar_no_events),
+                style = AppTypography.bodySmall,
+                color = TextMuted
+            )
+        }
+        else -> Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = DockLayout.ContentPadding),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            groups.forEachIndexed { index, group ->
+                if (index > 0) {
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(30.dp)
+                            .background(NotchBorder)
+                    )
+                }
+                CalendarDateTile(
+                    group = group,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One date: the day number in the big size (accented when it is today), the
+ * weekday over the event-count badge beside it -- the "date group" the badge
+ * belongs to.
+ */
+@Composable
+private fun CalendarDateTile(
+    group: CalendarDateGroup,
+    modifier: Modifier = Modifier
+) {
+    val day = group.date.dayOfMonth
+    val weekday = remember(group.date) {
+        java.time.LocalDate.of(group.date.year, group.date.monthNumber, group.date.dayOfMonth)
+            .dayOfWeek
+            .getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())
+    }
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = day.toString(),
+            style = AppTypography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (group.isToday) LiveAccent else TextPrimary
+        )
+        Spacer(modifier = Modifier.width(7.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = weekday,
+                style = AppTypography.labelSmall,
+                color = TextMuted
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            CountBadge(count = group.count)
+        }
+    }
 }
     

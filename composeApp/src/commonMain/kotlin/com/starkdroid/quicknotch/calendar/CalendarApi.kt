@@ -114,8 +114,9 @@ class CalendarApi(
      * and nothing was logged anywhere. The timestamps are RFC3339 now; the
      * reason travels back to the caller, which logs it.
      */
-    suspend fun eventsForDay(accessToken: String): EventsResult {
-        val (timeMin, timeMax) = todayWindowMillis()
+    suspend fun events(accessToken: String, fromMillis: Long, toMillis: Long): EventsResult {
+        val timeMin = fromMillis
+        val timeMax = toMillis
         // Instant.toString() is RFC3339 in UTC, which is the same instant as
         // local midnight — the day boundary is what Google filters on.
         val response = runCatching {
@@ -123,7 +124,7 @@ class CalendarApi(
                 "$EVENTS_ENDPOINT" +
                     "?timeMin=${Instant.fromEpochMilliseconds(timeMin)}" +
                     "&timeMax=${Instant.fromEpochMilliseconds(timeMax)}" +
-                    "&singleEvents=true&orderBy=startTime&maxResults=50"
+                    "&singleEvents=true&orderBy=startTime&maxResults=250"
             ) {
                 header("Authorization", "Bearer $accessToken")
             }

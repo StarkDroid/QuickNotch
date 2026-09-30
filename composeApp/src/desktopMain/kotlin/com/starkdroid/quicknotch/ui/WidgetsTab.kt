@@ -72,6 +72,7 @@ internal fun WidgetsTab(
     isScanning: Boolean,
     onSearchQueryChange: (String) -> Unit,
     calendarState: CalendarState,
+    calendarRefreshing: Boolean,
     onConnectCalendar: () -> Unit,
     onCancelCalendar: () -> Unit,
     onDisconnectCalendar: () -> Unit,
@@ -182,6 +183,7 @@ internal fun WidgetsTab(
                     Spacer(modifier = Modifier.height(14.dp))
                     CalendarWidget(
                         state = calendarState,
+                        refreshing = calendarRefreshing,
                         showInQuickView = config.widgets.showCalendar,
                         onShowInQuickViewChange = { enabled ->
                             onUpdate { it.copy(widgets = it.widgets.copy(showCalendar = enabled)) }

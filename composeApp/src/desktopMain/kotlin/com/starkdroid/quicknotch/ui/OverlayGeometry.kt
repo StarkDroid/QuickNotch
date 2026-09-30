@@ -41,6 +41,8 @@ internal object DockLayout {
      * the expanded dock; the apps page is narrower, so the window widens to
      * this whenever the music page is active.
      */
+    /** Five date tiles need their own room even when no dock or music page does. */
+    val CalendarPageWidth = 348.dp
     val NowPlayingWidth: Dp = 356.dp
 
     /**
@@ -102,8 +104,10 @@ fun computeNotchMetrics(
     config: NotchConfig,
     favoriteCount: Int,
     musicActive: Boolean = false,
-    indicatorSlots: Int = 0
+    indicatorSlots: Int = 0,
+    calendarActive: Boolean = false
 ): NotchMetrics {
+    val calendarActiveWidth = if (calendarActive) DockLayout.CalendarPageWidth else 0.dp
     val base = config.baseIconSizeDp.dp
     val count = favoriteCount.coerceAtLeast(0)
 
@@ -114,7 +118,7 @@ fun computeNotchMetrics(
                 DockLayout.AlongSafety
         } else 0.dp
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
-    val alongExpanded = maxOf(appsAlong, musicAlong)
+    val alongExpanded = maxOf(appsAlong, musicAlong, calendarActiveWidth)
     val alongCollapsed = maxOf(
         config.quickViewWidthDp.dp + DockLayout.CollapsedMargin +
             DockLayout.QuickViewIndicatorSlot * indicatorSlots.coerceAtLeast(0),

@@ -22,6 +22,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
+import com.starkdroid.quicknotch.calendar.calendarTodayCount
 import com.starkdroid.quicknotch.datasource.AppPaths
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
@@ -272,7 +273,7 @@ private fun NotchOverlayWindow(
     // notification bell, the calendar mail badge) clip off the far edge. Both
     // derive the slot count through the same helper.
     val calendarEventCount =
-        if (config.widgets.showCalendar) (calendarState as? CalendarState.Connected)?.events?.size ?: 0 else 0
+        if (config.widgets.showCalendar) calendarTodayCount(calendarState) else 0
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
     )
