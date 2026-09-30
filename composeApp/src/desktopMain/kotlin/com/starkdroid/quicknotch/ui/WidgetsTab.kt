@@ -73,6 +73,7 @@ internal fun WidgetsTab(
     onSearchQueryChange: (String) -> Unit,
     calendarState: CalendarState,
     onConnectCalendar: () -> Unit,
+    onCancelCalendar: () -> Unit,
     onDisconnectCalendar: () -> Unit,
     onRefreshCalendar: () -> Unit
 ) {
@@ -186,6 +187,7 @@ internal fun WidgetsTab(
                             onUpdate { it.copy(widgets = it.widgets.copy(showCalendar = enabled)) }
                         },
                         onConnect = onConnectCalendar,
+                        onCancel = onCancelCalendar,
                         onDisconnect = onDisconnectCalendar,
                         onRefresh = onRefreshCalendar
                     )

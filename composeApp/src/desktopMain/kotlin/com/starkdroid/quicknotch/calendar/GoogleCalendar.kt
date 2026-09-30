@@ -1,6 +1,7 @@
 package com.starkdroid.quicknotch.calendar
 
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.AppLog
 import com.starkdroid.quicknotch.datasource.AppPaths
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +39,7 @@ import java.time.ZoneId
 import java.util.Base64
 import java.util.EnumSet
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.TimeUnit
@@ -157,6 +159,13 @@ object GoogleCalendar {
     const val REASON_REVOKED = "revoked"
     /** The user closed the consent screen or declined the app. */
     const val REASON_CANCELLED = "cancelled"
+    /**
+     * Google refused because the OAuth consent screen is still in Testing and
+     * the signed-in account is not one of its test users. Arrives as
+     * `access_denied` like a plain decline, so it has to be told apart by the
+     * description or the user is told they cancelled something they did not.
+     */
+    const val REASON_NOT_VERIFIED = "not_verified"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -184,6 +193,9 @@ object GoogleCalendar {
      * lives and it already returns null for every outcome.
      */
     private var connectFailure: String = REASON_AUTH
+    private var connectJob: Job? = null
+    private var pendingCallback: CompletableFuture<String>? = null
+    private var cancelledByUser = false
     private var tickerJob: Job? = null
     private var pollJob: Job? = null
 
@@ -242,11 +254,17 @@ object GoogleCalendar {
     /** Open the consent screen and wait for the code to come back on loopback. */
     fun connect() {
         if (_state.value is CalendarState.Connecting) return
-        scope.launch {
+        cancelledByUser = false
+        connectJob = scope.launch {
             _state.value = CalendarState.Connecting
             val tokens = authorize()
             if (tokens == null) {
-                _state.value = CalendarState.Error(connectFailure)
+                // Walking away from the consent screen is not a failure, so it
+                // lands back on Disconnected rather than an error the user has
+                // to think about.
+                _state.value =
+                    if (cancelledByUser) CalendarState.Disconnected
+                    else CalendarState.Error(connectFailure)
                 return@launch
             }
             cached = tokens
@@ -254,6 +272,20 @@ object GoogleCalendar {
             // Consent succeeding proves nothing; the first fetch is the real test.
             refreshBlocking()
         }
+    }
+
+    /**
+     * Give up on a sign-in in progress. Without this the widget sat on a spinner
+     * for the full five-minute budget whenever the browser never showed up —
+     * which is indistinguishable, from the settings window, from a hang.
+     */
+    fun cancelConnect() {
+        if (_state.value !is CalendarState.Connecting) return
+        cancelledByUser = true
+        log("cancelled by the user")
+        pendingCallback?.completeExceptionally(CancellationException("cancelled by the user"))
+        connectJob?.cancel()
+        _state.value = CalendarState.Disconnected
     }
 
     /** Forget the tokens and stop showing anything. */
@@ -305,6 +337,7 @@ object GoogleCalendar {
             }
         }
         server.start()
+        pendingCallback = received
         log("consent server on $redirect")
         return try {
             AppLauncher.browse(
@@ -326,18 +359,18 @@ object GoogleCalendar {
             val code = received.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             log("callback carried a code after ${(System.currentTimeMillis() - started) / 1000}s")
             exchangeCode(code, redirect, verifier)
+        } catch (e: CancellationException) {
+            // The user walking away is not an error: rethrow so connect() can
+            // put the widget back to Disconnected instead of Error.
+            throw e
         } catch (e: ExecutionException) {
             val cause = e.cause
             if (cause is GoogleAuthException) {
                 // access_denied is the user closing the tab or picking "Cancel";
                 // anything else is Google's refusal and needs a real reason shown.
-                connectFailure = if (cause.error == "access_denied") {
-                    REASON_CANCELLED
-                } else {
-                    REASON_AUTH
-                }
+                connectFailure = classifyConsentRefusal(cause)
                 log("consent refused: ${cause.error} ${cause.description.orEmpty()}".trim())
-                System.err.println("QuickNotch: Google consent failed (${cause.error}): ${cause.description.orEmpty()}")
+                AppLog.line("Google consent failed (${cause.error}): ${cause.description.orEmpty()}")
             } else {
                 connectFailure = REASON_AUTH
                 log("consent wait failed: $cause")
@@ -346,17 +379,15 @@ object GoogleCalendar {
         } catch (e: TimeoutException) {
             connectFailure = REASON_AUTH
             log("no callback after ${CONNECT_TIMEOUT_MS / 60_000} min")
-            System.err.println(
-                "QuickNotch: Google sign-in got no callback within " +
-                    "${CONNECT_TIMEOUT_MS / 60_000} min"
-            )
+            AppLog.line("Google sign-in got no callback within ${CONNECT_TIMEOUT_MS / 60_000} min")
             null
         } catch (e: Exception) {
             connectFailure = REASON_AUTH
             log("consent failed: $e")
-            System.err.println("QuickNotch: Google sign-in failed: $e")
+            AppLog.line("Google sign-in failed: $e")
             null
         } finally {
+            pendingCallback = null
             server.stop(0)
         }
     }
@@ -375,12 +406,12 @@ object GoogleCalendar {
         if (response == null) {
             // No JSON back at all, or unparseable: the only honest report is
             // that the exchange itself produced nothing usable.
-            System.err.println("QuickNotch: Google token exchange returned no usable response")
+            AppLog.line("Google token exchange returned no usable response")
             return null
         }
         if (response.str("error") != null) {
-            System.err.println(
-                "QuickNotch: Google token exchange rejected the code: " +
+            AppLog.line(
+                "Google token exchange rejected the code: " +
                     "${response.str("error")} ${response.str("error_description").orEmpty()}".trim()
             )
             return null
@@ -615,6 +646,21 @@ object GoogleCalendar {
     /** Google answering a consent redirect with a refusal. */
     private class GoogleAuthException(val error: String, val description: String?) : Exception(error)
 
+    /**
+     * Google's own copy for "this app is not verified yet" arrives as
+     * `access_denied`, the same code as a user pressing Cancel. The two are told
+     * apart by the description, because the remedy is completely different: one
+     * needs a console setting, the other needs the user to stop cancelling.
+     * Unrecognised refusals stay [REASON_AUTH] rather than guessing.
+     */
+    private fun classifyConsentRefusal(failure: GoogleAuthException): String {
+        if (failure.error != "access_denied") return REASON_AUTH
+        val description = failure.description?.lowercase().orEmpty()
+        val blockedByTesting = listOf("not been verified", "not verified", "being tested", "app_notverified")
+            .any { it in description }
+        return if (blockedByTesting) REASON_NOT_VERIFIED else REASON_CANCELLED
+    }
+
     /** `a=1&b=2` to a map, decoding percent-escapes. */
     private fun queryParams(raw: String?): Map<String, String> =
         raw.orEmpty().split("&").filter { it.isNotBlank() }.associate { pair ->
@@ -624,7 +670,7 @@ object GoogleCalendar {
         }
 
     private fun log(message: String) {
-        if (VERBOSE) System.err.println("QuickNotch: calendar $message")
+        if (VERBOSE) AppLog.line("calendar $message")
     }
 
     private fun JsonObject.str(key: String): String? =

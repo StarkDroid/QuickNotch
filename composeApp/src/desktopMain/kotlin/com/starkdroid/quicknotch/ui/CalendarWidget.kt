@@ -31,11 +31,14 @@ import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.calendar_cancel
+import com.starkdroid.quicknotch.generated.resources.calendar_waiting
 import com.starkdroid.quicknotch.generated.resources.calendar_connect
 import com.starkdroid.quicknotch.generated.resources.calendar_connected_as
 import com.starkdroid.quicknotch.generated.resources.calendar_disconnect
 import com.starkdroid.quicknotch.generated.resources.calendar_error_auth
 import com.starkdroid.quicknotch.generated.resources.calendar_error_cancelled
+import com.starkdroid.quicknotch.generated.resources.calendar_error_not_verified
 import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
@@ -94,54 +97,61 @@ internal fun CalendarWidget(
     showInQuickView: Boolean,
     onShowInQuickViewChange: (Boolean) -> Unit,
     onConnect: () -> Unit,
+    onCancel: () -> Unit,
     onDisconnect: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    val todayCount = (state as? CalendarState.Connected)?.events?.size ?: 0
+    val connected = state as? CalendarState.Connected
     Column(modifier = Modifier.fillMaxWidth()) {
         CalendarConnectRow(
             state = state,
-            todayCount = todayCount,
             onConnect = onConnect,
+            onCancel = onCancel,
             onDisconnect = onDisconnect,
             onRefresh = onRefresh
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        // The notch toggle only exists once there is something to show. Offering
+        // it before the OAuth handshake has finished is a switch that controls
+        // nothing: the user flips it, sees no calendar, and concludes the
+        // feature is broken rather than not connected yet.
+        if (connected != null) {
+            Spacer(modifier = Modifier.height(12.dp))
 
-        // A small switch row rather than an indicator cell: the calendar is not
-        // a level ring, so there is nothing meaningful to preview.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(FlatCard)
-                .border(1.dp, FlatBorder, RoundedCornerShape(10.dp))
-                .clickable(enabled = state is CalendarState.Connected) { onShowInQuickViewChange(!showInQuickView) }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(Res.string.calendar_today_count, todayCount.toString()),
-                    style = AppTypography.titleSmall, // the day at a glance
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
-                Text(
-                    text = stringResource(Res.string.calendar_hint),
-                    style = AppTypography.bodySmall,
-                    color = TextSecondary
+            // A small switch row rather than an indicator cell: the calendar is
+            // not a level ring, so there is nothing meaningful to preview.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(FlatCard)
+                    .border(1.dp, FlatBorder, RoundedCornerShape(10.dp))
+                    .clickable { onShowInQuickViewChange(!showInQuickView) }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(Res.string.calendar_today_count, connected.events.size.toString()),
+                        style = AppTypography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = stringResource(Res.string.calendar_hint),
+                        style = AppTypography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                // Reuse the flat switch the rest of settings uses, so the notch
+                // and the settings window agree on what "on" looks like.
+                MinimalistRectSwitch(
+                    checked = showInQuickView,
+                    onCheckedChange = { onShowInQuickViewChange(it) }
                 )
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            // Reuse the flat switch the rest of settings uses, so the notch
-            // and the settings window agree on what "on" looks like.
-            MinimalistRectSwitch(
-                checked = showInQuickView,
-                onCheckedChange = { onShowInQuickViewChange(it) }
-            )
         }
     }
 }
@@ -150,8 +160,8 @@ internal fun CalendarWidget(
 @Composable
 private fun CalendarConnectRow(
     state: CalendarState,
-    todayCount: Int,
     onConnect: () -> Unit,
+    onCancel: () -> Unit,
     onDisconnect: () -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -166,6 +176,9 @@ private fun CalendarConnectRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = when {
+                    // While the browser is open the heading says what is being
+                    // waited on. The old "Connect Google Calendar" left the user
+                    // with a spinner and no idea whether anything was happening.
                     busy -> stringResource(Res.string.calendar_connect)
                     connected != null -> stringResource(Res.string.calendar_connected_as, connected.account)
                     error != null -> stringResource(Res.string.calendar_section_title)
@@ -178,10 +191,11 @@ private fun CalendarConnectRow(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = when {
-                    busy -> stringResource(Res.string.calendar_hint)
+                    busy -> stringResource(Res.string.calendar_waiting)
                     error != null -> stringResource(
                         when (error.reason) {
                             GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
+                            GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
                             GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
                             GoogleCalendar.REASON_REVOKED -> Res.string.calendar_error_revoked
                             else -> Res.string.calendar_error_auth
@@ -201,12 +215,15 @@ private fun CalendarConnectRow(
         Spacer(modifier = Modifier.width(10.dp))
 
         if (busy) {
-            Box(modifier = Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    color = AccentIndigoLight,
-                    strokeWidth = 2.dp
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(15.dp),
+                        color = AccentIndigoLight,
+                        strokeWidth = 2.dp
+                    )
+                }
+                CalendarActionChip(text = stringResource(Res.string.calendar_cancel), onClick = onCancel, tinted = true)
             }
         } else if (connected != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

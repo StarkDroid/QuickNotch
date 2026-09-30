@@ -196,6 +196,7 @@ fun SettingsScreen(
                         onSearchQueryChange = { searchQuery = it },
                         calendarState = calendarState,
                         onConnectCalendar = GoogleCalendar::connect,
+                        onCancelCalendar = GoogleCalendar::cancelConnect,
                         onDisconnectCalendar = GoogleCalendar::disconnect,
                         onRefreshCalendar = GoogleCalendar::refresh
                     )

@@ -61,11 +61,14 @@
     <string name="calendar_connect">Connect Google Calendar</string>
     <string name="calendar_disconnect">Disconnect</string>
     <string name="calendar_refresh">Refresh</string>
+    <string name="calendar_cancel">Cancel</string>
+    <string name="calendar_waiting">Waiting for Google sign-in in your browser</string>
     <string name="calendar_connected_as">Connected as %1$s</string>
     <string name="calendar_never_synced">Not synced yet</string>
     <string name="calendar_last_sync">Updated %1$s</string>
     <string name="calendar_error_auth">Sign-in didn&#39;t finish. Try connecting again.</string>
     <string name="calendar_error_network">Couldn&#39;t reach Google. Showing the last known day.</string>
+    <string name="calendar_error_not_verified">Google has not released this app yet. Add your Google account as a test user on the OAuth consent screen, then try again.</string>
     <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
     <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
     <string name="calendar_today_count">%1$s events today</string>
