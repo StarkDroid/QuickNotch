@@ -122,7 +122,7 @@ internal fun OnboardingScreen(
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
     val calendarTick by GoogleCalendar.minuteTick.collectAsState()
 
-    var step by remember { mutableStateOf(OnboardingStep.Style) }
+    var step by remember { mutableStateOf(OnboardingStep.Welcome) }
 
     // The apps list is only needed on the last screen, so the (sometimes slow)
     // installed-apps scan starts when the user gets there, not at launch.
