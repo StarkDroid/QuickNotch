@@ -72,7 +72,8 @@ internal fun IdleClockRow(
     modifier: Modifier = Modifier,
     battery: AudioDeviceBattery? = null,
     deviceBattery: SystemBattery? = null,
-    notificationCount: Int? = null
+    notificationCount: Int? = null,
+    calendarEventCount: Int = 0
 ) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -155,6 +156,13 @@ internal fun IdleClockRow(
         // while that count is readable.
         if (notificationCount != null) {
             NotificationIndicator(count = notificationCount, tint = tint)
+        }
+        // The calendar badge caps the row. It lives in this branch too or the
+        // pill disagrees with its own sizer: quickViewIndicatorSlots counts the
+        // slot whenever a count exists, so a branch that does not draw it widens
+        // the notch and shows nothing -- pitfall 15, again.
+        if (calendarEventCount > 0) {
+            CalendarDayIndicator(count = calendarEventCount)
         }
     }
 }

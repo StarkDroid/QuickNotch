@@ -810,11 +810,11 @@ object GoogleCalendar {
 }
 
 /**
- * The pill badge's number: events still upcoming across the whole window. The
- * badge used to count today's events only, which hid it entirely on any day
- * whose calendar was empty -- indistinguishable from the feature being off.
- * Upcoming is what the notch is announcing, and it is non-zero whenever the
- * connected calendar has anything at all to say.
+ * The pill badge's number: today's events that are still upcoming -- running
+ * right now counts, one that already ended does not. That is both what the
+ * user reads on Google Calendar for the day ("2 upcoming events") and what the
+ * notch can still announce; a whole-window count would badge the pill with
+ * December while the day itself has nothing going on.
  */
 fun calendarUpcomingCount(state: CalendarState): Int =
-    (state as? CalendarState.Connected)?.events?.upcomingCount() ?: 0
+    (state as? CalendarState.Connected)?.events?.todayUpcomingCount() ?: 0

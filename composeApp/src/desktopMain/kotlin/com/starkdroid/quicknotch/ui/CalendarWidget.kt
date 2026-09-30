@@ -51,6 +51,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_no_events
+import com.starkdroid.quicknotch.generated.resources.calendar_today
 import com.starkdroid.quicknotch.generated.resources.calendar_upcoming_count
 import com.starkdroid.quicknotch.generated.resources.calendar_last_sync
 import com.starkdroid.quicknotch.generated.resources.calendar_never_synced
@@ -442,7 +443,13 @@ private fun CalendarDateTile(
     group: CalendarDateGroup,
     modifier: Modifier = Modifier
 ) {
-    val label = remember(group.date) { formatDate(group.date, "d MMM") }
+    // Today never needs a month -- the big block beside it carries the date --
+    // and it takes the accent so the schedule's "now" reads at a glance.
+    val label = if (group.isToday) {
+        stringResource(Res.string.calendar_today)
+    } else {
+        remember(group.date) { formatDate(group.date, "d MMM") }
+    }
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -451,7 +458,7 @@ private fun CalendarDateTile(
             text = label,
             style = AppTypography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
+            color = if (group.isToday) LiveAccent else TextPrimary
         )
         Spacer(modifier = Modifier.height(4.dp))
         CountBadge(count = group.count)

@@ -238,7 +238,8 @@ internal fun QuickView(
                 tint = islandTint(surface),
                 battery = if (showBattery) battery else null,
                 deviceBattery = if (showDeviceBattery) deviceBattery else null,
-                notificationCount = notificationCount
+                notificationCount = notificationCount,
+                calendarEventCount = if (showCalendar) calendarEventCount else 0
             )
         } else {
             // Idle dots; the notification bell, when readable, caps the row.

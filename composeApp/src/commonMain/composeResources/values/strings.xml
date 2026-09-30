@@ -75,6 +75,7 @@
     <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
     <string name="calendar_today_count">%1$s events today</string>
     <string name="calendar_upcoming_count">%1$s upcoming events</string>
+    <string name="calendar_today">Today</string>
     <string name="calendar_no_events">No upcoming events</string>
     <string name="calendar_ticker_label">Calendar event</string>
     <string name="notification_grant_button">Grant Full Disk Access</string>

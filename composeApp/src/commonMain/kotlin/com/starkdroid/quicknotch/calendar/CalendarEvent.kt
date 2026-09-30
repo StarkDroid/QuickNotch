@@ -93,6 +93,20 @@ fun List<CalendarEvent>.todayCount(
 }
 
 /**
+ * Today's events that are still upcoming -- running counts, ended does not.
+ * This is the pill badge's number, and it matches the count Google Calendar
+ * itself shows for the day.
+ */
+fun List<CalendarEvent>.todayUpcomingCount(
+    timeZone: TimeZone = TimeZone.currentSystemDefault(),
+    today: LocalDate = Clock.System.todayIn(timeZone),
+    nowMillis: Long = Clock.System.now().toEpochMilliseconds()
+): Int = count { event ->
+    Instant.fromEpochMilliseconds(event.startMillis)
+        .toLocalDateTime(timeZone).date == today && event.endMillis >= nowMillis
+}
+
+/**
  * How many of these events are still upcoming -- running right now counts, one
  * that ended does not. This is the number the pill badge shows, so a calendar
  * whose today is empty still gets its icon and count on the notch.
@@ -102,12 +116,11 @@ fun List<CalendarEvent>.upcomingCount(
 ): Int = count { it.endMillis >= nowMillis }
 
 /**
- * The next [maxDates] dates after today that have an event coming, soonest
- * first. Today is excluded on purpose: the page gives it the big left slot
- * already, and the example the page mirrors -- "10 Oct, 17 Oct, 20 Nov, 25 Dec"
- * -- is future dates. Gaps are the point -- a quiet calendar should not show
- * five empty days -- and an event still running counts as upcoming, so a
- * meeting that started an hour ago keeps its date on the page until it ends.
+ * The next [maxDates] dates with an event coming, soonest first. Today comes
+ * first when it has one still running or ahead -- the schedule view shows the
+ * current day's events, and a page that says "No upcoming events" while this
+ * evening's meeting exists is simply lying. Gaps are the point: a quiet
+ * calendar should not show five empty days.
  */
 fun List<CalendarEvent>.upcomingDateGroups(
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
@@ -118,11 +131,10 @@ fun List<CalendarEvent>.upcomingDateGroups(
     val upcoming = filter { it.endMillis >= nowMillis }
     return upcoming
         .groupBy { Instant.fromEpochMilliseconds(it.startMillis).toLocalDateTime(timeZone).date }
-        .filterKeys { it > today }
         .toList()
         .sortedBy { (date, _) -> date }
         .take(maxDates)
-        .map { (date, events) -> CalendarDateGroup(date, events.size, isToday = false) }
+        .map { (date, events) -> CalendarDateGroup(date, events.size, date == today) }
 }
 
 /** `2026-09-30T10:00:00+05:30` -> epoch millis; null when Google sends junk. */
