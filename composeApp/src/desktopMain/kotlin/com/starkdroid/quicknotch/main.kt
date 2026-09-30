@@ -56,7 +56,6 @@ import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
 fun main(args: Array<String>) {
-
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")

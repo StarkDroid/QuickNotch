@@ -203,6 +203,9 @@ private fun CalendarConnectRow(
                             else -> Res.string.calendar_error_auth
                         }
                     )
+                    connected != null && connected.staleError != null -> stringResource(
+                        Res.string.calendar_error_network
+                    )
                     connected != null && connected.fetchedAtMillis > 0L -> stringResource(
                         Res.string.calendar_last_sync,
                         relativeTime(connected.fetchedAtMillis)
@@ -211,7 +214,7 @@ private fun CalendarConnectRow(
                     else -> stringResource(Res.string.calendar_hint)
                 },
                 style = AppTypography.bodySmall,
-                color = if (error != null) TextMuted else TextSecondary
+                color = if (error != null || (connected?.staleError != null)) TextMuted else TextSecondary
             )
         }
         Spacer(modifier = Modifier.width(10.dp))

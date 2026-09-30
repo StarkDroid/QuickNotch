@@ -986,6 +986,22 @@ composeApp/
     let `commonMain` reach for a desktop-only helper — an `AppLog` call in the
     API layer does not compile, which is the boundary doing its job for free.
 
+37. **Google Calendar's `timeMin`/`timeMax` are RFC3339, not epoch seconds.**
+    The day query went out as `timeMin=1790706600` and the stub accepted it, so
+    the harness was green while real Google answered 400 every time. The
+    symptom was the worst kind: the fetch failed *silently* (a null return),
+    the state fell to `Error(network)`, and the user read "not connected" after
+    a sign-in that had completely succeeded -- exchange included. Three lessons:
+    a stub must validate what the real endpoint documents, not just what it
+    consumes; a null that collapses four different failures (HTTP status,
+    unreachable, malformed, empty) hides the one you actually have (the fetch
+    result is a sealed `EventsResult` now, each logged); and "connected" and
+    "the day synced" are different states -- the widget now lands on
+    `Connected` the moment tokens exist, with the fetch outcome layered on top
+    as `staleError`, so a failing day never again reads as a failed sign-in.
+    Refreshes are serialized by a mutex because the button outruns the round
+    trip and overlapping refreshes race the token file.
+
 34. **A failed HTTP status is not an empty response.** Porting the calendar to
     Ktor turned a revoked token into an empty calendar: Google's refusal is a
     JSON body with no `items` key, so `?: return emptyList()` reported "the day

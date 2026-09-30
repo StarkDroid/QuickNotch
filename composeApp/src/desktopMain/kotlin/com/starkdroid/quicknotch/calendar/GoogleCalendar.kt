@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -261,6 +263,17 @@ object GoogleCalendar {
             }
             cached = tokens
             writeTokens(tokens)
+            log("token exchange succeeded")
+            // Connected is true the moment tokens exist; whether the first day
+            // fetch works is a separate state that layers on top. Landing here
+            // first is what keeps a slow or failing first fetch from reading as
+            // "sign-in didn't finish" after a sign-in that fully succeeded --
+            // which is exactly what three console theories failed to explain.
+            _state.value = CalendarState.Connected(
+                account = tokens.account.ifBlank { "Google" },
+                events = emptyList(),
+                fetchedAtMillis = 0L
+            )
             // Consent succeeding proves nothing; the first fetch is the real test.
             refreshBlocking()
         }
@@ -509,9 +522,46 @@ object GoogleCalendar {
         }
     }
 
+    /**
+     * One day fetch, with every failure mode logged. This used to be a silent
+     * null and a 400 from a malformed query read as "not connected" after a
+     * sign-in that had entirely succeeded -- the log is what turns that class
+     * of bug from an afternoon into a sentence.
+     */
+    private suspend fun fetchDay(tokens: Tokens): List<CalendarEvent>? =
+        when (val result = api.eventsForDay(tokens.accessToken)) {
+            is EventsResult.Ok -> {
+                log("day fetched: ${result.events.size} events")
+                result.events
+            }
+            is EventsResult.Http -> {
+                AppLog.line("Google events request answered HTTP ${result.status}")
+                null
+            }
+            EventsResult.Unreachable -> {
+                AppLog.line("Google events request was unreachable")
+                null
+            }
+            EventsResult.Malformed -> {
+                AppLog.line("Google events response was not parseable")
+                null
+            }
+        }
+
     // ── fetching ────────────────────────────────────────────────────────────
 
-    private suspend fun refreshBlocking() {
+    /**
+     * One refresh at a time. The button can be clicked faster than a round trip
+     * finishes, and two overlapping refreshes would race the token file and, on
+     * a server that rotates refresh tokens, invalidate one of them.
+     */
+    private val refreshMutex = Mutex()
+
+    private suspend fun refreshBlocking() = refreshMutex.withLock {
+        refreshBlockingLocked()
+    }
+
+    private suspend fun refreshBlockingLocked() {
         var tokens = cached ?: readTokens() ?: run {
             _state.value = CalendarState.Disconnected
             return
@@ -522,19 +572,27 @@ object GoogleCalendar {
             writeTokens(tokens)
         }
 
-        var events = api.eventsForDay(tokens.accessToken)
+        var events = fetchDay(tokens)
         if (events == null && tokens.refreshToken != null) {
             // Most likely an access token revoked server-side since we cached
             // it: refresh once and retry before giving up.
             tokens = refreshed(tokens) ?: run { revoked(); return }
             cached = tokens
             writeTokens(tokens)
-            events = api.eventsForDay(tokens.accessToken)
+            events = fetchDay(tokens)
         }
         if (events == null) {
+            // The caller may be mid-connect (state still Connecting), in which
+            // case there is no Connected state to keep stale -- but the tokens
+            // are real and on disk, so the honest state is Connected-with-a-
+            // stale-day rather than an error that reads as "sign-in failed".
             val previous = _state.value as? CalendarState.Connected
-            _state.value = previous?.copy(staleError = REASON_NETWORK)
-                ?: CalendarState.Error(REASON_NETWORK)
+            _state.value = previous?.copy(staleError = REASON_NETWORK) ?: CalendarState.Connected(
+                account = tokens.account.ifBlank { "Google" },
+                events = emptyList(),
+                fetchedAtMillis = 0L,
+                staleError = REASON_NETWORK
+            )
             return
         }
 

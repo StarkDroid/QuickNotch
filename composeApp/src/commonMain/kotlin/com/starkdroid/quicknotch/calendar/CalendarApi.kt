@@ -7,6 +7,7 @@ import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import kotlinx.datetime.Instant
 import io.ktor.http.Parameters
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -103,18 +104,30 @@ class CalendarApi(
      * Null means the day could not be fetched at all, which the caller treats as
      * "keep the last known day" rather than "the day is empty".
      */
-    suspend fun eventsForDay(accessToken: String): List<CalendarEvent>? {
+    /**
+     * Today's events, with the failure named rather than flattened into a null.
+     *
+     * The flattening cost a real bug: `timeMin` went out as epoch seconds, which
+     * Google's API answers with a 400 ("must be an RFC3339 timestamp") — and a
+     * null return made that indistinguishable from every other failure, so the
+     * widget showed "not connected" after a sign-in that had fully succeeded,
+     * and nothing was logged anywhere. The timestamps are RFC3339 now; the
+     * reason travels back to the caller, which logs it.
+     */
+    suspend fun eventsForDay(accessToken: String): EventsResult {
         val (timeMin, timeMax) = todayWindowMillis()
+        // Instant.toString() is RFC3339 in UTC, which is the same instant as
+        // local midnight — the day boundary is what Google filters on.
         val response = runCatching {
             client.get(
                 "$EVENTS_ENDPOINT" +
-                    "?timeMin=${timeMin / 1000}" +
-                    "&timeMax=${timeMax / 1000}" +
+                    "?timeMin=${Instant.fromEpochMilliseconds(timeMin)}" +
+                    "&timeMax=${Instant.fromEpochMilliseconds(timeMax)}" +
                     "&singleEvents=true&orderBy=startTime&maxResults=50"
             ) {
                 header("Authorization", "Bearer $accessToken")
             }
-        }.getOrNull() ?: return null
+        }.getOrNull() ?: return EventsResult.Unreachable
 
         // A failed status is "we could not fetch the day", which is NOT the same
         // as "the day is empty" and must not be reported as one. Google's refusal
@@ -126,11 +139,12 @@ class CalendarApi(
         //
         // No logging here on purpose: this file is commonMain, so it has no
         // business reaching for the desktop-only log file.
-        if (!response.status.isSuccess()) return null
-        val body = runCatching { response.bodyAsText() }.getOrNull() ?: return null
+        if (!response.status.isSuccess()) return EventsResult.Http(response.status.value)
+        val body = runCatching { response.bodyAsText() }.getOrNull() ?: return EventsResult.Malformed
 
         return runCatching {
-            val items = json.parseToJsonElement(body).jsonObject["items"]?.jsonArray ?: return emptyList()
+            val items = json.parseToJsonElement(body).jsonObject["items"]?.jsonArray
+                ?: return@runCatching EventsResult.Ok(emptyList())
             items.mapNotNull { item ->
                 val obj = item.jsonObject
                 if (obj.string("status") == "cancelled") return@mapNotNull null
@@ -146,8 +160,8 @@ class CalendarApi(
                 val endMillis = (end.string("dateTime") ?: end.string("date"))
                     ?.let { parseEventMillis(it, allDay) } ?: (startMillis + 3_600_000L)
                 CalendarEvent(id, summary, startMillis, endMillis, allDay)
-            }
-        }.getOrNull()
+            }.let { EventsResult.Ok(it) }
+        }.getOrElse { EventsResult.Malformed }
     }
 
     // ── plumbing ────────────────────────────────────────────────────────────
@@ -196,6 +210,20 @@ class CalendarApi(
             }
         }
     }
+}
+
+/** The four outcomes of a day fetch, each diagnosable at the caller. */
+sealed interface EventsResult {
+    data class Ok(val events: List<CalendarEvent>) : EventsResult
+
+    /** Google answered, and said no. 401/403 mean the token; 400 means our query. */
+    data class Http(val status: Int) : EventsResult
+
+    /** No usable answer at all: offline, timeout, TLS. */
+    data object Unreachable : EventsResult
+
+    /** An answer that was not the JSON we know how to read. */
+    data object Malformed : EventsResult
 }
 
 /** The three outcomes a token request can have, kept apart on purpose. */
