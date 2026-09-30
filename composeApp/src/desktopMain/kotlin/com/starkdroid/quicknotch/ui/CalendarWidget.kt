@@ -23,6 +23,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,6 +110,7 @@ internal fun CalendarDayIndicator(
 internal fun CalendarWidget(
     state: CalendarState,
     refreshing: Boolean,
+    tick: Long,
     showInQuickView: Boolean,
     onShowInQuickViewChange: (Boolean) -> Unit,
     onConnect: () -> Unit,
@@ -150,7 +153,7 @@ internal fun CalendarWidget(
                     Text(
                         text = stringResource(
                             Res.string.calendar_upcoming_count,
-                            calendarUpcomingCount(state).toString()
+                            calendarUpcomingCount(state, tick).toString()
                         ),
                         style = AppTypography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
@@ -340,8 +343,13 @@ internal fun CalendarNotchPage(
     state: CalendarState?,
     refreshing: Boolean
 ) {
-    val groups = remember(state) {
-        (state as? CalendarState.Connected)?.events.orEmpty().upcomingDateGroups()
+    // Sampled here rather than passed down: the page is the only drawer of the
+    // schedule, and the tick is what makes its tiles drop a spent date without
+    // waiting for the next fetch.
+    val tick by GoogleCalendar.minuteTick.collectAsState()
+    val groups = remember(state, tick) {
+        (state as? CalendarState.Connected)?.events.orEmpty()
+            .upcomingDateGroups(nowMillis = tick)
     }
     when {
         groups.isEmpty() && refreshing -> Box(

@@ -182,6 +182,16 @@ object GoogleCalendar {
     val ticker: StateFlow<CalendarEvent?> = _ticker.asStateFlow()
 
     /**
+     * "Now", sampled once a minute, so anything derived from the wall clock --
+     * the pill badge, the schedule tiles -- decays as events end instead of
+     * waiting for the next fetch to notice. Minute granularity is finer than
+     * any calendar display needs, and one state write per minute change is
+     * nothing next to recomposing on every 1s loop pass (pitfall 29).
+     */
+    private val _minuteTick = MutableStateFlow(System.currentTimeMillis() / 60_000L * 60_000L)
+    val minuteTick: StateFlow<Long> = _minuteTick.asStateFlow()
+
+    /**
      * Events whose ticker the user has already seen, so expanding the notch
      * over one dismisses it until the *next* event starts. Session-scoped on
      * purpose: after a restart an in-progress event re-announces itself, which
@@ -260,8 +270,11 @@ object GoogleCalendar {
         if (tickerJob != null) return
         tickerJob = scope.launch {
             while (isActive) {
+                val nowMillis = System.currentTimeMillis()
+                val nowMinute = nowMillis / 60_000L * 60_000L
+                if (nowMinute != _minuteTick.value) _minuteTick.value = nowMinute
                 val next = (_state.value as? CalendarState.Connected)
-                    ?.tickerEventAt(System.currentTimeMillis())
+                    ?.tickerEventAt(nowMillis)
                     ?.takeIf { it.id !in seenTickerEventIds }
                 if (next != _ticker.value) _ticker.value = next
                 delay(1000L)
@@ -819,5 +832,5 @@ object GoogleCalendar {
  * notch can still announce; a whole-window count would badge the pill with
  * December while the day itself has nothing going on.
  */
-fun calendarUpcomingCount(state: CalendarState): Int =
-    (state as? CalendarState.Connected)?.events?.todayUpcomingCount() ?: 0
+fun calendarUpcomingCount(state: CalendarState, nowMillis: Long): Int =
+    (state as? CalendarState.Connected)?.events?.todayUpcomingCount(nowMillis = nowMillis) ?: 0

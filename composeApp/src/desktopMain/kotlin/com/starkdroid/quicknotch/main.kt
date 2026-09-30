@@ -268,12 +268,13 @@ private fun NotchOverlayWindow(
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
     val calendarState by GoogleCalendar.state.collectAsState()
+    val calendarTick by GoogleCalendar.minuteTick.collectAsState()
     // The native window and the overlay content must size the quickview
     // identically, or the indicator slots (device + laptop battery + the
     // notification bell, the calendar mail badge) clip off the far edge. Both
     // derive the slot count through the same helper.
     val calendarEventCount =
-        if (config.widgets.showCalendar) calendarUpcomingCount(calendarState) else 0
+        if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
     )

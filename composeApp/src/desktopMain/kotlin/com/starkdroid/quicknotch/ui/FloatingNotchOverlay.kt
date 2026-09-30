@@ -125,9 +125,10 @@ internal fun FloatingNotchOverlay(
     // here because the pill is the only thing that draws them.
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
+    val calendarTick by GoogleCalendar.minuteTick.collectAsState()
     val calendarTicker by GoogleCalendar.ticker.collectAsState()
     val calendarEventCount =
-        if (config.widgets.showCalendar) calendarUpcomingCount(calendarState) else 0
+        if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
