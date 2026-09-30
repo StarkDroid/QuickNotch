@@ -996,6 +996,19 @@ composeApp/
     token calls return a sealed `OAuthResult` instead of throwing, since a
     refusal's error code is the only useful thing in the response.
 
+36. **An OAuth client registered as a *Web application* needs a `client_secret`;
+    a *Desktop app* one must not send one.** Both use the same
+    `*.apps.googleusercontent.com` id, so the type is invisible from the id — and
+    the symptom is baffling because everything the user can see works: the
+    browser opens, the sign-in completes, the loopback callback lands with a
+    code. The exchange then fails with
+    `invalid_request: client_secret is missing`, because Google treats a web
+    client as confidential and a desktop client as public, where PKCE alone *is*
+    the authentication. Read it off the log, not by guessing: verify with
+    `jimage`-style discipline and check the Cloud console's Application type
+    before adding a secret to the binary — an embedded secret in a shipped desktop
+    app is not a fix.
+
 33. **A desktop OAuth client in Google's "Testing" consent status only lets
     *test users* through.** A brand-new client refuses everyone else with
     `access_denied` and the description "The developer hasn’t given you access

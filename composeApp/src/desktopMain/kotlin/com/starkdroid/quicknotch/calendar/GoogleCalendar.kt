@@ -126,6 +126,15 @@ object GoogleCalendar {
      * description or the user is told they cancelled something they did not.
      */
     const val REASON_NOT_VERIFIED = "not_verified"
+    /**
+     * The OAuth client is registered as a Web application, so Google treats it
+     * as confidential and wants a client_secret. A desktop client is a *public*
+     * client: PKCE is the authentication and there is no secret to send — the
+     * remedy is the client type in the Cloud console, never a secret in the
+     * binary. Distinct from a generic refusal because the consent screen worked
+     * and only the exchange was rejected, which makes it baffling otherwise.
+     */
+    const val REASON_CLIENT_TYPE = "client_type"
 
     /**
      * All four Google calls, owned by the common (multiplatform) layer. One
@@ -449,7 +458,7 @@ object GoogleCalendar {
                 account = result.accountHint
             )
             is OAuthResult.Refused -> {
-                connectFailure = REASON_AUTH
+                connectFailure = classifyTokenRefusal(result)
                 AppLog.line(
                     "Google token exchange rejected the code: " +
                         "${result.error} ${result.description.orEmpty()}".trim()
@@ -598,6 +607,19 @@ object GoogleCalendar {
 
     /** Google answering a consent redirect with a refusal. */
     private class GoogleAuthException(val error: String, val description: String?) : Exception(error)
+
+    /**
+     * Google's "client_secret is missing" means the client in the Cloud console
+     * is a Web application rather than a Desktop app. Naming that here beats a
+     * generic failure, because everything the user can see *worked*: the browser
+     * opened, the sign-in went through, the callback landed.
+     */
+    private fun classifyTokenRefusal(refusal: OAuthResult.Refused): String {
+        val description = refusal.description?.lowercase().orEmpty()
+        val wantsASecret = "client_secret" in description ||
+            (refusal.error == "invalid_client" && description.contains("secret"))
+        return if (wantsASecret) REASON_CLIENT_TYPE else REASON_AUTH
+    }
 
     /**
      * Google's own copy for "this app is not verified yet" arrives as
