@@ -16,13 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.URL
@@ -43,35 +37,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.TimeUnit
 
-/**
- * How early before an event the ticker appears, so a 10:00 meeting is already
- * on screen at 9:58 rather than popping in as it starts. File scope (not on
- * [GoogleCalendar]) because [CalendarState] reads it too.
- */
-const val TICKER_LEAD_MS = 2 * 60 * 1000L
-
-/** How long the ticker lingers after an event ends, so a one-minute entry is
- *  still readable instead of blinking past. */
-const val TICKER_LINGER_MS = 30 * 60 * 1000L
-
-/**
- * One event on the user's primary calendar, reduced to what the notch shows.
- *
- * All-day entries still count towards the day's badge but never drive the
- * ticker: a day-long "Team offsite" is not worth interrupting the pill for.
- */
-data class CalendarEvent(
-    val id: String,
-    val summary: String,
-    val startMillis: Long,
-    val endMillis: Long,
-    val allDay: Boolean
-) {
-    fun containsAt(nowMillis: Long): Boolean =
-        nowMillis >= startMillis && nowMillis < maxOf(endMillis, startMillis + 1)
-}
-
-/** Everything the settings widget and the quickview need to know. */
 sealed interface CalendarState {
     /** No tokens on disk: the user has never connected. */
     data object Disconnected : CalendarState
@@ -91,11 +56,7 @@ sealed interface CalendarState {
         val staleError: String? = null
     ) : CalendarState {
         /** The timed event to put on the ticker at [nowMillis], if any. */
-        fun tickerEventAt(nowMillis: Long): CalendarEvent? = events.firstOrNull { event ->
-            !event.allDay &&
-                event.startMillis - TICKER_LEAD_MS <= nowMillis &&
-                event.endMillis + TICKER_LINGER_MS > nowMillis
-        }
+        fun tickerEventAt(nowMillis: Long): CalendarEvent? = events.firstOrNull { it.isTickerLiveAt(nowMillis) }
     }
 
     /**
@@ -165,6 +126,13 @@ object GoogleCalendar {
      * description or the user is told they cancelled something they did not.
      */
     const val REASON_NOT_VERIFIED = "not_verified"
+
+    /**
+     * All four Google calls, owned by the common (multiplatform) layer. One
+     * client for the process: it owns a connection pool and a selector thread,
+     * and a client per request would throw both away.
+     */
+    private val api = CalendarApi(CLIENT_ID)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -319,7 +287,7 @@ object GoogleCalendar {
      * uncaught, kill the coroutine, and strand the state on [CalendarState.Connecting]
      * with no log line and no way out.
      */
-    private fun authorize(): Tokens? {
+    private suspend fun authorize(): Tokens? {
         val verifier = randomUrlToken(64)
         val challenge = base64Url(sha256(verifier))
         val started = System.currentTimeMillis()
@@ -467,57 +435,56 @@ object GoogleCalendar {
         }
     }
 
-    private fun exchangeCode(code: String, redirect: String, verifier: String): Tokens? {
-        val response = postForm(
-            TOKEN_ENDPOINT,
-            mapOf(
-                "client_id" to CLIENT_ID,
-                "code" to code,
-                "code_verifier" to verifier,
-                "grant_type" to "authorization_code",
-                "redirect_uri" to redirect
+    /**
+     * Trade Google's code for tokens. The request itself lives in [CalendarApi]
+     * (commonMain, Ktor); what stays here is the part that is genuinely
+     * platform-shaped: deciding what a refusal means for the widget.
+     */
+    private suspend fun exchangeCode(code: String, redirect: String, verifier: String): Tokens? =
+        when (val result = api.exchangeCode(code, redirect, verifier)) {
+            is OAuthResult.Tokens -> Tokens(
+                accessToken = result.accessToken,
+                refreshToken = result.refreshToken,
+                expiresAtMillis = result.expiresAtMillis,
+                account = result.accountHint
             )
-        )
-        if (response == null) {
-            connectFailure = REASON_AUTH
-            // No JSON back at all, or unparseable: the only honest report is
-            // that the exchange itself produced nothing usable.
-            AppLog.line("Google token exchange returned no usable response")
-            return null
+            is OAuthResult.Refused -> {
+                connectFailure = REASON_AUTH
+                AppLog.line(
+                    "Google token exchange rejected the code: " +
+                        "${result.error} ${result.description.orEmpty()}".trim()
+                )
+                null
+            }
+            OAuthResult.Unreachable -> {
+                connectFailure = REASON_AUTH
+                AppLog.line("Google token exchange returned no usable response")
+                null
+            }
         }
-        if (response.str("error") != null) {
-            connectFailure = REASON_AUTH
-            AppLog.line(
-                "Google token exchange rejected the code: " +
-                    "${response.str("error")} ${response.str("error_description").orEmpty()}".trim()
-            )
-            return null
-        }
-        val access = response.str("access_token") ?: return null
-        return Tokens(
-            accessToken = access,
-            refreshToken = response.str("refresh_token"),
-            expiresAtMillis = expiryFrom(response),
-            account = response.str("account_hint").orEmpty()
-        )
-    }
 
-    private fun refreshed(previous: Tokens): Tokens? {
+    /**
+     * Renew an access token. A null refresh token means we cannot renew, which
+     * is a dead connection rather than a transient one — the caller treats it as
+     * revoked and prompts again.
+     */
+    private suspend fun refreshed(previous: Tokens): Tokens? {
         val refresh = previous.refreshToken ?: return null
-        val response = postForm(
-            TOKEN_ENDPOINT,
-            mapOf(
-                "client_id" to CLIENT_ID,
-                "refresh_token" to refresh,
-                "grant_type" to "refresh_token"
+        return when (val result = api.refresh(refresh)) {
+            is OAuthResult.Tokens -> previous.copy(
+                accessToken = result.accessToken,
+                expiresAtMillis = result.expiresAtMillis
             )
-        ) ?: return null
-        val access = response.str("access_token") ?: return null
-        return previous.copy(accessToken = access, expiresAtMillis = expiryFrom(response))
+            is OAuthResult.Refused -> {
+                AppLog.line("Google refused to renew the token: ${result.error}")
+                null
+            }
+            OAuthResult.Unreachable -> {
+                AppLog.line("Google token renewal was unreachable")
+                null
+            }
+        }
     }
-
-    private fun expiryFrom(response: JsonObject): Long =
-        System.currentTimeMillis() + (response.str("expires_in")?.toLongOrNull() ?: 3600L) * 1000L
 
     // ── fetching ────────────────────────────────────────────────────────────
 
@@ -532,14 +499,14 @@ object GoogleCalendar {
             writeTokens(tokens)
         }
 
-        var events = fetchToday(tokens.accessToken)
+        var events = api.eventsForDay(tokens.accessToken)
         if (events == null && tokens.refreshToken != null) {
             // Most likely an access token revoked server-side since we cached
             // it: refresh once and retry before giving up.
             tokens = refreshed(tokens) ?: run { revoked(); return }
             cached = tokens
             writeTokens(tokens)
-            events = fetchToday(tokens.accessToken)
+            events = api.eventsForDay(tokens.accessToken)
         }
         if (events == null) {
             val previous = _state.value as? CalendarState.Connected
@@ -549,7 +516,7 @@ object GoogleCalendar {
         }
 
         val account = tokens.account.ifBlank {
-            accountEmail(tokens.accessToken) ?: "Google"
+            api.accountEmail(tokens.accessToken) ?: "Google"
         }
         val labelled = tokens.copy(account = account)
         cached = labelled
@@ -568,97 +535,6 @@ object GoogleCalendar {
         runCatching { tokenFile.delete() }
         _state.value = CalendarState.Error(REASON_REVOKED)
     }
-
-    private fun fetchToday(accessToken: String): List<CalendarEvent>? {
-        val raw = get(
-            URL(
-                EVENTS_ENDPOINT +
-                    "?timeMin=${dayStartMillis() / 1000}" +
-                    "&timeMax=${dayEndMillis() / 1000}" +
-                    "&singleEvents=true&orderBy=startTime&maxResults=50"
-            ),
-            accessToken
-        ) ?: return null
-        return runCatching {
-            val items = json.parseToJsonElement(raw).jsonObject["items"]?.jsonArray ?: return emptyList()
-            items.mapNotNull { item ->
-                val obj = item.jsonObject
-                if (obj.str("status") == "cancelled") return@mapNotNull null
-                val id = obj.str("id") ?: return@mapNotNull null
-                // Unnamed entries ("Busy") would put a meaningless word on the
-                // pill's ticker, so they are left to the count only.
-                val summary = obj.str("summary")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val start = obj["start"]?.jsonObject ?: return@mapNotNull null
-                val end = obj["end"]?.jsonObject ?: return@mapNotNull null
-                val allDay = start["date"]?.jsonPrimitive?.contentOrNullSafe() != null
-                val startMillis = (start.str("dateTime") ?: start.str("date"))
-                    ?.let { parseMillis(it, allDay) } ?: return@mapNotNull null
-                val endMillis = (end.str("dateTime") ?: end.str("date"))
-                    ?.let { parseMillis(it, allDay) } ?: (startMillis + 3_600_000L)
-                CalendarEvent(id, summary, startMillis, endMillis, allDay)
-            }
-        }.getOrNull()
-    }
-
-    private fun dayStartMillis(): Long =
-        LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-    private fun dayEndMillis(): Long =
-        LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-    /** `2026-09-30T10:00:00+05:30` for timed events, `2026-09-30` for all-day. */
-    private fun parseMillis(value: String, allDay: Boolean): Long? = runCatching {
-        if (allDay) {
-            LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } else {
-            OffsetDateTime.parse(value).toInstant().toEpochMilli()
-        }
-    }.getOrNull()
-
-    private fun accountEmail(accessToken: String): String? = runCatching {
-        get(URL(USERINFO_ENDPOINT), accessToken)?.let { raw ->
-            json.parseToJsonElement(raw).jsonObject.str("email")
-        }
-    }.getOrNull()
-
-    // ── HTTP ────────────────────────────────────────────────────────────────
-
-    private fun get(url: URL, accessToken: String): String? = runCatching {
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            connectTimeout = 10_000
-            readTimeout = 15_000
-        }
-        try {
-            if (connection.responseCode !in 200..299) return null
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
-        }
-    }.getOrNull()
-
-    private fun postForm(endpoint: String, form: Map<String, String>): JsonObject? = runCatching {
-        val connection = URL(endpoint).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 20_000
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            val body = form.entries.joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
-            connection.outputStream.use { it.write(body.toByteArray()) }
-            val stream = if (connection.responseCode in 200..299) {
-                connection.inputStream
-            } else {
-                connection.errorStream ?: return null
-            }
-            val text = stream.bufferedReader().use { it.readText() }
-            json.parseToJsonElement(text).jsonObject
-        } finally {
-            connection.disconnect()
-        }
-    }.getOrNull()
 
     // ── token + event store ─────────────────────────────────────────────────
 
@@ -749,11 +625,6 @@ object GoogleCalendar {
     private fun log(message: String) {
         if (VERBOSE) AppLog.line("calendar $message")
     }
-
-    private fun JsonObject.str(key: String): String? =
-        (this[key] as? JsonPrimitive)?.contentOrNullSafe()?.takeIf { it.isNotBlank() }
-
-    private fun JsonPrimitive.contentOrNullSafe(): String? = runCatching { content }.getOrNull()
 
     private fun randomUrlToken(bytes: Int): String = base64Url(ByteArray(bytes).also { random.nextBytes(it) })
 

@@ -24,6 +24,20 @@ kotlin {
             implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
+            // HTTP. Ktor rather than HttpURLConnection/java.net.http for one
+            // reason that is not taste: the jlink image Compose's jpackage
+            // builds has no java.net.http and no jdk.httpserver (only java.base
+            // and a handful of others), so the JDK options are simply not in
+            // the shipped app -- and a missing module is a NoClassDefFoundError
+            // at the first call, which is exactly how the OAuth loopback broke
+            // (pitfall 34). CIO is ordinary bytecode, so it ships with the jars
+            // and works on every target. Being multiplatform is the other half
+            // of the reason: the network layer lives in commonMain.
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.cio)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.kotlinx.datetime)
         }
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)

@@ -53,6 +53,7 @@ to the app build, ignore it unless explicitly asked.
 | Compose Multiplatform | 1.7.3 (Compose Desktop), Material 3, `materialIconsExtended` |
 | Concurrency | kotlinx-coroutines-core 1.10.1 + kotlinx-coroutines-swing (AWT/EDT == the Compose render thread) |
 | Serialization | kotlinx-serialization-json 1.7.3 |
+| HTTP / dates | Ktor 3.1.3 client (CIO) + kotlinx-datetime 0.6.2 — see pitfall 35 |
 | Native | JNA 5.16.0 + jna-platform (Win32), PowerShell 5.1 bridges, macOS ObjC MediaRemote bridge |
 | Renderer | **Skiko 0.8.25 pinned** (see pitfall 28) — METAL on macOS, DIRECT3D on Windows. `software-render` marker file in the app-data dir forces the CPU rasterizer |
 | Build | plain KMP `jvm("desktop")` target; no Android/iOS |
@@ -470,7 +471,11 @@ composeApp/
 │                                         # window level/collection/frame-top-gap, CG origin,
 │                                         # activation policy (MacAppKit front)
 └── src/
-    ├── commonMain/composeResources/
+    ├── commonMain/
+    │   ├── kotlin/com/starkdroid/quicknotch/calendar/
+    │   │   ├── CalendarApi.kt            # every Google request, on Ktor CIO (commonMain, no java.*)
+    │   │   └── CalendarEvent.kt          # event model + ticker window (kotlinx-datetime)
+    │   ├── composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
     │   └── drawable/                     # battery_{full,mid,low}/charging/volume/notification SVGs,
     │                                     #   quicknotch_icon.png
@@ -487,6 +492,7 @@ composeApp/
             │                             # launchers/startup
             ├── calendar/                 # GoogleCalendar: OAuth (PKCE + loopback) -> today's
             │                             #   events, tokens in calendar.json, ticker/Connected flows
+            │                             #   (desktop only: loopback socket, file store, browser hand-off)
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
@@ -965,6 +971,30 @@ composeApp/
     DMG (fcopyfile I/O error on the runtime); `rsync -a` is the only installer
     that has worked. For the same reason, do not trust
     "the app is running" as proof the build is good — check the log file.
+
+35. **The jlink image Compose's jpackage builds has 7 modules, so "use the
+    standard library" is not always available.** `java.net.http` and
+    `jdk.httpserver` are both absent from the shipped runtime; only
+    `java.base`, `java.datatransfer`, `java.desktop`, `java.logging`,
+    `java.prefs`, `java.xml` and `jdk.crypto.ec` are there (check with
+    `jimage list Contents/runtime/Contents/Home/lib/modules`). A library that is
+    ordinary bytecode travels with the jars and always works, which is why the
+    calendar's HTTP runs on **Ktor CIO** from `commonMain` and the OAuth loopback
+    is a hand-rolled `ServerSocket`. Two habits when adding a dependency here:
+    verify it inside the *installed* app rather than under `./gradlew run`, since
+    a dependency's own JVM requirements are invisible to the compiler, and do not
+    let `commonMain` reach for a desktop-only helper — an `AppLog` call in the
+    API layer does not compile, which is the boundary doing its job for free.
+
+34. **A failed HTTP status is not an empty response.** Porting the calendar to
+    Ktor turned a revoked token into an empty calendar: Google's refusal is a
+    JSON body with no `items` key, so `?: return emptyList()` reported "the day
+    is empty" and would have wiped the pill instead of keeping the last known
+    day. `HttpURLConnection` had returned null on a non-2xx, so the swap quietly
+    regressed it. Check `response.status.isSuccess()` before parsing and treat
+    "could not fetch" and "nothing today" as different answers — the same reason
+    token calls return a sealed `OAuthResult` instead of throwing, since a
+    refusal's error code is the only useful thing in the response.
 
 33. **A desktop OAuth client in Google's "Testing" consent status only lets
     *test users* through.** A brand-new client refuses everyone else with
