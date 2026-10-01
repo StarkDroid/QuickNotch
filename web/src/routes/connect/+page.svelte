@@ -36,15 +36,15 @@
 				return;
 			}
 
-			// Prefer what the desktop sent, falling back to the site's own config.
-			// The two normally agree, but they *must* during local testing: the app
-			// is pointed at `vite dev` with QUICKNOTCH_WEB_BASE and sends
-			// `http://localhost:5173/oauth/callback` as its redirect_uri. Echoing the
-			// production URI instead would either fail as a redirect_uri_mismatch or,
-			// worse, quietly authorise against a URI the app will not exchange
-			// against.
+			// Prefer what the desktop sent, falling back to *this page's own origin*.
+			// Same-origin is the right fallback rather than a hardcoded constant
+			// because during local testing the correct URI is literally wherever this
+			// page was served from -- 5173 under `vite dev`, 4173 under `vite
+			// preview`, whatever in production. Echoing the wrong one would fail as a
+			// redirect_uri_mismatch, or worse, quietly authorise against a URI the
+			// app is not going to exchange against.
 			const clientId = params.get('client_id') ?? calendarAuth.clientId;
-			const redirectUri = params.get('redirect_uri') ?? calendarAuth.callbackUrl;
+			const redirectUri = params.get('redirect_uri') ?? (location.origin + '/oauth/callback');
 
 			// Use the value the desktop sent for the port too, falling back to the page
 			// address: `vite preview` and `vite dev` differ (4173 vs 5173), so the

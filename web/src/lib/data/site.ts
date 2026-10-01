@@ -238,10 +238,13 @@ export const calendarAuth = {
 	// redirect URI at all). Must stay in step with CLIENT_ID in
 	// GoogleCalendar.kt — the two are the same credential described twice.
 	clientId: '317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com',
-	// Production. Locally, `vite dev` serves the same routes, and Google exempts
-	// loopback origins from its HTTPS rule, so http://localhost:5173/oauth/callback
-	// is registered alongside this one and the app is pointed at it with
-	// QUICKNOTCH_WEB_BASE.
+	// Not used to build the authorize URL: the connect page prefers the
+	// redirect_uri the desktop sends it, falling back to its own origin. That is
+	// what makes the flow testable before the site is deployed -- Google's
+	// redirect_uri must be the exact URI the app will exchange against, and
+	// during local testing both are `vite dev`, not a constant that can live in
+	// two places and drift. Kept here for documentation of the production URI
+	// that must be registered on the client at go-live.
 	callbackUrl: 'https://quicknotch.app/oauth/callback',
 	scope:
 		'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email'

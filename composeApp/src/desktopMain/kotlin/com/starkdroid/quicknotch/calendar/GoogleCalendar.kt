@@ -122,15 +122,27 @@ object GoogleCalendar {
      * Only the callback path is a registered redirect URI — the connect page is
      * an entry point, and registering it was never needed or possible.
      *
-     * The origin is an environment variable so the whole flow can be pointed at
-     * `vite dev` before the site is deployed. Google exempts loopback origins
-     * from the HTTPS rule ("Localhost URIs (including localhost IP address URIs)
-     * are exempt from this rule"), so `http://localhost:5173/oauth/callback` is
-     * a legal redirect URI to register alongside the production one — which is
-     * the only way to test this end to end without a deployment.
+     * The origin is an environment variable, and the default is deliberately
+     * `vite dev` rather than the deployed site: the site does not exist yet, so
+     * testing this flow is the *current* job and should not need a flag to
+     * remember. Google exempts loopback origins from the HTTPS rule ("Redirect
+     * URIs must use the HTTPS scheme, not plain HTTP. Localhost URIs (including
+     * localhost IP address URIs) are exempt from this rule"), which is what makes
+     * `http://localhost:5173/oauth/callback` a legal redirect URI at all.
+     *
+     * The port is part of the registered URI, so the dev server must be started
+     * via `npm run dev:oauth` (`--strictPort`) — plain `npm run dev` silently
+     * falls through to 5174 if 5173 is busy, and every flow then fails as
+     * `redirect_uri_mismatch` for a reason that has nothing to do with the code.
+     *
+     * TO GO LIVE: set [PRODUCTION_WEB_BASE] as [DEFAULT_WEB_BASE], register
+     * `https://quicknotch.app/oauth/callback` on the client, and update
+     * `calendarAuth` in the site so its fallback matches. The env var still wins,
+     * so nothing else changes.
      */
     private const val WEB_BASE_ENV = "QUICKNOTCH_WEB_BASE"
-    private const val DEFAULT_WEB_BASE = "https://quicknotch.app"
+    private const val PRODUCTION_WEB_BASE = "https://quicknotch.app"
+    private const val DEFAULT_WEB_BASE = "http://localhost:5173"
 
     private val webBase: String by lazy {
         val override = System.getenv(WEB_BASE_ENV)?.trim().orEmpty()

@@ -1120,16 +1120,28 @@ composeApp/
     **Google exempts loopback origins from the HTTPS rule** ("Redirect URIs must
     use the HTTPS scheme, not plain HTTP. Localhost URIs (including localhost IP
     address URIs) are exempt from this rule"), which is what makes local
-    testing of the hosted flow possible at all:
-    `QUICKNOTCH_WEB_BASE=http://localhost:5173` plus a registered
-    `http://localhost:5173/oauth/callback`. Everything the flow needs derives
-    from that one variable (`webConnectUrl` / `webCallbackUrl`), and both are
-    echoed to the site, which prefers the desktop's values over its own
-    hardcoded production ones — otherwise the desktop would point Google at the
-    production callback while the app exchanged against the local one, and the
-    whole thing fails as `redirect_uri_mismatch`. Console changes can take
-    **5 minutes to a few hours** to take effect, so a URI that "should" work
-    failing immediately usually means propagation, not configuration.
+    testing of the hosted flow possible at all. While the site is undeployed
+    `DEFAULT_WEB_BASE` **is** `http://localhost:5173` — no env var needed, because
+    testing this flow is the current job and a flag to remember is one more way
+    to test a stale origin. `PRODUCTION_WEB_BASE` sits beside it as the constant
+    to swap in at go-live; `QUICKNOTCH_WEB_BASE` still overrides both.
+
+    The port is part of the registered URI, so the dev server must be started
+    with `npm run dev:oauth` (`--strictPort`). Plain `npm run dev` falls through
+    to 5174 when 5173 is busy and every flow then fails as
+    `redirect_uri_mismatch` for a reason unrelated to the code — the same class
+    of bug as the double-scaled hit-test rect in pitfall 17, where the wrong
+    value was invisible on the developer's own machine.
+
+    **The redirect URI must never be a constant in two places.** The desktop
+    sends `client_id` + `redirect_uri` to `/connect`, and the page prefers those,
+    falling back to `location.origin + '/oauth/callback'` — same-origin rather
+    than a hardcoded URL, because the correct URI *is* wherever the page is being
+    served from (5173 dev, 4173 preview, production in future). Echoing the wrong
+    one either fails as `redirect_uri_mismatch` or, worse, authorises against a
+    URI the app will not exchange against. Console changes can take **5 minutes
+    to a few hours** to take effect, so a URI that "should" work failing
+    immediately usually means propagation, not configuration.
 
     Corollary on the *refusal* path: Google bounces a decline to the site's
     callback, so if that page only ever handled a successful `code`, the app sat
