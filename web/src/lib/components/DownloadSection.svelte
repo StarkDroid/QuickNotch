@@ -7,9 +7,12 @@
 <section class="section" id="download">
 	<div class="container">
 		<div class="panel glass" use:reveal={{ from: 'up' }} data-reveal="up">
-			<span class="panel__glow" aria-hidden="true"></span>
+			<span class="panel__tape tape" aria-hidden="true"></span>
+			<span class="panel__ticket" aria-hidden="true"></span>
 
 			<div class="panel__inner">
+				<span class="sticker panel__ribbon" aria-hidden="true">no card required ★</span>
+
 				<p class="eyebrow">Get started</p>
 
 				<h2 class="display h2">{download.title}</h2>
@@ -63,32 +66,48 @@
 <style>
 	.panel {
 		position: relative;
-		/* Pins the glow's negative z-index to this panel so it never slides behind
-		   the glass background. */
+		/* The glass surface is the big poster card now: paper sheet, ink keyline,
+		   hard print shadow. No moving aurora — flat spot tints instead. */
 		isolation: isolate;
 		overflow: hidden;
 		border-radius: var(--r-xl);
+		border: 2px solid var(--ink);
+		background-color: var(--paper-lift);
+		box-shadow: var(--shadow-3);
 		padding: clamp(1.5rem, 4.6vw, 3.5rem);
 	}
 
-	/* Slow, composited aurora behind the panel content. */
-	.panel__glow {
+	/* A two-toned paper background: flat accent corner + cream field still reads
+	   as a print, and costs nothing to paint. */
+	.panel::before {
+		content: '';
 		position: absolute;
-		inset: -35%;
+		inset: -1px;
 		z-index: -1;
 		background: var(--accent-soft);
-		filter: blur(30px);
-		animation: panel-drift 24s var(--ease-inout) infinite alternate;
-		will-change: transform;
+		border-radius: inherit;
 	}
 
-	@keyframes panel-drift {
-		from {
-			transform: translate3d(-4%, -2%, 0) scale(1.02);
-		}
-		to {
-			transform: translate3d(4%, 3%, 0) scale(1.1);
-		}
+	/* Washi tape across the top, ticket stub across the bottom. */
+	.panel__tape {
+		top: -0.8rem;
+		left: 50%;
+		translate: -50% 0;
+		rotate: -2deg;
+	}
+
+	.panel__ticket {
+		position: absolute;
+		left: 10%;
+		right: 10%;
+		bottom: -1px;
+		border-top: 3px dashed var(--accent-line);
+	}
+
+	.panel__ribbon {
+		position: absolute;
+		top: -1.1rem;
+		right: clamp(1rem, 4vw, 2.5rem);
 	}
 
 	.panel__inner {
@@ -128,7 +147,7 @@
 	.platform__text strong {
 		font-family: var(--font-display);
 		font-size: 0.95rem;
-		font-weight: 600;
+		font-weight: 700;
 		color: var(--text);
 	}
 
@@ -155,7 +174,7 @@
 	}
 
 	.notes :global(svg) {
-		color: var(--cyan);
+		color: var(--green);
 		flex: none;
 		margin-top: 0.18rem;
 	}

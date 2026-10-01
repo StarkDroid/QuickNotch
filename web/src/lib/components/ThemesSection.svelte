@@ -7,14 +7,15 @@
 	<div class="container">
 		<header class="section-head" use:reveal={{ from: 'up' }} data-reveal="up">
 			<p class="eyebrow">Theming</p>
-			<h2 class="display h2">The notch, your way.</h2>
+			<h2 class="display h2">Your notch, your look.</h2>
 			<p class="lead">
-				Pick the look that fits how you work — and switch any time.
+				Three moods to pick from, and no commitment — flip between them any time from
+				Settings.
 			</p>
 		</header>
 
 		<div class="grid" use:stagger={{ step: 0.09 }} data-stagger>
-			{#each themes as theme (theme.id)}
+			{#each themes as theme, index (theme.id)}
 				<article class="card card--lift theme">
 					<div class="theme__screen" aria-hidden="true">
 						<span class="tick tick--tl"></span>
@@ -23,6 +24,7 @@
 						<span class="tick tick--br"></span>
 
 						<span class="theme__notch" data-style={theme.id}></span>
+						<span class="mono theme__swatch">swatch {index + 1} / {themes.length}</span>
 					</div>
 					<div class="theme__text">
 						<h3 class="h4">{theme.label}</h3>
@@ -47,14 +49,27 @@
 		gap: 1.25rem;
 	}
 
+	/* Mounted prints: alternate tilt so the row reads hand-arranged. */
+	.theme:nth-child(1) {
+		rotate: -0.5deg;
+	}
+
+	.theme:nth-child(2) {
+		rotate: 0.4deg;
+	}
+
+	.theme:nth-child(3) {
+		rotate: -0.3deg;
+	}
+
 	/* ---- Sketch canvas ---------------------------------------------------- */
 	.theme__screen {
 		position: relative;
 		height: 190px;
 		border-radius: var(--r-md);
 		/* A dashed frame reads as a technical drawing — the "sketch" look. */
-		border: 1.5px dashed rgb(148 163 184 / 0.5);
-		background: rgb(8 11 18 / 0.55);
+		border: 2px dashed var(--line-strong);
+		background: #16120c;
 		overflow: hidden;
 	}
 
@@ -63,8 +78,8 @@
 		position: absolute;
 		width: 11px;
 		height: 11px;
-		border: 1.5px solid var(--indigo-light);
-		opacity: 0.75;
+		border: 1.5px solid var(--tomato);
+		opacity: 0.9;
 	}
 
 	.tick--tl {
@@ -95,6 +110,14 @@
 		border-top: none;
 	}
 
+	.theme__swatch {
+		position: absolute;
+		left: 12px;
+		bottom: 10px;
+		color: rgb(245 242 234 / 0.55);
+		letter-spacing: 0.14em;
+	}
+
 	.theme__notch {
 		position: absolute;
 		left: 50%;
@@ -104,7 +127,7 @@
 	}
 
 	.theme:hover .theme__notch {
-		outline-color: var(--cyan);
+		outline-color: var(--accent);
 	}
 
 	/* AMOLED notch — a deep-black cutout sitting flush on the top edge. */
@@ -114,8 +137,8 @@
 		height: 34px;
 		border-radius: 0 0 17px 17px;
 		background: #000;
-		border: 1.5px solid rgb(226 232 240 / 0.7);
-		outline: 1.5px dashed var(--indigo-light);
+		border: 1.5px solid rgb(245 242 234 / 0.7);
+		outline: 1.5px dashed var(--accent-line);
 		outline-offset: 6px;
 	}
 
@@ -138,8 +161,8 @@
 		height: 30px;
 		border-radius: 999px;
 		background: rgb(10 10 10 / 0.9);
-		border: 1.5px solid rgb(226 232 240 / 0.7);
-		outline: 1.5px dashed var(--indigo-light);
+		border: 1.5px solid rgb(245 242 234 / 0.7);
+		outline: 1.5px dashed var(--accent-line);
 		outline-offset: 6px;
 		box-shadow: 0 16px 30px -14px rgb(0 0 0 / 0.9);
 	}
@@ -151,8 +174,8 @@
 		height: 12px;
 		border-radius: 999px;
 		background: rgb(255 255 255 / 0.16);
-		border: 1.5px dashed rgb(226 232 240 / 0.65);
-		outline: 1.5px solid var(--indigo-light);
+		border: 1.5px dashed rgb(245 242 234 / 0.65);
+		outline: 1.5px solid var(--accent-line);
 		outline-offset: 6px;
 	}
 

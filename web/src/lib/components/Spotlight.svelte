@@ -210,8 +210,8 @@
 		height: var(--core-size);
 		margin-left: calc(var(--core-size) / -2);
 		margin-top: calc(var(--core-size) / -2);
-		background: var(--indigo-light);
-		opacity: 0.28;
+		background: var(--tomato);
+		opacity: 0.2;
 		filter: blur(calc(var(--core-size) * 0.22));
 	}
 
@@ -220,8 +220,8 @@
 		height: var(--halo-size);
 		margin-left: calc(var(--halo-size) / -2);
 		margin-top: calc(var(--halo-size) / -2);
-		background: var(--cyan);
-		opacity: 0.12;
+		background: var(--blue);
+		opacity: 0.09;
 		filter: blur(calc(var(--halo-size) * 0.16));
 	}
 

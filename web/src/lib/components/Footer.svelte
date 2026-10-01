@@ -17,7 +17,10 @@
 
 		<p class="footer__tagline">{site.tagline}</p>
 
-		<p class="footer__bar">© {year} {site.author} · v{site.version}</p>
+		<p class="footer__bar">
+			<span>© {year} {site.author} · v{site.version}</span>
+			<span aria-hidden="true">· printed on cream, obviously</span>
+		</p>
 	</div>
 </footer>
 
@@ -25,8 +28,8 @@
 	.footer {
 		position: relative;
 		margin-top: clamp(3rem, 7vw, 6rem);
-		border-top: 1px solid var(--line);
-		background: rgb(15 23 42 / 0.02);
+		border-top: 2px dashed var(--line-strong);
+		background: var(--paper-deep);
 		padding-block: clamp(2.5rem, 5vw, 3.5rem);
 	}
 
@@ -44,7 +47,7 @@
 		gap: 0.6rem;
 		font-family: var(--font-display);
 		font-weight: 700;
-		font-size: 1.08rem;
+		font-size: 1.15rem;
 		letter-spacing: -0.02em;
 		color: var(--text);
 	}
@@ -54,10 +57,11 @@
 		place-items: center;
 		width: 32px;
 		height: 32px;
-		border-radius: 10px;
-		color: #fff;
+		border-radius: var(--r-sm);
+		border: 2px solid var(--ink);
+		color: var(--on-accent);
 		background: var(--accent);
-		box-shadow: 0 8px 22px -10px rgb(79 70 229 / 0.4);
+		box-shadow: 2px 2px 0 rgb(33 28 19 / 0.85);
 	}
 
 	.footer__tagline {

@@ -19,27 +19,30 @@ export const site = {
 	version: '1.0.0',
 	price: '0',
 	currency: 'USD',
-	tagline: 'One notch. Everything you need.',
+	tagline: 'One tiny notch. Apps, weather, stats and more.',
 	description:
-		'QuickNotch is a glanceable notch for Windows and macOS. Scroll through quick-launch apps, weather, system usage, a game FPS counter and live activity controls — styled as an AMOLED notch, a floating pill or a slim drag handle.',
+		'QuickNotch is a free Dynamic Island-style notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance — styled as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
 	shortDescription:
-		'A glanceable notch that shows your apps, weather, stats and live controls at a glance.',
+		'A free Dynamic Island-style notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
 	keywords: [
 		'app launcher',
 		'floating dock',
 		'Dynamic Island for desktop',
+		'MacBook notch alternative',
 		'macOS app launcher',
 		'Windows app launcher',
 		'cross-platform app launcher',
 		'dock replacement',
 		'notch app launcher',
 		'quick launcher',
+		'free app dock',
 		'widgets',
 		'weather widget',
 		'system monitor',
 		'fps counter',
 		'live activities',
+		'now playing widget',
 		'notch themes',
 		'productivity utility'
 	]
@@ -48,7 +51,8 @@ export const site = {
 export const nav = [
 	{ label: 'Widgets', href: '#widgets' },
 	{ label: 'Themes', href: '#themes' },
-	{ label: 'Launch', href: '#launch' }
+	{ label: 'Launch', href: '#launch' },
+	{ label: 'FAQ', href: '#faq' }
 ] as const;
 
 export const platforms = [
@@ -69,71 +73,117 @@ export const platforms = [
 ] as const;
 
 export const hero = {
+	// Sticker ribbon that sits on top of the headline.
+	badge: 'a notchful of good stuff · 100% free',
 	// Rendered as separate masked lines so each can animate on its own.
-	headlineLines: ['One notch.', 'Everything', 'you need.'],
-	sub: 'A glanceable notch that lives on any screen edge. Scroll through your apps, weather, system stats, game FPS and live controls — styled exactly the way you like it.',
+	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
+	sub: 'A Dynamic Island-style notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around — without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
 	primaryCta: 'Download for free',
+	secondaryCta: 'See how it works',
 	trust: ['No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
 } as const;
 
 export const stats = [
 	{
 		value: '5',
-		label: 'Glanceable widgets',
+		label: 'Widgets, always up top',
 		detail: 'Apps, weather, stats, FPS and live controls'
 	},
-	{ value: '3', label: 'Notch styles', detail: 'AMOLED notch, floating pill or drag handle' },
-	{ value: '2', label: 'Platforms, one app', detail: 'The same look on Windows and macOS' },
-	{ value: '1', label: 'Click to launch', detail: 'Open any pinned app in an instant' }
+	{ value: '3', label: 'Looks — all yours', detail: 'AMOLED notch, floating pill or drag handle' },
+	{ value: '2', label: 'Platforms, one app', detail: 'Same vibe on Windows and macOS' },
+	{ value: '1', label: 'Click and you are in', detail: 'Open any pinned app in an instant' }
 ] as const;
 
 export type WidgetId = 'apps' | 'weather' | 'system' | 'fps' | 'music';
 
 export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
-	{ id: 'apps', label: 'Quick launch', blurb: 'Your pinned apps, one click away.' },
-	{ id: 'weather', label: 'Weather', blurb: 'Conditions and the next few days at a glance.' },
-	{ id: 'system', label: 'System usage', blurb: 'CPU, RAM, GPU and network, live.' },
-	{ id: 'fps', label: 'Game mode', blurb: 'A live FPS counter while you play.' },
-	{ id: 'music', label: 'Live activities', blurb: 'Now playing, with controls.' }
+	{ id: 'apps', label: 'Quick launch', blurb: 'Your pinned apps, one sunny click away.' },
+	{ id: 'weather', label: 'Weather', blurb: 'Peek outside without standing up.' },
+	{ id: 'system', label: 'System usage', blurb: 'CPU, RAM, GPU and network, live and honest.' },
+	{ id: 'fps', label: 'Game mode', blurb: 'A live FPS counter. Your framerate has a fan club now.' },
+	{ id: 'music', label: 'Live activities', blurb: 'Now playing — with the important buttons.' }
 ];
 
 export type ThemeId = 'amoled' | 'pill' | 'handle';
 
 export const themes: { id: ThemeId; label: string; blurb: string }[] = [
-	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Blends into the screen edge — deep black, there only when you look.' },
-	{ id: 'pill', label: 'Floating pill', blurb: 'A soft rounded pill floating just off the edge.' },
-	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet handle that stays out of the way.' }
+	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Deep black, vanishes into the screen edge. There only when you look.' },
+	{ id: 'pill', label: 'Floating pill', blurb: 'A plump little capsule, hovering just off the edge of forever.' },
+	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet grip. Very chill. Barely any notice.' }
 ];
 
 export const launch = {
-	eyebrow: 'Launch from anywhere',
-	title: 'One click, from any app',
-	body: 'Because the notch floats above whatever is on screen, you never leave the window you are working in. The dock collapses behind you on launch if you want it to.',
+	eyebrow: 'The notch overlay',
+	title: 'Hover the notch. Get what you need.',
+	body: 'The notch rests slim at the top-centre of your screen. Hover it and the overlay answers — an app dock that grows straight out of the notch, right where you are looking. Move along and it tucks itself away, leaving a pixel-wide nothing behind.',
 	items: [
 		{
-			title: 'One click to launch',
-			body: 'Every pinned app opens the moment you click, exactly as the system would launch it.'
+			title: 'Hover to expand',
+			body: 'Rest over the notch and it grows into an app dock, exactly the way a Dynamic Island does — no clicks, no menu, no fumbling.'
 		},
 		{
 			title: 'Always on top',
-			body: 'Keep the notch above everything, or let it fall behind when you want a clean canvas.'
+			body: 'Keep the notch above everything, or let it politely recede when you want a clean canvas.'
 		},
 		{
-			title: 'Collapse on launch',
-			body: 'Optionally tuck the dock away the moment your app opens, ready for the next one.'
+			title: 'Tucks away on its own',
+			body: 'Move along and the overlay collapses back to a slim notch. Nothing lingers, nothing gets in your way, and a single press of Escape closes it too.'
 		}
 	]
 } as const;
 
 export const download = {
-	title: 'Put a notch on your desktop',
-	body: 'Download the installer for your platform and you are done — the first launch gives you a sensible default pin set to start from.',
+	title: 'Slap a notch on your desktop',
+	body: 'Grab the installer for your platform, run it once, and boom — a tiny superpower notch. Apps, weather, stats and media controls on day one, with new widgets queued up after. No account, no credit card, no signing your soul away.',
 	notes: [
 		'Installs on Windows 10 & 11 and macOS 12 or newer.',
 		'No account, no telemetry, no cloud.',
 		'Runs offline — the app never phones home.'
 	]
 } as const;
+
+export const faq = [
+	{
+		question: 'Is QuickNotch really free?',
+		answer:
+			'Yes — completely. There is no trial, no in-app purchase and no account to create. Download the installer, launch it once, and it just works.'
+	},
+	{
+		question: 'Does QuickNotch work on Windows and macOS?',
+		answer:
+			'It runs on Windows 10 & 11 and macOS 12 or newer, on both Apple silicon and Intel. The same app, the same notch, on both platforms.'
+	},
+	{
+		question: 'Does QuickNotch collect or send my data?',
+		answer:
+			'No telemetry, no analytics, no cloud. QuickNotch runs entirely offline and never phones home. Your pinned apps and settings stay in a local file on your machine.'
+	},
+	{
+		question: 'Can I pin any app?',
+		answer:
+			'Any app that is installed. Search your installed apps, or browse for an app bundle or executable on disk. Reorder and remove them any time from Settings.'
+	},
+	{
+		question: 'Will the notch get in the way?',
+		answer:
+			'That is the point — it should not. It stays as a slim pill at the top-centre of your screen and only expands into a dock when you hover over it. You can set it to always stay on top, or collapse it the moment you launch an app.'
+	},
+	{
+		question: 'Can I change how the notch looks?',
+		answer:
+			'Yes. Pick between an AMOLED notch, a floating pill or a slim drag handle, and tune the magnification, icon size, geometry and whether labels show.'
+	},
+	{
+		question: 'Does QuickNotch start automatically?',
+		answer:
+			'If you want it to. Toggle "start at login" in Settings and QuickNotch will be waiting on your desktop edge after every restart.'
+	},
+	{
+		question: 'Is QuickNotch more than an app launcher?',
+		answer:
+			'It started as a launcher, and the notch has grown into a whole widget stack: apps, weather, system usage, game FPS and live media controls today, with more widgets and tricks queued up for the next updates. Every bit of it is free, offline-facing and one glance away.'
+	}
+] as const;
 
 /** Abstract dock tiles — original artwork, not third-party app icons. */
 export type Tile = {
