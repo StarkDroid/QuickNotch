@@ -8,6 +8,7 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +33,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Launch
 import androidx.compose.material.icons.filled.MusicNote
@@ -50,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
@@ -78,6 +82,7 @@ import com.starkdroid.quicknotch.generated.resources.onboarding_continue
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_apps
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_calendar
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_media
+import com.starkdroid.quicknotch.generated.resources.onboarding_back
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_quiet
 import com.starkdroid.quicknotch.generated.resources.onboarding_welcome_subtitle
 import com.starkdroid.quicknotch.generated.resources.onboarding_welcome_title
@@ -106,6 +111,14 @@ private enum class OnboardingStep(val index: Int) {
     Style(1),
     Calendar(2),
     Apps(3);
+
+    /** Where the carried notch parks, how big it is, per step. */
+    val islandOffsetY: Dp
+        get() = when (this) {
+            Welcome, Style -> 4.dp
+            Calendar -> 40.dp
+            Apps -> 52.dp
+        }
 }
 
 private const val SAMPLE_TICKER = "Standup with the platform team"
@@ -150,41 +163,72 @@ internal fun OnboardingScreen(
         }
     }
 
-    SharedTransitionLayout {
-        AnimatedContent(
-            targetState = step,
-            transitionSpec = {
-                // Forward-only flow: each screen enters from the right while
-                // the carried notch morphs between them.
-                (slideInHorizontally(tween(380)) { it / 3 } + fadeIn(tween(380))) togetherWith
-                    (slideOutHorizontally(tween(300)) { -it / 3 } + fadeOut(tween(220)))
-            },
-            label = "onboarding-step"
-        ) { currentStep ->
-            val animatedContentScope = this
-            Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FlatBg)
+            .padding(horizontal = 48.dp, vertical = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // The notch lives OUTSIDE the step transition, in a fixed header, so it
+        // is one always-composed element that springs in size and position as
+        // the steps change. A shared element between two fading screens reads
+        // as a dissolve; a single element travelling under its own spring reads
+        // as the carry this flow is about.
+        Box(
+            modifier = Modifier.fillMaxWidth().height(112.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            val islandWidth by animateDpAsState(
+                targetValue = islandWidthFor(step, favorites.size),
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
+                label = "onboarding-island-width"
+            )
+            val islandHeight by animateDpAsState(
+                targetValue = islandHeightFor(step, config.style),
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
+                label = "onboarding-island-height"
+            )
+            val islandY by animateDpAsState(
+                targetValue = step.islandOffsetY,
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
+                label = "onboarding-island-y"
+            )
+            val expanded = step == OnboardingStep.Apps
+            val shape = notchShape(expanded = expanded, style = config.style)
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(FlatBg)
-                    .padding(horizontal = 48.dp, vertical = 36.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .offset(y = islandY)
+                    .width(islandWidth)
+                    .height(islandHeight)
+                    .clip(shape)
+                    .islandSurface(config.surface)
+                    .border(1.dp, NotchBorder, shape),
+                contentAlignment = Alignment.Center
             ) {
-                OnboardingNotchPreview(
-                    step = currentStep,
-                    style = config.style,
-                    surface = config.surface,
-                    favorites = favorites,
-                    animatedContentScope = animatedContentScope,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
+                NotchPreviewContent(step = step, style = config.style, surface = config.surface, favorites = favorites)
+            }
+        }
 
-                Spacer(modifier = Modifier.height(28.dp))
-                StepDots(current = currentStep)
-                Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        StepDots(current = step)
+        Spacer(modifier = Modifier.height(20.dp))
 
                 AnimatedContent(
-                    targetState = currentStep,
-                    transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(180)) },
+                    targetState = step,
+                    transitionSpec = {
+                        // Directional: forward enters from the right, back
+                        // enters from the left, so walking backwards through
+                        // the flow feels like unwinding it.
+                        val forward = targetState.index > initialState.index
+                        if (forward) {
+                            (slideInHorizontally(tween(360)) { it / 3 } + fadeIn(tween(360))) togetherWith
+                                (slideOutHorizontally(tween(280)) { -it / 3 } + fadeOut(tween(200)))
+                        } else {
+                            (slideInHorizontally(tween(360)) { -it / 3 } + fadeIn(tween(360))) togetherWith
+                                (slideOutHorizontally(tween(280)) { it / 3 } + fadeOut(tween(200)))
+                        }
+                    },
                     label = "onboarding-copy"
                 ) { stepForCopy ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -275,119 +319,96 @@ internal fun OnboardingScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
                 OnboardingButtons(
-                    step = currentStep,
+                    step = step,
+                    onBack = {
+                        if (step != OnboardingStep.Welcome) {
+                            step = when (step) {
+                                OnboardingStep.Style -> OnboardingStep.Welcome
+                                OnboardingStep.Calendar -> OnboardingStep.Style
+                                else -> OnboardingStep.Calendar
+                            }
+                        }
+                    },
                     onSkip = {
-                        if (currentStep == OnboardingStep.Apps) finish() else advance()
+                        if (step == OnboardingStep.Apps) finish() else advance()
                     },
                     onContinue = {
-                        if (currentStep == OnboardingStep.Apps) finish() else advance()
+                        if (step == OnboardingStep.Apps) finish() else advance()
                     }
                 )
-            }
-        }
     }
 }
 
-/** The notch itself, carried between steps as one shared element. */
-@OptIn(ExperimentalSharedTransitionApi::class)
+/** The carried notch's size per step; the dock's width grows with the pins. */
+private fun islandWidthFor(step: OnboardingStep, pinnedCount: Int): Dp = when (step) {
+    OnboardingStep.Welcome, OnboardingStep.Style -> 150.dp
+    OnboardingStep.Calendar -> 236.dp
+    OnboardingStep.Apps -> (DockLayout.ContentPadding * 2 +
+        DockLayout.iconSlot(30.dp) * pinnedCount.coerceAtLeast(1)).coerceAtLeast(160.dp)
+}
+
+private fun islandHeightFor(step: OnboardingStep, style: NotchStyle): Dp = when {
+    step == OnboardingStep.Apps -> 56.dp
+    // Collapsed drag handle: the slim 8dp bar, exactly as the real pill sits.
+    style == NotchStyle.DRAG_HANDLE -> DockLayout.DragHandleHeightDp.dp
+    else -> 30.dp
+}
+
+/**
+ * What the carried notch shows, per step. The collapsed drag handle shows only
+ * its grabber line -- matching QuickView exactly -- in every step it is
+ * collapsed for.
+ */
 @Composable
-private fun SharedTransitionScope.OnboardingNotchPreview(
+private fun NotchPreviewContent(
     step: OnboardingStep,
     style: NotchStyle,
     surface: NotchSurface,
-    favorites: List<AppItem>,
-    animatedContentScope: AnimatedContentScope,
-    modifier: Modifier = Modifier
+    favorites: List<AppItem>
 ) {
-    val islandWidth = when (step) {
-        OnboardingStep.Welcome, OnboardingStep.Style -> 150.dp
-        OnboardingStep.Calendar -> 236.dp
-        OnboardingStep.Apps -> (DockLayout.ContentPadding * 2 +
-            DockLayout.iconSlot(30.dp) * favorites.size.coerceAtLeast(1)).coerceAtLeast(160.dp)
+    if (step != OnboardingStep.Apps && style == NotchStyle.DRAG_HANDLE) {
+        Box(
+            modifier = Modifier
+                .size(width = 36.dp, height = 4.dp)
+                .clip(CircleShape)
+                .background(handleTint(surface))
+        )
+        return
     }
-    // The drag handle collapses to a slim 8dp bar, not the taller pill -- and
-    // the preview must lie about that no more than about anything else.
-    val islandHeight = when {
-        step == OnboardingStep.Apps -> 56.dp
-        style == NotchStyle.DRAG_HANDLE -> DockLayout.DragHandleHeightDp.dp
-        else -> 30.dp
-    }
-
-    Box(
-        modifier = modifier
-            .sharedElement(
-                rememberSharedContentState(key = "onboarding-notch"),
-                animatedVisibilityScope = animatedContentScope,
-                boundsTransform = { _, _ -> spring(dampingRatio = 0.9f, stiffness = 320f) }
-            )
-            .width(islandWidth)
-            .height(islandHeight)
-            .clip(notchShape(expanded = step == OnboardingStep.Apps, style = style))
-            .islandSurface(surface)
-            .border(
-                1.dp,
-                NotchBorder,
-                notchShape(expanded = step == OnboardingStep.Apps, style = style)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        AnimatedContent(
-            targetState = step,
-            transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(160)) },
-            label = "onboarding-notch-content"
-        ) { stepForContent ->
-            // Collapsed drag handle: a single slim grabber line, the whole
-            // point of the style -- no clock, no badges, matching QuickView.
-            if (stepForContent != OnboardingStep.Apps && style == NotchStyle.DRAG_HANDLE) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 36.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(handleTint(surface))
+    AnimatedContent(
+        targetState = step,
+        transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(160)) },
+        label = "onboarding-notch-content",
+        contentKey = { it }
+    ) { stepForContent ->
+        when (stepForContent) {
+            OnboardingStep.Welcome, OnboardingStep.Style -> Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "9:41",
+                    style = AppTypography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
                 )
-                return@AnimatedContent
+                CalendarDayIndicator(count = SAMPLE_COUNT)
             }
-            when (stepForContent) {
-                OnboardingStep.Welcome -> Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "9:41",
-                        style = AppTypography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    CalendarDayIndicator(count = SAMPLE_COUNT)
-                }
-                OnboardingStep.Style -> Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "9:41",
-                        style = AppTypography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    CalendarDayIndicator(count = SAMPLE_COUNT)
-                }
-                OnboardingStep.Calendar -> Row(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MarqueeText(
-                        text = SAMPLE_TICKER,
-                        color = TextPrimary,
-                        fontSize = AppTypography.bodySmall.fontSize,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    CalendarDayIndicator(count = SAMPLE_COUNT)
-                }
-                OnboardingStep.Apps -> OnboardingDockRow(favorites = favorites)
+            OnboardingStep.Calendar -> Row(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MarqueeText(
+                    text = SAMPLE_TICKER,
+                    color = TextPrimary,
+                    fontSize = AppTypography.bodySmall.fontSize,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                CalendarDayIndicator(count = SAMPLE_COUNT)
             }
+            OnboardingStep.Apps -> OnboardingDockRow(favorites = favorites)
         }
     }
 }
@@ -613,6 +634,7 @@ private fun StepDots(current: OnboardingStep) {
 @Composable
 private fun OnboardingButtons(
     step: OnboardingStep,
+    onBack: () -> Unit,
     onSkip: () -> Unit,
     onContinue: () -> Unit
 ) {
@@ -620,6 +642,32 @@ private fun OnboardingButtons(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (step != OnboardingStep.Welcome) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onBack)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = stringResource(Res.string.onboarding_back),
+                        style = AppTypography.labelLarge,
+                        color = TextSecondary
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+        }
         Text(
             text = stringResource(
                 Res.string.onboarding_step_of,
