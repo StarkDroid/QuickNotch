@@ -1082,6 +1082,23 @@ composeApp/
     remembering that a harness which only tests the happy path with inputs
     pre-populated hides exactly this class of bug.
 
+41. **A Compose resource accessor used without an *explicit import* does not resolve.**
+    The string/drawable accessors the resource generator emits (e.g.
+    `internal val Res.string.onboarding_back` in `String0.commonMain.kt`) are
+    Kotlin *extension properties*. They live in a different file than the code
+    that uses them, and Kotlin only finds an extension property through an
+    explicit import (or a same-file declaration), not just by being in the same
+    module. Symptom: `Res.string.onboarding_back` compiles for sibling
+    accessors that sit behind explicit
+    `import com.starkdroid.quicknotch.generated.resources.onboarding_finish`
+    lines at the top of `OnboardingScreen.kt`, while a *newly added* string
+    referenced the same way fails with a lone `Unresolved reference
+    'onboarding_back'` -- and renaming the string does not help, because the
+    name is not the problem. Every onboarding accessor is explicitly imported,
+    and the missing import is the whole bug. Rule: when you add a resource and
+    reference it, add the matching `import com.starkdroid.quicknotch.generated.resources.<name>`
+    in the same edit. Cost about 45 minutes and a full clean-build rule-out.
+
 ## 11. Git workflow
 
 - Branch: `cursor/macos-compose-adaptation`; work here, commit, `git push`.
