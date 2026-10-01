@@ -229,9 +229,13 @@ internal fun OnboardingScreen(
                                 (slideOutHorizontally(tween(280)) { it / 3 } + fadeOut(tween(200)))
                         }
                     },
-                    label = "onboarding-copy"
+                    label = "onboarding-copy",
+                    modifier = Modifier.weight(1f, fill = true)
                 ) { stepForCopy ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         when (stepForCopy) {
                             OnboardingStep.Welcome -> {
                                 OnboardingHeading(
@@ -298,7 +302,11 @@ internal fun OnboardingScreen(
                                     subtitle = stringResource(Res.string.onboarding_apps_subtitle)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Box(modifier = Modifier.height(320.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f, fill = true)
+                                        .fillMaxWidth()
+                                ) {
                                     PinnedAppsTab(
                                         favorites = favorites,
                                         scannedApps = scannedApps,
@@ -317,7 +325,7 @@ internal fun OnboardingScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(12.dp))
                 OnboardingButtons(
                     step = step,
                     onBack = {
