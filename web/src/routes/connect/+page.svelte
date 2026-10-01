@@ -23,7 +23,6 @@
 	onMount(() => {
 		try {
 			const params = new URLSearchParams(window.location.search);
-			const port = params.get('port');
 			const state = params.get('state');
 			const scope = params.get('scope');
 			const accessType = params.get('access_type');
@@ -46,9 +45,12 @@
 			const clientId = params.get('client_id') ?? calendarAuth.clientId;
 			const redirectUri = params.get('redirect_uri') ?? (location.origin + '/oauth/callback');
 
-			// Use the value the desktop sent for the port too, falling back to the page
-			// address: `vite preview` and `vite dev` differ (4173 vs 5173), so the
-			// URL the app opened is the only reliable source.
+			// Note the loopback `port` the desktop also sends is deliberately not
+			// read here. It rides inside `state` instead, which is the only value
+			// Google's round-trip echoes back intact, so that is where
+			// /oauth/callback recovers it from. Reading the query param would look
+			// equivalent and quietly couple the handoff to the URL the user
+			// happened to reach this page through.
 			const qs = new URLSearchParams({
 				client_id: clientId,
 				redirect_uri: redirectUri,
