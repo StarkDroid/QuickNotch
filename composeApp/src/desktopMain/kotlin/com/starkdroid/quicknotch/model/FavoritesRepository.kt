@@ -1,7 +1,10 @@
 package com.starkdroid.quicknotch.model
 
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,22 +15,39 @@ import java.io.File
 
 /**
  * Manages persistent storage of QuickNotch settings and pinned applications.
+ *
+ * In-memory state is the source of truth for the UI (each setter publishes the
+ * new value immediately); writes are handed to a single background writer that
+ * coalesces them, so dragging a slider persists exactly one final value instead
+ * of one file write per tick, and config/favorites never interleave.
  */
 class FavoritesRepository(
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
         encodeDefaults = true
+        // Legacy configs may reference removed fields (e.g. the old screen-edge
+        // position); ignore unknown keys and coerce surviving enums to their
+        // defaults instead of discarding the whole config.
+        coerceInputValues = true
     }
 
     private val storageDir: File by lazy {
-        val appData = System.getenv("APPDATA")
-        val dir = if (!appData.isNullOrBlank()) {
-            File(appData, "QuickNotch")
-        } else {
-            File(System.getProperty("user.home"), ".quicknotch")
+        val dir = when {
+            HostPlatform.isMac -> File(
+                System.getProperty("user.home"),
+                "Library/Application Support/QuickNotch"
+            )
+            else -> {
+                val appData = System.getenv("APPDATA")
+                if (!appData.isNullOrBlank()) {
+                    File(appData, "QuickNotch")
+                } else {
+                    File(System.getProperty("user.home"), ".quicknotch")
+                }
+            }
         }
         if (!dir.exists()) {
             dir.mkdirs()
@@ -43,6 +63,47 @@ class FavoritesRepository(
 
     private val _favorites = MutableStateFlow(loadFavorites())
     val favorites: StateFlow<List<AppItem>> = _favorites.asStateFlow()
+
+    // ── Coalescing persistence ────────────────────────────────────────────────
+    // Setters record the latest value of each kind under a plain lock (guarding
+    // only the tiny assignments, never file IO) and wake the writer. The writer
+    // drains the pending snapshots sequentially, so rapid changes — e.g. slider
+    // drags at frame rate — fold into a single disk write and concurrent
+    // writes to the same file can never interleave (no torn JSON).
+    private sealed interface PersistRequest {
+        data class Config(val value: NotchConfig) : PersistRequest
+        data class Favorites(val value: List<AppItem>) : PersistRequest
+    }
+
+    private val persistLock = Any()
+    private var pendingConfig: NotchConfig? = null
+    private var pendingFavorites: List<AppItem>? = null
+    private val persistWake = Channel<Unit>(Channel.CONFLATED)
+
+    init {
+        scope.launch {
+            for (wakeSignal in persistWake) {
+                val configToSave = synchronized(persistLock) {
+                    pendingConfig.also { pendingConfig = null }
+                }
+                val favoritesToSave = synchronized(persistLock) {
+                    pendingFavorites.also { pendingFavorites = null }
+                }
+                if (configToSave != null) saveConfigDirect(configToSave)
+                if (favoritesToSave != null) saveFavoritesDirect(favoritesToSave)
+            }
+        }
+    }
+
+    private fun persist(request: PersistRequest) {
+        synchronized(persistLock) {
+            when (request) {
+                is PersistRequest.Config -> pendingConfig = request.value
+                is PersistRequest.Favorites -> pendingFavorites = request.value
+            }
+        }
+        persistWake.trySend(Unit)
+    }
 
     private fun loadConfig(): NotchConfig {
         return try {
@@ -96,16 +157,7 @@ class FavoritesRepository(
     fun updateConfig(transform: (NotchConfig) -> NotchConfig) {
         val updated = transform(_config.value)
         _config.value = updated
-        scope.launch(Dispatchers.IO) {
-            saveConfigDirect(updated)
-        }
-    }
-
-    fun setConfig(newConfig: NotchConfig) {
-        _config.value = newConfig
-        scope.launch(Dispatchers.IO) {
-            saveConfigDirect(newConfig)
-        }
+        persist(PersistRequest.Config(updated))
     }
 
     fun addFavorite(item: AppItem) {
@@ -113,9 +165,7 @@ class FavoritesRepository(
         if (current.none { it.id == item.id || it.executablePath.equals(item.executablePath, ignoreCase = true) }) {
             current.add(item)
             _favorites.value = current
-            scope.launch(Dispatchers.IO) {
-                saveFavoritesDirect(current)
-            }
+            persist(PersistRequest.Favorites(current))
         }
     }
 
@@ -123,9 +173,7 @@ class FavoritesRepository(
         val current = _favorites.value.toMutableList()
         if (current.removeAll { it.id == id }) {
             _favorites.value = current
-            scope.launch(Dispatchers.IO) {
-                saveFavoritesDirect(current)
-            }
+            persist(PersistRequest.Favorites(current))
         }
     }
 
@@ -135,16 +183,7 @@ class FavoritesRepository(
             val item = current.removeAt(fromIndex)
             current.add(toIndex, item)
             _favorites.value = current
-            scope.launch(Dispatchers.IO) {
-                saveFavoritesDirect(current)
-            }
-        }
-    }
-
-    fun setFavorites(list: List<AppItem>) {
-        _favorites.value = list
-        scope.launch(Dispatchers.IO) {
-            saveFavoritesDirect(list)
+            persist(PersistRequest.Favorites(current))
         }
     }
 
@@ -153,13 +192,54 @@ class FavoritesRepository(
         _favorites.value = defaults
         val defaultCfg = NotchConfig()
         _config.value = defaultCfg
-        scope.launch(Dispatchers.IO) {
-            saveFavoritesDirect(defaults)
-            saveConfigDirect(defaultCfg)
-        }
+        persist(PersistRequest.Favorites(defaults))
+        persist(PersistRequest.Config(defaultCfg))
     }
 
     private fun getDefaultFavorites(): List<AppItem> {
+        return if (HostPlatform.isMac) defaultMacFavorites() else defaultWindowsFavorites()
+    }
+
+    private fun defaultMacFavorites(): List<AppItem> {
+        val candidates = listOf(
+            Triple("Finder", "/System/Library/CoreServices/Finder.app", "Finder"),
+            Triple("Safari", "/Applications/Safari.app", "Safari"),
+            Triple("Terminal", "/System/Applications/Utilities/Terminal.app", "Terminal"),
+            Triple("Calculator", "/System/Applications/Calculator.app", "Calculator"),
+            Triple("Notes", "/System/Applications/Notes.app", "Notes"),
+            Triple("Preview", "/System/Applications/Preview.app", "Preview"),
+            Triple("System Settings", "/System/Applications/System Settings.app", "System Settings"),
+            Triple("Google Chrome", "/Applications/Google Chrome.app", "Google Chrome"),
+            Triple("Visual Studio Code", "/Applications/Visual Studio Code.app", "Code")
+        )
+        val list = mutableListOf<AppItem>()
+        for ((name, path, _) in candidates) {
+            val file = File(path)
+            if (file.exists()) {
+                list.add(
+                    AppItem(
+                        id = "default_${name.lowercase().replace(" ", "_")}",
+                        name = name,
+                        executablePath = file.absolutePath,
+                        iconPath = file.absolutePath
+                    )
+                )
+            }
+            if (list.size >= 7) break
+        }
+        if (list.isEmpty()) {
+            list.add(
+                AppItem(
+                    id = "default_finder",
+                    name = "Finder",
+                    executablePath = "/System/Library/CoreServices/Finder.app"
+                )
+            )
+        }
+        return list
+    }
+
+    private fun defaultWindowsFavorites(): List<AppItem> {
         val list = mutableListOf<AppItem>()
         val winDir = System.getenv("WINDIR") ?: "C:/Windows"
         val progFiles = System.getenv("ProgramFiles") ?: "C:/Program Files"

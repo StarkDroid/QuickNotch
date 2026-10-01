@@ -1,0 +1,31 @@
+{
+  "name": "quicknotch-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "verify": "node scripts/verify-render.mjs",
+    "og": "node scripts/generate-og.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.20.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "sharp": "^0.35.4",
+    "svelte": "^5.20.0",
+    "svelte-check": "^4.1.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  },
+  "dependencies": {
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/inter": "^5.1.1",
+    "@fontsource-variable/space-grotesk": "^5.1.1",
+    "gsap": "^3.12.7",
+    "lenis": "^1.1.20"
+  }
+}

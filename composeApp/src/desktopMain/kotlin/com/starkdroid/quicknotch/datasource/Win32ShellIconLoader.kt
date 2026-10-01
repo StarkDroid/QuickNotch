@@ -30,6 +30,8 @@ object Win32ShellIconLoader {
     private const val SHIL_EXTRALARGE = 2  // 48x48
     private const val SHIL_LARGE = 0       // 32x32
     private const val SHGFI_SYSICONINDEX = 0x000004000
+    private const val SHGFI_ICON = 0x000000100
+    private const val SHGFI_SMALLICON = 0x000000001
     private const val ILD_TRANSPARENT = 0x00000001
     private const val DI_NORMAL = 0x0003
 
@@ -115,27 +117,32 @@ object Win32ShellIconLoader {
         if (cached != null) return@withContext cached
 
         val iconBitmap = try {
-            val file = cleanPath(app.iconPath ?: app.executablePath)
+            // Registry DisplayIcon strings are frequently junk ("%SystemRoot%\...")
+            // or stale, so always fall back to the executable's own file.
+            val file = app.iconPath?.let { cleanPath(it) } ?: cleanPath(app.executablePath)
             if (file != null) {
                 // 1. Try Windows Shell ImageList (256x256 Jumbo, then 48x48 Extra Large)
                 extractShellImageListIcon(file.absolutePath, SHIL_JUMBO)
                     ?: extractShellImageListIcon(file.absolutePath, SHIL_EXTRALARGE)
-                    // 2. Try User32 PrivateExtractIcons (128x128)
+                    // 2. Classic SHGetFileInfo + SHGFI_ICON (32x32, honours app overrides)
+                    ?: extractShellIcon(file.absolutePath)
+                    // 3. Try User32 PrivateExtractIcons (128x128)
                     ?: extractPrivateIcon(file.absolutePath, 128)
-                    // 3. Fallback to Java Swing system icon rendered at 128x128
+                    // 4. Fallback to Java Swing system icon rendered at 128x128
                     ?: run {
                         val icon = fsv.getSystemIcon(file)
                         iconToImageBitmap(icon, 128)
                     }
             } else {
-                generateMonogramIcon(app.name)
+                AppIconLoader.generateMonogramIcon(app.name)
             }
         } catch (_: Throwable) {
-            generateMonogramIcon(app.name)
+            AppIconLoader.generateMonogramIcon(app.name)
         }
 
-        cache[app.id] = iconBitmap
-        iconBitmap
+        val sized = iconBitmap.downscaleForCache()
+        cache[app.id] = sized
+        sized
     }
 
     private fun cleanPath(raw: String): File? {
@@ -203,6 +210,29 @@ object Win32ShellIconLoader {
                     User32Extra.INSTANCE.DestroyIcon(hIcon)
                 }
             } else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Direct SHGetFileInfoW + SHGFI_ICON extraction. This resolves the shell
+     * overlay/association icon the same way Explorer does and is a good middle
+     * ground when the system image list is unavailable.
+     */
+    private fun extractShellIcon(filePath: String): ImageBitmap? {
+        return try {
+            val sfi = SHFILEINFOW()
+            val flags = SHGFI_ICON // SHGFI_LARGEICON == 0, so this is already 32x32
+            val ret = Shell32Extra.INSTANCE.SHGetFileInfoW(filePath, 0, sfi, sfi.size(), flags)
+            val hIcon = sfi.hIcon
+            if (ret == null || hIcon == null) return null
+            try {
+                val bImg = hIconToBufferedImage(hIcon)
+                bImg?.toComposeImageBitmap()
+            } finally {
+                User32Extra.INSTANCE.DestroyIcon(hIcon)
+            }
         } catch (_: Throwable) {
             null
         }
@@ -277,7 +307,7 @@ object Win32ShellIconLoader {
     }
 
     private fun iconToImageBitmap(icon: Icon?, targetSize: Int = 64): ImageBitmap {
-        if (icon == null) return generateMonogramIcon("?")
+        if (icon == null) return AppIconLoader.generateMonogramIcon("?")
         val width = icon.iconWidth.coerceAtLeast(1)
         val height = icon.iconHeight.coerceAtLeast(1)
         val bufferedImage = BufferedImage(targetSize, targetSize, BufferedImage.TYPE_INT_ARGB)
@@ -297,36 +327,4 @@ object Win32ShellIconLoader {
         return bufferedImage.toComposeImageBitmap()
     }
 
-    fun generateMonogramIcon(title: String, size: Int = 64): ImageBitmap {
-        val letter = title.trim().take(1).uppercase().ifEmpty { "A" }
-        val img = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
-        val g2d = img.createGraphics()
-        try {
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-            val hash = title.hashCode()
-            val colors = listOf(
-                java.awt.Color(99, 102, 241),
-                java.awt.Color(56, 189, 248),
-                java.awt.Color(168, 85, 247),
-                java.awt.Color(236, 72, 153),
-                java.awt.Color(34, 197, 94),
-                java.awt.Color(245, 158, 11)
-            )
-            val bg = colors[kotlin.math.abs(hash) % colors.size]
-            g2d.color = bg
-            g2d.fillRoundRect(2, 2, size - 4, size - 4, 18, 18)
-            g2d.color = java.awt.Color(255, 255, 255, 240)
-            g2d.font = java.awt.Font("Segoe UI", java.awt.Font.BOLD, (size * 0.45).toInt())
-            val fm = g2d.fontMetrics
-            val textWidth = fm.stringWidth(letter)
-            val textHeight = fm.ascent
-            val x = (size - textWidth) / 2
-            val y = ((size - fm.height) / 2) + textHeight
-            g2d.drawString(letter, x, y)
-        } finally {
-            g2d.dispose()
-        }
-        return img.toComposeImageBitmap()
-    }
 }

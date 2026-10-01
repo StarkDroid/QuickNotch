@@ -7,8 +7,7 @@ import java.awt.Desktop
 import java.io.File
 
 /**
- * Handles launching Windows executables, shortcuts (.lnk), UWP applications,
- * and command-line utilities safely.
+ * Launches pinned applications. Windows uses cmd/UWP shell; macOS uses `open`.
  */
 object AppLauncher {
 
@@ -16,54 +15,116 @@ object AppLauncher {
         runCatching {
             val execPath = app.executablePath.trim()
 
-            // 1. UWP / Shell App UserModelId
-            if (app.isUwp && !app.uwpAppUserModelId.isNullOrBlank()) {
-                ProcessBuilder("cmd.exe", "/c", "start", "shell:AppsFolder\${app.uwpAppUserModelId}").start()
-                return@runCatching
-            }
-
-            // 2. Shell URI or Web URL
             if (execPath.startsWith("http://", ignoreCase = true) ||
-                execPath.startsWith("https://", ignoreCase = true) ||
-                execPath.startsWith("shell:", ignoreCase = true)
+                execPath.startsWith("https://", ignoreCase = true)
             ) {
-                if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                    Desktop.getDesktop().browse(java.net.URI(execPath))
-                } else {
-                    ProcessBuilder("cmd.exe", "/c", "start", "", execPath).start()
-                }
+                browse(execPath)
                 return@runCatching
             }
 
-            // 3. System command (e.g. wt.exe, calc.exe, notepad.exe)
-            if (!execPath.contains("\\") && !execPath.contains("/")) {
-                val commandList = mutableListOf(execPath)
-                if (app.arguments.isNotBlank()) {
-                    commandList.addAll(app.arguments.split(" ").filter { it.isNotBlank() })
-                }
-                ProcessBuilder(commandList).start()
+            if (HostPlatform.isMac) {
+                launchOnMac(app, execPath)
                 return@runCatching
             }
 
-            // 4. Standard File / Shortcut
-            val file = File(execPath)
-            val workingDir = app.workingDirectory?.let { File(it) }?.takeIf { it.exists() && it.isDirectory }
-                ?: file.parentFile?.takeIf { it.exists() && it.isDirectory }
+            launchOnWindows(app, execPath)
+        }
+    }
 
-            val builder = ProcessBuilder()
-            if (app.arguments.isNotBlank()) {
-                val parts = mutableListOf(execPath)
-                parts.addAll(app.arguments.split(" ").filter { it.isNotBlank() })
-                builder.command(parts)
+    private fun launchOnMac(app: AppItem, execPath: String) {
+        val file = File(execPath)
+        val command = mutableListOf("open")
+        if (file.extension.equals("app", ignoreCase = true) || file.isDirectory) {
+            command += execPath
+        } else if (!execPath.contains("/") && !file.exists()) {
+            command += listOf("-a", execPath)
+        } else {
+            command += execPath
+        }
+        if (app.arguments.isNotBlank()) {
+            command += "--args"
+            command += app.arguments.split(" ").filter { it.isNotBlank() }
+        }
+        val builder = ProcessBuilder(command)
+        val workingDir = app.workingDirectory?.let { File(it) }?.takeIf { it.exists() && it.isDirectory }
+        if (workingDir != null) {
+            builder.directory(workingDir)
+        }
+        builder.start()
+    }
+
+    private fun launchOnWindows(app: AppItem, execPath: String) {
+        if (app.isUwp && !app.uwpAppUserModelId.isNullOrBlank()) {
+            ProcessBuilder("cmd.exe", "/c", "start", "shell:AppsFolder\\${app.uwpAppUserModelId}").start()
+            return
+        }
+
+        if (execPath.startsWith("shell:", ignoreCase = true)) {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(java.net.URI(execPath))
             } else {
-                builder.command("cmd.exe", "/c", "start", "", "\"$execPath\"")
+                ProcessBuilder("cmd.exe", "/c", "start", "", execPath).start()
             }
+            return
+        }
 
-            if (workingDir != null) {
-                builder.directory(workingDir)
+        if (!execPath.contains("\\") && !execPath.contains("/")) {
+            val commandList = mutableListOf(execPath)
+            if (app.arguments.isNotBlank()) {
+                commandList.addAll(app.arguments.split(" ").filter { it.isNotBlank() })
             }
+            ProcessBuilder(commandList).start()
+            return
+        }
 
-            builder.start()
+        val file = File(execPath)
+        val workingDir = app.workingDirectory?.let { File(it) }?.takeIf { it.exists() && it.isDirectory }
+            ?: file.parentFile?.takeIf { it.exists() && it.isDirectory }
+
+        val builder = ProcessBuilder()
+        if (app.arguments.isNotBlank()) {
+            val parts = mutableListOf(execPath)
+            parts.addAll(app.arguments.split(" ").filter { it.isNotBlank() })
+            builder.command(parts)
+        } else {
+            builder.command("cmd.exe", "/c", "start", "", "\"$execPath\"")
+        }
+
+        if (workingDir != null) {
+            builder.directory(workingDir)
+        }
+
+        builder.start()
+    }
+
+    /**
+     * Brings a media provider forward by launch identifier (bundle id on macOS,
+     * e.g. `com.apple.Music`) or app name — used when the user clicks a now-playing
+     * album art.
+     */
+    fun openMediaProvider(sourceId: String, sourceName: String) {
+        runCatching {
+            if (HostPlatform.isMac) {
+                if (sourceId.isNotBlank()) {
+                    ProcessBuilder("open", "-b", sourceId).start()
+                } else if (sourceName.isNotBlank()) {
+                    ProcessBuilder("open", "-a", sourceName).start()
+                }
+            } else if (HostPlatform.isWindows && sourceName.isNotBlank()) {
+                ProcessBuilder("cmd.exe", "/c", "start", "", sourceName).start()
+            }
+        }
+    }
+
+    private fun browse(url: String) {
+        if (HostPlatform.isMac) {
+            ProcessBuilder("open", url).start()
+            return
+        }
+        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+            Desktop.getDesktop().browse(java.net.URI(url))
+        } else {
+            ProcessBuilder("cmd.exe", "/c", "start", "", url).start()
         }
     }
 }

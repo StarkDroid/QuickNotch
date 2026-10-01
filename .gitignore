@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin
 /local.properties
 /.idea
 .DS_Store
@@ -13,3 +14,7 @@ local.properties
 hs_err_pid*
 replay_pid*
 *.hprof
+
+# Generated at build time by gradle tasks (macOS bridge binary, Windows SMTC script)
+/composeApp/src/desktopMain/resources/macos/
+/composeApp/src/desktopMain/resources/windows/

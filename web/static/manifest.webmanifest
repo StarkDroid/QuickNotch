@@ -1,0 +1,31 @@
+{
+	"name": "QuickNotch — floating app launcher for Windows and macOS",
+	"short_name": "QuickNotch",
+	"description": "A Dynamic Island–style floating notch and dock that pins apps so you can launch them from anywhere on Windows and macOS.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#f9f3e7",
+	"theme_color": "#f9f3e7",
+	"categories": ["utilities", "productivity"],
+	"icons": [
+		{
+			"src": "/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		}
+	]
+}
