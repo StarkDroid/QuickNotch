@@ -1,8 +1,11 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,11 +28,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarDateGroup
@@ -38,6 +51,7 @@ import com.starkdroid.quicknotch.calendar.todayDate
 import com.starkdroid.quicknotch.calendar.upcomingDateGroups
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
+import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_cancel
 import com.starkdroid.quicknotch.generated.resources.calendar_waiting
@@ -53,6 +67,7 @@ import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_no_events
+import com.starkdroid.quicknotch.generated.resources.calendar_open_day
 import com.starkdroid.quicknotch.generated.resources.calendar_today
 import com.starkdroid.quicknotch.generated.resources.calendar_upcoming_count
 import com.starkdroid.quicknotch.generated.resources.calendar_last_sync
@@ -73,6 +88,8 @@ import org.jetbrains.compose.resources.stringResource
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * The QuickView calendar element: a calendar glyph badged with how many events
@@ -335,13 +352,21 @@ private fun String.localized(): StringResource = when (this) {
  * a count badge. Rows cannot fit the island's ~84dp depth, so the dates run as
  * a single row of tiles -- the wheel flips to this page like any other.
  *
+ * Every date on it, today's block included, is a link into that day in Google
+ * Calendar: the row's whole job is "where is my calendar heading", and the place
+ * a user goes to act on that is the real calendar. The tiles are the only
+ * pointer targets on the page, so they hang off [interactive] exactly like the
+ * dock icons do -- a hit-testable node on an inactive (alpha 0) page would sit
+ * in the hit path of the page composed beneath it (pitfall 24).
+ *
  * Loading is never blocking: while a fetch runs with nothing to show yet the
  * page is a small spinner, and an empty-but-settled calendar says so in words.
  */
 @Composable
 internal fun CalendarNotchPage(
     state: CalendarState?,
-    refreshing: Boolean
+    refreshing: Boolean,
+    interactive: Boolean
 ) {
     // Sampled here rather than passed down: the page is the only drawer of the
     // schedule, and the tick is what makes its tiles drop a spent date without
@@ -351,6 +376,7 @@ internal fun CalendarNotchPage(
         (state as? CalendarState.Connected)?.events.orEmpty()
             .upcomingDateGroups(nowMillis = tick)
     }
+    val openDay = rememberDayOpener()
     when {
         groups.isEmpty() && refreshing -> Box(
             modifier = Modifier.fillMaxSize(),
@@ -379,7 +405,7 @@ internal fun CalendarNotchPage(
             // Today holds the left slot in the big size -- the schedule's "now"
             // anchor -- and the five tiles to its right are strictly future
             // dates, month included, because the next events can be months out.
-            CalendarTodayBlock()
+            CalendarTodayBlock(interactive = interactive, openDay = openDay)
             Box(
                 modifier = Modifier
                     .padding(horizontal = 10.dp)
@@ -398,11 +424,116 @@ internal fun CalendarNotchPage(
                 }
                 CalendarDateTile(
                     group = group,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    interactive = interactive,
+                    openDay = openDay
                 )
             }
         }
     }
+}
+
+/**
+ * The web view of one day in Google Calendar, for handing a schedule date to
+ * the browser.
+ *
+ * `u/0` is Google's own documented form and is deliberate, not a shortcut: the
+ * number in that path is the account's position in the *browser's* sign-in
+ * order, and no API reports it (Google's own guidance on deep links is that the
+ * index cannot be derived). The tempting alternative, `?authuser=<email>` with
+ * the address this app does know from userinfo, is worse in a way that is easy
+ * to miss: if that account is not signed into the browser, Google silently
+ * opens a *different* one rather than prompting, so the user lands in a
+ * plausible-looking wrong calendar. `u/0` is the default account, which is
+ * right often enough and never quietly wrong.
+ *
+ * Month and day go in unpadded, matching Google's own examples
+ * (`.../r/day/2023/4/1`).
+ */
+private fun googleDayUrl(date: kotlinx.datetime.LocalDate): String =
+    "https://calendar.google.com/calendar/u/0/r/day/" +
+        "${date.year}/${date.monthNumber}/${date.dayOfMonth}"
+
+/**
+ * Opens a date's web view in the browser, off the UI thread.
+ *
+ * [AppLauncher.browse] spawns `open` and then *waits* for it, with a ten second
+ * ceiling, so calling it straight from a click handler would stall the Compose
+ * thread for the whole spawn -- the same mistake the transport buttons used to
+ * make with `waitFor` on the macOS media commands. The OAuth path already runs
+ * on an IO scope and needs no help; a click handler arrives on the EDT, so the
+ * hop has to happen here.
+ */
+@Composable
+private fun rememberDayOpener(): (kotlinx.datetime.LocalDate) -> Unit {
+    val scope = rememberCoroutineScope()
+    return remember(scope) {
+        { date: kotlinx.datetime.LocalDate ->
+            scope.launch(Dispatchers.IO) { AppLauncher.browse(googleDayUrl(date)) }
+        }
+    }
+}
+
+/**
+ * The shared affordance for a clickable date: a translucent capsule that fades
+ * in under the cursor plus the slight spring scale the transport buttons use, so
+ * the row reads as "these are links" rather than as a table of numbers.
+ *
+ * The whole pointer modifier chain is built only while [interactive] --
+ * `clickable(enabled = false)` still registers a hit-testable node, so a
+ * disabled-but-present clickable would keep an inactive page owning the hit path
+ * of the page beneath it.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun Modifier.dateLink(
+    interactive: Boolean,
+    onClick: () -> Unit,
+    // Deliberately not named `contentDescription`: inside the semantics lambda
+    // that name would resolve against SemanticsPropertyReceiver too, and both
+    // sides are String, so a mis-resolution would compile and only ever show up
+    // as every tile announcing the wrong date.
+    linkLabel: String
+): Modifier {
+    var hovered by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (hovered) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
+        label = "calendarDayHover"
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .then(
+            if (interactive) {
+                Modifier
+                    .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                    .onPointerEvent(PointerEventType.Exit) { hovered = false }
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (hovered) LiveAccent.copy(alpha = 0.10f) else Color.Transparent
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onClick
+                    )
+            } else {
+                Modifier
+            }
+        )
+        .then(
+            // A11y only: the capsule and scale are decoration, the label is what
+            // a screen reader announces for the link.
+            if (interactive) {
+                Modifier.semantics { contentDescription = linkLabel }
+            } else {
+                Modifier
+            }
+        )
 }
 
 /**
@@ -412,13 +543,28 @@ internal fun CalendarNotchPage(
  * pill's ticker already announced.
  */
 @Composable
-private fun CalendarTodayBlock() {
+private fun CalendarTodayBlock(
+    interactive: Boolean,
+    openDay: (kotlinx.datetime.LocalDate) -> Unit
+) {
     val today = remember {
         com.starkdroid.quicknotch.calendar.todayDate()
     }
     val weekday = remember(today) { formatDate(today, "EEE") }
     val month = remember(today) { formatDate(today, "MMM") }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val label = stringResource(Res.string.calendar_today)
+    Row(
+        modifier = Modifier
+            .dateLink(
+                interactive = interactive,
+                onClick = { openDay(today) },
+                linkLabel = stringResource(Res.string.calendar_open_day, label)
+            )
+            // Grows the hit area past the glyphs themselves, so the date is
+            // easy to hit without the capsule crowding the row.
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
             text = today.dayOfMonth.toString(),
             style = AppTypography.titleLarge,
@@ -444,12 +590,14 @@ private fun CalendarTodayBlock() {
 /**
  * One upcoming date in the schedule row: the day with its month -- "10 Oct",
  * "20 Nov" -- over the count badge, centered. Dates here are never today; the
- * big left block owns that.
+ * big left block owns that. Clicking one opens that date in Google Calendar.
  */
 @Composable
 private fun CalendarDateTile(
     group: CalendarDateGroup,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    interactive: Boolean,
+    openDay: (kotlinx.datetime.LocalDate) -> Unit
 ) {
     // Today never needs a month -- the big block beside it carries the date --
     // and it takes the accent so the schedule's "now" reads at a glance.
@@ -459,7 +607,13 @@ private fun CalendarDateTile(
         remember(group.date) { formatDate(group.date, "d MMM") }
     }
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .dateLink(
+                interactive = interactive,
+                onClick = { openDay(group.date) },
+                linkLabel = stringResource(Res.string.calendar_open_day, label)
+            )
+            .padding(horizontal = 4.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(

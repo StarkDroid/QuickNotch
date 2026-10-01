@@ -152,7 +152,11 @@ internal fun WidgetPages(
                     )
                     WidgetPage.Calendar -> CalendarNotchPage(
                         state = calendarState,
-                        refreshing = calendarRefreshing
+                        refreshing = calendarRefreshing,
+                        // Same rule as the other two pages: only the page under
+                        // the cursor may own the hit path, or an alpha-0 page
+                        // keeps swallowing clicks meant for the page beneath it.
+                        interactive = interactive && isActive
                     )
                     WidgetPage.Music -> if (session != null) {
                         MusicPage(

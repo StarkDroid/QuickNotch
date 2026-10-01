@@ -96,6 +96,7 @@
     <string name="calendar_upcoming_count">%1$s upcoming events</string>
     <string name="calendar_today">Today</string>
     <string name="calendar_no_events">No upcoming events</string>
+    <string name="calendar_open_day">Open %1$s in Google Calendar</string>
     <string name="calendar_ticker_label">Calendar event</string>
     <string name="notification_grant_button">Grant Full Disk Access</string>
     <string name="notification_grant_hint">QuickNotch needs Full Disk Access to read macOS notification counts.</string>
