@@ -216,3 +216,27 @@ export const dockTiles: Tile[] = [
 	{ id: 'utility', name: 'Utility', glyph: 'calc', from: '#94a3b8', to: '#475569' },
 	{ id: 'mail', name: 'Mail', glyph: 'mail', from: '#22d3ee', to: '#0891b2' }
 ];
+
+/**
+ * Google Calendar auth lives on the website now — the consent UI is a page in
+ * this theme, not a settings row. What follows is everything a page needs to
+ * run the flow. The token exchange itself deliberately stays out of the site:
+ * it is a static host, Google requires a client_secret from every client type,
+ * and the secret ships inside the desktop app and never leaves it.
+ *
+ * The flow: the desktop opens {@code connectUrl} with the loopback intent
+ * baked into `state` (which carries the loopback port), the connect page sends
+ * the user to Google with that exact `state`, Google bounces the browser back
+ * to {@code callbackUrl}, and that page performs a plain top-level navigation
+ * to the app's `http://127.0.0.1:<port>/oauth?...` — where the code is
+ * exchanged. Both {@code callbackUrl} and the connect page's client id must
+ * be present in the Google OAuth client's authorized redirect URIs.
+ */
+export const calendarAuth = {
+	authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+	clientId:
+		'317663226214-ojbngp1n0p81tttll9sjq9ou74mvjegk.apps.googleusercontent.com',
+	callbackUrl: 'https://quicknotch.app/oauth/callback',
+	scope:
+		'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email'
+} as const;

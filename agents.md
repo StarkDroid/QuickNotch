@@ -599,7 +599,7 @@ composeApp/
 | macOS above-menu-bar placement: overlay parked **flush at the true top of the screen** (level `NSStatusWindowLevel` 25, collection `canJoinAllSpaces|stationary|fullScreenAuxiliary|ignoresCycle`, top-gap = style edge gap) via `MacOverlayWindowPolicy` + the AppKit dylib; AWT would park it under the menu bar (its alwaysOnTop tops out at floating level 3 and placement clamps to the visible area) | done (this session) — **verified live**: `CGWindowList` shows the overlay at `kCGWindowLayer=25`, bounds `y=0`. Off-state (Always-on-top off) drops to level 0 and re-parks below the menu bar. Windows analog is AWT `alwaysOnTop` alone (unchanged) |
 | Calendar schedule page in the expanded notch: a third wheel page (after Music/Apps, only while connected) in Google's schedule-view shape -- today's date big on the left (accented), then the next 4 event dates as "d MMM" tiles over count badges (today first, as "Today", when it still has events ahead), gaps skipped; `computeNotchMetrics` claims a 348dp width when the page exists; the fetch is open-ended (timeMin only, no timeMax -- the API has no schedule-mode endpoint, but omitting timeMax *is* schedule semantics: everything upcoming, capped by maxResults=250), because any day window amputated the months-out dates the page promises. The ticker is a notification now: it runs from 2 min before an event until the event ends (no linger), expanding the notch over it consumes it (`GoogleCalendar.dismissTicker`, state-based so a pre-tick dismissal still counts) and lands directly on the calendar page; collapse snaps back to page 0 and the next event re-arms the ticker. The pill badge shows today's still-upcoming events via `calendarUpcomingCount` (running counts, ended does not) and renders in ALL three pill branches -- the clock branch originally skipped it, so the sizer widened the notch for an icon that never drew (pitfall 15 again); the schedule's first tile is today ("Today", accented) when it has events still ahead, then the future dates; Refresh spinner + mutex unchanged. Decay is live: `GoogleCalendar.minuteTick` (minute-granular, published from the existing 1s ticker loop, one write per minute change per pitfall 29) feeds the badge, both notch sizers and the page, so an ended event drops out within a minute -- and fetched-vs-displayed reconciles as `fetched = shown + ended`, by design | done (this session) -- stub harness: 9-case green incl. a simulated end-of-today tick; the schedule layout itself needs eyes |
 | First-run onboarding: a four-step flow (welcome -> pill style cards -> Google Calendar connect -> pinned apps) that owns the settings window until finished, with the notch preview carried between steps as a shared element and applying choices to the config live; each step skippable; the real overlay does not compose until `config.onboardingDone` flips (verified: no passthrough-armed line while onboarding), and closing the window mid-flow finishes it so the notch always ends up existing; `resetToDefaults` preserves the flag | done (this session) -- compiles, smoke-verified (overlay absent during onboarding); the transitions and step layouts themselves need eyes |
-| Google Calendar in the notch: OAuth connect in Widgets, today's events fetched on a 30-min poll + manual refresh, a calendar glyph badged with the day's count in the collapsed pill, and the event title on a ticker from 2 min before to 30 min after | done (this session) — **verified against a local stub of Google's endpoints** (consent redirect -> code -> token -> userinfo -> events, `expires_in: 0` to force the refresh branch): 3 of 5 events kept (cancelled + unnamed "Busy" dropped, all-day kept), all six ticker-window assertions pass, token/event caches written, a 503 on events keeps the last known day with `staleError`, `invalid_grant` clears the token and reports revoked, disconnect drops both. **The real consent screen is unverified** (needs the user's Google login) |
+| Google Calendar in the notch: OAuth connect in Widgets, today's events fetched on a 30-min poll + manual refresh, a calendar glyph badged with the day's count in the collapsed pill, and the event title on a ticker from 2 min before to 30 min after | done (this session) — **verified against a local stub of Google's endpoints** (consent redirect -> code -> token -> userinfo -> events, `expires_in: 0` to force the refresh branch): 3 of 5 events kept (cancelled + unnamed "Busy" dropped, all-day kept), all six ticker-window assertions pass, token/event caches written, a 503 on events keeps the last known day with `staleError`, `invalid_grant` clears the token and reports revoked, disconnect drops both. **The real consent screen is unverified** (needs the user's Google login). **The consent UI has since moved to the marketing site** (`quicknotch.app/connect` -> `/oauth/callback` -> loopback), see pitfall 42: `state`/`code_challenge` echo through Google's URL and the callback's loopback hop arrives with `code`+`state` intact (Playwright, production build), but a real Google consent round-trip still needs the user's login **and** `https://quicknotch.app/oauth/callback` registered as an authorized redirect URI on the client |
 | macOS Dock presence tied to the Settings window: accessory agent (no Dock icon, no app menu bar) while only the notch runs; Regular + activate while Settings is open — `MacDockPresence` via `setActivationPolicy` + reconcile loop | done (this session) — **verified live**: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` (Dock icon, in front) with Settings open; closing Settings returns to accessory. Activation is **one-shot on the open transition** — the reconcile loop only re-asserts the policy, so another app keeps focus (verified: TextEdit stays frontmost across ~12 ticks with Settings open, and stays front while media ticks fire with music playing — the presence controller lives in `DisposableEffect(Unit)`, not the composition body, see pitfall 20). Windows analog: overlay built with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar/Alt+Tab slot, no focus steal) — unverified until a Windows run |
 
 **Verification matrix (important!):**
@@ -1098,6 +1098,55 @@ composeApp/
     and the missing import is the whole bug. Rule: when you add a resource and
     reference it, add the matching `import com.starkdroid.quicknotch.generated.resources.<name>`
     in the same edit. Cost about 45 minutes and a full clean-build rule-out.
+
+42. **The calendar's OAuth consent UI lives on the website now; the token
+    exchange cannot, and must not, move with it.** The site's `web/` is a fully
+    static SvelteKit build (`adapter-static`, `prerender = true`, no server
+    endpoints at all) and Google's token endpoint demands a `client_secret`
+    from every client type (pitfall 36) -- so the exchange has to stay in the
+    desktop app, which is where the secret already is. What moved to the web is
+    the *consent UI*: `GoogleCalendar.authorize()` now opens
+    `https://quicknotch.app/connect?client_id&redirect_uri&port&state&scope&
+    access_type&prompt&code_challenge&code_challenge_method` instead of
+    building the Google URL itself. The flow, end to end:
+    1. Desktop mints PKCE verifier/challenge and binds a loopback
+       `ServerSocket` (pitfall 34 -- still hand-rolled, still `java.base`).
+    2. The **loopback port rides inside `state`**: base64url of
+       `{"p":<port>,"s":"<nonce>"}`. This is the load-bearing detail. The
+       consent round-trip now passes through a website, so Google's echo is the
+       only thing that can tell the callback which port to jump home to, and the
+       desktop verifies the *entire* echoed string against what it sent --
+       `serveCallback` refuses a code whose state does not match
+       (`state_mismatch`), it never exchanges a code from an unrelated attempt.
+    3. `/connect` builds the Google authorize URL, carrying the same
+       `code_challenge` and `state` through unchanged.
+    4. Google bounces to `https://quicknotch.app/oauth/callback` (must be an
+       authorized redirect URI on the client). That page decodes the port out of
+       `state` and does `location.assign('http://127.0.0.1:<port>/oauth?'+qs)`.
+    5. The loopback server accepts that GET, reads `code` + `state`, replies
+       with the small `CONSENT_PAGE`, and `exchangeCode` runs in-process.
+
+    Why a **top-level navigation** for the hand-off and not a `fetch`: a
+    cross-origin POST/fetch from `https://quicknotch.app` to
+    `http://127.0.0.1:<port>` is blocked or needs CORS + Private Network
+    Access preflight headers, and those preflights also make the loopback
+    server answer more than once. A browser navigating the tab to loopback is
+    the one direction every browser allows unconditionally, and it is the same
+    mechanism the direct-Google flow always used. Verified end to end in
+    Playwright against the production build: `state`/`code_challenge` echo
+    byte-for-byte through Google's URL, and the callback's navigation arrives at
+    the loopback with `code` and `state` both intact.
+
+    Two site-side rules that are easy to regress: `/connect` and
+    `/oauth/callback` must **not** render the marketing `Nav` -- its section
+    anchors (`#widgets`, `#themes`...) resolve to nothing on those routes and the
+    prerenderer hard-fails the build with `handleMissingId` (the slim sticky
+    bar in `connect/+page.svelte` replaced it), and `Seo.svelte` takes no props
+    (its title is a module-level const), so `<Seo title="..."/>` is a type
+    error. `?standby=1` on `/connect` renders the page with the consent button as
+    the trigger instead of a timer; it exists so the flow can be reviewed and
+    screenshotted without starting a real sign-in, and the desktop never sends
+    it.
 
 ## 11. Git workflow
 

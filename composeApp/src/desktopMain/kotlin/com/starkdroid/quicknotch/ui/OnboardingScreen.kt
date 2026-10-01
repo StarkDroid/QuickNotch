@@ -553,13 +553,6 @@ private fun StyleCards(
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                     color = if (isSelected) TextPrimary else TextSecondary
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(if (isSelected) AccentIndigoLight else Color.Transparent)
-                )
             }
         }
     }

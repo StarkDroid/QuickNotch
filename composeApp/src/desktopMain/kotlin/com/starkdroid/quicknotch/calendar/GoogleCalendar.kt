@@ -102,10 +102,24 @@ object GoogleCalendar {
      */
     private const val CLIENT_SECRET = "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"
 
-    private const val AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
     private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
     private const val USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
     private const val EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+
+    /**
+     * The website now owns the consent UI (it has its own editorial voice, and
+     * "connect QuickNotch to your Google Calendar" is a story the marketing site
+     * tells better than a settings row can). The desktop opens this page with
+     * the loopback intent encoded in [OAUTH_STATE], and the page sends the user
+     * to Google with `state` set to exactly that string. Google bounces the
+     * browser back to [OAUTH_CALLBACK_URL] — the site's page, which jumps the
+     * tab home with a top-level navigation to the app's loopback server, where
+     * the code lands and the exchange happens with the secret that never leaves
+     * this process. Both are also registered as the OAuth client's authorized
+     * redirect URIs in the Google Cloud console.
+     */
+    private const val WEB_CONNECT_URL = "https://quicknotch.app/connect"
+    private const val OAUTH_CALLBACK_URL = "https://quicknotch.app/oauth/callback"
 
     /** Read-only calendar, plus the address used to label the connection. */
     private const val SCOPE =
@@ -220,6 +234,13 @@ object GoogleCalendar {
     private var connectFailure: String = REASON_AUTH
     private var connectJob: Job? = null
     private var pendingCallback: CompletableFuture<String>? = null
+    /**
+     * The exact `state` string this attempt sent Google. It carries the loopback
+     * port the site needs to jump the browser home, so the echoed value is the
+     * only thing the loopback server can trust as coming back from this flow —
+     * a callback without it (or with a stale one) is refused, never answered.
+     */
+    private var expectedState: String? = null
     private var cancelledByUser = false
     private var tickerJob: Job? = null
     private var pollJob: Job? = null
@@ -280,7 +301,8 @@ object GoogleCalendar {
         }
     }
 
-    /** Open the consent screen and wait for the code to come back on loopback. */
+    /** Run the web-hosted consent flow: open the connect page, wait for the
+     *  site to bounce the code back to the loopback landing strip. */
     fun connect() {
         if (_state.value is CalendarState.Connecting) return
         cancelledByUser = false
@@ -369,15 +391,28 @@ object GoogleCalendar {
         val received = CompletableFuture<String>()
         var listener: ServerSocket? = null
         var listenerThread: Thread? = null
-        var redirect = ""
+        val redirect = OAUTH_CALLBACK_URL
         return try {
+            // Landing strip on loopback: the site's callback page jumps the
+            // browser here (a *top-level* navigation, so no CORS/PNA dance)
+            // after Google has bounced the code back to the website. The code
+            // is exchanged in this process, because the client secret lives
+            // here and nowhere else.
             val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
             server.soTimeout = CONNECT_TIMEOUT_MS.toInt()
             listener = server
-            redirect = "http://127.0.0.1:${server.localPort}/"
 
-            // One request, one answer, then done: the redirect is a single GET
-            // carrying Google's answer in the query string.
+            // The loopback port rides inside `state`: the consent round-trip
+            // goes through the website, and its callback page can only learn
+            // *which* port to jump home to from the exact echo Google returns.
+            val state = base64Url(
+                "{\"p\":${server.localPort},\"s\":\"${randomUrlToken(16)}\"}"
+                    .toByteArray(Charsets.UTF_8)
+            )
+            expectedState = state
+
+            // One request, one answer, then done: the jump is a single GET
+            // carrying the callback's code and the echoed state in the query.
             listenerThread = Thread({
                 runCatching { serveCallback(server) }
                     .onFailure { received.completeExceptionally(it) }
@@ -386,13 +421,16 @@ object GoogleCalendar {
                 start()
             }
             pendingCallback = received
-            log("consent server on $redirect")
+            log("consent landing on 127.0.0.1:${server.localPort}")
 
+            // Consent UI lives on the website now; this URL is everything the
+            // page needs to run the flow and bring the browser back here.
             AppLauncher.browse(
-                AUTH_ENDPOINT + "?" + listOf(
+                WEB_CONNECT_URL + "?" + listOf(
                     "client_id" to CLIENT_ID,
                     "redirect_uri" to redirect,
-                    "response_type" to "code",
+                    "port" to server.localPort.toString(),
+                    "state" to state,
                     "scope" to SCOPE,
                     // Offline so we get a refresh token at all. `prompt=consent`
                     // only on a fresh connect: without it Google silently
@@ -403,7 +441,7 @@ object GoogleCalendar {
                     "code_challenge_method" to "S256"
                 ).joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
             )
-            log("browser handed off, waiting for the callback (${CONNECT_TIMEOUT_MS / 60_000} min budget)")
+            log("connect page opened; waiting for the callback (${CONNECT_TIMEOUT_MS / 60_000} min budget)")
 
             val code = received.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             log("callback carried a code after ${(System.currentTimeMillis() - started) / 1000}s")
@@ -446,6 +484,7 @@ object GoogleCalendar {
             null
         } finally {
             pendingCallback = null
+            expectedState = null
             runCatching { listener?.close() }
             listenerThread?.interrupt()
         }
@@ -501,9 +540,18 @@ object GoogleCalendar {
                         GoogleAuthException(query.getValue("error"), query["error_description"])
                     )
                 }
-                query["code"] != null -> {
-                    log("callback carried a code")
+                query["code"] != null && query["state"] == expectedState -> {
+                    log("callback carried a code with a matching state")
                     pendingCallback?.complete(query.getValue("code"))
+                }
+                query["code"] != null -> {
+                    // A stale or forged jump: the site is meant to echo the
+                    // exact state back. Refuse it rather than exchange a code
+                    // that does not belong to this attempt.
+                    log("callback carried a code but a mismatched state; refusing")
+                    pendingCallback?.completeExceptionally(
+                        GoogleAuthException("state_mismatch", "callback state did not match this attempt")
+                    )
                 }
                 else -> log("callback carried neither a code nor an error")
             }
