@@ -1099,6 +1099,56 @@ composeApp/
     reference it, add the matching `import com.starkdroid.quicknotch.generated.resources.<name>`
     in the same edit. Cost about 45 minutes and a full clean-build rule-out.
 
+43. **A Desktop OAuth client cannot register an https redirect URI at all — the
+    console does not render the field.** The hosted consent flow (pitfall 42) is
+    therefore only reachable with a **Web application** client, and that type is
+    confidential, so `client_secret` becomes mandatory rather than optional. The
+    type is forced by the console UI, not chosen: a Desktop app client accepts
+    *any* `http://127.0.0.1:<port>` implicitly (which is why the old loopback
+    flow needed no registered URI and no secret) and offers nowhere to add one.
+    Two things follow that are easy to get wrong:
+    - `GoogleCalendar.kt` had the client type described three different ways
+      across comments (a "Desktop-app client id" next to the constant, a
+      `REASON_CLIENT_TYPE` doc claiming Web, and pitfall 36 recording that
+      creating another Desktop client changed nothing). Only the console settles
+      it — read the type off the client's detail page, never off the repo.
+    - Once Web-typed, `classifyTokenRefusal`'s "wants a secret" branch no longer
+      means *you are the wrong client type*. It means the secret is mistyped,
+      rotated, or not yet propagated. The old wording sent us looking at the
+      client type when the answer was the secret.
+
+    **Google exempts loopback origins from the HTTPS rule** ("Redirect URIs must
+    use the HTTPS scheme, not plain HTTP. Localhost URIs (including localhost IP
+    address URIs) are exempt from this rule"), which is what makes local
+    testing of the hosted flow possible at all:
+    `QUICKNOTCH_WEB_BASE=http://localhost:5173` plus a registered
+    `http://localhost:5173/oauth/callback`. Everything the flow needs derives
+    from that one variable (`webConnectUrl` / `webCallbackUrl`), and both are
+    echoed to the site, which prefers the desktop's values over its own
+    hardcoded production ones — otherwise the desktop would point Google at the
+    production callback while the app exchanged against the local one, and the
+    whole thing fails as `redirect_uri_mismatch`. Console changes can take
+    **5 minutes to a few hours** to take effect, so a URI that "should" work
+    failing immediately usually means propagation, not configuration.
+
+    Corollary on the *refusal* path: Google bounces a decline to the site's
+    callback, so if that page only ever handled a successful `code`, the app sat
+    out its full 5-minute timeout on every cancelled consent. It forwards
+    `error`/`error_description` to the loopback too, because
+    `classifyConsentRefusal` is what distinguishes "user pressed Cancel" from
+    "consent screen still in Testing" (pitfall 33) — a distinction that only
+    exists app-side. A refusal with *no* usable `state` cannot be handed back at
+    all, so the page says so instead of jumping at a guessed port.
+
+44. **A consent page's inert button is a symptom, not a styling nit.** The
+    connect page's error branch rendered "Try opening Google again" bound to a
+    `consentUrl` that is only ever set on the *success* branch — so the button
+    did nothing at all, and it was the only prominent action on the page. Any
+    page whose controls are built inside a parse branch needs its error branch
+    to offer a way out that does not depend on that branch's state; here the only
+    correct exit is back through the app, since the app is what mints the
+    loopback port.
+
 42. **The calendar's OAuth consent UI lives on the website now; the token
     exchange cannot, and must not, move with it.** The site's `web/` is a fully
     static SvelteKit build (`adapter-static`, `prerender = true`, no server

@@ -87,39 +87,58 @@ sealed interface CalendarState {
  *   [CalendarState.Connected.staleError].
  */
 object GoogleCalendar {
-    // Desktop-app client id from Google Cloud (APIs & Services → Credentials →
-    // OAuth client ID → Desktop app). Desktop clients are public by design:
-    // PKCE protects the exchange, so there is no secret to protect.
-    private const val CLIENT_ID = "317663226214-ojbngp1n0p81tttll9sjq9ou74mvjegk.apps.googleusercontent.com"
+    // **Web application** client id from Google Cloud (APIs & Services →
+    // Credentials → OAuth client ID → Web application). The type is forced, not
+    // preferred: a *Desktop app* client cannot register an https redirect URI at
+    // all (the console does not render the field for that type), and the loopback
+    // flow it does support is exactly what this app stopped doing in favour of the
+    // hosted consent page. Web clients are confidential, which is why the secret
+    // below is required rather than merely tolerated.
+    private const val CLIENT_ID = "317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com"
 
     /**
-     * Google's token endpoint demands a client secret from every client type,
-     * Desktop included (see [CalendarApi.exchangeCode] for the evidence). It is
+     * Required because the client is a Web application (pitfall 36). It is
      * extractable from any shipped binary, which is inherent to desktop OAuth —
      * the same reason gcloud ships its own. It authorizes nothing alone: every
      * token still needs a real user's interactive consent. Rotate it in the
      * Cloud console if it ever leaks wider than this repo.
      */
-    private const val CLIENT_SECRET = "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"
+    private const val CLIENT_SECRET = "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"
 
     private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
     private const val USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
     private const val EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
     /**
-     * The website now owns the consent UI (it has its own editorial voice, and
+     * The website owns the consent UI (it has its own editorial voice, and
      * "connect QuickNotch to your Google Calendar" is a story the marketing site
-     * tells better than a settings row can). The desktop opens this page with
-     * the loopback intent encoded in [OAUTH_STATE], and the page sends the user
-     * to Google with `state` set to exactly that string. Google bounces the
-     * browser back to [OAUTH_CALLBACK_URL] — the site's page, which jumps the
-     * tab home with a top-level navigation to the app's loopback server, where
-     * the code lands and the exchange happens with the secret that never leaves
-     * this process. Both are also registered as the OAuth client's authorized
-     * redirect URIs in the Google Cloud console.
+     * tells better than a settings row can). The desktop opens the connect page
+     * with the loopback intent encoded in `state`; the page sends the user to
+     * Google with `state` set to exactly that string. Google bounces the browser
+     * back to the *callback* page, which jumps the tab home with a top-level
+     * navigation to the app's loopback server, where the code lands and the
+     * exchange happens with the secret that never leaves this process.
+     *
+     * Only the callback path is a registered redirect URI — the connect page is
+     * an entry point, and registering it was never needed or possible.
+     *
+     * The origin is an environment variable so the whole flow can be pointed at
+     * `vite dev` before the site is deployed. Google exempts loopback origins
+     * from the HTTPS rule ("Localhost URIs (including localhost IP address URIs)
+     * are exempt from this rule"), so `http://localhost:5173/oauth/callback` is
+     * a legal redirect URI to register alongside the production one — which is
+     * the only way to test this end to end without a deployment.
      */
-    private const val WEB_CONNECT_URL = "https://quicknotch.app/connect"
-    private const val OAUTH_CALLBACK_URL = "https://quicknotch.app/oauth/callback"
+    private const val WEB_BASE_ENV = "QUICKNOTCH_WEB_BASE"
+    private const val DEFAULT_WEB_BASE = "https://quicknotch.app"
+
+    private val webBase: String by lazy {
+        val override = System.getenv(WEB_BASE_ENV)?.trim().orEmpty()
+        (if (override.isEmpty()) DEFAULT_WEB_BASE else override).trimEnd('/')
+    }
+
+    private val webConnectUrl: String get() = "$webBase/connect"
+    private val webCallbackUrl: String get() = "$webBase/oauth/callback"
 
     /** Read-only calendar, plus the address used to label the connection. */
     private const val SCOPE =
@@ -154,12 +173,12 @@ object GoogleCalendar {
      */
     const val REASON_NOT_VERIFIED = "not_verified"
     /**
-     * The OAuth client is registered as a Web application, so Google treats it
-     * as confidential and wants a client_secret. A desktop client is a *public*
-     * client: PKCE is the authentication and there is no secret to send — the
-     * remedy is the client type in the Cloud console, never a secret in the
-     * binary. Distinct from a generic refusal because the consent screen worked
-     * and only the exchange was rejected, which makes it baffling otherwise.
+     * Google refused the token exchange over the client secret. The client is a
+     * Web application and does send one, so this is nearly always a secret that
+     * was rotated, mistyped, or has not propagated yet -- not a client-type
+     * mistake the way it was before the move to a Web client. Kept as its own
+     * reason because "everything visible worked, only the exchange was
+     * rejected" is baffling without naming the stage that failed.
      */
     const val REASON_CLIENT_TYPE = "client_type"
     /**
@@ -391,7 +410,7 @@ object GoogleCalendar {
         val received = CompletableFuture<String>()
         var listener: ServerSocket? = null
         var listenerThread: Thread? = null
-        val redirect = OAUTH_CALLBACK_URL
+        val redirect = webCallbackUrl
         return try {
             // Landing strip on loopback: the site's callback page jumps the
             // browser here (a *top-level* navigation, so no CORS/PNA dance)
@@ -422,11 +441,12 @@ object GoogleCalendar {
             }
             pendingCallback = received
             log("consent landing on 127.0.0.1:${server.localPort}")
+            log("consent UI served from $webBase")
 
             // Consent UI lives on the website now; this URL is everything the
             // page needs to run the flow and bring the browser back here.
             AppLauncher.browse(
-                WEB_CONNECT_URL + "?" + listOf(
+                webConnectUrl + "?" + listOf(
                     "client_id" to CLIENT_ID,
                     "redirect_uri" to redirect,
                     "port" to server.localPort.toString(),
@@ -812,12 +832,11 @@ object GoogleCalendar {
     private class GoogleAuthException(val error: String, val description: String?) : Exception(error)
 
     /**
-     * Google's "client_secret is missing" means the client in the Cloud console
-     * is a Web application rather than a Desktop app. Naming that here beats a
-     * generic failure, because everything the user can see *worked*: the browser
-     * opened, the sign-in went through, the callback landed.
+     * The id this build exchanges with, for correlating refusals with the console.
+     * A secret-shaped refusal is only interpretable next to it: the same error
+     * means a wrong client on an old build and a rotated or not-yet-propagated
+     * secret on this one.
      */
-    /** The id this build exchanges with, for correlating refusals with the console. */
     private fun resultForLog(): String = CLIENT_ID
 
     private fun classifyTokenRefusal(refusal: OAuthResult.Refused): String {

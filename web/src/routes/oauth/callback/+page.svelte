@@ -2,7 +2,7 @@
 	import Seo from '$components/Seo.svelte';
 	import Footer from '$components/Footer.svelte';
 	import Icon from '$components/Icon.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 
 	/**
 	 * Google's OAuth bounce lands here (the redirect URI registered in the
@@ -14,9 +14,21 @@
 	 * must match the exact string this attempt emitted), sends the small
 	 * consent page back, and completes the exchange.
 	 */
-	let status = $state<'idle' | 'jumping' | 'done' | 'error'>('idle');
+	let status = $state<'idle' | 'jumping' | 'done' | 'refused' | 'error'>('idle');
 	let error = $state('');
 	let target = $state('');
+
+	/**
+	 * How long the refusal page lingers before handing control back to the app.
+	 * Long enough to read why, short enough that the settings widget — which is
+	 * the authoritative place the failure is reported — is never left spinning.
+	 */
+	const REFUSAL_HANDOFF_MS = 2500;
+	let handoff: ReturnType<typeof setTimeout> | undefined;
+
+	// Hoisted out of `onMount` so the "back to QuickNotch now" button can call it:
+	// it is both the success path and the refusal path's escape hatch.
+	let returnToApp = $state<() => void>(() => {});
 
 	/**
 	 * The loopback port rides inside the `state` the desktop minted: it is
@@ -47,10 +59,37 @@
 		const err = params.get('error');
 		const errDesc = params.get('error_description');
 
+		const port = state ? extractPortFromState(state) : null;
+		const hasPort = port !== null && port >= 1 && port <= 65535;
+
+		/**
+		 * Hand control back to the loopback, carrying whatever Google said.
+		 * A refusal is forwarded too, not just a code: the desktop classifies
+		 * `access_denied` against its description to tell "user pressed Cancel"
+		 * from "consent screen still in Testing" (pitfall 33), and that
+		 * distinction only exists on the app side. Swallowing it here would
+		 * leave the settings widget spinning out its whole timeout on the one
+		 * outcome it is best equipped to explain.
+		 */
+		returnToApp = function () {
+			if (!hasPort || !state) return;
+			target = `http://127.0.0.1:${port}/oauth?${params.toString()}`;
+			status = 'jumping';
+			window.location.assign(target);
+			status = 'done';
+		}
+
 		if (err) {
 			const desc = errDesc ? ` (${errDesc})` : '';
 			error = `Google returned "${err}"${desc}.`;
-			status = 'error';
+			if (!hasPort) {
+				// Nowhere to hand the failure back to, so the page has to be the
+				// whole answer.
+				status = 'error';
+				return;
+			}
+			status = 'refused';
+			handoff = setTimeout(returnToApp, REFUSAL_HANDOFF_MS);
 			return;
 		}
 		if (!code) {
@@ -63,9 +102,7 @@
 			status = 'error';
 			return;
 		}
-
-		const port = extractPortFromState(state);
-		if (!port || port < 1 || port > 65535) {
+		if (!hasPort) {
 			error = 'The state does not tell QuickNotch which port to connect to.';
 			status = 'error';
 			return;
@@ -74,14 +111,10 @@
 		// Reattach the query to the loopback. The GET is the signal the desktop's
 		// ServerSocket is waiting for; it will respond with the small success
 		// page and complete the handshake.
-		const qs = new URLSearchParams(params);
-		target = `http://127.0.0.1:${port}/oauth?${qs.toString()}`;
-		status = 'jumping';
-		// A top-level location.assign is the cleanest way to jump back to a
-		// non-http(s) loopback origin; the browser will navigate that tab to it.
-		window.location.assign(target);
-		status = 'done';
+		returnToApp();
 	});
+
+	onDestroy(() => clearTimeout(handoff));
 </script>
 
 <Seo />
@@ -103,6 +136,21 @@
 					{#if target}
 						<code class="mono text-muted jump">{target}</code>
 					{/if}
+{:else if status === 'refused'}
+					<span class="eyebrow">Sign-in didn't complete</span>
+					<h1 class="h4">{error}</h1>
+					<p class="text-muted">
+						No permissions were changed. Taking you back to QuickNotch, which
+						knows what this refusal means — a cancelled consent and an
+						unverified one look identical from here.
+					</p>
+					<button class="btn" type="button" onclick={returnToApp}>
+
+						<Icon name="arrow-left" size={16} />
+
+						Back to QuickNotch now
+					</button>
+
 				{:else if status === 'error'}
 					<span class="eyebrow">Could not return to QuickNotch</span>
 					<h1 class="h4">{error}</h1>
@@ -111,10 +159,13 @@
 						If this keeps happening, the state from the desktop app might have
 						expired or the browser blocked the loopback jump.
 					</p>
-					<a class="btn btn--ghost" href="/">
+					<a class="btn btn--ghost" href="/connect" data-sveltekit-reload>
+
 						<Icon name="arrow-left" size={16} />
-						Back to QuickNotch
+
+						Start again
 					</a>
+
 				{/if}
 			</div>
 		</div>

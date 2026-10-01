@@ -234,8 +234,14 @@ export const dockTiles: Tile[] = [
  */
 export const calendarAuth = {
 	authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-	clientId:
-		'317663226214-ojbngp1n0p81tttll9sjq9ou74mvjegk.apps.googleusercontent.com',
+	// Web application client (not Desktop: that type cannot register an https
+	// redirect URI at all). Must stay in step with CLIENT_ID in
+	// GoogleCalendar.kt — the two are the same credential described twice.
+	clientId: '317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com',
+	// Production. Locally, `vite dev` serves the same routes, and Google exempts
+	// loopback origins from its HTTPS rule, so http://localhost:5173/oauth/callback
+	// is registered alongside this one and the app is pointed at it with
+	// QUICKNOTCH_WEB_BASE.
 	callbackUrl: 'https://quicknotch.app/oauth/callback',
 	scope:
 		'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email'

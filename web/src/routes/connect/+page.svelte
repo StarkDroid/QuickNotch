@@ -36,9 +36,22 @@
 				return;
 			}
 
+			// Prefer what the desktop sent, falling back to the site's own config.
+			// The two normally agree, but they *must* during local testing: the app
+			// is pointed at `vite dev` with QUICKNOTCH_WEB_BASE and sends
+			// `http://localhost:5173/oauth/callback` as its redirect_uri. Echoing the
+			// production URI instead would either fail as a redirect_uri_mismatch or,
+			// worse, quietly authorise against a URI the app will not exchange
+			// against.
+			const clientId = params.get('client_id') ?? calendarAuth.clientId;
+			const redirectUri = params.get('redirect_uri') ?? calendarAuth.callbackUrl;
+
+			// Use the value the desktop sent for the port too, falling back to the page
+			// address: `vite preview` and `vite dev` differ (4173 vs 5173), so the
+			// URL the app opened is the only reliable source.
 			const qs = new URLSearchParams({
-				client_id: calendarAuth.clientId,
-				redirect_uri: calendarAuth.callbackUrl,
+				client_id: clientId,
+				redirect_uri: redirectUri,
 				response_type: 'code',
 				scope: scope ?? calendarAuth.scope,
 				access_type: accessType ?? 'offline',
@@ -169,12 +182,11 @@
 							start again from QuickNotch → Settings → Google Calendar.
 						</p>
 					</div>
+					<!-- No "try again" here on purpose: `consentUrl` is empty in this branch, so
+					   that button was inert. The only way out is back through the app,
+					   which is what mints the loopback port this page needs. -->
 					<div class="cluster">
-						<button class="btn btn--primary" onclick={openGoogle}>
-							<Icon name="arrow-right" size={16} />
-							Try opening Google again
-						</button>
-						<a class="btn btn--ghost" href="/">
+						<a class="btn btn--primary" href="/">
 							<Icon name="arrow-left" size={16} />
 							Back to the website
 						</a>
