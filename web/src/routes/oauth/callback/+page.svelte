@@ -141,7 +141,7 @@
 					<h1 class="h4">{error}</h1>
 					<p class="text-muted">
 						No permissions were changed. Taking you back to QuickNotch, which
-						knows what this refusal means — a cancelled consent and an
+						knows what this refusal means, since a cancelled consent and an
 						unverified one look identical from here.
 					</p>
 					<button class="btn" type="button" onclick={returnToApp}>

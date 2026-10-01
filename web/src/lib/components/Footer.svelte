@@ -10,7 +10,7 @@
 
 <footer class="footer">
 	<div class="container footer__inner">
-		<a class="brand" href="#top" aria-label="{site.name} — back to top">
+		<a class="brand" href="#top" aria-label="{site.name}, back to top">
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			{site.name}
 		</a>

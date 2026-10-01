@@ -118,7 +118,7 @@
 				</h1>
 				<p class="lead">
 					The notch shows today's upcoming events at a glance, and scrolls the
-					next one as a live ticker — without ever needing to open Google
+					next one as a live ticker, without ever needing to open Google
 					Calendar. The connection is read-only, stays on your machine, and
 					never sends your events anywhere else.
 				</p>
@@ -159,7 +159,7 @@
 						<p>
 							{status === 'starting'
 								? 'Opening Google consent…'
-								: 'Taking you to Google — if the tab did not open, try again.'}
+								: 'Taking you to Google. If the tab did not open, try again.'}
 						</p>
 					</div>
 					<div class="cluster">

@@ -85,7 +85,7 @@
 		class:notch--handle={theme === 'handle'}
 		use:wheelPager
 		role="region"
-		aria-label="{label} — {current.label}"
+		aria-label="{label}, {current.label}"
 	>
 		<span class="notch__title mono" aria-hidden="true">{current.label}</span>
 

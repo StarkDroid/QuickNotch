@@ -20,7 +20,7 @@
 			<h2 class="display h2">A whole dockful of widgets.</h2>
 			<p class="lead">
 				Scroll up or down inside the notch to hop between your apps, the weather,
-				system stats, game FPS and your music — no windows, no hunting.
+				system stats, game FPS and your music. No windows, no hunting.
 			</p>
 		</header>
 
@@ -30,7 +30,7 @@
 					<span class="tape tape--tl"></span>
 					<span class="tape tape--br"></span>
 				</div>
-				<span class="mono stage__tag">fig. 1 — the daily scroll</span>
+				<span class="mono stage__tag">fig. 1: the daily scroll</span>
 				<NotchWidgetDemo label="Widget demo" />
 			</div>
 

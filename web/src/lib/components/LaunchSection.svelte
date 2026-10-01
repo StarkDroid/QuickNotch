@@ -30,7 +30,7 @@
 				<span class="tape tape--tl"></span>
 				<span class="tape tape--br"></span>
 			</div>
-			<span class="mono stage__tag">fig. 2 — hover the notch to open the overlay</span>
+			<span class="mono stage__tag">fig. 2: hover the notch to open the overlay</span>
 			<DockDemo />
 		</div>
 

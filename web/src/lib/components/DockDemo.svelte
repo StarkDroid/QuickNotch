@@ -263,7 +263,7 @@
 <div
 	class="dock-demo"
 	role="region"
-	aria-label="Live QuickNotch overlay demo — hover the notch at the top of the screen to expand it into a dock, then move your cursor across the icons to feel the magnification wave. It tucks back into the notch when you leave."
+	aria-label="Live QuickNotch overlay demo. Hover the notch at the top of the screen to expand it into a dock, then move your cursor across the icons to feel the magnification wave. It tucks back into the notch when you leave."
 >
 	<div class="dock-demo__screen">
 		<div class="dock-demo__chrome" aria-hidden="true">
@@ -296,8 +296,8 @@
 					class="dock-demo__notch"
 					class:notch-open={open}
 					aria-label={open
-						? 'QuickNotch overlay is open — press Escape to close'
-						: 'Notch — hover or click to open QuickNotch'}
+						? 'QuickNotch overlay is open, press Escape to close'
+						: 'Notch, hover or click to open QuickNotch'}
 					aria-expanded={open}
 					onclick={onToggle}
 				>
@@ -311,7 +311,7 @@
 							type="button"
 							class="dock-demo__tile-btn"
 							data-tile
-							aria-label="{tile.name} — launch demo"
+							aria-label="{tile.name}, launch demo"
 							onclick={(event) => onTileClick(index, event)}
 						>
 							<AppTile {tile} size={40} decorative />
@@ -334,7 +334,7 @@
 		<Icon name="arrow-right" size={14} />
 		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Overlay pops open · move to feel the wave</span>
 		<Icon name="arrow-right" size={14} />
-		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Leave — it tucks away</span>
+		<span class="dock-demo__hint-step"><i class="dot" aria-hidden="true"></i>Leave, it tucks away</span>
 	</p>
 </div>
 
