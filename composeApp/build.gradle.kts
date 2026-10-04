@@ -5,6 +5,26 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.detekt)
+}
+
+// Static analysis (detekt): analysis-only rules, no auto-formatting —
+// formatting changes would churn every file, so style stays enforced by the
+// pre-commit sweep (§11) until a formatter is adopted deliberately. The KMP
+// source layout is not the JVM default the plugin assumes, so the analysed
+// roots are set explicitly; generated Compose resources under build/ are
+// excluded. Findings that predate the adoption are grandfathered in
+// config/detekt/baseline.xml — `detekt` fails only on NEW findings.
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    baseline = file("$rootDir/config/detekt/baseline.xml")
+    source.setFrom(
+        files(
+            "$projectDir/src/commonMain/kotlin",
+            "$projectDir/src/desktopMain/kotlin"
+        )
+    )
 }
 
 version = "3.0.0"
