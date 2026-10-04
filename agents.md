@@ -1638,7 +1638,11 @@ composeApp/
   unreachable. Diagnosed from `quicknotch.log` (`pages=[Apps, Weather,
   Calendar]` with the index demonstrably stopping on weather while the user
   saw nothing settle). Order stays Music? → Apps → Weather → Calendar, so no
-  widget is ever skipped at any swipe strength.
+  widget is ever skipped at any swipe strength. Follow-up: repeats inside the
+  tail still died (moving the cursor only helped by passing time), so a fresh
+  intent also re-arms mid-tail — a full-step shove or a 2× rising edge landing
+  >100ms after the flip, while the flick's own follow-through (large but
+  within milliseconds) stays swallowed.
 
 ---
 

@@ -23,8 +23,9 @@ import kotlin.math.abs
  * One swipe gesture flips at most ONE page, no matter how hard it is: the
  * first threshold crossing in a burst takes the page and the rest of the
  * burst (trackpad momentum, a fast multi-notch fling) is swallowed. The next
- * page waits for the next gesture — a fresh burst after a short quiet gap.
- * Without this, a hard swipe crosses the threshold several times and blows
+ * page waits for the next gesture — a fresh burst after a short quiet gap, or
+ * a full-step shove landing well after the flip (a fast second swipe arriving
+ * mid-tail). Without this, a hard swipe crosses the threshold several times and blows
  * straight past the middle pages, which then only ever flash by mid-flight
  * instead of settling. A burst ends after [GESTURE_GAP_NS] of quiet; discrete
  * wheel ticks carry pauses and keep working tick-per-page.
@@ -46,9 +47,19 @@ internal class OverlayPager(
      * Quiet gap that ends a swipe burst and re-arms the next flip. Trackpad
      * momentum arrives as a continuous stream with tiny gaps, so it never
      * re-arms mid-flight; deliberate wheel ticks carry human pauses and do.
+     * The accumulator is deliberately NOT cleared here: slow multi-tick
+     * swipes accumulate across pauses, and it is always zeroed by a flip.
      */
     private val gestureGapNs = 180_000_000L
+    /**
+     * A full step arriving this long after a flip is a fresh shove, not the
+     * old gesture's follow-through (which lands within milliseconds). Lets a
+     * fast second swipe through while the momentum tail is still trickling.
+     */
+    private val shoveDelayNs = 100_000_000L
     private var lastEventNanos = 0L
+    private var lastFlipNanos = 0L
+    private var lastDeltaPx = 0f
     private var burstFlipped = false
 
     /** Current number of widget pages (Apps, Music, …). Synced by the overlay. */
@@ -70,18 +81,34 @@ internal class OverlayPager(
             scrollAccum.value = 0f
         }
         lastEventNanos = now
-        // Already flipped inside this burst: swallow the momentum tail so a
-        // hard swipe can never blow past the neighbouring page.
-        if (!burstFlipped) {
-            scrollAccum.value += deltaPx
-            if (abs(scrollAccum.value) >= stepPx) {
-                val step = if (scrollAccum.value > 0) 1 else -1
-                val next = (pageIndex.value + step).coerceIn(0, pageCount - 1)
+        if (burstFlipped) {
+            // A full step landing well after the flip is the next swipe
+            // arriving mid-tail, not momentum: re-arm and count it fresh. The
+            // flick's own follow-through is large too but lands within
+            // milliseconds of the flip, so it stays swallowed. Same for a
+            // rising edge — fresh fingers spike the deltas, momentum only ever
+            // decays — so gentle repeats get through as well.
+            val freshShove = abs(deltaPx) >= stepPx
+            val risingEdge = lastDeltaPx != 0f && abs(deltaPx) > 2 * abs(lastDeltaPx)
+            lastDeltaPx = deltaPx
+            if ((freshShove || risingEdge) && now - lastFlipNanos > shoveDelayNs) {
+                burstFlipped = false
                 scrollAccum.value = 0f
-                if (next != pageIndex.value) {
-                    pageIndex.value = next
-                    burstFlipped = true
-                }
+            } else {
+                return
+            }
+        } else {
+            lastDeltaPx = deltaPx
+        }
+        scrollAccum.value += deltaPx
+        if (abs(scrollAccum.value) >= stepPx) {
+            val step = if (scrollAccum.value > 0) 1 else -1
+            val next = (pageIndex.value + step).coerceIn(0, pageCount - 1)
+            scrollAccum.value = 0f
+            if (next != pageIndex.value) {
+                pageIndex.value = next
+                burstFlipped = true
+                lastFlipNanos = now
             }
         }
     }
