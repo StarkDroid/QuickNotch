@@ -33,6 +33,7 @@ import com.starkdroid.quicknotch.generated.resources.notification_indicator
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
+import com.starkdroid.quicknotch.weather.WeatherData
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -74,7 +75,9 @@ internal fun IdleClockRow(
     battery: AudioDeviceBattery? = null,
     deviceBattery: SystemBattery? = null,
     notificationCount: Int? = null,
-    calendarEventCount: Int = 0
+    calendarEventCount: Int = 0,
+    weather: WeatherData? = null,
+    fahrenheit: Boolean = false
 ) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -98,6 +101,16 @@ internal fun IdleClockRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
+        // Current conditions cap the row on the left: glyph + temperature
+        // ahead of the date, mirroring how the expanded page leads with now.
+        // Hidden until a forecast loads rather than showing a false "--°".
+        if (weather != null) {
+            WeatherQuickChip(
+                data = weather,
+                fahrenheit = fahrenheit,
+                tint = tint
+            )
+        }
         if (clock.showDate) {
             ClockTextFrame(
                 text = formatClockDate(clock.dateFormat, now),

@@ -47,6 +47,8 @@ import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
 import com.starkdroid.quicknotch.media.NotificationCount
+import com.starkdroid.quicknotch.weather.Weather
+import com.starkdroid.quicknotch.weather.WeatherState
 import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
@@ -130,12 +132,16 @@ fun main(args: Array<String>) {
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
             GoogleCalendar.start()
+            // Weather locates itself over IP and caches the day to disk, so a
+            // cold start paints the last known forecast on the first frame.
+            Weather.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
                 AudioBattery.stop()
                 SystemBattery.stop()
                 NotificationCount.stop()
+                Weather.stop()
             }
         }
 
@@ -321,11 +327,20 @@ private fun NotchOverlayWindow(
     // derive the slot count through the same helper.
     val calendarEventCount =
         if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
+    // The weather chip draws while a forecast is loaded; the expanded outlook
+    // page exists under the same condition the overlay uses, so both sizers
+    // claim the identical footprint.
+    val weatherState by Weather.state.collectAsState()
+    val weatherFetching by Weather.fetching.collectAsState()
+    val weatherData = (weatherState as? WeatherState.Ready)?.data
+    val weatherReady = config.widgets.showWeather &&
+        (weatherData != null || weatherFetching || weatherState is WeatherState.Loading)
     val indicatorSlots = quickViewIndicatorSlots(
-        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
+        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
+        weatherVisible = weatherData != null
     )
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, weatherReady) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, weatherActive = weatherReady)
     }
     // The native window keeps the expanded footprint at all times (see class
     // doc): opening/collapsing never resizes the transparent window, which is

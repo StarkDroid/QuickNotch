@@ -82,6 +82,7 @@ import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.model.AppItem
 
 import com.starkdroid.quicknotch.model.NotchConfig
+import com.starkdroid.quicknotch.weather.WeatherState
 import com.starkdroid.quicknotch.theme.TextPrimary
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -89,7 +90,7 @@ import kotlin.math.abs
 
 // ── Widget pages ─────────────────────────────────────────────────────────────
 
-internal enum class WidgetPage { Apps, Music, Calendar }
+internal enum class WidgetPage { Apps, Music, Calendar, Weather }
 
 /**
  * Renders every active widget page as an always-composed sibling so the pager
@@ -119,6 +120,10 @@ internal fun WidgetPages(
     batteryRingModifier: Modifier,
     calendarState: CalendarState?,
     calendarRefreshing: Boolean,
+    weatherState: WeatherState?,
+    weatherFetching: Boolean,
+    fahrenheit: Boolean,
+    onRefreshWeather: () -> Unit,
     onLaunch: (AppItem) -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -149,6 +154,15 @@ internal fun WidgetPages(
                         // the cursor may own the hit path, or an alpha-0 page
                         // keeps swallowing clicks meant for the page beneath it.
                         interactive = interactive && isActive
+                    )
+                    WidgetPage.Weather -> WeatherNotchPage(
+                        state = weatherState ?: WeatherState.Loading,
+                        fetching = weatherFetching,
+                        fahrenheit = fahrenheit,
+                        // The retry chip is the only pointer target here, gated
+                        // like every other page's controls (pitfall 24).
+                        interactive = interactive && isActive,
+                        onRefresh = onRefreshWeather
                     )
                     WidgetPage.Music -> if (session != null) {
                         MusicPage(

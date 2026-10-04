@@ -95,7 +95,15 @@ data class WidgetsConfig(
      * Requires a connection (see the Calendar widget in the Widgets tab).
      */
     val showCalendar: Boolean = false,
-    /** Album-art-derived or constant white; see [WaveformTint]. */
+    /**
+     * Weather in the collapsed pill (condition glyph + temperature, left of
+     * the date) and as an expanded wheel page (today plus the 7-day outlook
+     * with UV index and precipitation chances). Zero-config: the position is
+     * IP-geolocated, so no account or setup is needed.
+     */
+    val showWeather: Boolean = true,
+    /** Display temperatures in Fahrenheit instead of Celsius. */
+    val weatherFahrenheit: Boolean = false,    /** Album-art-derived or constant white; see [WaveformTint]. */
     val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
     /**
      * While the waveform is on, drop the song name from the collapsed pill: the

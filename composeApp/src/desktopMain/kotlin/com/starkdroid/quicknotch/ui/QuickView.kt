@@ -32,6 +32,7 @@ import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.model.NotchSurface
 import org.jetbrains.compose.resources.stringResource
@@ -79,6 +80,14 @@ internal fun QuickView(
     showCalendar: Boolean = false,
     calendarEvent: String? = null,
     calendarEventCount: Int = 0,
+    /**
+     * Current-conditions chip (collapsed idle pill only): condition glyph +
+     * temperature left of the date. Null until a forecast loads, which hides
+     * the chip rather than showing a false reading.
+     */
+    showWeather: Boolean = false,
+    weather: WeatherData? = null,
+    fahrenheit: Boolean = false,
     /** Shared-element morph modifiers for the live-activity disc/title/rings. */
     discModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
@@ -239,7 +248,9 @@ internal fun QuickView(
                 battery = if (showBattery) battery else null,
                 deviceBattery = if (showDeviceBattery) deviceBattery else null,
                 notificationCount = notificationCount,
-                calendarEventCount = if (showCalendar) calendarEventCount else 0
+                calendarEventCount = if (showCalendar) calendarEventCount else 0,
+                weather = if (showWeather) weather else null,
+                fahrenheit = fahrenheit
             )
         } else {
             // Idle dots; the notification bell, when readable, caps the row.
