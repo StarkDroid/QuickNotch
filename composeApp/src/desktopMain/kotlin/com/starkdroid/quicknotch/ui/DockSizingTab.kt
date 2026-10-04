@@ -1,47 +1,30 @@
 package com.starkdroid.quicknotch.ui
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.*
 import com.starkdroid.quicknotch.media.NotificationCount
@@ -52,11 +35,9 @@ import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
-import com.starkdroid.quicknotch.theme.AccentIndigoLight
-import com.starkdroid.quicknotch.theme.AccentRed
 import com.starkdroid.quicknotch.theme.AppTypography
+import com.starkdroid.quicknotch.theme.SettingsBorder
 import com.starkdroid.quicknotch.theme.TextPrimary
-import com.starkdroid.quicknotch.theme.TextSecondary
 import java.util.Locale
 import org.jetbrains.compose.resources.stringResource
 
@@ -79,7 +60,7 @@ internal fun DockSizingTab(
 
     // Live unread count drives the notification helper row below the indicator
     // grid: null on macOS means Full Disk Access is still missing, so the row
-    // offers the Grant button that opens the Privacy &amp; Security pane. Once the
+    // offers the Grant button that opens the Privacy & Security pane. Once the
     // store is readable there is nothing left to configure, so the row hides.
     val notificationCount by NotificationCount.count.collectAsState()
     val notificationNeedsPermission = HostPlatform.isMac && notificationCount == null
@@ -91,12 +72,14 @@ internal fun DockSizingTab(
     ) {
         // Section 1: Appearance — silhouette picker, then the surface theme
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            TabEntrance(index = 0) {
+                SettingsCard {
+                    SectionHeader(
+                        Icons.Default.ZoomIn,
+                        stringResource(Res.string.notch_style),
+                        stringResource(Res.string.settings_appearance_desc)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                     AppearanceDropdown(
                         label = stringResource(Res.string.notch_style),
                         options = NotchStyle.entries.toList(),
@@ -105,7 +88,7 @@ internal fun DockSizingTab(
                         onSelect = { style -> onUpdate { it.copy(style = style) } },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     AppearanceDropdown(
                         label = stringResource(Res.string.surface_theme),
                         options = NotchSurface.entries.toList(),
@@ -120,12 +103,8 @@ internal fun DockSizingTab(
 
         // Section 2: Icon Fish-eye Magnification
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            TabEntrance(index = 1) {
+                SettingsCard {
                     SectionHeader(Icons.Default.ZoomIn, stringResource(Res.string.fisheye_title))
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -159,12 +138,8 @@ internal fun DockSizingTab(
 
         // Section 3: Notch Dimensions & Geometry
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            TabEntrance(index = 2) {
+                SettingsCard {
                     SectionHeader(Icons.Default.Straighten, stringResource(Res.string.geometry_title))
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -199,12 +174,8 @@ internal fun DockSizingTab(
         // Section 4: QuickView Indicators (moved here from the Now Playing
         // widget accordion — they tune the quickview, not the music widget).
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            TabEntrance(index = 3) {
+                SettingsCard {
                     SectionHeader(Icons.Default.Sensors, stringResource(Res.string.quickview_indicators_title))
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -267,7 +238,7 @@ internal fun DockSizingTab(
                     // toggle and only matters while the toggle is on.
                     if (config.widgets.showCollapsedWaveform) {
                         Spacer(modifier = Modifier.height(14.dp))
-                        HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                        HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
                         Spacer(modifier = Modifier.height(12.dp))
                         AppearanceDropdown(
                             label = stringResource(Res.string.waveform_tint_title),
@@ -300,7 +271,7 @@ internal fun DockSizingTab(
                     // Security pane; once the store reads the row disappears.
                     if (config.widgets.showCollapsedNotifications && notificationNeedsPermission) {
                         Spacer(modifier = Modifier.height(14.dp))
-                        HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
+                        HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
                         Spacer(modifier = Modifier.height(12.dp))
                         NotificationGrantRow(
                             hint = stringResource(Res.string.notification_grant_hint),
@@ -314,74 +285,35 @@ internal fun DockSizingTab(
 
         // Section 5: Idle clock in the quickview
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            TabEntrance(index = 4) {
+                SettingsCard {
                     SectionHeader(Icons.Default.Schedule, stringResource(Res.string.clock_title))
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.clock_show_date),
-                            style = AppTypography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary
-                        )
-                        MinimalistRectSwitch(
-                            checked = config.clockDate,
-                            onCheckedChange = { checked -> onUpdate { it.copy(clockDate = checked) } }
-                        )
-                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.clock_show_time),
-                            style = AppTypography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary
-                        )
-                        MinimalistRectSwitch(
-                            checked = config.clockTime,
-                            onCheckedChange = { checked -> onUpdate { it.copy(clockTime = checked) } }
-                        )
-                    }
+                    BehaviorSwitchRow(
+                        title = stringResource(Res.string.clock_show_date),
+                        checked = config.clockDate,
+                        onCheckedChange = { checked -> onUpdate { it.copy(clockDate = checked) } }
+                    )
+
+                    BehaviorSwitchRow(
+                        title = stringResource(Res.string.clock_show_time),
+                        checked = config.clockTime,
+                        onCheckedChange = { checked -> onUpdate { it.copy(clockTime = checked) } }
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    BehaviorSwitchRow(
+                        title = stringResource(Res.string.clock_24h),
+                        checked = config.clock24Hour,
+                        onCheckedChange = { checked -> onUpdate { it.copy(clock24Hour = checked) } }
+                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = FlatBorder.copy(alpha = 0.6f))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.clock_24h),
-                            style = AppTypography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary
-                        )
-                        MinimalistRectSwitch(
-                            checked = config.clock24Hour,
-                            onCheckedChange = { checked -> onUpdate { it.copy(clock24Hour = checked) } }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
 
                     AppearanceDropdown(
                         label = stringResource(Res.string.clock_date_format),
