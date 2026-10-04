@@ -1646,7 +1646,11 @@ composeApp/
   follow-up made each turn land decisively instead of reading as scrolling:
   `pageSpring` went 0.9/900 → 1.0/1600 (~200ms, critically damped) and an
   explicit reversal breaks the burst, so corrections never wait out the
-  quiet gap.
+  quiet gap. Final shape, after isolated flicks still moved several pages:
+  mid-stream re-arming is impossible to get right (every "fresh intent"
+  signal also occurs inside one long hard flick), so re-arm happens ONLY on
+  a 100ms quiet gap — no shove/rising/reversal exceptions — which momentum
+  (single-digit-ms gaps) can never fake but every human pause satisfies.
 
 ---
 
