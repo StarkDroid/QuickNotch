@@ -7,7 +7,7 @@
 		<priority>1.0</priority>
 		<image:image>
 			<image:loc>https://quicknotch.app/og.png</image:loc>
-			<image:title>QuickNotch, a Dynamic Island–style app launcher for Windows and macOS</image:title>
+				<image:title>QuickNotch, a floating notch app launcher for Windows and macOS</image:title>
 		</image:image>
 	</url>
 </urlset>

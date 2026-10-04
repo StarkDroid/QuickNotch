@@ -21,14 +21,14 @@ export const site = {
 	currency: 'USD',
 	tagline: 'One tiny notch. Apps, weather, stats and more.',
 	description:
-		'QuickNotch is a free Dynamic Island-style notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
+		'QuickNotch is a free floating notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
 	shortDescription:
-		'A free Dynamic Island-style notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
+		'A free floating notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
 	keywords: [
 		'app launcher',
 		'floating dock',
-		'Dynamic Island for desktop',
+		'Floating notch for desktop',
 		'MacBook notch alternative',
 		'macOS app launcher',
 		'Windows app launcher',
@@ -77,7 +77,7 @@ export const hero = {
 	badge: 'a notchful of good stuff · 100% free',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'A Dynamic Island-style notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around, without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
+	sub: 'A notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around, without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
 	primaryCta: 'Download for free',
 	secondaryCta: 'See how it works',
 	trust: ['No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
@@ -119,7 +119,7 @@ export const launch = {
 	items: [
 		{
 			title: 'Hover to expand',
-			body: 'Rest over the notch and it grows into an app dock, exactly the way a Dynamic Island does. No clicks, no menu, no fumbling.'
+			body: 'Rest over the notch and it grows into an app dock. No clicks, no menu, no fumbling.'
 		},
 		{
 			title: 'Always on top',

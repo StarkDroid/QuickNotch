@@ -15,8 +15,9 @@ enum class NotchStyle(
     /** Round every corner into a capsule, vs. keeping the edge side square. */
     val capsule: Boolean
 ) {
-    /** Flush to the edge, inner corners rounded — the Dynamic-Island default. */
-    DYNAMIC_ISLAND(0, false),
+    /** Flush to the edge, inner corners rounded — the default. */
+    @SerialName("DYNAMIC_ISLAND")
+    NOTCH(0, false),
 
     /** Detached stadium-shaped pill floating a few points off the edge. */
     FLOATING_PILL(14, true),
@@ -145,7 +146,7 @@ enum class ClockDateFormat(val pattern: String) {
 @Immutable
 @Serializable
 data class NotchConfig(
-    val style: NotchStyle = NotchStyle.DYNAMIC_ISLAND,
+    val style: NotchStyle = NotchStyle.NOTCH,
 
     /**
      * Set once the first-run onboarding has been walked through (or skipped

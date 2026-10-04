@@ -152,7 +152,7 @@ fun SettingsScreen(
     val onResetDefaults: () -> Unit = {
         repository.updateConfig {
             it.copy(
-                style = NotchStyle.DYNAMIC_ISLAND,
+                style = NotchStyle.NOTCH,
                 surface = NotchSurface.SOLID,
                 dockScaleFactor = 1.35f,
                 baseIconSizeDp = 38,
@@ -402,7 +402,7 @@ private fun ContentHeaderReset(onReset: () -> Unit) {
 @Composable
 internal fun NotchStyle.label(): String = stringResource(
     when (this) {
-        NotchStyle.DYNAMIC_ISLAND -> Res.string.style_default
+        NotchStyle.NOTCH -> Res.string.style_default
         NotchStyle.FLOATING_PILL -> Res.string.style_floating_pill
         NotchStyle.DRAG_HANDLE -> Res.string.style_drag_handle
     }

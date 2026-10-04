@@ -197,7 +197,7 @@ fun quickViewIndicatorSlots(
  * Computes the top-left screen coordinate (in AWT points) for the overlay
  * window, hugging the top edge of the chosen screen and centred along it. On
  * macOS the notch hugs the very top of the panel ([hugMenuBar]) so it reads as
- * a real Dynamic Island. [edgeGapPx] floats capsule styles off the edge by
+ * a real top-edge notch. [edgeGapPx] floats capsule styles off the edge by
  * insetting the anchored coordinate, leaving the gap as ordinary desktop
  * (click-through) rather than dead window area.
  */
@@ -220,7 +220,7 @@ fun overlayScreenLocation(
 /**
  * Rounds only the two corners facing away from the anchored edge; the corners
  * touching the screen edge stay square so the notch reads as flush with the
- * display, like the hardware Dynamic Island.
+ * display, like a hardware notch.
  */
 internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape {
     if (style.capsule) {

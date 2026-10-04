@@ -154,7 +154,7 @@ internal object MacAppKit {
 }
 
 /**
- * macOS-only per-overlay controller that gives the notch its Dynamic Island
+ * macOS-only per-overlay controller that gives the notch its above-menu-bar
  * home: raised above the menu bar, flush against the true top of the screen
  * (AWT cannot reach that position — it clamps placement to the visible area),
  * joining every Space and surviving full-screen apps.

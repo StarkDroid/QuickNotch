@@ -1,7 +1,7 @@
 <resources>
     <!-- App / header -->
     <string name="app_name">QuickNotch</string>
-    <string name="settings_tagline">Dynamic Island &amp; Floating Dock Customizer</string>
+    <string name="settings_tagline">Notch &amp; Floating Dock Customizer</string>
     <string name="about">About</string>
     <string name="close">Close</string>
     <string name="clear">Clear</string>
@@ -10,7 +10,7 @@
     <string name="menu_settings">Settings</string>
     <string name="onboarding_window_title">Welcome to QuickNotch</string>
     <string name="onboarding_welcome_title">Meet QuickNotch</string>
-    <string name="onboarding_welcome_subtitle">A Dynamic-Island-style notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later.</string>
+    <string name="onboarding_welcome_subtitle">A notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later.</string>
     <string name="onboarding_feature_apps">Launch your pinned apps with a click</string>
     <string name="onboarding_feature_media">See what is playing and control it</string>
     <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
@@ -183,7 +183,7 @@ Add apps from the list on the right.</string>
     <string name="about_product_name">QuickNotch Desktop</string>
     <string name="about_version">Version %1$s</string>
     <string name="app_version">1.0.0</string>
-    <string name="about_description">Dynamic Island &amp; Dock floating app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.</string>
+    <string name="about_description">Floating notch &amp; dock app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.</string>
     <string name="about_tag_kotlin">Kotlin</string>
     <string name="about_tag_compose">Compose Desktop</string>
     <string name="about_tag_macos">macOS</string>

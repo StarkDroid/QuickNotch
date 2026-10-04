@@ -198,7 +198,7 @@ compose.desktop {
             packageName = "QuickNotch"
             vendor = "StarkDroid"
             packageVersion = project.version.toString()
-            description = "Dynamic Island & Dock floating app launcher for Windows and macOS"
+            description = "Floating notch and dock app launcher for Windows and macOS"
             copyright = "© 2025 StarkDroid. All rights reserved."
             windows {
                 iconFile.set(project.file("quicknotch.ico"))

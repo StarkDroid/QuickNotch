@@ -101,7 +101,7 @@ jobs:
           $body = @"
           # QuickNotch v$newVer
 
-          A sleek, ultra-responsive macOS Dynamic Island & Dock floating app launcher for Windows 10 & 11.
+          A sleek, ultra-responsive floating notch and dock app launcher for Windows and macOS.
 
           ### 📦 Installation Packages & Checksums (SHA-256)
 

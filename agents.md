@@ -7,7 +7,7 @@ touch against the code — the file the comment narrates is the source of truth.
 
 ## 1. What this project is
 
-**QuickNotch** is a Dynamic-Island-style floating dock for **Windows 10/11** and
+**QuickNotch** is a floating notch-and-dock for **Windows 10/11** and
 **macOS 12+**: a small pill pinned to the top-centre of the screen. Hover it →
 it expands into a dock of pinned apps (fisheye magnification, launch on click),
 plus a growing set of **widgets**: a now-playing "live activity" (vinyl disc,
@@ -15,7 +15,7 @@ marquee title, volume + device-battery level rings, transport controls, seekable
 gradient progress bar) and an idle clock (date/time) in the quickview.
 
 On macOS the pill lives **inside the menu-bar band, flush against the true top
-of the screen** (above the menu bar itself — a real Dynamic Island placement),
+of the screen** (above the menu bar itself — a real top-edge notch placement),
 joins every Space and survives full-screen apps while Always-on-top is on. That
 position is unreachable through AWT, so an ObjC bridge parks/keeps the window
 there (see 5.10/5.11). The app is a **quiet agent when only the notch is open**
@@ -424,7 +424,7 @@ Dock-presence work. Findings in brief:
 - **AWT/Compose limits on macOS** (verified against JDK 17 source and live):
   `setAlwaysOnTop` tops out at `NSFloatingWindowLevel` (3) — *below* the menu bar
   (24) — and placement clamps to the visible frame (y ≥ menu-bar height). A
-  Dynamic Island therefore cannot live above the menu bar via AWT. `locationOnScreen`
+  A top-edge notch therefore cannot live above the menu bar via AWT. `locationOnScreen`
   returns a *cached* origin that never observes direct Cocoa frame moves, so any
   AWT-side screen math (hover gating, passthrough) drifts exactly by the menu-bar
   height once the window is parked above it.
@@ -787,7 +787,7 @@ composeApp/
     stale the moment Cocoa moves the window** (both verified live + in JDK 17
     source). `setAlwaysOnTop(true)` maps to `NSFloatingWindowLevel` (3) — below
     the menu bar's `kCGMainMenuWindowLevel` (24) — and AWT placement clamps to
-    the visible frame (y ≥ menu-bar height), so a Dynamic Island always parks
+    the visible frame (y ≥ menu-bar height), so a top-edge notch always parks
     *under* the menu bar ("below the screen"). Both are fixed by the compiled
     bridge: `NSStatusWindowLevel` (25) + `frame-top-gap` + the Spaces collection
     behavior, re-asserted on a ~700 ms reconcile loop because Compose placement
