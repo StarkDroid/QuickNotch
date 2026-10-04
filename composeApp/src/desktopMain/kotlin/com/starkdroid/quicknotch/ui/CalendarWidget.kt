@@ -76,9 +76,11 @@ import com.starkdroid.quicknotch.generated.resources.calendar_refresh
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
 import com.starkdroid.quicknotch.generated.resources.calendar_today_count
 import com.starkdroid.quicknotch.generated.resources.calendar
-import com.starkdroid.quicknotch.theme.AccentIndigoLight
+import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.NotchBorder
+import com.starkdroid.quicknotch.theme.SettingsBorder
+import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
@@ -155,12 +157,12 @@ internal fun CalendarWidget(
 
             // A small switch row rather than an indicator cell: the calendar is
             // not a level ring, so there is nothing meaningful to preview.
-            Row(
+                Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(FlatCard)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SettingsElevated)
+                    .border(1.dp, SettingsBorder, RoundedCornerShape(12.dp))
                     .clickable { onShowInQuickViewChange(!showInQuickView) }
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -261,7 +263,7 @@ private fun CalendarConnectRow(
                 Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(15.dp),
-                        color = AccentIndigoLight,
+                        color = AccentSolid,
                         strokeWidth = 2.dp
                     )
                 }
@@ -276,7 +278,7 @@ private fun CalendarConnectRow(
                     Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(15.dp),
-                            color = AccentIndigoLight,
+                            color = AccentSolid,
                             strokeWidth = 2.dp
                         )
                     }
@@ -307,8 +309,8 @@ private fun CalendarActionChip(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (tinted) FlatSurfaceElevated else AccentIndigoLight)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (tinted) SettingsElevated else AccentSolid)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
@@ -384,7 +386,7 @@ internal fun CalendarNotchPage(
         ) {
             CircularProgressIndicator(
                 modifier = Modifier.size(15.dp),
-                color = AccentIndigoLight,
+                color = AccentSolid,
                 strokeWidth = 2.dp
             )
         }

@@ -107,7 +107,11 @@ import com.starkdroid.quicknotch.theme.AccentCyan
 import com.starkdroid.quicknotch.theme.AccentGreen
 import com.starkdroid.quicknotch.theme.AccentIndigo
 import com.starkdroid.quicknotch.theme.AccentRed
+import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
+import com.starkdroid.quicknotch.theme.SettingsBorder
+import com.starkdroid.quicknotch.theme.SettingsCard
+import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
@@ -182,9 +186,9 @@ internal fun PinnedAppsTab(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            colors = CardDefaults.cardColors(containerColor = FlatSurface),
-            border = BorderStroke(1.dp, FlatBorder),
-            shape = RoundedCornerShape(12.dp)
+            colors = CardDefaults.cardColors(containerColor = SettingsCard),
+            border = BorderStroke(1.dp, SettingsBorder),
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
@@ -202,8 +206,9 @@ internal fun PinnedAppsTab(
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(FlatSurfaceElevated)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(SettingsElevated)
+                                .border(1.dp, SettingsBorder, RoundedCornerShape(6.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
@@ -299,9 +304,9 @@ internal fun PinnedAppsTab(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            colors = CardDefaults.cardColors(containerColor = FlatSurface),
-            border = BorderStroke(1.dp, FlatBorder),
-            shape = RoundedCornerShape(12.dp)
+            colors = CardDefaults.cardColors(containerColor = SettingsCard),
+            border = BorderStroke(1.dp, SettingsBorder),
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Text(
@@ -326,9 +331,9 @@ internal fun PinnedAppsTab(
                         modifier = Modifier
                             .weight(1f)
                             .height(44.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(FlatCard)
-                            .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SettingsElevated)
+                            .border(1.dp, SettingsBorder, RoundedCornerShape(10.dp))
                             .clickable { searchFocus.requestFocus() }
                             .padding(horizontal = 10.dp),
                         contentAlignment = Alignment.CenterStart
@@ -394,9 +399,9 @@ internal fun PinnedAppsTab(
                             )?.let(onAddFavorite)
                         },
                         modifier = Modifier.height(44.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
-                        border = BorderStroke(1.dp, FlatBorder),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SettingsElevated),
+                        border = BorderStroke(1.dp, SettingsBorder),
+                        shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp)
                     ) {
                         Icon(Icons.Default.FolderOpen, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
@@ -473,7 +478,7 @@ internal fun AppIconSlot(
         modifier = Modifier
             .size(boxSize)
             .clip(RoundedCornerShape(corner))
-            .background(FlatSurfaceElevated),
+            .background(SettingsElevated),
         contentAlignment = Alignment.Center
     ) {
         key(id) {
@@ -546,9 +551,13 @@ internal fun PinnedAppRow(
         modifier = modifier
             .fillMaxWidth()
             .onSizeChanged { onHeightChanged(it.height) }
-            .clip(RoundedCornerShape(8.dp))
-            .background(FlatCard)
-            .border(1.dp, if (isDragging) AccentCyan else FlatBorder, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isDragging) SettingsElevated else SettingsElevated)
+            .border(
+                1.dp,
+                if (isDragging) AccentSolid else SettingsBorder,
+                RoundedCornerShape(10.dp)
+            )
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -623,9 +632,9 @@ internal fun AvailableAppRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(FlatCard)
-            .border(1.dp, FlatBorder.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(SettingsElevated)
+            .border(1.dp, SettingsBorder.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
             .padding(horizontal = 9.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -661,15 +670,15 @@ internal fun AvailableAppRow(
         } else {
             Button(
                 onClick = onAdd,
-                modifier = Modifier.height(26.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = FlatSurfaceElevated),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(5.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                modifier = Modifier.height(28.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SettingsCard),
+                border = BorderStroke(1.dp, SettingsBorder),
+                shape = RoundedCornerShape(7.dp),
+                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp)
             ) {
-                Icon(Icons.Default.Add, stringResource(Res.string.add), tint = AccentCyan, modifier = Modifier.size(13.dp))
+                Icon(Icons.Default.Add, stringResource(Res.string.add), tint = AccentSolid, modifier = Modifier.size(13.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text(stringResource(Res.string.add), color = AccentCyan, style = AppTypography.labelSmall, fontSize = 11.sp)
+                Text(stringResource(Res.string.add), color = AccentSolid, style = AppTypography.labelSmall, fontSize = 11.sp)
             }
         }
     }
