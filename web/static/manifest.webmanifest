@@ -1,5 +1,5 @@
 {
-	"name": "QuickNotch — floating app launcher for Windows and macOS",
+	"name": "QuickNotch, floating app launcher for Windows and macOS",
 	"short_name": "QuickNotch",
 	"description": "A Dynamic Island–style floating notch and dock that pins apps so you can launch them from anywhere on Windows and macOS.",
 	"start_url": "/",

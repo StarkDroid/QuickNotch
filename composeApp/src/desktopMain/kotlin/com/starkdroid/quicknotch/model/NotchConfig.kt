@@ -26,12 +26,12 @@ enum class NotchStyle(
 }
 
 /**
- * The body's material. Both entries resolve to statically cached brushes, so
- * neither adds per-frame shader work on the software renderer. [TRANSLUCENT]
- * is a deliberately texture-free glass: a tinted body that lets the desktop
- * bleed through the transparent window plus a smooth light sheen. A literal
- * blur of the pixels behind a borderless window is unreachable from Compose
- * without a native screen-capture loop.
+ * The body's material. All entries resolve to brushes built once and cached, so
+ * none is rebuilt per frame while the island animates. [TRANSLUCENT] and
+ * [SYSTEM_ACCENT] are deliberately texture-free glass: a tinted body that lets
+ * the desktop bleed through the transparent window plus a smooth light sheen.
+ * A literal blur of the pixels behind a borderless window is unreachable from
+ * Compose without a native screen-capture loop.
  */
 @Serializable
 enum class NotchSurface {
@@ -40,7 +40,26 @@ enum class NotchSurface {
 
     /** Translucent, smooth glass. (Serialised as the former name "BLUR".) */
     @SerialName("BLUR")
-    TRANSLUCENT
+    TRANSLUCENT,
+
+    /** Glass tinted with the desktop's accent colour (macOS/Windows). */
+    @SerialName("SYSTEM_ACCENT")
+    SYSTEM_ACCENT
+}
+
+/**
+ * What colour the collapsed pill's waveform bars take. [ALBUM_ART] derives a
+ * tint from the current cover once per track (see `dominantArtTint`); [WHITE]
+ * keeps them a constant white. A missing or unreadable cover falls back to
+ * white rather than inventing a colour.
+ */
+@Serializable
+enum class WaveformTint {
+    /** Dominant colour of the album artwork, pushed into a legible band. */
+    ALBUM_ART,
+
+    /** Plain white bars. */
+    WHITE
 }
 
 /**
@@ -52,11 +71,43 @@ enum class NotchSurface {
 @Serializable
 data class WidgetsConfig(
     val pinnedAppsEnabled: Boolean = true,
-    val nowPlayingEnabled: Boolean = true
+    val nowPlayingEnabled: Boolean = true,
+    /** Collapsed-pill indicator toggles; the expanded music page always shows volume + audio battery. */
+    val showCollapsedVolume: Boolean = true,
+    val showCollapsedBattery: Boolean = true,
+    /** System (laptop) battery indicator; quickview only, beside the clock. */
+    val showCollapsedDeviceBattery: Boolean = true,
+    /**
+     * Unread-notification indicator (bell + red badge, quickview only). The
+     * slot also drives the permission/test-notification helpers in settings.
+     */
+    val showCollapsedNotifications: Boolean = true,
+    /**
+     * Equalizer bars under the collapsed title while a track is live. Lives in
+     * the title's own slot (no new indicator slot, so the footprint math is
+     * untouched) and hides the edge progress strip for as long as it is on.
+     * Never rendered in the expanded music page.
+     */
+    val showCollapsedWaveform: Boolean = true,
+    /**
+     * Google Calendar in the collapsed pill: a mail glyph badged with today's
+     * event count, and the event title on a ticker while an event is live.
+     * Requires a connection (see the Calendar widget in the Widgets tab).
+     */
+    val showCalendar: Boolean = false,
+    /** Album-art-derived or constant white; see [WaveformTint]. */
+    val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
+    /**
+     * While the waveform is on, drop the song name from the collapsed pill: the
+     * live view then reads as disc + analyser + level rings only, and the bars
+     * get the whole title frame (18dp instead of a 7dp band). Meaningless with
+     * the waveform off, so the settings row appears only inside that section.
+     */
+    val waveformHidesTitle: Boolean = false
 )
 
 /**
- * Date layouts for the idle clock shown in the collapsed pill (while nothing
+ * Date layouts for the idle clock shown in the quickview (while nothing
  * is playing). The pattern is [java.time.format.DateTimeFormatter] syntax and
  * the dropdown renders a live example, so users pick the exact look they get.
  */
@@ -87,19 +138,30 @@ enum class ClockDateFormat(val pattern: String) {
 @Serializable
 data class NotchConfig(
     val style: NotchStyle = NotchStyle.DYNAMIC_ISLAND,
+
+    /**
+     * Set once the first-run onboarding has been walked through (or skipped
+     * through): the notch overlay does not exist until then, because the user
+     * is still configuring the pill it would draw. Defaults false, so a config
+     * written before this field existed runs onboarding once on next launch.
+     */
+    val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
     val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,
     val baseIconSizeDp: Int = 38,
-    val collapsedPillWidthDp: Int = 150,
-    val collapsedPillHeightDp: Int = 30,
+    /** Quickview (collapsed pill) footprint; serialised under the old names so existing files load. */
+    @SerialName("collapsedPillWidthDp")
+    val quickViewWidthDp: Int = 150,
+    @SerialName("collapsedPillHeightDp")
+    val quickViewHeightDp: Int = 30,
     val expandedNotchHeightDp: Int = 78,
     val autoStartOnBoot: Boolean = false,
     val alwaysOnTop: Boolean = true,
     val showTooltips: Boolean = true,
     val hideOnAppLaunch: Boolean = false,
     val collapseDelayMs: Long = 400L,
-    // Idle clock in the collapsed pill: replaces the idle dots whenever either
+    // Idle clock in the quickview: replaces the idle dots whenever either
     // piece is on. Old config files load fine (missing fields take these
     // defaults via kotlinx.serialization).
     val clockDate: Boolean = true,

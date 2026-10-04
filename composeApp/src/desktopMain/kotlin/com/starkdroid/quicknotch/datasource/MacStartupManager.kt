@@ -47,10 +47,13 @@ object MacStartupManager {
         val command = info.command().orElse(null) ?: return emptyList()
         val args = info.arguments().orElse(emptyArray()).toList()
         val packagedApp = findEnclosingAppBundle(File(command))
+        // Tag the login-item command with the marker so the app can tell a boot
+        // auto-start (stay quietly in the tray) from a manual launch (open the
+        // Settings window).
         return if (packagedApp != null) {
-            listOf("/usr/bin/open", "-a", packagedApp.absolutePath)
+            listOf("/usr/bin/open", "-a", packagedApp.absolutePath, "--args", StartupManager.LAUNCHED_AT_LOGIN_ARG)
         } else {
-            listOf(command) + args
+            listOf(command) + args + StartupManager.LAUNCHED_AT_LOGIN_ARG
         }
     }
 

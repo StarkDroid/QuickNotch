@@ -6,7 +6,11 @@ import com.starkdroid.quicknotch.model.AppItem
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
-import com.sun.jna.platform.win32.*
+import com.sun.jna.platform.win32.Guid
+import com.sun.jna.platform.win32.GDI32
+import com.sun.jna.platform.win32.WinDef
+import com.sun.jna.platform.win32.WinGDI
+import com.sun.jna.platform.win32.WinNT
 import com.sun.jna.ptr.PointerByReference
 import com.sun.jna.win32.StdCallLibrary
 import com.sun.jna.win32.W32APIOptions
@@ -28,10 +32,8 @@ object Win32ShellIconLoader {
     private val IID_IImageList = Guid.GUID.fromString("{46EB5926-582E-4017-9FDF-E8998DAA0950}")
     private const val SHIL_JUMBO = 4       // 256x256
     private const val SHIL_EXTRALARGE = 2  // 48x48
-    private const val SHIL_LARGE = 0       // 32x32
     private const val SHGFI_SYSICONINDEX = 0x000004000
     private const val SHGFI_ICON = 0x000000100
-    private const val SHGFI_SMALLICON = 0x000000001
     private const val ILD_TRANSPARENT = 0x00000001
     private const val DI_NORMAL = 0x0003
 

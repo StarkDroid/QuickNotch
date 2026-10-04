@@ -1,62 +1,63 @@
 package com.starkdroid.quicknotch.ui
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Minimize
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
-import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.always_on_top_title
+import com.starkdroid.quicknotch.generated.resources.autostart_title_mac
+import com.starkdroid.quicknotch.generated.resources.autostart_title_windows
+import com.starkdroid.quicknotch.generated.resources.behavior_header
+import com.starkdroid.quicknotch.generated.resources.collapse_on_launch_title
+import com.starkdroid.quicknotch.generated.resources.settings_behavior_desc
+import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
-import com.starkdroid.quicknotch.theme.*
+import com.starkdroid.quicknotch.theme.SettingsBorder
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun BehaviorTab(
-    config: NotchConfig,
-    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit
+    repository: FavoritesRepository
 ) {
+    // The tab owns its config subscription so toggling a switch recomposes
+    // only this tab.
+    val config by repository.config.collectAsState()
+    val onUpdate: ((NotchConfig) -> NotchConfig) -> Unit = { transform ->
+        repository.updateConfig(transform)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = FlatSurface),
-                border = BorderStroke(1.dp, FlatBorder),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text(
-                        text = stringResource(Res.string.behavior_header),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+            TabEntrance(index = 0) {
+                SettingsCard {
+                    SectionHeader(
+                        Icons.Default.PowerSettingsNew,
+                        stringResource(Res.string.behavior_header),
+                        stringResource(Res.string.settings_behavior_desc)
                     )
-
+                    Spacer(modifier = Modifier.height(10.dp))
                     BehaviorSwitchRow(
+                        icon = Icons.Default.PowerSettingsNew,
                         title = stringResource(
                             if (HostPlatform.isMac) Res.string.autostart_title_mac
                             else Res.string.autostart_title_windows
-                        ),
-                        subtitle = stringResource(
-                            if (HostPlatform.isMac) Res.string.autostart_desc_mac
-                            else Res.string.autostart_desc_windows
                         ),
                         checked = config.autoStartOnBoot,
                         onCheckedChange = { checked ->
@@ -65,22 +66,22 @@ internal fun BehaviorTab(
                         }
                     )
 
-                    HorizontalDivider(color = FlatBorder)
+                    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
 
                     BehaviorSwitchRow(
+                        icon = Icons.Default.PushPin,
                         title = stringResource(Res.string.always_on_top_title),
-                        subtitle = stringResource(Res.string.always_on_top_desc),
                         checked = config.alwaysOnTop,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(alwaysOnTop = checked) }
                         }
                     )
 
-                    HorizontalDivider(color = FlatBorder)
+                    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
 
                     BehaviorSwitchRow(
+                        icon = Icons.Default.Minimize,
                         title = stringResource(Res.string.collapse_on_launch_title),
-                        subtitle = stringResource(Res.string.collapse_on_launch_desc),
                         checked = config.hideOnAppLaunch,
                         onCheckedChange = { checked ->
                             onUpdate { it.copy(hideOnAppLaunch = checked) }
@@ -89,38 +90,5 @@ internal fun BehaviorTab(
                 }
             }
         }
-    }
-}
-
-@Composable
-internal fun BehaviorSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = AppTypography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
-            )
-            Text(
-                text = subtitle,
-                style = AppTypography.bodySmall,
-                color = TextSecondary,
-                fontSize = 12.sp
-            )
-        }
-        MinimalistRectSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
     }
 }

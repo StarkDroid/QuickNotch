@@ -9,7 +9,7 @@
 	 * exactly what rich-result validators complain about.
 	 */
 
-	const title = 'QuickNotch — Free Dynamic Island app launcher & dock for Windows and macOS';
+	const title = 'QuickNotch: Free Dynamic Island app launcher & dock for Windows and macOS';
 	const canonical = `${site.url}/`;
 	const ogImage = `${site.url}/og.png`;
 	const logo = `${site.url}/icon-512.png`;

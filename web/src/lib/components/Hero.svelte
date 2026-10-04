@@ -234,7 +234,7 @@
 			>
 				<ScreenFrame tall>
 					{#snippet notch()}
-						<NotchWidgetDemo theme="amoled" label="Notch widgets — scroll to change" />
+						<NotchWidgetDemo theme="amoled" label="Notch widgets, scroll to change" />
 					{/snippet}
 				</ScreenFrame>
 			</div>

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Launches pinned applications. Windows uses cmd/UWP shell; macOS uses `open`.
@@ -116,15 +117,55 @@ object AppLauncher {
         }
     }
 
-    private fun browse(url: String) {
+    /**
+     * Open a URL in the user's browser. Public because the calendar's OAuth
+     * consent screen is just another link to hand to the OS, so it reuses this
+     * path rather than growing a second one.
+     *
+     * `open` goes first on purpose. [Desktop.browse] is the tidier API and was
+     * tried first, but it can return normally without a browser having actually
+     * opened — a no-op is indistinguishable from success from here, and this call
+     * sits in the middle of a handshake whose whole failure mode is silence.
+     * A spawned `open` at least has an exit code, and both outcomes are logged
+     * so a packaged app (which has no console anyone can read) leaves a trace.
+     */
+    fun browse(url: String) {
         if (HostPlatform.isMac) {
-            ProcessBuilder("open", url).start()
-            return
+            if (spawnAndReap("open", url)) return
+            AppLog.line("open handed off nothing; trying AWT instead")
         }
-        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-            Desktop.getDesktop().browse(java.net.URI(url))
+        val uri = runCatching { java.net.URI(url) }.getOrNull()
+        if (uri != null && Desktop.isDesktopSupported() &&
+            runCatching { Desktop.getDesktop().isSupported(Desktop.Action.BROWSE) }.getOrDefault(false)
+        ) {
+            runCatching { Desktop.getDesktop().browse(uri) }
+                .onSuccess { AppLog.line("opened a link in the browser via AWT") }
+                .onFailure { AppLog.line("AWT browse failed too: ${it.message}") }
         } else {
-            ProcessBuilder("cmd.exe", "/c", "start", "", url).start()
+            AppLog.line("no way to open a browser for a link")
         }
+    }
+
+    /**
+     * Spawn the OS hand-off and reap it, so a child is never left behind.
+     * Returns whether it looked like it worked: `open` exits non-zero when it
+     * cannot hand the URL over, which is a real answer rather than a guess.
+     */
+    private fun spawnAndReap(vararg command: String): Boolean = runCatching {
+        val process = ProcessBuilder(*command).start()
+        // Drain the child's pipes so a chatty one cannot fill them and wedge.
+        process.inputStream.close()
+        process.errorStream.close()
+        if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            AppLog.line("handing a link to the browser timed out (${command.first()})")
+            return@runCatching false
+        }
+        val code = process.exitValue()
+        AppLog.line("handed a link to the browser via ${command.first()} (exit $code)")
+        code == 0
+    }.getOrElse {
+        AppLog.line("could not hand a link to the browser: ${it.message}")
+        false
     }
 }

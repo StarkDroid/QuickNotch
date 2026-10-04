@@ -1,15 +1,19 @@
 #
 #  volume.ps1
 #
-#  Prints the current system master-volume percentage (0-100) as a single
-#  plain line. SMTC carries no volume, so the music widget gets this from the
-#  OS directly — the same endpoint the volume flyout reflects (the default
-#  render device's master volume, the user's active playback mix).
+#  Prints the current system master volume as one plain line:
+#    "<percent>,<muted>"   e.g. "40,False"
+#  or, when invoked with `-Action toggle|mute|unmute`, flips the mute flag of
+#  the default render device (no output). SMTC carries no volume, so the music
+#  widget reads this from the OS directly — the same endpoint the volume
+#  flyout reflects (the default render device's master volume + mute).
 #
 #  The CoreAudio COM API (MMDeviceEnumerator -> IAudioEndpointVolume) is not
-#  scriptable from PowerShell, so the whole read lives in a tiny C# helper
-#  compiled on the fly with Add-Type and driven through COM interop.
+#  scriptable from PowerShell, so the whole read/write lives in a tiny C#
+#  helper compiled on the fly with Add-Type and driven through COM interop.
 #
+
+param([string]$Action = "get")
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -62,26 +66,50 @@ namespace QuickNotchAudio {
     public static class VolumeReader {
         private static readonly Guid EndpointVolumeIid = Guid.Parse("5CDF2C82-841E-4546-9722-0CF74078229A");
 
-        public static int GetPercent() {
+        private static IAudioEndpointVolume OpenEndpoint() {
             var manager = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
             IMMDevice device;
             manager.GetDefaultAudioEndpoint(0, 1, out device); // eRender, eMultimedia
             Guid iid = EndpointVolumeIid;
             IntPtr unk = device.Activate(ref iid, 0x17, IntPtr.Zero);
+            var endpoint = (IAudioEndpointVolume)Marshal.GetObjectForIUnknown(unk);
+            Marshal.Release(unk);
+            return endpoint;
+        }
+
+        public static string GetState() {
+            var endpoint = OpenEndpoint();
             try {
-                var endpoint = (IAudioEndpointVolume)Marshal.GetObjectForIUnknown(unk);
                 float level;
                 endpoint.GetMasterVolumeLevelScalar(out level);
                 float percent = level * 100f;
                 if (percent < 0f) percent = 0f;
                 if (percent > 100f) percent = 100f;
-                return (int)Math.Round(percent);
+                bool mute;
+                endpoint.GetMute(out mute);
+                return ((int)Math.Round(percent)) + "," + (mute ? "True" : "False");
             } finally {
-                Marshal.Release(unk);
+                Marshal.ReleaseComObject(endpoint);
+            }
+        }
+
+        public static void SetMute(bool mute) {
+            var endpoint = OpenEndpoint();
+            try {
+                endpoint.SetMute(mute, Guid.Empty);
+            } finally {
+                Marshal.ReleaseComObject(endpoint);
             }
         }
     }
 }
-"@
 
-[QuickNotchAudio.VolumeReader]::GetPercent()
+switch ($Action) {
+    "get"    { [QuickNotchAudio.VolumeReader]::GetState() }
+    "mute"   { [QuickNotchAudio.VolumeReader]::SetMute($true) }
+    "unmute" { [QuickNotchAudio.VolumeReader]::SetMute($false) }
+    "toggle" {
+        $state = [QuickNotchAudio.VolumeReader]::GetState().Split(',')[1]
+        [QuickNotchAudio.VolumeReader]::SetMute($state -ne "True")
+    }
+}

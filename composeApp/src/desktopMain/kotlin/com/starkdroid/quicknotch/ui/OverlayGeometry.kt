@@ -3,7 +3,11 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import com.starkdroid.quicknotch.media.AudioDeviceBattery
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import java.awt.Insets
@@ -37,6 +41,8 @@ internal object DockLayout {
      * the expanded dock; the apps page is narrower, so the window widens to
      * this whenever the music page is active.
      */
+    /** Five date tiles need their own room even when no dock or music page does. */
+    val CalendarPageWidth = 348.dp
     val NowPlayingWidth: Dp = 356.dp
 
     /**
@@ -44,10 +50,18 @@ internal object DockLayout {
      * art + marquee title + play/pause in the island's slim cross-section.
      */
     val LiveCollapsedWidth: Dp = 236.dp
+
+    /**
+     * Extra quickview length per indicator shown in the idle pill (22dp ring or
+     * bell + 6dp spacing). The idle pill widens by this per indicator so
+     * date/time + device battery + laptop battery + notifications all coexist
+     * without clipping, mirroring how the live pill already grows to its rings.
+     */
+    val QuickViewIndicatorSlot: Dp = 28.dp
 }
 
 /**
- * The window footprint (in dp) for both the collapsed pill and the expanded
+ * The window footprint (in dp) for both the quickview and the expanded
  * dock.
  */
 @Immutable
@@ -80,12 +94,20 @@ data class NotchMetrics(
  * removes the dead space that used to flank the icons. When the now-playing
  * page is live it is wider than the apps page, so the window widens to that
  * page — the apps page keeps its own (narrower) layout, centred.
+ *
+ * [indicatorSlots] is the count of indicators actually rendered in the idle
+ * quickview next to the clock (connected-device + laptop battery rings, plus the
+ * notification bell); the collapsed footprint grows by one slot per indicator so
+ * nothing is ever clipped by the configured pill width.
  */
 fun computeNotchMetrics(
     config: NotchConfig,
     favoriteCount: Int,
-    musicActive: Boolean = false
+    musicActive: Boolean = false,
+    indicatorSlots: Int = 0,
+    calendarActive: Boolean = false
 ): NotchMetrics {
+    val calendarActiveWidth = if (calendarActive) DockLayout.CalendarPageWidth else 0.dp
     val base = config.baseIconSizeDp.dp
     val count = favoriteCount.coerceAtLeast(0)
 
@@ -96,9 +118,10 @@ fun computeNotchMetrics(
                 DockLayout.AlongSafety
         } else 0.dp
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
-    val alongExpanded = maxOf(appsAlong, musicAlong)
+    val alongExpanded = maxOf(appsAlong, musicAlong, calendarActiveWidth)
     val alongCollapsed = maxOf(
-        config.collapsedPillWidthDp.dp + DockLayout.CollapsedMargin,
+        config.quickViewWidthDp.dp + DockLayout.CollapsedMargin +
+            DockLayout.QuickViewIndicatorSlot * indicatorSlots.coerceAtLeast(0),
         if (musicActive) DockLayout.LiveCollapsedWidth else 0.dp
     )
 
@@ -108,7 +131,7 @@ fun computeNotchMetrics(
     // pill, so it recedes into the edge when idle.
     val collapsedHeightDp =
         if (config.style == NotchStyle.DRAG_HANDLE) DockLayout.DragHandleHeightDp
-        else config.collapsedPillHeightDp
+        else config.quickViewHeightDp
     val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
 
     val islandExpanded = DpSize(alongExpanded, islandDepth)
@@ -126,6 +149,38 @@ fun computeNotchMetrics(
 }
 
 /**
+ * How many indicator slots the idle quickview actually renders right now: the
+ * connected-device ring, the laptop ring (each gated by its own collapsed-only
+ * toggle) and the notification bell (shown whenever the unread count is
+ * readable AND its toggle is on). The window sizer and the overlay content MUST
+ * agree on this — it widens the collapsed footprint by one slot per indicator
+ * so nothing clips against the window edge. Gated to the idle branches: the
+ * drag-handle style renders no indicators and a live media pill grows to its
+ * own (fixed) width.
+ */
+fun quickViewIndicatorSlots(
+    config: NotchConfig,
+    musicLive: Boolean,
+    battery: AudioDeviceBattery?,
+    deviceBattery: SystemBattery?,
+    notificationCount: Int?,
+    calendarEventCount: Int
+): Int {
+    if (musicLive || config.style == NotchStyle.DRAG_HANDLE) return 0
+    val notificationSlots =
+        if (notificationCount != null && config.widgets.showCollapsedNotifications) 1 else 0
+    // The mail badge claims a slot only when it actually draws: a connected
+    // calendar with an empty day shows nothing, so it must not widen the pill.
+    val calendarSlots = if (config.widgets.showCalendar && calendarEventCount > 0) 1 else 0
+    // Dots branch (no clock): only the bell and the mail badge sit beside the dots.
+    if (!(config.clockDate || config.clockTime)) return notificationSlots + calendarSlots
+    return notificationSlots + calendarSlots + listOfNotNull(
+        battery.takeIf { config.widgets.showCollapsedBattery },
+        deviceBattery.takeIf { config.widgets.showCollapsedDeviceBattery }
+    ).size
+}
+
+/**
  * Computes the top-left screen coordinate (in AWT points) for the overlay
  * window, hugging the top edge of the chosen screen and centred along it. On
  * macOS the notch hugs the very top of the panel ([hugMenuBar]) so it reads as
@@ -135,7 +190,6 @@ fun computeNotchMetrics(
  */
 fun overlayScreenLocation(
     windowWidthPx: Int,
-    windowHeightPx: Int,
     screen: Rectangle,
     insets: Insets,
     hugMenuBar: Boolean,
@@ -148,4 +202,20 @@ fun overlayScreenLocation(
     val centerX = left + ((right - left) - windowWidthPx) / 2
 
     return Point(centerX, top + edgeGapPx)
+}
+
+/**
+ * Rounds only the two corners facing away from the anchored edge; the corners
+ * touching the screen edge stay square so the notch reads as flush with the
+ * display, like the hardware Dynamic Island.
+ */
+internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape {
+    if (style.capsule) {
+        // Round all four corners; a generous radius clamps to a stadium at the
+        // slim collapsed height and a soft pill when expanded.
+        val corner = if (expanded) 18.dp else 14.dp
+        return RoundedCornerShape(corner)
+    }
+    val corner = if (expanded) 18.dp else 13.dp
+    return RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
 }

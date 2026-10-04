@@ -21,7 +21,7 @@ export const site = {
 	currency: 'USD',
 	tagline: 'One tiny notch. Apps, weather, stats and more.',
 	description:
-		'QuickNotch is a free Dynamic Island-style notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance — styled as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
+		'QuickNotch is a free Dynamic Island-style notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
 	shortDescription:
 		'A free Dynamic Island-style notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
@@ -77,7 +77,7 @@ export const hero = {
 	badge: 'a notchful of good stuff · 100% free',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'A Dynamic Island-style notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around — without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
+	sub: 'A Dynamic Island-style notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around, without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
 	primaryCta: 'Download for free',
 	secondaryCta: 'See how it works',
 	trust: ['No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
@@ -89,7 +89,7 @@ export const stats = [
 		label: 'Widgets, always up top',
 		detail: 'Apps, weather, stats, FPS and live controls'
 	},
-	{ value: '3', label: 'Looks — all yours', detail: 'AMOLED notch, floating pill or drag handle' },
+	{ value: '3', label: 'Looks, all yours', detail: 'AMOLED notch, floating pill or drag handle' },
 	{ value: '2', label: 'Platforms, one app', detail: 'Same vibe on Windows and macOS' },
 	{ value: '1', label: 'Click and you are in', detail: 'Open any pinned app in an instant' }
 ] as const;
@@ -101,7 +101,7 @@ export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
 	{ id: 'weather', label: 'Weather', blurb: 'Peek outside without standing up.' },
 	{ id: 'system', label: 'System usage', blurb: 'CPU, RAM, GPU and network, live and honest.' },
 	{ id: 'fps', label: 'Game mode', blurb: 'A live FPS counter. Your framerate has a fan club now.' },
-	{ id: 'music', label: 'Live activities', blurb: 'Now playing — with the important buttons.' }
+	{ id: 'music', label: 'Live activities', blurb: 'Now playing, with the important buttons.' }
 ];
 
 export type ThemeId = 'amoled' | 'pill' | 'handle';
@@ -115,11 +115,11 @@ export const themes: { id: ThemeId; label: string; blurb: string }[] = [
 export const launch = {
 	eyebrow: 'The notch overlay',
 	title: 'Hover the notch. Get what you need.',
-	body: 'The notch rests slim at the top-centre of your screen. Hover it and the overlay answers — an app dock that grows straight out of the notch, right where you are looking. Move along and it tucks itself away, leaving a pixel-wide nothing behind.',
+	body: 'The notch rests slim at the top-centre of your screen. Hover it and the overlay answers with an app dock that grows straight out of the notch, right where you are looking. Move along and it tucks itself away, leaving a pixel-wide nothing behind.',
 	items: [
 		{
 			title: 'Hover to expand',
-			body: 'Rest over the notch and it grows into an app dock, exactly the way a Dynamic Island does — no clicks, no menu, no fumbling.'
+			body: 'Rest over the notch and it grows into an app dock, exactly the way a Dynamic Island does. No clicks, no menu, no fumbling.'
 		},
 		{
 			title: 'Always on top',
@@ -134,11 +134,11 @@ export const launch = {
 
 export const download = {
 	title: 'Slap a notch on your desktop',
-	body: 'Grab the installer for your platform, run it once, and boom — a tiny superpower notch. Apps, weather, stats and media controls on day one, with new widgets queued up after. No account, no credit card, no signing your soul away.',
+	body: 'Grab the installer for your platform, run it once, and boom: a tiny superpower notch. Apps, weather, stats and media controls on day one, with new widgets queued up after. No account, no credit card, no signing your soul away.',
 	notes: [
 		'Installs on Windows 10 & 11 and macOS 12 or newer.',
 		'No account, no telemetry, no cloud.',
-		'Runs offline — the app never phones home.'
+		'Runs offline. The app never phones home.'
 	]
 } as const;
 
@@ -146,7 +146,7 @@ export const faq = [
 	{
 		question: 'Is QuickNotch really free?',
 		answer:
-			'Yes — completely. There is no trial, no in-app purchase and no account to create. Download the installer, launch it once, and it just works.'
+			'Yes, completely. There is no trial, no in-app purchase and no account to create. Download the installer, launch it once, and it just works.'
 	},
 	{
 		question: 'Does QuickNotch work on Windows and macOS?',
@@ -166,7 +166,7 @@ export const faq = [
 	{
 		question: 'Will the notch get in the way?',
 		answer:
-			'That is the point — it should not. It stays as a slim pill at the top-centre of your screen and only expands into a dock when you hover over it. You can set it to always stay on top, or collapse it the moment you launch an app.'
+			'That is the point: it should not get in the way. It stays as a slim pill at the top-centre of your screen and only expands into a dock when you hover over it. You can set it to always stay on top, or collapse it the moment you launch an app.'
 	},
 	{
 		question: 'Can I change how the notch looks?',
@@ -216,3 +216,36 @@ export const dockTiles: Tile[] = [
 	{ id: 'utility', name: 'Utility', glyph: 'calc', from: '#94a3b8', to: '#475569' },
 	{ id: 'mail', name: 'Mail', glyph: 'mail', from: '#22d3ee', to: '#0891b2' }
 ];
+
+/**
+ * Google Calendar auth lives on the website now — the consent UI is a page in
+ * this theme, not a settings row. What follows is everything a page needs to
+ * run the flow. The token exchange itself deliberately stays out of the site:
+ * it is a static host, Google requires a client_secret from every client type,
+ * and the secret ships inside the desktop app and never leaves it.
+ *
+ * The flow: the desktop opens {@code connectUrl} with the loopback intent
+ * baked into `state` (which carries the loopback port), the connect page sends
+ * the user to Google with that exact `state`, Google bounces the browser back
+ * to {@code callbackUrl}, and that page performs a plain top-level navigation
+ * to the app's `http://127.0.0.1:<port>/oauth?...` — where the code is
+ * exchanged. Both {@code callbackUrl} and the connect page's client id must
+ * be present in the Google OAuth client's authorized redirect URIs.
+ */
+export const calendarAuth = {
+	authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+	// Web application client (not Desktop: that type cannot register an https
+	// redirect URI at all). Must stay in step with CLIENT_ID in
+	// GoogleCalendar.kt — the two are the same credential described twice.
+	clientId: '317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com',
+	// Not used to build the authorize URL: the connect page prefers the
+	// redirect_uri the desktop sends it, falling back to its own origin. That is
+	// what makes the flow testable before the site is deployed -- Google's
+	// redirect_uri must be the exact URI the app will exchange against, and
+	// during local testing both are `vite dev`, not a constant that can live in
+	// two places and drift. Kept here for documentation of the production URI
+	// that must be registered on the client at go-live.
+	callbackUrl: 'https://quicknotch.app/oauth/callback',
+	scope:
+		'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email'
+} as const;

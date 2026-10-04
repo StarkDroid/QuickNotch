@@ -21,11 +21,13 @@ object WindowsStartupManager {
         return try {
             if (enabled) {
                 val exePath = getAppExecutablePath()
+                // The marker lets the app tell a boot auto-start (stay quietly
+                // in the tray) from a manual launch (open the Settings window).
                 Advapi32Util.registrySetStringValue(
                     WinReg.HKEY_CURRENT_USER,
                     REGISTRY_RUN_KEY,
                     APP_KEY_NAME,
-                    "\"" + exePath + "\""
+                    "\"" + exePath + "\" " + StartupManager.LAUNCHED_AT_LOGIN_ARG
                 )
             } else {
                 if (Advapi32Util.registryValueExists(WinReg.HKEY_CURRENT_USER, REGISTRY_RUN_KEY, APP_KEY_NAME)) {

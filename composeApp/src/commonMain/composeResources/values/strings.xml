@@ -8,50 +8,106 @@
 
     <!-- Tray menu -->
     <string name="menu_settings">Settings</string>
+    <string name="onboarding_window_title">Welcome to QuickNotch</string>
+    <string name="onboarding_welcome_title">Meet QuickNotch</string>
+    <string name="onboarding_welcome_subtitle">A Dynamic-Island-style notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later.</string>
+    <string name="onboarding_feature_apps">Launch your pinned apps with a click</string>
+    <string name="onboarding_feature_media">See what is playing and control it</string>
+    <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
+    <string name="onboarding_feature_quiet">Stays out of the way until you hover</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_skip">Skip for now</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_finish">Finish setup</string>
+    <string name="onboarding_step_of">Step %1$s of %2$s</string>
+    <string name="onboarding_style_title">Choose your pill style</string>
+    <string name="onboarding_style_subtitle">This is how the notch sits at the top of your screen, with a sample of what it shows. You can fine-tune everything later in Settings.</string>
+    <string name="onboarding_calendar_title">Connect Google Calendar</string>
+    <string name="onboarding_calendar_subtitle">See your day on the notch: a badge with today&#39;s remaining events, and the title on a ticker while one runs.</string>
+    <string name="onboarding_calendar_note">This is just the connection; appearance, theme and every size can be adjusted later in Settings.</string>
+    <string name="onboarding_apps_title">Pin your apps</string>
+    <string name="onboarding_apps_subtitle">Pick the apps to live in the dock, and they appear inside the notch above as you choose them.</string>
+    <string name="settings_window_title">QuickNotch Settings</string>
     <string name="menu_hide_notch">Hide Notch</string>
     <string name="menu_show_notch">Show Notch</string>
     <string name="reset_defaults">Reset Defaults</string>
+    <string name="menu_always_on_top">Always on top</string>
+    <string name="menu_always_on_top_checked">✓ Always on top</string>
     <string name="menu_quit">Quit QuickNotch</string>
 
     <!-- Tabs -->
-    <string name="tab_dock_sizing">Dock &amp; Sizing</string>
+    <string name="tab_dock_sizing">Appearance</string>
     <string name="tab_widgets">Widgets</string>
     <string name="tab_behavior">Behavior</string>
+    <string name="settings_appearance_desc">Notch silhouette, surface finish, icon magnification and the idle clock.</string>
+    <string name="settings_widgets_desc">Pinned apps, Now Playing and Calendar — flip the notch open and scroll to move between them.</string>
+    <string name="settings_behavior_desc">How QuickNotch starts, layers and gets out of your way.</string>
 
     <!-- Enum labels: notch style -->
-    <string name="style_dynamic_island">Dynamic Island</string>
+    <string name="style_default">Default</string>
     <string name="style_floating_pill">Floating Pill</string>
     <string name="style_drag_handle">Drag Handle</string>
 
     <!-- Enum labels: surface -->
     <string name="surface_solid">Solid</string>
     <string name="surface_translucent">Translucent</string>
+    <string name="surface_system_accent">System Accent</string>
 
     <!-- Dock & Sizing tab -->
-    <string name="dock_sizing_header">Dock Layout &amp; Sizing</string>
     <string name="reset">Reset</string>
     <string name="notch_style">Notch Style</string>
     <string name="surface_theme">Surface Theme</string>
     <string name="fisheye_title">Icon Fish-eye Magnification</string>
-    <string name="fisheye_desc">Icons magnify precisely under the cursor; the wave radius is derived from icon size automatically</string>
     <string name="peak_scale_title">Magnification Peak Scale</string>
     <string name="base_icon_size_title">Base Icon Size</string>
     <string name="show_labels_title">Show App Labels</string>
-    <string name="show_labels_desc">Display app name labels when hovering over icons</string>
     <string name="geometry_title">Notch Geometry</string>
-    <string name="geometry_desc">Collapsed pill and expanded dock dimensions</string>
-    <string name="collapsed_width_title">Collapsed Pill Width</string>
+    <string name="quickview_width_title">QuickView Width</string>
     <string name="expanded_height_title">Expanded Dock Height</string>
     <string name="value_dp">%1$s dp</string>
     <string name="value_scale">%1$sx</string>
+    <string name="quickview_indicators_title">QuickView Indicators</string>
+    <string name="indicator_volume">Volume</string>
+    <string name="indicator_bluetooth_battery">Bluetooth Battery</string>
+    <string name="indicator_laptop_battery">Laptop Battery</string>
+    <string name="indicator_notifications">Notifications</string>
+    <string name="indicator_waveform">Waveform</string>
+    <string name="waveform_tint_title">Waveform Color</string>
+    <string name="waveform_tint_album_art">Album Art</string>
+    <string name="waveform_tint_white">White</string>
+    <string name="waveform_hide_title">Hide Song Title</string>
+    <string name="notification_indicator">Unread notifications</string>
+    <string name="calendar_section_title">Calendar</string>
+    <string name="calendar_hint">Show today&#39;s Google Calendar events in the notch.</string>
+    <string name="calendar_connect">Connect Google Calendar</string>
+    <string name="calendar_disconnect">Disconnect</string>
+    <string name="calendar_refresh">Refresh</string>
+    <string name="calendar_cancel">Cancel</string>
+    <string name="calendar_waiting">Waiting for Google sign-in in your browser</string>
+    <string name="calendar_connected_as">Connected as %1$s</string>
+    <string name="calendar_never_synced">Not synced yet</string>
+    <string name="calendar_last_sync">Updated %1$s</string>
+    <string name="calendar_error_auth">Sign-in didn&#39;t finish. Try connecting again.</string>
+    <string name="calendar_error_network">Couldn&#39;t reach Google. Showing the last known day.</string>
+    <string name="calendar_error_api_disabled">The Google Calendar API is not enabled for this project yet. Enable it in the Google Cloud console (APIs &amp; Services &#8594; Library), then press Refresh.</string>
+    <string name="calendar_error_client_type">This Google client is set up as a web app. Create a Desktop app client in the Google Cloud console and use its client ID instead.</string>
+    <string name="calendar_error_not_verified">Google has not released this app yet. Add your Google account as a test user on the OAuth consent screen, then try again.</string>
+    <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
+    <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
+    <string name="calendar_upcoming_count">%1$s upcoming events</string>
+    <string name="calendar_today">Today</string>
+    <string name="calendar_no_events">No upcoming events</string>
+    <string name="calendar_open_day">Open %1$s in Google Calendar</string>
+    <string name="notification_grant_button">Grant Full Disk Access</string>
+    <string name="notification_grant_hint">QuickNotch needs Full Disk Access to read macOS notification counts.</string>
 
-    <!-- Idle clock in the collapsed pill -->
+    <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>
-    <string name="clock_desc">Show a live date &amp; time in the collapsed pill instead of the idle dots</string>
     <string name="clock_show_date">Show Date</string>
     <string name="clock_show_time">Show Time</string>
     <string name="clock_24h">24-Hour Clock</string>
     <string name="clock_date_format">Date Format</string>
+    <string name="clock_date_separator">·</string>
 
     <!-- Pinned apps tab -->
     <string name="pinned_items">Pinned Items</string>
@@ -64,26 +120,28 @@ Add apps from the list on the right.</string>
     <string name="pick_mac_title">Choose a macOS Application</string>
     <string name="pick_mac_filter">Applications (.app)</string>
     <string name="pick_win_filter">Executables &amp; Shortcuts (*.exe, *.lnk)</string>
-    <string name="move_up">Move Up</string>
-    <string name="move_down">Move Down</string>
+    <string name="reorder_handle">Drag to reorder</string>
     <string name="remove">Remove</string>
     <string name="pinned_badge">Pinned</string>
     <string name="add">Add</string>
 
     <!-- Widgets tab -->
-    <string name="widgets_header">Widgets</string>
-    <string name="widgets_header_desc">Enable widgets and tune them. Open the notch and scroll the wheel to flip between the active ones.</string>
     <string name="widget_apps_title">Pinned Apps</string>
-    <string name="widget_apps_desc">Quick-launch applications in the notch dock</string>
     <string name="widget_music_title">Now Playing</string>
-    <string name="widget_music_desc">Live music activity on the notch from any app</string>
-    <string name="widget_now_playing">Now playing: %1$s — %2$s</string>
+    <string name="widget_now_playing">Now playing: %1$s · %2$s</string>
+    <string name="widget_unknown_artist">Unknown artist</string>
     <string name="widget_no_session">No active media session</string>
-    <string name="widget_style_warning">Live activity appears only on the Dynamic Island and Floating Pill styles.</string>
+    <string name="widget_style_warning">Live activity appears only on the Default and Floating Pill styles.</string>
     <string name="widget_scroll_hint">Scroll the mouse wheel over the open notch to switch between enabled widgets.</string>
     <string name="music_play">Play</string>
     <string name="music_pause">Pause</string>
     <string name="music_volume">System volume</string>
+    <string name="music_mute">Mute</string>
+    <string name="music_unmute">Unmute</string>
+    <string name="music_battery">Audio device battery: %1$s</string>
+    <string name="music_audio_device">audio device</string>
+    <string name="device_battery">Device battery: %1$d%%</string>
+    <string name="device_battery_charging">Device battery: %1$d%%, charging</string>
     <string name="music_previous">Previous track</string>
     <string name="music_next">Next track</string>
 
@@ -91,12 +149,8 @@ Add apps from the list on the right.</string>
     <string name="behavior_header">System &amp; Startup Behaviors</string>
     <string name="autostart_title_mac">Start at Login</string>
     <string name="autostart_title_windows">Start on Windows Boot</string>
-    <string name="autostart_desc_mac">Launch QuickNotch automatically when you sign in to macOS</string>
-    <string name="autostart_desc_windows">Launch QuickNotch automatically on user sign-in</string>
     <string name="always_on_top_title">Always on Top</string>
-    <string name="always_on_top_desc">Keep the floating notch and dock above other windows</string>
     <string name="collapse_on_launch_title">Collapse on Launch</string>
-    <string name="collapse_on_launch_desc">Automatically collapse dock back into pill after launching an app</string>
 
     <!-- About dialog -->
     <string name="about_header">About QuickNotch</string>

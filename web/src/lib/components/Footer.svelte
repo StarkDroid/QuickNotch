@@ -10,12 +10,17 @@
 
 <footer class="footer">
 	<div class="container footer__inner">
-		<a class="brand" href="#top" aria-label="{site.name} — back to top">
+		<a class="brand" href="#top" aria-label="{site.name}, back to top">
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			{site.name}
 		</a>
 
 		<p class="footer__tagline">{site.tagline}</p>
+
+		<nav class="footer__links" aria-label="More">
+			<a href="/connect">Connect Google Calendar</a>
+			<a href="{site.url}">Back to top</a>
+		</nav>
 
 		<p class="footer__bar">
 			<span>© {year} {site.author} · v{site.version}</span>
@@ -74,5 +79,25 @@
 		margin-top: 0.5rem;
 		font-size: var(--fs-small);
 		color: var(--text-3);
+	}
+
+	.footer__links {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem 1.25rem;
+		font-size: var(--fs-small);
+		color: var(--text-2);
+	}
+
+	.footer__links a {
+		text-decoration: underline;
+		text-decoration-color: var(--line-strong);
+		text-underline-offset: 3px;
+	}
+
+	.footer__links a:hover {
+		color: var(--accent-text);
+		text-decoration-color: var(--accent);
 	}
 </style>

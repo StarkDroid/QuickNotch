@@ -9,7 +9,7 @@
 			<p class="eyebrow">Theming</p>
 			<h2 class="display h2">Your notch, your look.</h2>
 			<p class="lead">
-				Three moods to pick from, and no commitment — flip between them any time from
+				Three moods to pick from, and no commitment. Flip between them any time from
 				Settings.
 			</p>
 		</header>

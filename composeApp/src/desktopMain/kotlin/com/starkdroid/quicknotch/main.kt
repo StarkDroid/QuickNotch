@@ -2,6 +2,8 @@ package com.starkdroid.quicknotch
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,11 +22,33 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.starkdroid.quicknotch.ui.OnboardingScreen
+import com.starkdroid.quicknotch.calendar.GoogleCalendar
+import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
+import com.starkdroid.quicknotch.datasource.AppPaths
 import com.starkdroid.quicknotch.datasource.HostPlatform
-import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.datasource.StartupManager
+import com.starkdroid.quicknotch.datasource.MacDockPresence
+import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
+import com.starkdroid.quicknotch.datasource.WindowPassthrough
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.app_name
+import com.starkdroid.quicknotch.generated.resources.menu_always_on_top
+import com.starkdroid.quicknotch.generated.resources.menu_always_on_top_checked
+import com.starkdroid.quicknotch.generated.resources.menu_hide_notch
+import com.starkdroid.quicknotch.generated.resources.menu_quit
+import com.starkdroid.quicknotch.generated.resources.menu_settings
+import com.starkdroid.quicknotch.generated.resources.menu_show_notch
+import com.starkdroid.quicknotch.generated.resources.onboarding_window_title
+import com.starkdroid.quicknotch.generated.resources.reset_defaults
+import com.starkdroid.quicknotch.generated.resources.settings_window_title
+import com.starkdroid.quicknotch.media.AudioBattery
+import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
+import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemVolume
+import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
@@ -33,25 +57,50 @@ import com.starkdroid.quicknotch.ui.SettingsScreen
 import com.starkdroid.quicknotch.ui.computeNotchMetrics
 import com.starkdroid.quicknotch.ui.isMusicLive
 import com.starkdroid.quicknotch.ui.overlayScreenLocation
+import com.starkdroid.quicknotch.ui.quickViewIndicatorSlots
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
+import java.awt.event.WindowEvent
+import java.awt.event.WindowFocusListener
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
-fun main() {
+fun main(args: Array<String>) {
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
         System.setProperty("apple.awt.application.appearance", "system")
-        // Skiko's Metal backend can crash on transparent overlay windows on newer
-        // macOS releases; the software pipeline keeps the notch stable.
-        if (System.getProperty("skiko.renderApi").isNullOrBlank()) {
-            System.setProperty("skiko.renderApi", "SOFTWARE")
-        }
+        // Skiko backend selection — the single biggest performance lever in the
+        // app. Measured on the settings list, one scroll frame costs ~70ms of
+        // process CPU on the SOFTWARE rasterizer (14fps, visibly unsmooth)
+        // versus ~3.4ms on Metal (vsync-capped 60fps), so macOS now defaults to
+        // METAL. The old comment here claimed Metal crashed on the transparent
+        // overlay window; that was skiko 0.8.18's MetalRedrawer running on the
+        // AWT EDT and tripping the macOS 26/27 main-thread assertion, fixed in
+        // the pinned skiko (agents.md pitfall 28).
+        //
+        // Precedence: an explicit -Dskiko.renderApi / SKIKO_RENDER_API wins, then
+        // the `software-render` marker file, then METAL. The marker exists
+        // because a backend problem is a native crash, so it must be fixable
+        // without a UI the crash may prevent from appearing.
+        val marker = AppPaths.configDir.resolve("software-render")
+        val backend = System.getProperty("skiko.renderApi")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("SKIKO_RENDER_API")?.takeIf { it.isNotBlank() }
+            ?: (if (marker.exists()) "SOFTWARE" else "METAL")
+        System.setProperty("skiko.renderApi", backend)
+        println("QuickNotch: skiko render backend = $backend${if (marker.exists()) " (marker file)" else ""}")
     }
+    // A fresh manual launch (Spotlight/Dock/Finder/Launchpad) opens the Settings
+    // window alongside the notch so the app's presence is obvious and the user
+    // can configure it immediately. A login-item auto-start passes
+    // `--login-item` (written into the launch command by StartupManager) and
+    // stays quietly behind the tray instead — nobody asked for settings at boot.
+    val loginItemLaunch = args.contains(StartupManager.LAUNCHED_AT_LOGIN_ARG)
 
     application {
         val repository = remember { FavoritesRepository() }
@@ -65,23 +114,64 @@ fun main() {
 
         // Master volume drives the collapsed music pill's percentage chip; it
         // is polled separately from the session feed (SMTC/MediaRemote carry
-        // no volume) and simply stays hidden whenever a query fails.
+        // no volume) and simply stays hidden whenever a query fails. The same
+        // goes for the connected audio device's battery level.
         val volumePercent by SystemVolume.percent.collectAsState()
+        val volumeMuted by SystemVolume.muted.collectAsState()
+        val battery by AudioBattery.info.collectAsState()
+        val deviceBattery by SystemBattery.state.collectAsState()
+        val notificationCount by NotificationCount.count.collectAsState()
         DisposableEffect(Unit) {
             media.start()
             SystemVolume.start()
+            AudioBattery.start()
+            SystemBattery.start()
+            NotificationCount.start()
+            // Calendar is opt-in and file-backed: with no token on disk this
+            // returns immediately, so an unconnected user pays nothing.
+            GoogleCalendar.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
+                AudioBattery.stop()
+                SystemBattery.stop()
+                NotificationCount.stop()
             }
         }
 
+        // Derived distinctly so the window scaffolding reacts only to the
+        // flow actually finishing, not to every config write on the way.
+        val onboardingDone by remember {
+            repository.config.map { it.onboardingDone }.distinctUntilChanged()
+        }.collectAsState(initial = repository.config.value.onboardingDone)
+
         val musicLive = isMusicLive(config, liveSession)
-        var showSettings by remember { mutableStateOf(false) }
+        var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
-        var isWindowExpanded by remember { mutableStateOf(false) }
 
+        // Flip the Dock/app presence in-step with the Settings window: the
+        // first Settings open forces activation (an accessory agent can't bring
+        // a regular window forward on its own), and closing it returns the app
+        // to its quiet agent state.
+        // Onboarding counts as "settings open": the user is actively
+        // configuring, so the Dock presence and activation apply while it runs.
+        LaunchedEffect(showSettings, onboardingDone) {
+            MacDockPresence.setSettingsVisible(showSettings || !onboardingDone)
+        }
+
+        // Dock presence is a function of the Settings window, never of the
+        // notch: the resting QuickNotch is a silent agent (no Dock icon, no app
+        // menu bar — the overlay layers over full-screen apps), and the Dock
+        // icon + app activation appear only while the Settings page is open.
+        // Started from a DisposableEffect(Unit), NOT the composition body: the
+        // body re-executes on every media/volume/battery tick, and a raw call
+        // here re-armed the one-shot activation on each recomposition — the app
+        // then yanked focus back to itself ~every second while music played.
+        DisposableEffect(Unit) {
+            MacDockPresence.start()
+            onDispose { MacDockPresence.stop() }
+        }
         val appIcon = remember { loadQuickNotchIcon() }
         Tray(
             icon = BitmapPainter(appIcon),
@@ -93,6 +183,13 @@ fun main() {
                     else stringResource(Res.string.menu_show_notch),
                     onClick = { isNotchVisible = !isNotchVisible }
                 )
+                Item(
+                    if (config.alwaysOnTop) stringResource(Res.string.menu_always_on_top_checked)
+                    else stringResource(Res.string.menu_always_on_top),
+                    onClick = {
+                        repository.updateConfig { it.copy(alwaysOnTop = !it.alwaysOnTop) }
+                    }
+                )
                 Separator()
                 Item(stringResource(Res.string.reset_defaults), onClick = { repository.resetToDefaults() })
                 Separator()
@@ -100,38 +197,81 @@ fun main() {
             }
         )
 
-        if (isNotchVisible) {
+        if (isNotchVisible && onboardingDone) {
             NotchOverlayWindow(
                 repository = repository,
                 media = media,
                 musicLive = musicLive,
                 appIcon = appIcon,
                 isExpanded = isExpanded,
-                isWindowExpanded = isWindowExpanded,
                 volumePercent = volumePercent,
-                onExpandedChange = { isExpanded = it },
-                onWindowExpandedChange = { isWindowExpanded = it }
+                volumeMuted = volumeMuted,
+                battery = battery,
+                deviceBattery = deviceBattery,
+                notificationCount = notificationCount,
+                onExpandedChange = { isExpanded = it }
             )
         }
 
-        if (showSettings) {
+        // The onboarding flow lives in this same window: first-run users open
+        // straight into it (even at login launch -- a fresh install has no
+        // login item yet), and finishing hands the window to the tabbed
+        // settings while the notch, which did not exist during onboarding,
+        // appears for the first time.
+        if (showSettings || !onboardingDone) {
             val settingsState = rememberWindowState(
                 position = WindowPosition.Aligned(Alignment.Center),
                 size = DpSize(880.dp, 660.dp)
             )
             Window(
-                onCloseRequest = { showSettings = false },
+                onCloseRequest = {
+                    // Closing the window mid-onboarding finishes the flow: the
+                    // notch must exist no matter what, and the config the user
+                    // already touched stays.
+                    showSettings = false
+                    if (!onboardingDone) repository.updateConfig { it.copy(onboardingDone = true) }
+                },
                 state = settingsState,
-                title = "QuickNotch Settings",
+                title = stringResource(
+                    if (onboardingDone) Res.string.settings_window_title
+                    else Res.string.onboarding_window_title
+                ),
                 icon = BitmapPainter(appIcon),
                 resizable = true
             ) {
+                val settingsWindow = window
+                DisposableEffect(settingsWindow) {
+                    val listener = object : WindowFocusListener {
+                        override fun windowGainedFocus(e: WindowEvent?) {
+                            // The user just came back from System Settings
+                            // (possibly after granting Full Disk Access): re-read
+                            // the notification store right now instead of waiting
+                            // for the next 3s poll tick, so the helper row swaps
+                            // to "Send test notification" as soon as access lands.
+                            NotificationCount.poke()
+                        }
+                        override fun windowLostFocus(e: WindowEvent?) {
+                        }
+                    }
+                    settingsWindow.addWindowFocusListener(listener)
+                    onDispose { settingsWindow.removeWindowFocusListener(listener) }
+                }
                 QuickNotchTheme(darkTheme = true) {
-                    SettingsScreen(
-                        repository = repository,
-                        media = media,
-                        onClose = { showSettings = false }
-                    )
+                    Crossfade(
+                        targetState = onboardingDone,
+                        animationSpec = tween(320),
+                        label = "onboarding-to-settings"
+                    ) { done ->
+                        if (done) {
+                            SettingsScreen(
+                                repository = repository,
+                                media = media,
+                                onClose = { showSettings = false }
+                            )
+                        } else {
+                            OnboardingScreen(repository = repository)
+                        }
+                    }
                 }
             }
         }
@@ -141,12 +281,21 @@ fun main() {
 /**
  * Hosts the transparent overlay window and pins it to the top of the screen.
  *
+ * The native window adopts a single fixed footprint — the expanded dock size —
+ * and never resizes while the notch opens or collapses. On macOS a transparent
+ * AWT window that resizes flashes white / skips frames for a frame (a known
+ * Compose Desktop + Skiko issue), which reads as a blink; keeping the window
+ * size stable and drawing the growing/shrinking island inside it eliminates
+ * that entirely. The trade-off: the fixed window is wider/taller than the
+ * collapsed pill, so its transparent margin swallows clicks on the desktop
+ * directly around the pill until the notch expands.
+ *
  * Size and position are both written to [androidx.compose.ui.window.WindowState]
  * within a single effect so Compose applies them atomically in one pass — this is
- * what keeps the notch perfectly still (no shift, no flash) while it grows and
- * shrinks. The effect re-runs only when the style or the target footprint
- * changes, never in response to the window's own live dimensions, so there is
- * no feedback loop and no second corrective placement.
+ * what keeps the notch perfectly still while it grows and shrinks. The effect
+ * re-runs only when the style or the target footprint changes (favourites count,
+ * the widened now-playing page), never in response to the window's own live
+ * dimensions, so there is no feedback loop and no second corrective placement.
  */
 @Composable
 private fun NotchOverlayWindow(
@@ -155,17 +304,33 @@ private fun NotchOverlayWindow(
     musicLive: Boolean,
     appIcon: ImageBitmap,
     isExpanded: Boolean,
-    isWindowExpanded: Boolean,
     volumePercent: Int?,
-    onExpandedChange: (Boolean) -> Unit,
-    onWindowExpandedChange: (Boolean) -> Unit
+    volumeMuted: Boolean?,
+    battery: AudioDeviceBattery?,
+    deviceBattery: SystemBattery?,
+    notificationCount: Int?,
+    onExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
     val favorites by repository.favorites.collectAsState()
-    val metrics = remember(config, favorites.size, musicLive) {
-        computeNotchMetrics(config, favorites.size, musicLive)
+    val calendarState by GoogleCalendar.state.collectAsState()
+    val calendarTick by GoogleCalendar.minuteTick.collectAsState()
+    // The native window and the overlay content must size the quickview
+    // identically, or the indicator slots (device + laptop battery + the
+    // notification bell, the calendar mail badge) clip off the far edge. Both
+    // derive the slot count through the same helper.
+    val calendarEventCount =
+        if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
+    val indicatorSlots = quickViewIndicatorSlots(
+        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
+    )
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
     }
-    val targetSize = metrics.sizeFor(isWindowExpanded)
+    // The native window keeps the expanded footprint at all times (see class
+    // doc): opening/collapsing never resizes the transparent window, which is
+    // what would flash on macOS. The visible island animates inside it instead.
+    val targetSize = metrics.expanded
 
     val overlayState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.TopCenter),
@@ -175,7 +340,7 @@ private fun NotchOverlayWindow(
     Window(
         onCloseRequest = { },
         state = overlayState,
-        title = "QuickNotch",
+        title = stringResource(Res.string.app_name),
         icon = BitmapPainter(appIcon),
         undecorated = true,
         transparent = true,
@@ -183,6 +348,31 @@ private fun NotchOverlayWindow(
         alwaysOnTop = config.alwaysOnTop
     ) {
         val awtWindow = window
+
+        // Keep the fixed window's transparent margin click-through: only the
+        // drawn island is a touch target (SetWindowRgn on Windows, cursor-gated
+        // ignoresMouseEvents on macOS). Fails soft — no passthrough if the
+        // native handle can't be resolved.
+        val passthrough = remember(awtWindow) { WindowPassthrough.install(awtWindow) }
+        DisposableEffect(awtWindow) {
+            onDispose { passthrough?.close() }
+        }
+
+        // macOS above-menu-bar placement: AWT can't reach the true top of the
+        // screen (it clamps to the visible area), so a direct Cocoa policy parks
+        // the island there — raised above the menu bar, joining every Space and
+        // surviving full-screen apps while "always on top" is on. The policy is
+        // re-asserted on a slow reconcile tick because Compose placement and
+        // AWT's z-order bookkeeping keep re-parking the window below the menu
+        // bar; `update` just retargets the flags it re-adheres to. Off-mac this
+        // installs nothing.
+        val macPolicy = remember(awtWindow) { MacOverlayWindowPolicy.install(awtWindow) }
+        LaunchedEffect(config.alwaysOnTop, metrics.edgeGapDp) {
+            macPolicy?.update(config.alwaysOnTop, metrics.edgeGapDp)
+        }
+        DisposableEffect(awtWindow) {
+            onDispose { macPolicy?.close() }
+        }
 
         // Shared widget-pager state; on Windows the wheel listener below drives
         // it straight from AWT because the unfocused overlay window never sees
@@ -218,7 +408,6 @@ private fun NotchOverlayWindow(
             // works in, and Compose maps DpSize onto those units 1:1.
             val location = overlayScreenLocation(
                 windowWidthPx = targetSize.width.value.roundToInt(),
-                windowHeightPx = targetSize.height.value.roundToInt(),
                 screen = graphicsConfiguration.bounds,
                 insets = insets,
                 hugMenuBar = HostPlatform.isMac,
@@ -226,6 +415,12 @@ private fun NotchOverlayWindow(
             )
             overlayState.size = targetSize
             overlayState.position = WindowPosition.Absolute(location.x.dp, location.y.dp)
+            // Compose just re-parked the window at AWT's visible-clamped spot
+            // (30pt low on macOS). Ask the Cocoa policy to re-adhere it to the
+            // true top right after the placement lands instead of waiting for
+            // its next reconcile tick.
+            delay(120)
+            macPolicy?.update(config.alwaysOnTop, metrics.edgeGapDp)
         }
 
         QuickNotchTheme(darkTheme = config.themeDark) {
@@ -234,9 +429,13 @@ private fun NotchOverlayWindow(
                 media = media,
                 isExpanded = isExpanded,
                 onExpandedChange = onExpandedChange,
-                onWindowExpandedChange = onWindowExpandedChange,
                 volumePercent = volumePercent,
-                pager = pager
+                volumeMuted = volumeMuted,
+                battery = battery,
+                deviceBattery = deviceBattery,
+                pager = pager,
+                onTouchTargetChange = { passthrough?.update(it) },
+                awtWindow = awtWindow
             )
         }
     }

@@ -1,5 +1,6 @@
 package com.starkdroid.quicknotch.model
 
+import com.starkdroid.quicknotch.datasource.AppPaths
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,26 +35,10 @@ class FavoritesRepository(
         coerceInputValues = true
     }
 
-    private val storageDir: File by lazy {
-        val dir = when {
-            HostPlatform.isMac -> File(
-                System.getProperty("user.home"),
-                "Library/Application Support/QuickNotch"
-            )
-            else -> {
-                val appData = System.getenv("APPDATA")
-                if (!appData.isNullOrBlank()) {
-                    File(appData, "QuickNotch")
-                } else {
-                    File(System.getProperty("user.home"), ".quicknotch")
-                }
-            }
-        }
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        dir
-    }
+    // Resolved centrally in [AppPaths] so anything that needs the directory
+    // before this repository exists (the render-backend marker) reads the same
+    // path this writer uses.
+    private val storageDir: File get() = AppPaths.configDir
 
     private val configFile: File by lazy { File(storageDir, "config.json") }
     private val favoritesFile: File by lazy { File(storageDir, "favorites.json") }
@@ -191,7 +176,10 @@ class FavoritesRepository(
         val defaults = getDefaultFavorites()
         _favorites.value = defaults
         val defaultCfg = NotchConfig()
-        _config.value = defaultCfg
+        // A deliberate reset restores the notch's look, not the product: the
+        // user has already been onboarded, and re-running the first-run flow
+        // because they reset their sizes would be a punishment.
+        _config.value = defaultCfg.copy(onboardingDone = _config.value.onboardingDone)
         persist(PersistRequest.Favorites(defaults))
         persist(PersistRequest.Config(defaultCfg))
     }
