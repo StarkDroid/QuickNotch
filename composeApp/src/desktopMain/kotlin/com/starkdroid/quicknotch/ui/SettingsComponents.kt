@@ -245,7 +245,7 @@ internal fun SidebarNavItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (selected) {
+            if (false) {
                 Spacer(modifier = Modifier.weight(1f))
                 Box(
                     modifier = Modifier

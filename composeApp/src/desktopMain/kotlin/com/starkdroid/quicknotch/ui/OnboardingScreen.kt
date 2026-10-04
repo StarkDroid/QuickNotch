@@ -650,7 +650,7 @@ private fun StyleCards(
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         color = if (isSelected) TextPrimary else TextSecondary
                     )
-                    if (isSelected) {
+                    if (false) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
@@ -681,11 +681,13 @@ private fun FeatureCard(icon: androidx.compose.ui.graphics.vector.ImageVector?, 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .height(92.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(SettingsCard)
             .border(1.dp, SettingsBorder, RoundedCornerShape(14.dp))
             .padding(14.dp),
-        horizontalAlignment = Alignment.Start
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
         Box(
             modifier = Modifier
