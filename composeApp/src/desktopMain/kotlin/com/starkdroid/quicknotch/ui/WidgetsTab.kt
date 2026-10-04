@@ -34,12 +34,29 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.calendar.CalendarState
-import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.calendar_hint
+import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.show_labels_title
+import com.starkdroid.quicknotch.generated.resources.widget_apps_title
+import com.starkdroid.quicknotch.generated.resources.widget_music_title
+import com.starkdroid.quicknotch.generated.resources.widget_no_session
+import com.starkdroid.quicknotch.generated.resources.widget_now_playing
+import com.starkdroid.quicknotch.generated.resources.widget_scroll_hint
+import com.starkdroid.quicknotch.generated.resources.widget_style_warning
+import com.starkdroid.quicknotch.generated.resources.widget_unknown_artist
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
-import com.starkdroid.quicknotch.theme.*
+import com.starkdroid.quicknotch.theme.AccentGreen
+import com.starkdroid.quicknotch.theme.AppTypography
+import com.starkdroid.quicknotch.theme.SettingsBorder
+import com.starkdroid.quicknotch.theme.SettingsCard
+import com.starkdroid.quicknotch.theme.SettingsElevated
+import com.starkdroid.quicknotch.theme.TextMuted
+import com.starkdroid.quicknotch.theme.TextPrimary
+import com.starkdroid.quicknotch.theme.TextSecondary
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)

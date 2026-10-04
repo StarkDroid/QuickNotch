@@ -2,7 +2,6 @@ package com.starkdroid.quicknotch.media
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.coroutines.CoroutineScope

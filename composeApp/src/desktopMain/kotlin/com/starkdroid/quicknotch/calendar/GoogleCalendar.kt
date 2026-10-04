@@ -15,22 +15,17 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.InetAddress
 import java.net.ServerSocket
-import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneId
 import java.util.Base64
 import java.util.EnumSet
 import java.util.concurrent.CompletableFuture
@@ -104,10 +99,6 @@ object GoogleCalendar {
      * Cloud console if it ever leaks wider than this repo.
      */
     private const val CLIENT_SECRET = "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"
-
-    private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-    private const val USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
-    private const val EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
     /**
      * The website owns the consent UI (it has its own editorial voice, and

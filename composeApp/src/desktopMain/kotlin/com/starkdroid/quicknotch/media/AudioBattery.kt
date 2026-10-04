@@ -231,7 +231,7 @@ internal object AudioBattery {
 
     private val pokeLock = Any()
     private var lastPokeNanos = 0L
-    private val pokeCooldownMs = 4_000L
+    private const val pokeCooldownMs = 4_000L
 
     private fun kickRefresh() {
         val active = scope ?: return

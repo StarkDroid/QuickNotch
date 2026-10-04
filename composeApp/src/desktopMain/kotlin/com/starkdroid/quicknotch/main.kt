@@ -6,7 +6,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.DisposableEffect
@@ -23,7 +22,6 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.ui.OnboardingScreen
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
@@ -33,7 +31,17 @@ import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.datasource.MacDockPresence
 import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
-import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.app_name
+import com.starkdroid.quicknotch.generated.resources.menu_always_on_top
+import com.starkdroid.quicknotch.generated.resources.menu_always_on_top_checked
+import com.starkdroid.quicknotch.generated.resources.menu_hide_notch
+import com.starkdroid.quicknotch.generated.resources.menu_quit
+import com.starkdroid.quicknotch.generated.resources.menu_settings
+import com.starkdroid.quicknotch.generated.resources.menu_show_notch
+import com.starkdroid.quicknotch.generated.resources.onboarding_window_title
+import com.starkdroid.quicknotch.generated.resources.reset_defaults
+import com.starkdroid.quicknotch.generated.resources.settings_window_title
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
@@ -400,7 +408,6 @@ private fun NotchOverlayWindow(
             // works in, and Compose maps DpSize onto those units 1:1.
             val location = overlayScreenLocation(
                 windowWidthPx = targetSize.width.value.roundToInt(),
-                windowHeightPx = targetSize.height.value.roundToInt(),
                 screen = graphicsConfiguration.bounds,
                 insets = insets,
                 hugMenuBar = HostPlatform.isMac,

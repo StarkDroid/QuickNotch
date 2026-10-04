@@ -148,7 +148,7 @@ internal fun fisheyeScale(
  * energy saving without lying to the user.
  */
 internal const val PillAnimationFps = 30f
-internal val PillAnimationStepSec = 1f / PillAnimationFps
+internal const val PillAnimationStepSec = 1f / PillAnimationFps
 
 /** The matching [kotlinx.coroutines.delay] step, in milliseconds. */
 internal val PillAnimationStepMillis = (1000L / PillAnimationFps).toLong()

@@ -17,10 +17,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
-import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.always_on_top_title
+import com.starkdroid.quicknotch.generated.resources.autostart_title_mac
+import com.starkdroid.quicknotch.generated.resources.autostart_title_windows
+import com.starkdroid.quicknotch.generated.resources.behavior_header
+import com.starkdroid.quicknotch.generated.resources.collapse_on_launch_title
+import com.starkdroid.quicknotch.generated.resources.settings_behavior_desc
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
-import com.starkdroid.quicknotch.theme.*
+import com.starkdroid.quicknotch.theme.SettingsBorder
 import org.jetbrains.compose.resources.stringResource
 
 @Composable

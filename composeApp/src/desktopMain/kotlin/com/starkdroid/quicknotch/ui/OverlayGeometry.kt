@@ -190,7 +190,6 @@ fun quickViewIndicatorSlots(
  */
 fun overlayScreenLocation(
     windowWidthPx: Int,
-    windowHeightPx: Int,
     screen: Rectangle,
     insets: Insets,
     hugMenuBar: Boolean,

@@ -25,11 +25,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import com.starkdroid.quicknotch.generated.resources.*
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.battery_full
+import com.starkdroid.quicknotch.generated.resources.battery_low
+import com.starkdroid.quicknotch.generated.resources.battery_mid
+import com.starkdroid.quicknotch.generated.resources.bluetooth
+import com.starkdroid.quicknotch.generated.resources.charging
+import com.starkdroid.quicknotch.generated.resources.headphone
+import com.starkdroid.quicknotch.generated.resources.notification
+import com.starkdroid.quicknotch.generated.resources.volume
 import com.starkdroid.quicknotch.theme.AccentRed
 import org.jetbrains.compose.resources.painterResource
 

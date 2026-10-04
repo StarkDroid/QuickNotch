@@ -227,13 +227,13 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
                 // WS_EX_TOOLWINDOW hides it from the taskbar and Alt+Tab;
                 // WS_EX_NOACTIVATE keeps a click on the island from yanking
                 // focus off whatever the user was typing into.
-                val GWL_EXSTYLE = -20
+                val gwlExStyle = -20
                 val wsExToolWindow = 0x00000080
                 val wsExNoActivate = 0x08000000
-                val style = User32.INSTANCE.GetWindowLong(WinDef.HWND(Pointer(h)), GWL_EXSTYLE)
+                val style = User32.INSTANCE.GetWindowLong(WinDef.HWND(Pointer(h)), gwlExStyle)
                 User32.INSTANCE.SetWindowLong(
                     WinDef.HWND(Pointer(h)),
-                    GWL_EXSTYLE,
+                    gwlExStyle,
                     style or wsExToolWindow or wsExNoActivate
                 )
             } catch (t: Throwable) {
