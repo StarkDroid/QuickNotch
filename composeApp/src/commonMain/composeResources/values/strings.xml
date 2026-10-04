@@ -54,7 +54,6 @@
     <string name="surface_system_accent">System Accent</string>
 
     <!-- Dock & Sizing tab -->
-    <string name="dock_sizing_header">Appearance</string>
     <string name="reset">Reset</string>
     <string name="notch_style">Notch Style</string>
     <string name="surface_theme">Surface Theme</string>
@@ -95,12 +94,10 @@
     <string name="calendar_error_not_verified">Google has not released this app yet. Add your Google account as a test user on the OAuth consent screen, then try again.</string>
     <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
     <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
-    <string name="calendar_today_count">%1$s events today</string>
     <string name="calendar_upcoming_count">%1$s upcoming events</string>
     <string name="calendar_today">Today</string>
     <string name="calendar_no_events">No upcoming events</string>
     <string name="calendar_open_day">Open %1$s in Google Calendar</string>
-    <string name="calendar_ticker_label">Calendar event</string>
     <string name="notification_grant_button">Grant Full Disk Access</string>
     <string name="notification_grant_hint">QuickNotch needs Full Disk Access to read macOS notification counts.</string>
 
@@ -129,8 +126,6 @@ Add apps from the list on the right.</string>
     <string name="add">Add</string>
 
     <!-- Widgets tab -->
-    <string name="widgets_header">Widgets</string>
-    <string name="widgets_header_desc">Enable widgets and tune them. Open the notch and scroll the wheel to flip between the active ones.</string>
     <string name="widget_apps_title">Pinned Apps</string>
     <string name="widget_music_title">Now Playing</string>
     <string name="widget_now_playing">Now playing: %1$s · %2$s</string>

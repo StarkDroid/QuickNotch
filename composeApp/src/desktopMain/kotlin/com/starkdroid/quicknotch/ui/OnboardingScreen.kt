@@ -2,7 +2,6 @@ package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,8 +11,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,13 +40,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -553,7 +547,6 @@ private fun OnboardingDockRow(favorites: List<AppItem>) {
  * Three style cards: solid surfaces with hover lift and spring press, selected
  * gets the accent border + soft tint. Each shows the pill with sample content.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun StyleCards(
     selected: NotchStyle,
@@ -563,13 +556,10 @@ private fun StyleCards(
         NotchStyle.entries.forEachIndexed { index, style ->
             val isSelected = style == selected
             TabEntrance(index = index) {
-                var hovered by remember { mutableStateOf(false) }
-                var pressed by remember { mutableStateOf(false) }
-                val scale by animateFloatAsState(
-                    targetValue = if (pressed) 0.97f else 1f,
-                    animationSpec = spring(dampingRatio = 0.78f, stiffness = 520f),
-                    label = "styleCardScale"
-                )
+                val hoverPress = rememberHoverPressState()
+                val hovered = hoverPress.hovered
+                val pressed = hoverPress.pressed
+                val scale = hoverPressScale(hoverPress, pressedScale = 0.97f)
                 val lift by animateDpAsState(
                     targetValue = if (hovered && !pressed) (-2).dp else 0.dp,
                     animationSpec = spring(dampingRatio = 0.8f, stiffness = 500f),
@@ -591,15 +581,8 @@ private fun StyleCards(
                             },
                             RoundedCornerShape(16.dp)
                         )
-                        .onPointerEvent(PointerEventType.Enter) { hovered = true }
-                        .onPointerEvent(PointerEventType.Exit) { hovered = false }
-                        .onPointerEvent(PointerEventType.Press) { pressed = true }
-                        .onPointerEvent(PointerEventType.Release) { pressed = false }
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onSelect(style) }
-                        )
+                        .trackHoverPress(hoverPress)
+                        .plainClickable(onClick = { onSelect(style) })
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -761,7 +744,6 @@ private fun OnboardingHeading(title: String, subtitle: String) {
     )
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun OnboardingButtons(
     step: OnboardingStep,
@@ -774,18 +756,13 @@ private fun OnboardingButtons(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (step != OnboardingStep.Welcome) {
-            var backHovered by remember { mutableStateOf(false) }
+            val backHover = rememberHoverPressState()
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (backHovered) SettingsCardHover else Color.Transparent)
-                    .onPointerEvent(PointerEventType.Enter) { backHovered = true }
-                    .onPointerEvent(PointerEventType.Exit) { backHovered = false }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onBack
-                    )
+                    .background(if (backHover.hovered) SettingsCardHover else Color.Transparent)
+                    .trackHoverPress(backHover)
+                    .plainClickable(onClick = onBack)
                     .padding(horizontal = 12.dp, vertical = 9.dp)
             ) {
                 Row(

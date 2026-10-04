@@ -12,8 +12,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,13 +45,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,7 +91,6 @@ import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.FavoritesRepository
-import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
@@ -371,31 +365,18 @@ fun SettingsScreen(
 }
 
 /** Content-header reset chip — only on Appearance, the page it affects. */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ContentHeaderReset(onReset: () -> Unit) {
-    var hovered by remember { mutableStateOf(false) }
-    var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 550f),
-        label = "resetScale"
-    )
+    val hoverPress = rememberHoverPressState()
+    val scale = hoverPressScale(hoverPress, pressedScale = 0.95f)
     Box(
         modifier = Modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(9.dp))
-            .background(if (hovered) SettingsCardHover else SettingsCard)
+            .background(if (hoverPress.hovered) SettingsCardHover else SettingsCard)
             .border(1.dp, SettingsBorder, RoundedCornerShape(9.dp))
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .onPointerEvent(PointerEventType.Press) { pressed = true }
-            .onPointerEvent(PointerEventType.Release) { pressed = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onReset
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = onReset)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -460,22 +441,14 @@ private fun AboutDialog(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.6f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss
-            ),
+            .plainClickable(onClick = onDismiss),
         contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
                 .width(440.dp)
                 .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
-                ),
+                .plainClickable(onClick = {}),
             colors = CardDefaults.cardColors(containerColor = SettingsCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, SettingsBorder),
             shape = RoundedCornerShape(18.dp)

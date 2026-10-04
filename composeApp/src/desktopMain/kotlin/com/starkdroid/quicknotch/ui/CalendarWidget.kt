@@ -18,10 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -74,7 +71,6 @@ import com.starkdroid.quicknotch.generated.resources.calendar_last_sync
 import com.starkdroid.quicknotch.generated.resources.calendar_never_synced
 import com.starkdroid.quicknotch.generated.resources.calendar_refresh
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
-import com.starkdroid.quicknotch.generated.resources.calendar_today_count
 import com.starkdroid.quicknotch.generated.resources.calendar
 import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography

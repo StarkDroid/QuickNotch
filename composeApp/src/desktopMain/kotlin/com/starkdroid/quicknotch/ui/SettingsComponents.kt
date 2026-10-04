@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +39,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,16 +60,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AccentSoft
-import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
-import com.starkdroid.quicknotch.theme.SettingsBg
 import com.starkdroid.quicknotch.theme.SettingsBorder
 import com.starkdroid.quicknotch.theme.SettingsBorderStrong
 import com.starkdroid.quicknotch.theme.SettingsCard
 import com.starkdroid.quicknotch.theme.SettingsCardHover
 import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.SettingsSelected
-import com.starkdroid.quicknotch.theme.SettingsSidebar
 import com.starkdroid.quicknotch.theme.SwitchThumbOff
 import com.starkdroid.quicknotch.theme.SwitchThumbOn
 import com.starkdroid.quicknotch.theme.SwitchTrackOff
@@ -78,19 +75,55 @@ import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
 
-// Flat Minimalist Color Tokens (shared by the settings window and its tabs)
-// Kept for callers that reference them directly; new chrome prefers the
-// Settings* tokens in theme/Color.kt. All solids — no gradients anywhere in
-// settings or onboarding.
-internal val FlatBg = Color(0xFF0C0E14)
-internal val FlatSurface = Color(0xFF131722)
-internal val FlatSurfaceElevated = Color(0xFF181E2E)
-internal val FlatSurfaceSelected = Color(0xFF1B2236)
-internal val FlatBorder = Color(0xFF22283A)
-internal val FlatCard = Color(0xFF121622)
+// ── Shared interaction helpers ───────────────────────────────────────────────
+// Every hoverable settings/onboarding control used to redeclare the same two
+// booleans, the same four pointer handlers and the same ripple-free clickable.
+// They share one state shape and three helpers instead.
 
-/** Motion shared by settings micro-interactions: quick, calm, springy. */
-private val SettingsSpring = spring<Float>(dampingRatio = 0.78f, stiffness = 520f)
+/** Hover + press for one interactive element. */
+internal class HoverPressState {
+    var hovered by mutableStateOf(false)
+    var pressed by mutableStateOf(false)
+}
+
+@Composable
+internal fun rememberHoverPressState(): HoverPressState = remember { HoverPressState() }
+
+/** Feeds cursor enter/exit/press/release into [state]. */
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun Modifier.trackHoverPress(state: HoverPressState): Modifier = this
+    .onPointerEvent(PointerEventType.Enter) { state.hovered = true }
+    .onPointerEvent(PointerEventType.Exit) { state.hovered = false }
+    .onPointerEvent(PointerEventType.Press) { state.pressed = true }
+    .onPointerEvent(PointerEventType.Release) { state.pressed = false }
+
+/**
+ * Clickable without a ripple — settings/onboarding signal interaction through
+ * background/border/scale animation instead, so a Material ripple would
+ * double-announce every press.
+ */
+@Composable
+internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier = this.clickable(
+    interactionSource = remember { MutableInteractionSource() },
+    indication = null,
+    onClick = onClick
+)
+
+/** Spring dip on press, optional lift on hover. One tuning for all controls. */
+@Composable
+internal fun hoverPressScale(
+    state: HoverPressState,
+    hoveredScale: Float = 1f,
+    pressedScale: Float = 0.96f
+): Float {
+    val target = if (state.pressed) pressedScale else if (state.hovered) hoveredScale else 1f
+    val scale by animateFloatAsState(
+        targetValue = target,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 520f),
+        label = "hoverPressScale"
+    )
+    return scale
+}
 
 /**
  * One settings card: solid surface, 16dp radius, hairline border. The single
@@ -152,8 +185,9 @@ internal fun SidebarNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hovered by remember { mutableStateOf(false) }
-    var pressed by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
+    val pressed = hoverPress.pressed
     val bg by animateColorAsState(
         targetValue = when {
             selected -> SettingsSelected
@@ -169,11 +203,7 @@ internal fun SidebarNavItem(
         animationSpec = tween(140),
         label = "navBorder"
     )
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = SettingsSpring,
-        label = "navScale"
-    )
+    val scale = hoverPressScale(hoverPress, pressedScale = 0.97f)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -181,15 +211,8 @@ internal fun SidebarNavItem(
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(10.dp))
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .onPointerEvent(PointerEventType.Press) { pressed = true }
-            .onPointerEvent(PointerEventType.Release) { pressed = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -247,32 +270,22 @@ internal fun PrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hovered by remember { mutableStateOf(false) }
-    var pressed by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
+    val pressed = hoverPress.pressed
     val bg by animateColorAsState(
         targetValue = if (hovered) Color(0xFF939BFF) else AccentSolid,
         animationSpec = tween(120),
         label = "primaryBg"
     )
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = SettingsSpring,
-        label = "primaryScale"
-    )
+    val scale = hoverPressScale(hoverPress)
     Box(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .onPointerEvent(PointerEventType.Press) { pressed = true }
-            .onPointerEvent(PointerEventType.Release) { pressed = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -296,7 +309,8 @@ internal fun GhostButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hovered by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
     val bg by animateColorAsState(
         targetValue = if (hovered) SettingsCardHover else Color.Transparent,
         animationSpec = tween(120),
@@ -306,13 +320,8 @@ internal fun GhostButton(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -342,7 +351,8 @@ internal fun <T> AppearanceDropdown(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var hovered by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
     val chevron by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = spring(dampingRatio = 0.8f, stiffness = 500f),
@@ -372,13 +382,8 @@ internal fun <T> AppearanceDropdown(
                 .clip(RoundedCornerShape(10.dp))
                 .background(SettingsElevated)
                 .border(1.dp, border, RoundedCornerShape(10.dp))
-                .onPointerEvent(PointerEventType.Enter) { hovered = true }
-                .onPointerEvent(PointerEventType.Exit) { hovered = false }
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { expanded = true }
-                )
+                .trackHoverPress(hoverPress)
+                .plainClickable(onClick = { expanded = true })
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(
@@ -411,7 +416,8 @@ internal fun <T> AppearanceDropdown(
             ) {
                 options.forEach { option ->
                     val isSelected = option == selected
-                    var rowHovered by remember { mutableStateOf(false) }
+                    val rowHover = rememberHoverPressState()
+                    val rowHovered = rowHover.hovered
                     val rowBg by animateColorAsState(
                         targetValue = when {
                             isSelected -> AccentSoft
@@ -425,11 +431,8 @@ internal fun <T> AppearanceDropdown(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(rowBg)
-                            .onPointerEvent(PointerEventType.Enter) { rowHovered = true }
-                            .onPointerEvent(PointerEventType.Exit) { rowHovered = false }
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
+                            .trackHoverPress(rowHover)
+                            .plainClickable(
                                 onClick = {
                                     onSelect(option)
                                     expanded = false
@@ -532,8 +535,9 @@ internal fun MinimalistRectSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hovered by remember { mutableStateOf(false) }
-    var pressed by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
+    val pressed = hoverPress.pressed
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) 18.dp else 3.dp,
         animationSpec = spring(dampingRatio = 0.8f, stiffness = 550f),
@@ -553,11 +557,7 @@ internal fun MinimalistRectSwitch(
         animationSpec = tween(140),
         label = "switchBorder"
     )
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.93f else 1f,
-        animationSpec = SettingsSpring,
-        label = "switchScale"
-    )
+    val scale = hoverPressScale(hoverPress, pressedScale = 0.93f)
     Box(
         modifier = modifier
             .width(38.dp)
@@ -566,15 +566,8 @@ internal fun MinimalistRectSwitch(
             .clip(RoundedCornerShape(7.dp))
             .background(track)
             .border(1.dp, border, RoundedCornerShape(7.dp))
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .onPointerEvent(PointerEventType.Press) { pressed = true }
-            .onPointerEvent(PointerEventType.Release) { pressed = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { onCheckedChange(!checked) }
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = { onCheckedChange(!checked) })
             .padding(vertical = 3.dp),
         contentAlignment = Alignment.CenterStart
     ) {
@@ -730,8 +723,9 @@ private fun IndicatorCell(
     modifier: Modifier = Modifier,
     preview: @Composable () -> Unit
 ) {
-    var hovered by remember { mutableStateOf(false) }
-    var pressed by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
+    val pressed = hoverPress.pressed
     val bg by animateColorAsState(
         targetValue = when {
             checked -> SettingsSelected
@@ -750,30 +744,15 @@ private fun IndicatorCell(
         animationSpec = tween(130),
         label = "indicatorBorder"
     )
-    val scale by animateFloatAsState(
-        targetValue = when {
-            pressed -> 0.96f
-            hovered -> 1.02f
-            else -> 1f
-        },
-        animationSpec = SettingsSpring,
-        label = "indicatorScale"
-    )
+    val scale = hoverPressScale(hoverPress, hoveredScale = 1.02f)
     Box(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(12.dp))
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .onPointerEvent(PointerEventType.Press) { pressed = true }
-            .onPointerEvent(PointerEventType.Release) { pressed = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { onClick(!checked) }
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = { onClick(!checked) })
             .padding(vertical = 12.dp, horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -806,7 +785,8 @@ internal fun NotificationGrantRow(
     button: String,
     onGrant: () -> Unit
 ) {
-    var hovered by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
     val btnBg by animateColorAsState(
         targetValue = if (hovered) Color(0xFF939BFF) else AccentSolid,
         animationSpec = tween(120),
@@ -828,13 +808,8 @@ internal fun NotificationGrantRow(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(btnBg)
-                .onPointerEvent(PointerEventType.Enter) { hovered = true }
-                .onPointerEvent(PointerEventType.Exit) { hovered = false }
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onGrant
-                )
+                .trackHoverPress(hoverPress)
+                .plainClickable(onClick = onGrant)
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Text(
@@ -861,7 +836,8 @@ internal fun BehaviorSwitchRow(
     icon: ImageVector? = null,
     subtitle: String? = null
 ) {
-    var hovered by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
     val rowBg by animateColorAsState(
         targetValue = if (hovered) SettingsCardHover else Color.Transparent,
         animationSpec = tween(120),
@@ -872,13 +848,8 @@ internal fun BehaviorSwitchRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(rowBg)
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { onCheckedChange(!checked) }
-            )
+            .trackHoverPress(hoverPress)
+            .plainClickable(onClick = { onCheckedChange(!checked) })
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -940,7 +911,8 @@ internal fun WidgetAccordion(
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var hovered by remember { mutableStateOf(false) }
+    val hoverPress = rememberHoverPressState()
+    val hovered = hoverPress.hovered
     val chevron by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 480f),
@@ -967,13 +939,8 @@ internal fun WidgetAccordion(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(headerBg)
-                    .onPointerEvent(PointerEventType.Enter) { hovered = true }
-                    .onPointerEvent(PointerEventType.Exit) { hovered = false }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { expanded = !expanded }
-                    )
+                    .trackHoverPress(hoverPress)
+                    .plainClickable(onClick = { expanded = !expanded })
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1027,12 +994,6 @@ internal fun WidgetAccordion(
     }
 }
 
-/** Placeholder to keep unused-import warnings quiet for sidebar bg reuse. */
-@Suppress("unused")
-private val SidebarBgAlias = SettingsSidebar
-@Suppress("unused")
-private val BgAlias = SettingsBg
-
 /**
  * Staggered entrance for tab sections: fades + rises 10dp with a per-index
  * delay so a tab lands as a cascade instead of a flat pop. Pure enter
@@ -1044,7 +1005,7 @@ internal fun TabEntrance(
     content: @Composable () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { visible = true }
+    LaunchedEffect(Unit) { visible = true }
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(220, delayMillis = index * 55)) +
