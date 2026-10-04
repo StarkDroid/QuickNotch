@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlin.math.abs
+import kotlin.math.sign
 
 /**
  * Page-switch state for the expanded dock's widget pager, shared between the
@@ -60,6 +61,7 @@ internal class OverlayPager(
     private var lastEventNanos = 0L
     private var lastFlipNanos = 0L
     private var lastDeltaPx = 0f
+    private var lastFlipDir = 0
     private var burstFlipped = false
 
     /** Current number of widget pages (Apps, Music, …). Synced by the overlay. */
@@ -82,34 +84,43 @@ internal class OverlayPager(
         }
         lastEventNanos = now
         if (burstFlipped) {
-            // A full step landing well after the flip is the next swipe
-            // arriving mid-tail, not momentum: re-arm and count it fresh. The
-            // flick's own follow-through is large too but lands within
-            // milliseconds of the flip, so it stays swallowed. Same for a
-            // rising edge — fresh fingers spike the deltas, momentum only ever
-            // decays — so gentle repeats get through as well.
-            val freshShove = abs(deltaPx) >= stepPx
-            val risingEdge = lastDeltaPx != 0f && abs(deltaPx) > 2 * abs(lastDeltaPx)
-            lastDeltaPx = deltaPx
-            if ((freshShove || risingEdge) && now - lastFlipNanos > shoveDelayNs) {
-                burstFlipped = false
-                scrollAccum.value = 0f
-            } else {
+            if (!isFreshIntent(deltaPx, now)) {
+                lastDeltaPx = deltaPx
                 return
             }
-        } else {
-            lastDeltaPx = deltaPx
-        }
-        scrollAccum.value += deltaPx
-        if (abs(scrollAccum.value) >= stepPx) {
-            val step = if (scrollAccum.value > 0) 1 else -1
-            val next = (pageIndex.value + step).coerceIn(0, pageCount - 1)
+            burstFlipped = false
             scrollAccum.value = 0f
-            if (next != pageIndex.value) {
-                pageIndex.value = next
-                burstFlipped = true
-                lastFlipNanos = now
-            }
+        }
+        lastDeltaPx = deltaPx
+        scrollAccum.value += deltaPx
+        if (abs(scrollAccum.value) >= stepPx) flipOnce(now)
+    }
+
+    /**
+     * Whether this event starts a new gesture mid-tail: a full step, a rising
+     * edge (fresh fingers spike, momentum decays), or an explicit reversal —
+     * all only once the flick's own follow-through has passed. The flick's
+     * follow-through is large too but lands within milliseconds of the flip.
+     */
+    private fun isFreshIntent(deltaPx: Float, now: Long): Boolean {
+        val settled = now - lastFlipNanos > shoveDelayNs
+        val fullStep = abs(deltaPx) >= stepPx
+        val risingEdge = lastDeltaPx != 0f && abs(deltaPx) > 2 * abs(lastDeltaPx)
+        val reversed = lastFlipDir != 0 && sign(deltaPx).toInt() != lastFlipDir &&
+            abs(deltaPx) > stepPx / 4
+        return settled && (fullStep || risingEdge || reversed)
+    }
+
+    /** Advances one page in the accumulated direction and locks the burst. */
+    private fun flipOnce(now: Long) {
+        val step = if (scrollAccum.value > 0) 1 else -1
+        val next = (pageIndex.value + step).coerceIn(0, pageCount - 1)
+        scrollAccum.value = 0f
+        if (next != pageIndex.value) {
+            pageIndex.value = next
+            lastFlipDir = step
+            burstFlipped = true
+            lastFlipNanos = now
         }
     }
 

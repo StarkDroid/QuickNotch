@@ -32,8 +32,11 @@ internal fun iconSpring() = spring(
 )
 
 internal fun pageSpring() = spring(
-    dampingRatio = 0.9f,
-    stiffness = 900f,
+    // Critically damped and quick (~200ms): a flick lands on the next widget
+    // decisively instead of visibly travelling through the pages, which reads
+    // as scrolling rather than paging.
+    dampingRatio = 1.0f,
+    stiffness = 1600f,
     visibilityThreshold = 0.001f
 )
 

@@ -1640,9 +1640,13 @@ composeApp/
   saw nothing settle). Order stays Music? → Apps → Weather → Calendar, so no
   widget is ever skipped at any swipe strength. Follow-up: repeats inside the
   tail still died (moving the cursor only helped by passing time), so a fresh
-  intent also re-arms mid-tail — a full-step shove or a 2× rising edge landing
-  >100ms after the flip, while the flick's own follow-through (large but
-  within milliseconds) stays swallowed.
+  intent also re-arms mid-tail — a full-step shove, a 2× rising edge, or an
+  explicit reversal landing >100ms after the flip, while the flick's own
+  follow-through (large but within milliseconds) stays swallowed. A second
+  follow-up made each turn land decisively instead of reading as scrolling:
+  `pageSpring` went 0.9/900 → 1.0/1600 (~200ms, critically damped) and an
+  explicit reversal breaks the burst, so corrections never wait out the
+  quiet gap.
 
 ---
 
