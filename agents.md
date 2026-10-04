@@ -516,15 +516,24 @@ composeApp/
                 ├── Shimmer.kt                # icon-skeleton shimmer (draw-phase-only invalidation)
                 ├── CalendarWidget.kt         # Widgets-tab Google Calendar (connect/refresh/status) +
                 │                             #   CalendarDayIndicator for the collapsed pill's mail badge
-                ├── OnboardingScreen.kt       # first-run flow: style -> calendar -> apps, one shared-element notch
-                │                             #   carried between steps; config.onboardingDone gates the overlay
+                ├── OnboardingScreen.kt       # first-run flow: welcome -> style -> calendar -> apps, live notch
+                │                             #   preview carried between steps in a stage card + segmented progress;
+                │                             #   config.onboardingDone gates the overlay
                 ├── PinnedAppsPanel.kt        # Widgets-tab pinned apps: PinnedAppsTab + rows (shared AppIconSlot/AppTitleColumn)
                 └── SettingsScreen / WidgetsTab / DockSizingTab / BehaviorTab / SettingsComponents
-                    # Tabs collect their OWN state from the repository (config/favorites/session) —
-                    # the screen collects nothing, so a media tick or slider drag never recomposes
-                    # the whole window. SettingsComponents holds ALL shared chrome: AppearanceDropdown,
-                    # MinimalistSliderRow, MinimalistRectSwitch, SectionHeader, IndicatorToggleBox,
-                    # NotificationToggleBox, NotificationGrantRow, BehaviorSwitchRow, WidgetAccordion
+                    # Sidebar layout: nav (Appearance/Widgets/Behavior) + animated content pane
+                    # with per-tab header. Tabs collect their OWN state from the repository
+                    # (config/favorites/session) — the screen collects nothing, so a media tick
+                    # or slider drag never recomposes the whole window. SettingsComponents holds
+                    # ALL shared chrome: SettingsCard, SettingsPageHeader, SidebarNavItem,
+                    # PrimaryButton/GhostButton, AppearanceDropdown, MinimalistSliderRow,
+                    # MinimalistRectSwitch (solid tracks, no gradients), SectionHeader,
+                    # IndicatorToggleBox, NotificationToggleBox, WaveformToggleBox,
+                    # NotificationGrantRow, BehaviorSwitchRow, WidgetAccordion, TabEntrance —
+                    # plus the shared interaction helpers every hoverable control uses:
+                    # HoverPressState/rememberHoverPressState, trackHoverPress,
+                    # plainClickable (ripple-free), hoverPressScale. Never redeclare per-control
+                    # hover/press booleans or ripple-free clickables; use the helpers.
 ```
 
 ---
@@ -533,9 +542,16 @@ composeApp/
 
 - Palette in `theme/Color.kt`: `NotchDeepBlack`, `NotchSurface`, `NotchCard`,
   `NotchBorder`, accents (`AccentCyan=#38BDF8`, indigo/purple/pink/green/red),
-  `TextPrimary/Secondary/Muted`. Overlay-local accents live in `MediaWidgets.kt`:
+  `TextPrimary/Secondary/Muted`, plus the settings system's solid tokens
+  (`SettingsBg/Sidebar/Card/Hover/Elevated/Border/Selected`, `AccentSolid/Soft/Ink`,
+  `SwitchTrackOn/Off`, `SwitchThumbOn/Off`). Overlay-local accents live in `MediaWidgets.kt`:
   `LiveAccent=#38BDF8`, `VinylDiscFill`, `VinylRing`, `ProgressGradientStart/End`,
   `WaveformWhite`.
+- Settings + onboarding are **gradient-free**: every surface is a flat solid (the old
+  switch-track gradients are gone). Shared hover/press/scale micro-interactions live in
+  `SettingsComponents.kt` (`HoverPressState`, `trackHoverPress`, `plainClickable`,
+  `hoverPressScale`, one 0.78/520 spring) with staggered `TabEntrance` cascades and
+  directional `AnimatedContent` tab/step transitions.
 - Rounded capsules everywhere, thin borders, dark glass. `LiveAccent` tints live
   media UI. SVG glyphs are tinted via `ColorFilter.tint` (SrcIn) — no hardcoded path data.
 - **Level ring**: 20% open at the bottom; full 288°; 0–100; accepts a `Painter`.
@@ -593,7 +609,7 @@ composeApp/
 | Level-ring glyphs as solid `currentColor` SVG silhouettes, volume ring off Material icons; the Bluetooth indicator (audio → `headphone.svg`, anything else → `bluetooth.svg`) also badges the connected-device count above 1 | done |
 | Idle clock in pill (date/time formats) | done |
 | Settings tabs (Appearance / Widgets / Behavior) | done |
-| Settings revamp: section-header icons, notch style + surface dropdowns, `System Accent` surface (OS-accent-tinted glass); tab underglow reverted; descriptive/subtitle texts removed from settings rows and the quickview indicators become square toggle boxes previewing their level ring | done (this session) — visual pass still pending on a live machine |
+| Settings revamp: sidebar layout (Appearance/Widgets/Behavior nav + animated content pane with per-tab headers, reset only on Appearance), 16dp solid `SettingsCard` sections with subtitled headers and staggered entrances, gradient-free controls (`MinimalistRectSwitch` now solid tracks), hover/press/scale micro-interactions on every control via shared helpers; onboarding rebuilt around segmented progress, a stage card for the carried notch, 2×2 feature cards and interactive style cards | done — compiles + jars green; the look itself still needs eyes on a live machine |
 | Quickview notification indicator: bell + red unread-count badge from the macOS Notification Center store, plus the settings toggle with a compact rectangular **Grant Full Disk Access** button (deep-links the Privacy &amp; Security pane; the helper row disappears once the count reads) | done (this session) — value is `count(*)` on `record`, the store's live ledger behind the Notification Center (adds on delivery, removes on dismiss/Open/Clear; the earlier `delivered = 1` bug referenced a column that never existed → badge stayed "needs FDA"; the `record`-row semantics beats `sum(app.badge)` because badges don't move on dismissal, so they couldn't reflect removals). The residual count after a Clear All is honest: macOS keeps unread-badge apps' notifications (WhatsApp) *and* genuinely persistent rows (Screen Time weekly report) until read/dismissed, same as the Dock badges. A one-time **Send Test Notifications** flow (osascript banners / WinRT `toast.ps1`) was removed by request — the badge is a real NC ledger, not a demo surface. Windows has no store, so its bell stays hidden (`count` null). App version bumped to **3.0.0** |
 | Fresh manual launch opens the Settings window alongside the notch; login/boot auto-start stays quietly behind the tray (distinguished by `--quicknotch-launched-at-login`, written into the LaunchAgent/Run-key command) | done (this session) — verified on macOS via CGWindowList on both paths (manual = overlay + settings; marker = overlay only); Windows launch still unverified |
 | macOS above-menu-bar placement: overlay parked **flush at the true top of the screen** (level `NSStatusWindowLevel` 25, collection `canJoinAllSpaces|stationary|fullScreenAuxiliary|ignoresCycle`, top-gap = style edge gap) via `MacOverlayWindowPolicy` + the AppKit dylib; AWT would park it under the menu bar (its alwaysOnTop tops out at floating level 3 and placement clamps to the visible area) | done (this session) — **verified live**: `CGWindowList` shows the overlay at `kCGWindowLayer=25`, bounds `y=0`. Off-state (Always-on-top off) drops to level 0 and re-parks below the menu bar. Windows analog is AWT `alwaysOnTop` alone (unchanged) |
@@ -621,7 +637,8 @@ composeApp/
   documented with `//` narrations explaining *why*. Preserve and extend them.
 - Read the surrounding file before editing; treat unfamiliar work as user work.
 - Add to the app by building `:composeApp:compileKotlinDesktop` then `:composeApp:desktopJar`
-  green, smoke-run with `:composeApp:run`, then commit **and push** on the current branch.
+  green, smoke-run with `:composeApp:run`, then commit **signed** on the current branch
+  (author stays the user; never push — the user pushes).
 - Reuse `LevelRing`/`VinylDisc`/`MarqueeText`/`TrackProgress` for any music/battery UI.
 - Keep shared-element keys/scope rules intact when touching the morph (see 5.4 + pitfalls).
 - Use monotonic clocks (`System.nanoTime()`-based) for extrapolation math; sample stamps
@@ -1213,9 +1230,18 @@ composeApp/
 ## 11. Git workflow
 
 - Branch: `cursor/macos-compose-adaptation`; work here, commit, `git push`.
+- Commits are the user's: GPG-sign every commit (`git commit -S`), author stays the
+  user, and never push — the user pushes.
 - One logical change per commit; message = imperative summary matching recent history
   (e.g. "Reorder pinned apps by dragging instead of arrow buttons").
 - Before committing: `compileKotlinDesktop` + `desktopJar` green + smoke run.
+- No detekt/ktlint/spotless is configured in this repo, so the pre-commit sweep is
+  manual: drop unused imports/code/resources (unused `Res.string`/`Res.drawable`
+  entries included) and confirm zero `Brush.*Gradient` in settings/onboarding files.
+- Check `git status` before every `git stash` — concurrent sessions share this branch,
+  and stashing blind sweeps up work you did not author (recovering a conflicted pop
+  cost a real scare: the foreign WIP silently deleted import lines in non-conflicting
+  regions). When in doubt, ask before resolving a conflict either way.
 - Keep `git status` clean at the end of a task; note untestable paths honestly in the summary.
 
 ---
@@ -1536,6 +1562,23 @@ composeApp/
   the same badge component the notification count already uses. (An audio-vs-BT
   distinction is *not* a second toggle: one "Bluetooth Battery" switch covers
   both.)
+
+- (this session → HEAD): settings + onboarding visual overhaul, all solid surfaces
+  (no gradients anywhere in the window): `SettingsScreen` moved from top tab pills
+  to a 232dp sidebar (nav + per-tab animated headers + directional tab transitions,
+  reset only on Appearance, spring-in About dialog); every tab section became a 16dp
+  `SettingsCard` with subtitled headers and staggered `TabEntrance` cascades;
+  `MinimalistRectSwitch` lost its gradient tracks; all hover/press/scale feedback
+  consolidated onto shared helpers (`HoverPressState`/`trackHoverPress`/
+  `plainClickable`/`hoverPressScale`) instead of per-control booleans; onboarding
+  rebuilt around segmented progress, a stage card for the carried notch, 2×2 feature
+  cards and hover-lift style cards. Follow-up audit removed the dead `Flat*` tokens,
+  ~20 unused imports and 5 dead strings (`dock_sizing_header`, `widgets_header`/`_desc`,
+  `calendar_today_count`, `calendar_ticker_label`); no detekt/ktlint exists, so the
+  pre-commit sweep stays manual (§11). File-size verdict: `SettingsComponents`
+  (~1000 lines) stays whole — it is one concern (settings chrome) with section
+  banners, so a split would scatter it; same for the untouched `MediaWidgets`/
+  `GoogleCalendar`. The look itself still needs eyes on a live machine.
 
 ---
 
