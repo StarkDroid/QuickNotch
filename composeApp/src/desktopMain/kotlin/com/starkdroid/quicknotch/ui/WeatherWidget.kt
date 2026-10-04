@@ -57,9 +57,6 @@ import com.starkdroid.quicknotch.generated.resources.weather_cond_storm
 import com.starkdroid.quicknotch.generated.resources.weather_failed_hint
 import com.starkdroid.quicknotch.generated.resources.weather_fog
 import com.starkdroid.quicknotch.generated.resources.weather_high_low
-import com.starkdroid.quicknotch.generated.resources.weather_icons_colorful
-import com.starkdroid.quicknotch.generated.resources.weather_icons_mono
-import com.starkdroid.quicknotch.generated.resources.weather_icons_title
 import com.starkdroid.quicknotch.generated.resources.weather_locating
 import com.starkdroid.quicknotch.generated.resources.weather_never_synced
 import com.starkdroid.quicknotch.generated.resources.weather_night
@@ -156,17 +153,13 @@ internal fun WeatherCondition.label(isDay: Boolean = true): String = stringResou
 )
 
 /**
- * Glyph tint for one condition. Monochrome keeps the surrounding text tint
- * (the old look); colorful paints each condition in its signature colour —
- * amber sun, pale moon, blue rain — on every surface alike.
+ * Glyph tint for one condition in signature colours (Google-style):
+ * amber sun, pale moon, blue rain, etc., on every surface alike.
  */
 internal fun weatherConditionTint(
     condition: WeatherCondition,
     isDay: Boolean,
-    colorful: Boolean,
-    fallback: Color
 ): Color {
-    if (!colorful) return fallback
     return when (condition) {
         WeatherCondition.CLEAR -> if (isDay) WeatherClear else WeatherMoon
         WeatherCondition.PARTLY -> if (isDay) WeatherPartly else WeatherMoon
@@ -197,7 +190,6 @@ internal fun WeatherQuickChip(
     data: WeatherData,
     fahrenheit: Boolean,
     tint: Color,
-    colorful: Boolean,
     modifier: Modifier = Modifier
 ) {
     val condition = WeatherCondition.of(data.now.code)
@@ -212,7 +204,7 @@ internal fun WeatherQuickChip(
         Icon(
             painter = condition.painter(data.now.isDay),
             contentDescription = null,
-            tint = weatherConditionTint(condition, data.now.isDay, colorful, tint),
+            tint = weatherConditionTint(condition, data.now.isDay),
             modifier = Modifier.size(16.dp)
         )
         Text(
@@ -251,7 +243,6 @@ internal fun WeatherNotchPage(
     state: WeatherState,
     fetching: Boolean,
     fahrenheit: Boolean,
-    colorful: Boolean,
     interactive: Boolean,
     onRefresh: () -> Unit
 ) {
@@ -281,7 +272,7 @@ internal fun WeatherNotchPage(
             modifier = Modifier.fillMaxSize().padding(horizontal = DockLayout.ContentPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            WeatherCurrentBlock(data = data, fahrenheit = fahrenheit, colorful = colorful)
+            WeatherCurrentBlock(data = data, fahrenheit = fahrenheit)
             Box(
                 modifier = Modifier
                     .padding(horizontal = 10.dp)
@@ -295,8 +286,7 @@ internal fun WeatherNotchPage(
                     day = day,
                     today = index == 0,
                     fahrenheit = fahrenheit,
-                    colorful = colorful,
-                    modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -357,7 +347,7 @@ private fun WeatherErrorPage(interactive: Boolean, onRefresh: () -> Unit) {
 
 /** Left anchor: glyph + temperature over place, high/low and precip/UV. */
 @Composable
-private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean, colorful: Boolean) {
+private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean) {
     val condition = WeatherCondition.of(data.now.code)
     val unit = weatherTempUnit(fahrenheit)
     Column(modifier = Modifier.width(132.dp)) {
@@ -365,7 +355,7 @@ private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean, colorful
             Icon(
                 painter = condition.painter(data.now.isDay),
                 contentDescription = null,
-                tint = weatherConditionTint(condition, data.now.isDay, colorful, TextPrimary),
+                tint = weatherConditionTint(condition, data.now.isDay),
                 modifier = Modifier.size(30.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -432,8 +422,7 @@ private fun WeatherDayTile(
     day: WeatherDay,
     today: Boolean,
     fahrenheit: Boolean,
-    colorful: Boolean,
-    modifier: Modifier = Modifier
+        modifier: Modifier = Modifier
 ) {
     val condition = WeatherCondition.of(day.code)
     Column(
@@ -453,7 +442,7 @@ private fun WeatherDayTile(
         Icon(
             painter = condition.painter(isDay = true),
             contentDescription = condition.label(isDay = true),
-            tint = weatherConditionTint(condition, isDay = true, colorful, TextSecondary),
+            tint = weatherConditionTint(condition, isDay = true),
             modifier = Modifier.size(15.dp)
         )
         Spacer(modifier = Modifier.height(3.dp))
@@ -487,7 +476,7 @@ private fun weatherDow(dateIso: String): String = runCatching {
 /**
  * The Widgets-tab weather card: live status (place + sync age), manual
  * refresh, the notch toggle, the temperature unit, and the icon style
- * (monochrome vs. colorful glyphs). No connection flow —
+ * No connection flow —
  * the feed locates itself, so there is nothing to connect.
  */
 @Composable
@@ -498,8 +487,6 @@ internal fun WeatherSettings(
     onShowWeatherChange: (Boolean) -> Unit,
     fahrenheit: Boolean,
     onFahrenheitChange: (Boolean) -> Unit,
-    colorful: Boolean,
-    onColorfulChange: (Boolean) -> Unit,
     onRefresh: () -> Unit
 ) {
     val data = (state as? WeatherState.Ready)?.data
@@ -570,20 +557,7 @@ internal fun WeatherSettings(
             onSelect = onFahrenheitChange,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        AppearanceDropdown(
-            label = stringResource(Res.string.weather_icons_title),
-            options = listOf(false, true),
-            selected = colorful,
-            optionLabel = {
-                stringResource(
-                    if (it) Res.string.weather_icons_colorful
-                    else Res.string.weather_icons_mono
-                )
-            },
-            onSelect = onColorfulChange,
-            modifier = Modifier.fillMaxWidth()
-        )
+
     }
 }
 

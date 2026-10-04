@@ -227,10 +227,6 @@ internal fun WidgetsTab(
                         onFahrenheitChange = { enabled ->
                             onUpdate { it.copy(widgets = it.widgets.copy(weatherFahrenheit = enabled)) }
                         },
-                        colorful = config.widgets.weatherColorfulIcons,
-                        onColorfulChange = { enabled ->
-                            onUpdate { it.copy(widgets = it.widgets.copy(weatherColorfulIcons = enabled)) }
-                        },
                         onRefresh = Weather::refresh
                     )
                 }

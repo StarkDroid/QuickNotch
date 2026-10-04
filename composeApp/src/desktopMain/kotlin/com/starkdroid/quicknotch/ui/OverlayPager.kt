@@ -43,10 +43,9 @@ internal class OverlayPager(
      * Quiet gap that ends a swipe burst and re-arms the next flip. Uses a
      * monotonic clock so wall-clock jumps never glue two gestures together.
      */
-    private val gestureGapNs = 50_000_000L
+    private val gestureGapNs = 100_000_000L
     private var lastEventNanos = 0L
     private var burstFlipped = false
-    private var lastFlipSign = 0
 
     /** Current number of widget pages (Apps, Music, …). Synced by the overlay. */
     var pageCount: Int = 1
@@ -61,13 +60,7 @@ internal class OverlayPager(
     fun consumeWheel(deltaPx: Float) {
         if (!dockVisible.value || pageCount <= 1 || deltaPx == 0f) return
         val now = System.nanoTime()
-        val deltaSign = if (deltaPx > 0f) 1 else -1
-
-        // Immediate re-arm on direction reversal (enables rapid back-and-forth)
-        if (burstFlipped && lastFlipSign != 0 && deltaSign != lastFlipSign) {
-            burstFlipped = false
-            scrollAccum.value = 0f
-        } else if (now - lastEventNanos > gestureGapNs) {
+        if (now - lastEventNanos > gestureGapNs) {
             burstFlipped = false
             scrollAccum.value = 0f
         }
@@ -84,9 +77,8 @@ internal class OverlayPager(
         scrollAccum.value = 0f
         if (next != pageIndex.value) {
             pageIndex.value = next
+            burstFlipped = true
         }
-        burstFlipped = true
-        lastFlipSign = step
     }
 
     /** Resets accumulated wheel travel, e.g. after a page change via UI. */

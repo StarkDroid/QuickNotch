@@ -88,7 +88,6 @@ internal fun QuickView(
     showWeather: Boolean = false,
     weather: WeatherData? = null,
     fahrenheit: Boolean = false,
-    weatherColorful: Boolean = false,
     /** Shared-element morph modifiers for the live-activity disc/title/rings. */
     discModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
@@ -252,7 +251,6 @@ internal fun QuickView(
                 calendarEventCount = if (showCalendar) calendarEventCount else 0,
                 weather = if (showWeather) weather else null,
                 fahrenheit = fahrenheit,
-                weatherColorful = weatherColorful
             )
         } else {
             // Idle dots; the notification bell, when readable, caps the row.

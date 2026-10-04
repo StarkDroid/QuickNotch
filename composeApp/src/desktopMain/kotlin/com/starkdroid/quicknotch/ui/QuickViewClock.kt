@@ -78,7 +78,6 @@ internal fun IdleClockRow(
     calendarEventCount: Int = 0,
     weather: WeatherData? = null,
     fahrenheit: Boolean = false,
-    weatherColorful: Boolean = false
 ) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -109,8 +108,7 @@ internal fun IdleClockRow(
             WeatherQuickChip(
                 data = weather,
                 fahrenheit = fahrenheit,
-                tint = tint,
-                colorful = weatherColorful
+                tint = tint
             )
         }
         if (clock.showDate) {

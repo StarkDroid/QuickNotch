@@ -110,7 +110,7 @@ data class WidgetsConfig(
      * …) instead of the monochrome text tint. Purely a render choice — the
      * same glyphs, only the tint changes.
      */
-    val weatherColorfulIcons: Boolean = true,    /** Album-art-derived or constant white; see [WaveformTint]. */
+    /** Album-art-derived or constant white; see [WaveformTint]. */
     val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
     /**
      * While the waveform is on, drop the song name from the collapsed pill: the
