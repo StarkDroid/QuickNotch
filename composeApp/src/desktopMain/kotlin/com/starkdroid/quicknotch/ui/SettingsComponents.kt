@@ -1,22 +1,25 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,24 +45,43 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.starkdroid.quicknotch.theme.AccentIndigoLight
+import com.starkdroid.quicknotch.theme.AccentSolid
+import com.starkdroid.quicknotch.theme.AccentSoft
+import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
+import com.starkdroid.quicknotch.theme.SettingsBg
+import com.starkdroid.quicknotch.theme.SettingsBorder
+import com.starkdroid.quicknotch.theme.SettingsBorderStrong
+import com.starkdroid.quicknotch.theme.SettingsCard
+import com.starkdroid.quicknotch.theme.SettingsCardHover
+import com.starkdroid.quicknotch.theme.SettingsElevated
+import com.starkdroid.quicknotch.theme.SettingsSelected
+import com.starkdroid.quicknotch.theme.SettingsSidebar
+import com.starkdroid.quicknotch.theme.SwitchThumbOff
+import com.starkdroid.quicknotch.theme.SwitchThumbOn
+import com.starkdroid.quicknotch.theme.SwitchTrackOff
+import com.starkdroid.quicknotch.theme.SwitchTrackOn
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
 
 // Flat Minimalist Color Tokens (shared by the settings window and its tabs)
+// Kept for callers that reference them directly; new chrome prefers the
+// Settings* tokens in theme/Color.kt. All solids — no gradients anywhere in
+// settings or onboarding.
 internal val FlatBg = Color(0xFF0C0E14)
 internal val FlatSurface = Color(0xFF131722)
 internal val FlatSurfaceElevated = Color(0xFF181E2E)
@@ -68,12 +89,249 @@ internal val FlatSurfaceSelected = Color(0xFF1B2236)
 internal val FlatBorder = Color(0xFF22283A)
 internal val FlatCard = Color(0xFF121622)
 
+/** Motion shared by settings micro-interactions: quick, calm, springy. */
+private val SettingsSpring = spring<Float>(dampingRatio = 0.78f, stiffness = 520f)
+
+/**
+ * One settings card: solid surface, 16dp radius, hairline border. The single
+ * container every tab section uses, so Appearance / Widgets / Behavior read as
+ * one system instead of three card styles.
+ */
+@Composable
+internal fun SettingsCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SettingsCard),
+        border = androidx.compose.foundation.BorderStroke(1.dp, SettingsBorder),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp), content = content)
+    }
+}
+
+/**
+ * Page header for the content pane: 19sp semibold title over a 12.5sp
+ * secondary description. Rendered per tab so the sidebar selection always has
+ * a matching headline.
+ */
+@Composable
+internal fun SettingsPageHeader(title: String, description: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = AppTypography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            fontSize = 19.sp,
+            color = TextPrimary
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = description,
+            style = AppTypography.bodySmall,
+            color = TextSecondary,
+            fontSize = 12.5.sp,
+            lineHeight = 17.sp
+        )
+    }
+}
+
+/**
+ * One sidebar navigation row: icon chip + label with an animated selected
+ * pill. Hover lifts the background, press dips the scale — the whole row is
+ * the target, not just the label.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+internal fun SidebarNavItem(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var hovered by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
+    val bg by animateColorAsState(
+        targetValue = when {
+            selected -> SettingsSelected
+            hovered -> SettingsCardHover
+            else -> Color.Transparent
+        },
+        animationSpec = tween(140),
+        label = "navBg"
+    )
+    val border by animateColorAsState(
+        targetValue = if (selected) AccentSolid.copy(alpha = 0.55f)
+        else if (hovered) SettingsBorderStrong else Color.Transparent,
+        animationSpec = tween(140),
+        label = "navBorder"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = SettingsSpring,
+        label = "navScale"
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(10.dp))
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false }
+            .onPointerEvent(PointerEventType.Press) { pressed = true }
+            .onPointerEvent(PointerEventType.Release) { pressed = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 10.dp, vertical = 9.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) AccentSoft else SettingsElevated)
+                    .border(
+                        1.dp,
+                        if (selected) AccentSolid.copy(alpha = 0.4f) else SettingsBorder,
+                        RoundedCornerShape(8.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) AccentSolid else TextSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = label,
+                style = AppTypography.bodyLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                fontSize = 13.5.sp,
+                color = if (selected) TextPrimary else TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (selected) {
+                Spacer(modifier = Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(AccentSolid)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Primary action button: solid accent fill, ink text, hover lightens the fill
+ * and press dips the scale. Used for Continue/Finish, Browse-adjacent confirms
+ * and the grant-access call to action.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+internal fun PrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var hovered by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
+    val bg by animateColorAsState(
+        targetValue = if (hovered) Color(0xFF939BFF) else AccentSolid,
+        animationSpec = tween(120),
+        label = "primaryBg"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = SettingsSpring,
+        label = "primaryScale"
+    )
+    Box(
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false }
+            .onPointerEvent(PointerEventType.Press) { pressed = true }
+            .onPointerEvent(PointerEventType.Release) { pressed = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = AppTypography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF14161F)
+        )
+    }
+}
+
+/**
+ * Quiet ghost button: transparent until hovered, then a soft solid wash.
+ * Used for Skip/Back/Cancel-adjacent actions.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+internal fun GhostButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var hovered by remember { mutableStateOf(false) }
+    val bg by animateColorAsState(
+        targetValue = if (hovered) SettingsCardHover else Color.Transparent,
+        animationSpec = tween(120),
+        label = "ghostBg"
+    )
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = AppTypography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = TextSecondary
+        )
+    }
+}
+
 /**
  * A minimal, flat selection dropdown (label above, current value, popup menu)
  * shared by the style and surface pickers. Popup rows are plain composables, so
  * opening it costs one small popup — no preview textures are ever rendered.
+ * Hover highlights the field border; the chevron rotates open.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun <T> AppearanceDropdown(
     label: String,
@@ -84,22 +342,44 @@ internal fun <T> AppearanceDropdown(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var hovered by remember { mutableStateOf(false) }
+    val chevron by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 500f),
+        label = "dropdownChevron"
+    )
+    val border by animateColorAsState(
+        targetValue = when {
+            expanded -> AccentSolid.copy(alpha = 0.6f)
+            hovered -> SettingsBorderStrong
+            else -> SettingsBorder
+        },
+        animationSpec = tween(140),
+        label = "dropdownBorder"
+    )
     Column(modifier = modifier) {
         Text(
             text = label,
             style = AppTypography.titleSmall,
             fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
             color = TextPrimary
         )
         Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(FlatCard)
-                .border(1.dp, FlatBorder, RoundedCornerShape(8.dp))
-                .clickable { expanded = true }
-                .padding(horizontal = 10.dp, vertical = 9.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(SettingsElevated)
+                .border(1.dp, border, RoundedCornerShape(10.dp))
+                .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                .onPointerEvent(PointerEventType.Exit) { hovered = false }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { expanded = true }
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -110,46 +390,67 @@ internal fun <T> AppearanceDropdown(
                     text = optionLabel(selected),
                     style = AppTypography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.5.sp,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = null,
                     tint = TextMuted,
-                    modifier = Modifier.size(15.dp)
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = chevron }
                 )
             }
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.background(FlatSurfaceElevated)
+                modifier = Modifier.background(SettingsElevated)
             ) {
                 options.forEach { option ->
+                    val isSelected = option == selected
+                    var rowHovered by remember { mutableStateOf(false) }
+                    val rowBg by animateColorAsState(
+                        targetValue = when {
+                            isSelected -> AccentSoft
+                            rowHovered -> SettingsCardHover
+                            else -> Color.Transparent
+                        },
+                        animationSpec = tween(110),
+                        label = "dropdownRow"
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                onSelect(option)
-                                expanded = false
-                            }
-                            .background(if (option == selected) FlatSurfaceSelected else Color.Transparent)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .background(rowBg)
+                            .onPointerEvent(PointerEventType.Enter) { rowHovered = true }
+                            .onPointerEvent(PointerEventType.Exit) { rowHovered = false }
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    onSelect(option)
+                                    expanded = false
+                                }
+                            )
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = optionLabel(option),
                             style = AppTypography.labelSmall,
-                            color = if (option == selected) AccentIndigoLight else TextSecondary
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) AccentSolid else TextSecondary
                         )
-                        if (option == selected) {
+                        if (isSelected) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = AccentIndigoLight,
-                                modifier = Modifier.size(13.dp)
+                                tint = AccentSolid,
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
@@ -174,13 +475,13 @@ internal fun MinimalistSliderRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, style = AppTypography.bodySmall, color = TextSecondary)
+            Text(title, style = AppTypography.bodySmall, fontSize = 12.5.sp, color = TextSecondary)
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(FlatSurfaceElevated)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(SettingsElevated)
+                    .border(1.dp, SettingsBorder, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = valueLabel,
@@ -191,28 +492,28 @@ internal fun MinimalistSliderRow(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Slider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
-            modifier = Modifier.height(20.dp),
+            modifier = Modifier.height(22.dp),
             thumb = {
                 Box(
                     modifier = Modifier
-                        .size(width = 8.dp, height = 14.dp)
-                        .clip(RoundedCornerShape(2.5.dp))
-                        .background(Color(0xFFE2E8F0))
-                        .border(0.5.dp, Color(0xFF64748B), RoundedCornerShape(2.5.dp))
+                        .size(15.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFE8ECF4))
+                        .border(1.dp, Color(0xFF8A94A8), RoundedCornerShape(8.dp))
                 )
             },
             track = { sliderState ->
                 SliderDefaults.Track(
                     sliderState = sliderState,
-                    modifier = Modifier.height(2.5.dp),
+                    modifier = Modifier.height(4.dp),
                     colors = SliderDefaults.colors(
-                        activeTrackColor = Color(0xFFA0AEC0),
-                        inactiveTrackColor = Color(0xFF1E2436)
+                        activeTrackColor = AccentSolid,
+                        inactiveTrackColor = SettingsBorder
                     )
                 )
             }
@@ -220,57 +521,69 @@ internal fun MinimalistSliderRow(
     }
 }
 
+/**
+ * Flat rectangular switch: solid on/off tracks (no gradients), spring thumb,
+ * hover border lift and press dip. 38×22 with a 7dp radius.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun MinimalistRectSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var hovered by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) 16.dp else 2.dp,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 550f),
+        targetValue = if (checked) 18.dp else 3.dp,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 550f),
         label = "switchOffset"
     )
-
-    // Deep high-contrast track with rich depth
-    val trackBg = if (checked) {
-        Brush.horizontalGradient(
-            colors = listOf(Color(0xFF3730A3), Color(0xFF4F46E5), Color(0xFF6366F1))
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(Color(0xFF07090E), Color(0xFF0C1018))
-        )
-    }
-
-    val trackBorder = if (checked) {
-        Color(0xFF6366F1)
-    } else {
-        Color(0xFF1E2638)
-    }
-
-    val thumbBg = if (checked) Color(0xFFFFFFFF) else Color(0xFF526075)
-    val thumbBorder = if (checked) Color(0x26000000) else Color(0x33FFFFFF)
-
+    val track by animateColorAsState(
+        targetValue = if (checked) SwitchTrackOn else SwitchTrackOff,
+        animationSpec = tween(150),
+        label = "switchTrack"
+    )
+    val border by animateColorAsState(
+        targetValue = when {
+            checked -> AccentSolid.copy(alpha = 0.7f)
+            hovered -> SettingsBorderStrong
+            else -> SettingsBorder
+        },
+        animationSpec = tween(140),
+        label = "switchBorder"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = SettingsSpring,
+        label = "switchScale"
+    )
     Box(
         modifier = modifier
-            .width(36.dp)
-            .height(20.dp)
-            .clip(RoundedCornerShape(5.dp))
-            .background(trackBg)
-            .border(1.dp, trackBorder, RoundedCornerShape(5.dp))
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 2.dp),
+            .width(38.dp)
+            .height(22.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(7.dp))
+            .background(track)
+            .border(1.dp, border, RoundedCornerShape(7.dp))
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false }
+            .onPointerEvent(PointerEventType.Press) { pressed = true }
+            .onPointerEvent(PointerEventType.Release) { pressed = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onCheckedChange(!checked) }
+            )
+            .padding(vertical = 3.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
-                .size(width = 16.dp, height = 14.dp)
-                .shadow(if (checked) 2.dp else 1.dp, RoundedCornerShape(3.5.dp))
-                .clip(RoundedCornerShape(3.5.dp))
-                .background(thumbBg)
-                .border(0.5.dp, thumbBorder, RoundedCornerShape(3.5.dp))
+                .size(width = 15.dp, height = 14.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(if (checked) SwitchThumbOn else SwitchThumbOff)
         )
     }
 }
@@ -279,35 +592,55 @@ internal fun MinimalistRectSwitch(
 // ── Shared section chrome (used by multiple tabs) ────────────────────────────
 
 /**
- * Card section header: a small accent icon beside the title. Used across every
- * Dock & Sizing card so each section reads as one scannable unit.
+ * Card section header: icon chip beside title, optional subtitle underneath.
+ * Used across every settings card so each section reads as one scannable unit.
  */
 @Composable
-internal fun SectionHeader(icon: ImageVector, title: String) {
+internal fun SectionHeader(icon: ImageVector, title: String, subtitle: String? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = AccentIndigoLight,
-            modifier = Modifier.size(15.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = AppTypography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
-        )
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(SettingsElevated)
+                .border(1.dp, SettingsBorder, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = AccentSolid,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+            Text(
+                text = title,
+                style = AppTypography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = TextPrimary
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = AppTypography.bodySmall,
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+        }
     }
 }
 
 /**
  * One cell in the quickview indicators grid (Volume / Audio Battery /
  * Laptop Battery): a square toggle that previews the level-ring glyph and its
- * level, with the label centered underneath. The on-state reads as an
- * accent-cased selected cell with a full-bright ring; off is a neutral card
- * with a dimmed ring.
+ * level, with the label centered underneath. Hover lifts it, press dips it,
+ * and the border animates to the accent when on.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun IndicatorToggleBox(
     title: String,
@@ -336,7 +669,7 @@ internal fun IndicatorToggleBox(
  * The notifications entry of the same quickview indicators grid: identical
  * chrome to [IndicatorToggleBox] but the preview is the real bell glyph — a
  * notification has no level percentage to show inside a ring. Deliberately
- * badge-free: a hardcoded "3" here would misrepresent the live Notification
+ * badge-free: a hardcoded count here would misrepresent the live Notification
  * Center count the notch itself reads; the real badge only ever renders on the
  * island.
  */
@@ -385,9 +718,10 @@ internal fun WaveformToggleBox(
 
 /**
  * Shared chrome for one indicator-grid cell: the accent-outlined square toggle
- * with the caller-provided preview sitting above the centered label. The whole
- * cell toggles on the next click.
+ * with the caller-provided preview sitting above the centered label. Hover
+ * lifts the cell slightly, press dips it, and the whole cell toggles on click.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun IndicatorCell(
     title: String,
@@ -396,17 +730,51 @@ private fun IndicatorCell(
     modifier: Modifier = Modifier,
     preview: @Composable () -> Unit
 ) {
+    var hovered by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
+    val bg by animateColorAsState(
+        targetValue = when {
+            checked -> SettingsSelected
+            hovered -> SettingsCardHover
+            else -> SettingsCard
+        },
+        animationSpec = tween(130),
+        label = "indicatorBg"
+    )
+    val border by animateColorAsState(
+        targetValue = when {
+            checked -> AccentSolid.copy(alpha = 0.65f)
+            hovered -> SettingsBorderStrong
+            else -> SettingsBorder
+        },
+        animationSpec = tween(130),
+        label = "indicatorBorder"
+    )
+    val scale by animateFloatAsState(
+        targetValue = when {
+            pressed -> 0.96f
+            hovered -> 1.02f
+            else -> 1f
+        },
+        animationSpec = SettingsSpring,
+        label = "indicatorScale"
+    )
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (checked) FlatSurfaceSelected else FlatCard)
-            .border(
-                width = 1.dp,
-                color = if (checked) AccentIndigoLight.copy(alpha = 0.9f) else FlatBorder,
-                shape = RoundedCornerShape(10.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(12.dp))
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false }
+            .onPointerEvent(PointerEventType.Press) { pressed = true }
+            .onPointerEvent(PointerEventType.Release) { pressed = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onClick(!checked) }
             )
-            .clickable { onClick(!checked) }
-            .padding(vertical = 12.dp),
+            .padding(vertical = 12.dp, horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -428,16 +796,22 @@ private fun IndicatorCell(
  * Helper row under the indicators grid for the one thing that still needs the
  * user's action: granting QuickNotch Full Disk Access so the quickview can read
  * the macOS Notification Center count. A short hint on the left, a compact
- * rectangular button on the right that deep-links straight to the Privacy &
+ * solid button on the right that deep-links straight to the Privacy &
  * Security pane. Rendered only while the store is unreadable.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun NotificationGrantRow(
     hint: String,
     button: String,
     onGrant: () -> Unit
 ) {
-    val darkText = Color(0xFF1A1B25)
+    var hovered by remember { mutableStateOf(false) }
+    val btnBg by animateColorAsState(
+        targetValue = if (hovered) Color(0xFF939BFF) else AccentSolid,
+        animationSpec = tween(120),
+        label = "grantBg"
+    )
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -445,22 +819,29 @@ internal fun NotificationGrantRow(
         Text(
             text = hint,
             style = AppTypography.bodySmall,
+            fontSize = 12.sp,
             color = TextSecondary,
             modifier = Modifier.weight(1f)
         )
         Spacer(modifier = Modifier.width(10.dp))
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(AccentIndigoLight)
-                .clickable(onClick = onGrant)
+                .clip(RoundedCornerShape(8.dp))
+                .background(btnBg)
+                .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                .onPointerEvent(PointerEventType.Exit) { hovered = false }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onGrant
+                )
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Text(
                 text = button,
                 style = AppTypography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = darkText
+                color = Color(0xFF14161F)
             )
         }
     }
@@ -468,46 +849,75 @@ internal fun NotificationGrantRow(
 
 /**
  * The switch row used across the Behavior tab and the widget accordions:
- * optional leading icon chip, title, and a [MinimalistRectSwitch].
+ * icon chip, title (+ optional subtitle), and a [MinimalistRectSwitch].
+ * The whole row highlights softly on hover.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun BehaviorSwitchRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    subtitle: String? = null
 ) {
+    var hovered by remember { mutableStateOf(false) }
+    val rowBg by animateColorAsState(
+        targetValue = if (hovered) SettingsCardHover else Color.Transparent,
+        animationSpec = tween(120),
+        label = "switchRowBg"
+    )
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(rowBg)
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onCheckedChange(!checked) }
+            )
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         if (icon != null) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(30.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(FlatSurfaceElevated)
-                    .border(1.dp, FlatBorder, RoundedCornerShape(8.dp)),
+                    .background(SettingsElevated)
+                    .border(1.dp, SettingsBorder, RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = AccentIndigoLight,
-                    modifier = Modifier.size(14.dp)
+                    tint = AccentSolid,
+                    modifier = Modifier.size(15.dp)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
         }
-        Text(
-            text = title,
-            style = AppTypography.bodyLarge,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = AppTypography.bodyLarge,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = AppTypography.bodySmall,
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+            }
+        }
         MinimalistRectSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange
@@ -517,8 +927,10 @@ internal fun BehaviorSwitchRow(
 
 /**
  * A collapsible widget card: header row (icon chip, title, enable switch,
- * expand chevron) over an animated content area. Used by the Widgets tab.
+ * rotating chevron) over an animated content area. Used by the Widgets tab.
+ * The header lifts on hover and the chevron springs 180° when opened.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun WidgetAccordion(
     icon: ImageVector,
@@ -528,32 +940,55 @@ internal fun WidgetAccordion(
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var hovered by remember { mutableStateOf(false) }
+    val chevron by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 480f),
+        label = "accordionChevron"
+    )
+    val border by animateColorAsState(
+        targetValue = if (expanded) SettingsBorderStrong else SettingsBorder,
+        animationSpec = tween(150),
+        label = "accordionBorder"
+    )
+    val headerBg by animateColorAsState(
+        targetValue = if (hovered) SettingsCardHover else Color.Transparent,
+        animationSpec = tween(120),
+        label = "accordionHeaderBg"
+    )
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = FlatSurface),
-        border = BorderStroke(1.dp, FlatBorder),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(containerColor = SettingsCard),
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded }
+                    .background(headerBg)
+                    .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                    .onPointerEvent(PointerEventType.Exit) { hovered = false }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { expanded = !expanded }
+                    )
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(FlatSurfaceElevated)
-                        .border(1.dp, FlatBorder, RoundedCornerShape(9.dp)),
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SettingsElevated)
+                        .border(1.dp, SettingsBorder, RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = AccentIndigoLight,
+                        tint = AccentSolid,
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -561,27 +996,65 @@ internal fun WidgetAccordion(
                 Text(
                     text = title,
                     style = AppTypography.titleSmall,
-                    fontSize = 15.sp,
+                    fontSize = 14.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary,
                     modifier = Modifier.weight(1f)
                 )
                 MinimalistRectSwitch(checked = enabled, onCheckedChange = onToggleEnabled)
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = null,
                     tint = TextMuted,
-                    modifier = Modifier.size(19.dp)
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer { rotationZ = chevron }
                 )
             }
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically() + fadeIn(tween(160)),
-                exit = shrinkVertically() + fadeOut(tween(120))
+                enter = expandVertically(
+                    animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f)
+                ) + fadeIn(tween(180)),
+                exit = shrinkVertically(
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f)
+                ) + fadeOut(tween(140))
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) { content() }
             }
         }
+    }
+}
+
+/** Placeholder to keep unused-import warnings quiet for sidebar bg reuse. */
+@Suppress("unused")
+private val SidebarBgAlias = SettingsSidebar
+@Suppress("unused")
+private val BgAlias = SettingsBg
+
+/**
+ * Staggered entrance for tab sections: fades + rises 10dp with a per-index
+ * delay so a tab lands as a cascade instead of a flat pop. Pure enter
+ * transition — no exit, sections never leave except on tab switch.
+ */
+@Composable
+internal fun TabEntrance(
+    index: Int,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { visible = true }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(220, delayMillis = index * 55)) +
+            expandVertically(
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
+                expandFrom = Alignment.Top
+            ),
+        exit = fadeOut(tween(120)),
+        label = "tabEntrance$index"
+    ) {
+        content()
     }
 }
