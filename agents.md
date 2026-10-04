@@ -1630,6 +1630,16 @@ composeApp/
   missing newline, `WeatherErrorPage` extraction) and the page-layout
   complexity re-baselined like the other pages.
 
+- (this session → HEAD): wheel paging flips at most ONE page per swipe burst
+  (`OverlayPager`: first threshold crossing takes the page, the burst's
+  momentum tail is swallowed, next flip waits for 180ms of quiet). Before it,
+  a hard swipe crossed the step several times and blew straight past middle
+  pages — the weather page only ever flashed by mid-flight and read as
+  unreachable. Diagnosed from `quicknotch.log` (`pages=[Apps, Weather,
+  Calendar]` with the index demonstrably stopping on weather while the user
+  saw nothing settle). Order stays Music? → Apps → Weather → Calendar, so no
+  widget is ever skipped at any swipe strength.
+
 ---
 
 ## 15. Quick constants reference
