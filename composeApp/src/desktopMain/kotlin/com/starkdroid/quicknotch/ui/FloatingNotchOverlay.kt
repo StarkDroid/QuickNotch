@@ -46,6 +46,7 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.AppLog
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
 import com.starkdroid.quicknotch.datasource.SystemAccent
@@ -367,12 +368,14 @@ internal fun FloatingNotchOverlay(
     // step threshold and several swipes are needed for one page flip. Sum both
     // axes because Shift+scroll on macOS is reported on the x axis, which keeps
     // this path insensitive to Shift exactly like the Windows listener is.
-    val composeScrollModifier =
+        val composeScrollModifier =
         if (HostPlatform.isWindows) Modifier
         else Modifier.onPointerEvent(PointerEventType.Scroll) { event ->
             val rotations = event.changes.fold(0f) { acc, change ->
                 acc + change.scrollDelta.x + change.scrollDelta.y
             }
+            // TEMP-DEBUG (pager): remove before merging.
+            AppLog.line("pager-debug event rot=$rotations dock=${pager.dockVisible.value} count=${pager.pageCount}")
             pager.consumeWheel(rotations * pager.stepPx)
         }
 
