@@ -39,6 +39,9 @@
     <string name="tab_dock_sizing">Appearance</string>
     <string name="tab_widgets">Widgets</string>
     <string name="tab_behavior">Behavior</string>
+    <string name="settings_appearance_desc">Notch silhouette, surface finish, icon magnification and the idle clock.</string>
+    <string name="settings_widgets_desc">Pinned apps, Now Playing and Calendar — flip the notch open and scroll to move between them.</string>
+    <string name="settings_behavior_desc">How QuickNotch starts, layers and gets out of your way.</string>
 
     <!-- Enum labels: notch style -->
     <string name="style_default">Default</string>
