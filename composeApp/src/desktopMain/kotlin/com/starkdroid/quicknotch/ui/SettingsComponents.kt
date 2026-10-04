@@ -1002,12 +1002,14 @@ internal fun WidgetAccordion(
 @Composable
 internal fun TabEntrance(
     index: Int,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     AnimatedVisibility(
         visible = visible,
+        modifier = modifier,
         enter = fadeIn(tween(220, delayMillis = index * 55)) +
             expandVertically(
                 animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
