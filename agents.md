@@ -38,7 +38,7 @@ to the app build, ignore it unless explicitly asked.
 
 - Branch: `cursor/macos-compose-adaptation` (all recent widget work lands here).
 - App-code HEAD at doc creation: `0c9a9a7` — "Unify vinyl disc, stack rings over transport, morph title by scale, restyle progress". (This doc and its commits sit on top.)
-- No test source set exists. Verification = **compile + desktop jar + manual/visual smoke run**.
+- No test source set exists. Verification = **compile + desktop jar + `:composeApp:detekt` + manual/visual smoke run**.
 - Gradle wrapper (`gradlew.bat`), JDK 17+, run from `G:\QuickNotch`.
 - Locale strings live in `composeApp/src/commonMain/composeResources/values/strings.xml` and are referenced as `Res.string.x` via `stringResource(...)`.
 - Icons/glyphs live in `composeApp/src/commonMain/composeResources/drawable/*.svg` (tinted at draw time via SrcIn).
@@ -1235,9 +1235,19 @@ composeApp/
 - One logical change per commit; message = imperative summary matching recent history
   (e.g. "Reorder pinned apps by dragging instead of arrow buttons").
 - Before committing: `compileKotlinDesktop` + `desktopJar` green + smoke run.
-- No detekt/ktlint/spotless is configured in this repo, so the pre-commit sweep is
-  manual: drop unused imports/code/resources (unused `Res.string`/`Res.drawable`
-  entries included) and confirm zero `Brush.*Gradient` in settings/onboarding files.
+- Static analysis is detekt 1.23.8 (last stable line; 2.x is alpha-only), wired as
+  `:composeApp:detekt` and running inside `check`. It must be green before every
+  commit — it guards import hygiene (`UnusedImports` is on), naming, and
+  complexity for NEW code. Pre-existing findings are grandfathered in
+  `config/detekt/baseline.xml`; after a deliberate fix run `detektBaseline` to
+  re-cut it. Config lives in `config/detekt/detekt.yml` with three project
+  tunings: `MagicNumber` off (dp/sp literals are idiomatic Compose),
+  `FunctionNaming` exempts `@Composable` (PascalCase), and constants accept
+  `UPPER_SNAKE` or PascalCase (the palette tokens). No auto-formatter is
+  configured (a formatter would churn every file) — formatting stays review.
+- Detekt does not see resources, so the manual sweep stays for those: drop
+  unused `Res.string`/`Res.drawable` entries and confirm zero `Brush.*Gradient`
+  in settings/onboarding files.
 - Check `git status` before every `git stash` — concurrent sessions share this branch,
   and stashing blind sweeps up work you did not author (recovering a conflicted pop
   cost a real scare: the foreign WIP silently deleted import lines in non-conflicting
@@ -1579,6 +1589,24 @@ composeApp/
   (~1000 lines) stays whole — it is one concern (settings chrome) with section
   banners, so a split would scatter it; same for the untouched `MediaWidgets`/
   `GoogleCalendar`. The look itself still needs eyes on a live machine.
+
+- (this session → HEAD): static analysis adopted — detekt 1.23.8 (last stable;
+  2.x is alpha-only and 1.23.8's Gradle API still loads under the Gradle 8.9
+  wrapper) via the version catalog, running as `:composeApp:detekt` inside
+  `check` over `commonMain` + `desktopMain` (the KMP layout is set explicitly;
+  generated resources under `build/` excluded). Raw first run: 740 findings
+  (441 of them `MagicNumber`); project tunings in `config/detekt/detekt.yml`
+  (`MagicNumber` off, `@Composable` exempt from `FunctionNaming`, PascalCase
+  constants allowed) plus a `detektBaseline` grandfather the rest, so the gate
+  fails only on new issues — `UnusedImports` stays on and already paid for
+  itself (37 dead imports across 10 files the manual sweep had missed). Same
+  pass fixed the safe findings instead of baselining them: stale Ktor-move
+  endpoint consts in `GoogleCalendar`, dead Win32 consts, `MayBeConst` ×2,
+  `GWL_EXSTYLE` → `gwlExStyle`, dropped the unused `windowHeightPx` param, all
+  9 wildcard imports expanded, trailing newlines everywhere. Deliberately left
+  in the baseline: complexity debt, fail-soft broad catches, empty no-op
+  overrides, `PRODUCTION_WEB_BASE` (KDoc-referenced), `onClose`/`wakeSignal`
+  (signature/channel-drain). No formatter (would churn every file).
 
 ---
 
