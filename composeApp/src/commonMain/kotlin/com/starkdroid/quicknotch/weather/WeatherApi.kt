@@ -71,7 +71,7 @@ class WeatherApi(
         val body = runCatching {
             client.get(
                 "$FORECAST_ENDPOINT?latitude=$latitude&longitude=$longitude" +
-                    "&current=temperature_2m,relative_humidity_2m,weather_code" +
+                    "&current=temperature_2m,relative_humidity_2m,weather_code,is_day" +
                     "&daily=weather_code,temperature_2m_max,temperature_2m_min," +
                     "precipitation_probability_max,uv_index_max" +
                     "&timezone=auto&forecast_days=7$unit"
@@ -89,7 +89,9 @@ class WeatherApi(
             temperature = current["temperature_2m"]?.jsonPrimitive?.doubleOrNull
                 ?: return WeatherResult.Malformed,
             humidity = current["relative_humidity_2m"]?.jsonPrimitive?.intOrNull,
-            code = current["weather_code"]?.jsonPrimitive?.intOrNull ?: 0
+            code = current["weather_code"]?.jsonPrimitive?.intOrNull ?: 0,
+            // Open-Meteo answers 1/0; absent (older cache shape) means day.
+            isDay = current["is_day"]?.jsonPrimitive?.intOrNull != 0
         )
         val dates = daily["time"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
         val codes = daily["weather_code"]?.jsonArray.orEmpty().map { it.jsonPrimitive.intOrNull ?: 0 }
@@ -152,7 +154,9 @@ data class GeoPosition(
 data class WeatherNow(
     val temperature: Double,
     val humidity: Int? = null,
-    val code: Int = 0
+    val code: Int = 0,
+    /** Open-Meteo `is_day` flag — picks the sun vs. moon glyph. Defaults to day. */
+    val isDay: Boolean = true
 )
 
 /**

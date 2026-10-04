@@ -108,6 +108,9 @@
     <string name="weather_units_title">Temperature unit</string>
     <string name="weather_unit_celsius">Celsius (°C)</string>
     <string name="weather_unit_fahrenheit">Fahrenheit (°F)</string>
+    <string name="weather_icons_title">Icon style</string>
+    <string name="weather_icons_mono">Monochrome</string>
+    <string name="weather_icons_colorful">Colorful</string>
     <string name="weather_refresh">Refresh</string>
     <string name="weather_locating">Finding your location…</string>
     <string name="weather_unavailable">Weather unavailable</string>
@@ -120,7 +123,9 @@
     <string name="weather_uv">UV %1$s</string>
     <string name="weather_chip">%1$s, %2$s</string>
     <string name="weather_cond_clear">Clear sky</string>
+    <string name="weather_cond_night">Clear night</string>
     <string name="weather_cond_partly">Partly cloudy</string>
+    <string name="weather_cond_partly_night">Partly cloudy night</string>
     <string name="weather_cond_cloudy">Overcast</string>
     <string name="weather_cond_fog">Fog</string>
     <string name="weather_cond_rain">Rain</string>

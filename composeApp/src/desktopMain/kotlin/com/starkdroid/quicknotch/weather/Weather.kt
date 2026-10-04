@@ -141,6 +141,7 @@ object Weather {
         val temperature: Double,
         val humidity: Int? = null,
         val code: Int = 0,
+        val isDay: Boolean = true,
         val days: List<CachedDay> = emptyList(),
         val fetchedAtMillis: Long = 0L
     )
@@ -161,7 +162,7 @@ object Weather {
     }.getOrNull()
 
     private fun CachedWeather.toData(): WeatherData = WeatherData(
-        now = WeatherNow(temperature, humidity, code),
+        now = WeatherNow(temperature, humidity, code, isDay),
         days = days.map {
             WeatherDay(it.dateIso, it.code, it.high, it.low, it.precipitationProbability, it.uvIndexMax)
         },
@@ -183,6 +184,7 @@ object Weather {
                         temperature = data.now.temperature,
                         humidity = data.now.humidity,
                         code = data.now.code,
+                        isDay = data.now.isDay,
                         days = data.days.map {
                             CachedDay(
                                 it.dateIso, it.code, it.high, it.low,

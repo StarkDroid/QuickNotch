@@ -123,6 +123,7 @@ internal fun WidgetPages(
     weatherState: WeatherState?,
     weatherFetching: Boolean,
     fahrenheit: Boolean,
+    weatherColorful: Boolean,
     onRefreshWeather: () -> Unit,
     onLaunch: (AppItem) -> Unit
 ) {
@@ -159,6 +160,7 @@ internal fun WidgetPages(
                         state = weatherState ?: WeatherState.Loading,
                         fetching = weatherFetching,
                         fahrenheit = fahrenheit,
+                        colorful = weatherColorful,
                         // The retry chip is the only pointer target here, gated
                         // like every other page's controls (pitfall 24).
                         interactive = interactive && isActive,

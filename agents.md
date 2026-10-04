@@ -1628,7 +1628,13 @@ composeApp/
   OAuth: `showWeather` defaults on, Fahrenheit is a render conversion so the
   unit toggle never refetches. New detekt findings were fixed (unused import,
   missing newline, `WeatherErrorPage` extraction) and the page-layout
-  complexity re-baselined like the other pages.
+  complexity re-baselined like the other pages. The condition glyph follows
+  the feed's `is_day` (moon variants after dark; outlook tiles stay daytime)
+  and the Widgets-tab card has an icon-style dropdown: colorful
+  per-condition tints (default on) vs. the monochrome text tint.
+  `isDay`/`weatherColorfulIcons` are defaulted fields, so old caches and
+  configs load unchanged; the longer signatures re-cut the detekt baseline
+  like the other pages.
 
 - (this session → HEAD): wheel paging flips at most ONE page per swipe burst
   (`OverlayPager`: first threshold crossing takes the page, the burst's

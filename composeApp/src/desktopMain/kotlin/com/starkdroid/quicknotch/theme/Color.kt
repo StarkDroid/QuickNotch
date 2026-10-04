@@ -19,6 +19,18 @@ val TextPrimary = Color(0xFFF8FAFC)
 val TextSecondary = Color(0xFF94A3B8)
 val TextMuted = Color(0xFF64748B)
 
+// ── Weather condition tints (the "colorful" icon style) ─────────────────────
+// One signature colour per condition; the monochrome style ignores these and
+// tints every glyph with the surrounding text colour instead.
+val WeatherClear = Color(0xFFFFC53D)
+val WeatherMoon = Color(0xFFC7D6F5)
+val WeatherPartly = Color(0xFFFFB020)
+val WeatherCloudy = Color(0xFF94A3B8)
+val WeatherFog = Color(0xFF9CA3AF)
+val WeatherRain = Color(0xFF38BDF8)
+val WeatherSnow = Color(0xFFBAE6FD)
+val WeatherStorm = Color(0xFFA78BFA)
+
 // ── Modern settings design tokens (all solid flats — no gradients) ───────────
 // Refined sidebar + card system for the settings window and onboarding flow.
 // Every token is a flat solid so surfaces stay crisp on the CPU rasterizer and

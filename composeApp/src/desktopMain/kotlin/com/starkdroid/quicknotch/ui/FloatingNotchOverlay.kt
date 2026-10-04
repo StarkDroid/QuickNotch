@@ -528,6 +528,7 @@ internal fun FloatingNotchOverlay(
                         showWeather = config.widgets.showWeather,
                         weather = weatherData,
                         fahrenheit = config.widgets.weatherFahrenheit,
+                        weatherColorful = config.widgets.weatherColorfulIcons,
                         showWaveform = config.widgets.showCollapsedWaveform,
                         waveformColor = waveformColor,
                         waveformHidesTitle =
@@ -632,6 +633,7 @@ internal fun FloatingNotchOverlay(
                         weatherState = weatherState,
                         weatherFetching = weatherFetching,
                         fahrenheit = config.widgets.weatherFahrenheit,
+                        weatherColorful = config.widgets.weatherColorfulIcons,
                         onRefreshWeather = { Weather.refresh() },
                         onLaunch = { app ->
                             scope.launch {

@@ -48,16 +48,23 @@ import com.starkdroid.quicknotch.generated.resources.weather_cloud
 import com.starkdroid.quicknotch.generated.resources.weather_cond_clear
 import com.starkdroid.quicknotch.generated.resources.weather_cond_cloudy
 import com.starkdroid.quicknotch.generated.resources.weather_cond_fog
+import com.starkdroid.quicknotch.generated.resources.weather_cond_night
 import com.starkdroid.quicknotch.generated.resources.weather_cond_partly
+import com.starkdroid.quicknotch.generated.resources.weather_cond_partly_night
 import com.starkdroid.quicknotch.generated.resources.weather_cond_rain
 import com.starkdroid.quicknotch.generated.resources.weather_cond_snow
 import com.starkdroid.quicknotch.generated.resources.weather_cond_storm
 import com.starkdroid.quicknotch.generated.resources.weather_failed_hint
 import com.starkdroid.quicknotch.generated.resources.weather_fog
 import com.starkdroid.quicknotch.generated.resources.weather_high_low
+import com.starkdroid.quicknotch.generated.resources.weather_icons_colorful
+import com.starkdroid.quicknotch.generated.resources.weather_icons_mono
+import com.starkdroid.quicknotch.generated.resources.weather_icons_title
 import com.starkdroid.quicknotch.generated.resources.weather_locating
 import com.starkdroid.quicknotch.generated.resources.weather_never_synced
+import com.starkdroid.quicknotch.generated.resources.weather_night
 import com.starkdroid.quicknotch.generated.resources.weather_partly
+import com.starkdroid.quicknotch.generated.resources.weather_partly_night
 import com.starkdroid.quicknotch.generated.resources.weather_precip
 import com.starkdroid.quicknotch.generated.resources.weather_rain
 import com.starkdroid.quicknotch.generated.resources.weather_refresh
@@ -79,6 +86,14 @@ import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
+import com.starkdroid.quicknotch.theme.WeatherClear
+import com.starkdroid.quicknotch.theme.WeatherCloudy
+import com.starkdroid.quicknotch.theme.WeatherFog
+import com.starkdroid.quicknotch.theme.WeatherMoon
+import com.starkdroid.quicknotch.theme.WeatherPartly
+import com.starkdroid.quicknotch.theme.WeatherRain
+import com.starkdroid.quicknotch.theme.WeatherSnow
+import com.starkdroid.quicknotch.theme.WeatherStorm
 import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.weather.WeatherDay
 import com.starkdroid.quicknotch.weather.WeatherState
@@ -92,7 +107,8 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * WMO weather-code groups to the packaged condition glyph. Solid
  * `currentColor` silhouettes like every other ring/pill glyph, so they tint
- * fully under `ColorFilter`-style SrcIn painting.
+ * fully under `ColorFilter`-style SrcIn painting. Clear/partly resolve to the
+ * moon variants after dark via the feed's `is_day` flag.
  */
 internal enum class WeatherCondition {
     CLEAR, PARTLY, CLOUDY, FOG, RAIN, SNOW, STORM;
@@ -111,10 +127,11 @@ internal enum class WeatherCondition {
 }
 
 @Composable
-internal fun WeatherCondition.painter(): Painter = painterResource(
+internal fun WeatherCondition.painter(isDay: Boolean = true): Painter = painterResource(
     when (this) {
-        WeatherCondition.CLEAR -> Res.drawable.weather_clear
-        WeatherCondition.PARTLY -> Res.drawable.weather_partly
+        WeatherCondition.CLEAR -> if (isDay) Res.drawable.weather_clear else Res.drawable.weather_night
+        WeatherCondition.PARTLY ->
+            if (isDay) Res.drawable.weather_partly else Res.drawable.weather_partly_night
         WeatherCondition.CLOUDY -> Res.drawable.weather_cloud
         WeatherCondition.FOG -> Res.drawable.weather_fog
         WeatherCondition.RAIN -> Res.drawable.weather_rain
@@ -124,10 +141,12 @@ internal fun WeatherCondition.painter(): Painter = painterResource(
 )
 
 @Composable
-internal fun WeatherCondition.label(): String = stringResource(
+internal fun WeatherCondition.label(isDay: Boolean = true): String = stringResource(
     when (this) {
-        WeatherCondition.CLEAR -> Res.string.weather_cond_clear
-        WeatherCondition.PARTLY -> Res.string.weather_cond_partly
+        WeatherCondition.CLEAR ->
+            if (isDay) Res.string.weather_cond_clear else Res.string.weather_cond_night
+        WeatherCondition.PARTLY ->
+            if (isDay) Res.string.weather_cond_partly else Res.string.weather_cond_partly_night
         WeatherCondition.CLOUDY -> Res.string.weather_cond_cloudy
         WeatherCondition.FOG -> Res.string.weather_cond_fog
         WeatherCondition.RAIN -> Res.string.weather_cond_rain
@@ -135,6 +154,29 @@ internal fun WeatherCondition.label(): String = stringResource(
         WeatherCondition.STORM -> Res.string.weather_cond_storm
     }
 )
+
+/**
+ * Glyph tint for one condition. Monochrome keeps the surrounding text tint
+ * (the old look); colorful paints each condition in its signature colour —
+ * amber sun, pale moon, blue rain — on every surface alike.
+ */
+internal fun weatherConditionTint(
+    condition: WeatherCondition,
+    isDay: Boolean,
+    colorful: Boolean,
+    fallback: Color
+): Color {
+    if (!colorful) return fallback
+    return when (condition) {
+        WeatherCondition.CLEAR -> if (isDay) WeatherClear else WeatherMoon
+        WeatherCondition.PARTLY -> if (isDay) WeatherPartly else WeatherMoon
+        WeatherCondition.CLOUDY -> WeatherCloudy
+        WeatherCondition.FOG -> WeatherFog
+        WeatherCondition.RAIN -> WeatherRain
+        WeatherCondition.SNOW -> WeatherSnow
+        WeatherCondition.STORM -> WeatherStorm
+    }
+}
 
 /** Display temperature: the feed is always metric, Fahrenheit is a render conversion. */
 internal fun weatherTemp(celsius: Double, fahrenheit: Boolean): String {
@@ -155,6 +197,7 @@ internal fun WeatherQuickChip(
     data: WeatherData,
     fahrenheit: Boolean,
     tint: Color,
+    colorful: Boolean,
     modifier: Modifier = Modifier
 ) {
     val condition = WeatherCondition.of(data.now.code)
@@ -167,9 +210,9 @@ internal fun WeatherQuickChip(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            painter = condition.painter(),
+            painter = condition.painter(data.now.isDay),
             contentDescription = null,
-            tint = tint,
+            tint = weatherConditionTint(condition, data.now.isDay, colorful, tint),
             modifier = Modifier.size(16.dp)
         )
         Text(
@@ -189,7 +232,7 @@ internal fun weatherChipDescription(data: WeatherData, fahrenheit: Boolean): Str
     stringResource(
         Res.string.weather_chip,
         weatherTemp(data.now.temperature, fahrenheit),
-        WeatherCondition.of(data.now.code).label()
+        WeatherCondition.of(data.now.code).label(data.now.isDay)
     )
 
 /**
@@ -208,6 +251,7 @@ internal fun WeatherNotchPage(
     state: WeatherState,
     fetching: Boolean,
     fahrenheit: Boolean,
+    colorful: Boolean,
     interactive: Boolean,
     onRefresh: () -> Unit
 ) {
@@ -237,7 +281,7 @@ internal fun WeatherNotchPage(
             modifier = Modifier.fillMaxSize().padding(horizontal = DockLayout.ContentPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            WeatherCurrentBlock(data = data, fahrenheit = fahrenheit)
+            WeatherCurrentBlock(data = data, fahrenheit = fahrenheit, colorful = colorful)
             Box(
                 modifier = Modifier
                     .padding(horizontal = 10.dp)
@@ -251,6 +295,7 @@ internal fun WeatherNotchPage(
                     day = day,
                     today = index == 0,
                     fahrenheit = fahrenheit,
+                    colorful = colorful,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -312,15 +357,15 @@ private fun WeatherErrorPage(interactive: Boolean, onRefresh: () -> Unit) {
 
 /** Left anchor: glyph + temperature over place, high/low and precip/UV. */
 @Composable
-private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean) {
+private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean, colorful: Boolean) {
     val condition = WeatherCondition.of(data.now.code)
     val unit = weatherTempUnit(fahrenheit)
     Column(modifier = Modifier.width(132.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                painter = condition.painter(),
+                painter = condition.painter(data.now.isDay),
                 contentDescription = null,
-                tint = TextPrimary,
+                tint = weatherConditionTint(condition, data.now.isDay, colorful, TextPrimary),
                 modifier = Modifier.size(30.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -381,12 +426,13 @@ private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean) {
     }
 }
 
-/** One outlook day: weekday over glyph over high/low. */
+/** One outlook day: weekday over glyph over high/low. Outlook days are daytime. */
 @Composable
 private fun WeatherDayTile(
     day: WeatherDay,
     today: Boolean,
     fahrenheit: Boolean,
+    colorful: Boolean,
     modifier: Modifier = Modifier
 ) {
     val condition = WeatherCondition.of(day.code)
@@ -405,9 +451,9 @@ private fun WeatherDayTile(
         )
         Spacer(modifier = Modifier.height(3.dp))
         Icon(
-            painter = condition.painter(),
-            contentDescription = condition.label(),
-            tint = TextSecondary,
+            painter = condition.painter(isDay = true),
+            contentDescription = condition.label(isDay = true),
+            tint = weatherConditionTint(condition, isDay = true, colorful, TextSecondary),
             modifier = Modifier.size(15.dp)
         )
         Spacer(modifier = Modifier.height(3.dp))
@@ -440,7 +486,8 @@ private fun weatherDow(dateIso: String): String = runCatching {
 
 /**
  * The Widgets-tab weather card: live status (place + sync age), manual
- * refresh, the notch toggle, and the temperature unit. No connection flow —
+ * refresh, the notch toggle, the temperature unit, and the icon style
+ * (monochrome vs. colorful glyphs). No connection flow —
  * the feed locates itself, so there is nothing to connect.
  */
 @Composable
@@ -451,6 +498,8 @@ internal fun WeatherSettings(
     onShowWeatherChange: (Boolean) -> Unit,
     fahrenheit: Boolean,
     onFahrenheitChange: (Boolean) -> Unit,
+    colorful: Boolean,
+    onColorfulChange: (Boolean) -> Unit,
     onRefresh: () -> Unit
 ) {
     val data = (state as? WeatherState.Ready)?.data
@@ -519,6 +568,20 @@ internal fun WeatherSettings(
                 )
             },
             onSelect = onFahrenheitChange,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        AppearanceDropdown(
+            label = stringResource(Res.string.weather_icons_title),
+            options = listOf(false, true),
+            selected = colorful,
+            optionLabel = {
+                stringResource(
+                    if (it) Res.string.weather_icons_colorful
+                    else Res.string.weather_icons_mono
+                )
+            },
+            onSelect = onColorfulChange,
             modifier = Modifier.fillMaxWidth()
         )
     }
