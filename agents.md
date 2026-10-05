@@ -1731,6 +1731,17 @@ composeApp/
   `smtc.ps1 status <id> <haveArt>` skips the thumbnail transfer once the app
   holds art for the track (unverified — no Windows machine here).
 
+- (this session → HEAD): content-hugging collapsed pill
+  (`fix/weather-units-quickview-padding`) — the wrapping quickview branches
+  (idle clock, idle dots) report their measured width and the drawn island
+  shrinks to exactly that, so a clock-only pill carries ~2dp per side instead
+  of the slider's dead air. Fill branches (live media, ticker) keep the
+  configured width; the native window never moves, so hugging is pure drawn
+  growth with no resize flash, and passthrough/hover follow the drawn island
+  automatically. Consequence: the width slider no longer widens the clock/dots
+  pill — it sizes the fill branches. `QuickView.onWrapWidthChange` grew a
+  parameter for this (baseline re-cut, signatures only).
+
 - (this session → HEAD): weather-unit + quickview-inset fixes
   (`fix/weather-units-quickview-padding`) — CMP's `stringResource` templating is
   a bare `%N$s`/`%N$d` substitution (NOT `String.format`, so `%%` renders
@@ -1750,7 +1761,8 @@ composeApp/
 
 | Constant | Value | Where |
 | --- | --- | --- |
-| `quickViewWidthDp` / `quickViewHeightDp` | 150 / 30 (default; serialised as `collapsedPillWidthDp`/`collapsedPillHeightDp`) | `NotchConfig` |
+| `quickViewWidthDp` / `quickViewHeightDp` | 136 / 30 (default; slider 110–190; serialised as `collapsedPillWidthDp`/`collapsedPillHeightDp`; exact-150 files migrate to 136) | `NotchConfig` |
+| `HugMinWidth` | 32dp floor for the content-hugging clock/dots pill | `DockLayout` |
 | `expandedNotchHeightDp` | 78 (slider 70–86) | `NotchConfig`, `DockSizingTab` |
 | island depth | height + 6dp | `OverlayGeometry` |
 | `NowPlayingWidth` / `LiveCollapsedWidth` | 356dp / 236dp | `DockLayout` |

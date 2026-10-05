@@ -41,6 +41,8 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
@@ -55,6 +57,7 @@ import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
+import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.weather.Weather
@@ -83,6 +86,23 @@ import kotlin.math.roundToInt
  * (see `NotchOverlayWindow` in main.kt), so opening/collapsing never resizes a
  * transparent window — expanding is purely drawn growth inside it (pitfall 17).
  */
+/**
+ * Collapsed island width: hug the measured wrapping content when a hugging
+ * branch is showing (falling back to the configured width until the first
+ * measure lands), the configured width everywhere else. Bounded below against
+ * degenerate measures and above by the native window, so the island can never
+ * outgrow its window or collapse into a sliver.
+ */
+private fun hugCollapsedWidth(
+    hugVisible: Boolean,
+    hugWidth: Dp?,
+    formula: DpSize,
+    window: DpSize
+): Dp {
+    if (!hugVisible) return formula.width
+    return hugWidth?.coerceIn(DockLayout.HugMinWidth, window.width) ?: formula.width
+}
+
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun FloatingNotchOverlay(
@@ -398,7 +418,24 @@ internal fun FloatingNotchOverlay(
     // fixed (expanded) native window, so the collapsed pill nests into the
     // window's top edge and needs no gutter.
     val islandExpanded = isExpanded || dockState.currentState || dockState.targetState
-    val targetSize = metrics.islandFor(islandExpanded)
+    // Content-hugging collapsed pill: the wrapping branches (idle clock, idle
+    // dots) report their measured width, and the island shrinks to exactly
+    // that — the row already carries its own 2dp side insets, so the pill ends
+    // up with ~4px of black on each end and no slider dead air. Fill branches
+    // (live media, ticker) keep the configured width; the native window never
+    // moves either way, so hugging is pure drawn growth like every expansion.
+    var hugWidth by remember { mutableStateOf<Dp?>(null) }
+    val hugVisible = !musicLive && calendarTicker?.summary == null &&
+        config.style != NotchStyle.DRAG_HANDLE
+    val formulaCollapsed = metrics.islandFor(false)
+    val collapsedWidth = hugCollapsedWidth(
+        hugVisible = hugVisible,
+        hugWidth = hugWidth,
+        formula = formulaCollapsed,
+        window = metrics.expanded
+    )
+    val targetSize = if (islandExpanded) metrics.islandFor(true)
+    else formulaCollapsed.copy(width = collapsedWidth)
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
@@ -428,10 +465,10 @@ internal fun FloatingNotchOverlay(
             // now-playing page's real bounds as the pill returns.
             pager.pageIndex.value = 0
             showDock = false
-            val collapsed = metrics.islandFor(false)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
-                    animatedWidth <= collapsed.width + 1.dp && animatedHeight <= collapsed.height + 1.dp
+                    animatedWidth <= collapsedWidth + 1.dp &&
+                        animatedHeight <= formulaCollapsed.height + 1.dp
                 }.first { settled -> settled }
             }
         }
@@ -530,7 +567,8 @@ internal fun FloatingNotchOverlay(
                                 clock24Hour = config.clock24Hour,
                                 dateFormat = config.clockDateFormat
                             )
-                        }
+                        },
+                        onWrapWidthChange = { hugWidth = it }
                     )
                 }
                 // Live progress hugs the pill's inner border (the edge facing

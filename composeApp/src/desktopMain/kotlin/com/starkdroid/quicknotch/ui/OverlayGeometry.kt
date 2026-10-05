@@ -41,6 +41,14 @@ internal object DockLayout {
     const val QuickViewWidthMinDp: Int = 110
     const val QuickViewWidthMaxDp: Int = 190
 
+    /**
+     * Degenerate-measurement guard for the content-hugging pill: the island
+     * never contracts past this, so a zero-size first frame (or a future
+     * empty branch) cannot collapse it into a sliver. Well under every real
+     * branch's width, so it only ever binds on garbage input.
+     */
+    val HugMinWidth: Dp = 32.dp
+
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
 
