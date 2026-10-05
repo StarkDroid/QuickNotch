@@ -99,7 +99,7 @@ internal fun IdleClockRow(
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        modifier = modifier.padding(horizontal = 4.dp, vertical = 4.dp)
     ) {
         // Current conditions cap the row on the left: glyph + temperature
         // ahead of the date, mirroring how the expanded page leads with now.

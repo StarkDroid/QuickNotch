@@ -123,7 +123,7 @@ internal fun QuickView(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
                 // Same vinyl treatment as the expanded page's disc — art on a
                 // grooved disc with a spindle hub, gently rotating while
