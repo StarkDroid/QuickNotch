@@ -1731,6 +1731,16 @@ composeApp/
   `smtc.ps1 status <id> <haveArt>` skips the thumbnail transfer once the app
   holds art for the track (unverified — no Windows machine here).
 
+- (this session → HEAD): weather-unit + quickview-inset fixes
+  (`fix/weather-units-quickview-padding`) — CMP's `stringResource` templating is
+  a bare `%N$s`/`%N$d` substitution (NOT `String.format`, so `%%` renders
+  doubled): `weather_precip` and both `device_battery` strings dropped to a
+  single `%`, and the current-conditions temperature stopped printing the degree
+  twice (`weatherTemp` already carries `°`, so the unit letter is now `"F"`/`"C"`
+  via `weatherTempUnitLetter`). Swept every `%`/`°` in strings + code — those
+  were the only three. Collapsed-pill side insets trimmed 4dp → 2dp on both
+  quickview rows.
+
 ---
 
 ## 15. Quick constants reference

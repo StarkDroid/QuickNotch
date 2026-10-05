@@ -116,7 +116,7 @@
     <string name="weather_never_synced">Not synced yet</string>
     <string name="weather_today">Today</string>
     <string name="weather_high_low">H %1$s · L %2$s</string>
-    <string name="weather_precip">Precipitation %1$d%%</string>
+    <string name="weather_precip">Precipitation %1$d%</string>
     <string name="weather_uv">UV %1$s</string>
     <string name="weather_chip">%1$s, %2$s</string>
     <string name="weather_cond_clear">Clear sky</string>
@@ -168,8 +168,8 @@ Add apps from the list on the right.</string>
     <string name="music_unmute">Unmute</string>
     <string name="music_battery">Audio device battery: %1$s</string>
     <string name="music_audio_device">audio device</string>
-    <string name="device_battery">Device battery: %1$d%%</string>
-    <string name="device_battery_charging">Device battery: %1$d%%, charging</string>
+    <string name="device_battery">Device battery: %1$d%</string>
+    <string name="device_battery_charging">Device battery: %1$d%, charging</string>
     <string name="music_previous">Previous track</string>
     <string name="music_next">Next track</string>
 
