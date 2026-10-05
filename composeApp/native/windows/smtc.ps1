@@ -33,6 +33,15 @@
 #  Usage:
 #    powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File smtc.ps1
 #    powershell ... -File smtc.ps1 toggle | next | previous | "seek <millis>"
+#    powershell ... -File smtc.ps1 status <lastId> <haveArt>
+#
+#  The `status` poll accepts what the app already holds: <lastId> is the track
+#  id of its current session and <haveArt> is '1' when it already decoded art
+#  for that id. The thumbnail (a COM fetch plus a few hundred KB of base64
+#  through stdout) is then skipped for the steady state and only re-sent on a
+#  track change or while the app is still artless — the Kotlin side caches per
+#  id, so omitting it loses nothing. Both args arrive as separate argv elements
+#  (ProcessBuilder), so ids containing spaces survive intact.
 #
 #  Output contract (identical to the macOS nowplaying-bridge):
 #    {"state":"playing|paused|stopped|none","src":"","title":"…",
@@ -88,6 +97,8 @@ function Get-Base64 {
 
 $command = $args[0]
 if ([string]::IsNullOrWhiteSpace($command)) { $command = 'status' }
+$lastId = $args[1]
+$lastHaveArt = $args[2]
 
 $manager = $null
 for ($attempt = 0; $attempt -lt 3 -and $null -eq $manager; $attempt++) {
@@ -156,14 +167,6 @@ if ($null -eq $status) {
     try { $status = $session.GetPlaybackStatus().ToString() } catch { }
 }
 
-# Album art is carried by the media properties in this projection.
-if ($null -ne $properties) {
-    try { $art = Get-Base64 $properties.Thumbnail } catch { $art = $null }
-}
-if ([string]::IsNullOrWhiteSpace($art)) {
-    try { $art = Get-Base64 ($session.TryGetThumbnailAsync()) } catch { $art = $null }
-}
-
 $title = ''
 $artist = ''
 $album = ''
@@ -173,6 +176,21 @@ if ($null -ne $properties) {
     $artist = [string]$properties.Artist
     $album = [string]$properties.AlbumTitle
     $id = [string]$properties.GlobalId
+}
+
+# Album art is carried by the media properties in this projection — but only
+# fetched while the app still needs it (new track, or a decode that has not
+# landed yet). Steady-state polls for an already-illustrated track skip the
+# COM round-trip and the base64 transfer entirely.
+$needArt = $true
+if (-not [string]::IsNullOrWhiteSpace($id) -and $id -ceq $lastId -and $lastHaveArt -ceq '1') {
+    $needArt = $false
+}
+if ($needArt -and $null -ne $properties) {
+    try { $art = Get-Base64 $properties.Thumbnail } catch { $art = $null }
+}
+if ($needArt -and [string]::IsNullOrWhiteSpace($art)) {
+    try { $art = Get-Base64 ($session.TryGetThumbnailAsync()) } catch { $art = $null }
 }
 
 $positionMs = 0

@@ -19,7 +19,13 @@ import java.util.concurrent.TimeUnit
  * stdout. Transport commands spawn a short-lived helper invocation the same
  * way.
  *
- * If the helper is absent (non-mac build host) the controller simply never
+ * Cover art needs its own channel: scripted contexts only ever see metadata,
+ * never the artwork bytes. Any snapshot that arrives without art (browsers,
+ * Spotify, Music alike) goes to [MacArtworkFetcher], which runs one
+ * entitled-helper query per track through `/usr/bin/perl` and fills the art
+ * in behind the poll loop.
+ *
+ * If the helpers are absent (non-mac build host) the controller simply never
  * publishes a session.
  */
 internal class MacNowPlayingController : MediaControllerBase() {
@@ -32,10 +38,17 @@ internal class MacNowPlayingController : MediaControllerBase() {
     @Volatile
     private var watcher: Process? = null
 
+    private val artworkFetcher = MacArtworkFetcher(
+        ioScope = ioScope,
+        currentId = { session.value?.contentId },
+        onArtwork = ::publishArtwork
+    )
+
     override fun start() {
         val binary = NativeResources.extract("macos/nowplaying-bridge", "")
         if (binary == null || !binary.canExecute()) return
         bridge = binary
+        artworkFetcher.start()
 
         ioScope.launch {
             // Restart-on-crash loop: the helper is trivial but MediaRemote is
@@ -49,7 +62,15 @@ internal class MacNowPlayingController : MediaControllerBase() {
                     process.inputStream.bufferedReader().use { reader ->
                         var line = reader.readLine()
                         while (line != null) {
-                            if (line.startsWith("{")) publish(line)
+                            if (line.startsWith("{")) {
+                                // publish returns null for unplayable lines, so
+                                // a non-null artless snapshot is always a live
+                                // track still missing its cover.
+                                val snapshot = publish(line)
+                                if (snapshot != null && snapshot.artworkBase64.isNullOrBlank()) {
+                                    artworkFetcher.fetch(snapshot.contentId)
+                                }
+                            }
                             line = reader.readLine()
                         }
                     }

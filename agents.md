@@ -96,6 +96,8 @@ command line matches `MainKt|quicknotch`.
 - `compileMacNowPlayingBridge` — builds `native/macos/nowplaying_bridge.m` with `cc` (macOS hosts only).
 - `compileMacBtWatchBridge` — builds `native/macos/btwatch_bridge.m` with Foundation + CoreAudio (macOS hosts only).
 - `compileMacPassthroughBridge` — builds `native/macos/passthrough_bridge.m` into a dylib with Foundation + AppKit (macOS hosts only; loaded by `MacAppKit` and used by `WindowPassthrough`, the overlay window policy and the Dock-presence toggle).
+- `compileMacArtworkBridge` — builds `native/macos/artwork_bridge.m` into `artwork-bridge.dylib` with Foundation (macOS hosts only; the entitled-context cover fetcher, see 5.6).
+- `syncMacArtworkDriver` — copies `native/macos/artwork-driver.pl` → `src/desktopMain/resources/macos/` (source of truth is `native/macos`, like the Windows `.ps1` files).
 
 If a Windows `.ps1` script is edited in `native/windows`, the copy into
 `resources/windows` is refreshed automatically at jar time — but **during a plain
@@ -270,11 +272,23 @@ pure copying per track, 131ms cold); the same decode pass also derives `MediaSes
 **once per track on the poller's worker thread** and cached with the bitmap, so the
 waveform can take the album's colour without sampling pixels in composition.
 - Windows: `WindowsSmtcController` reads SMTC through `smtc.ps1` (PowerShell 5.1
-  projection — this was a hard-won fix). Supports seek.
+  projection — this was a hard-won fix). Supports seek. The status poll carries
+  the current track id + whether its art already decoded (`status <id> <haveArt>`
+  as separate argv elements), so the thumbnail COM fetch + base64 transfer runs
+  once per track instead of on every 1s poll; the per-id art cache covers the
+  omission. (Windows side compiles but is unverified — no Windows machine here.)
 - macOS: `MacNowPlayingController` runs the compiled `nowplaying-bridge` binary, which
   in turn supervises an `osascript -l JavaScript` subprocess (only *its* context —
   i.e. a `com.apple.*` bundle — can talk to MediaRemote since macOS 15.4). macOS does
   **not** support seek (`supportsSeek=false`, progress display-only).
+- macOS artwork arrives on three layers: the JXA snapshot's `art` (almost never
+  present — scripted contexts only see metadata), the universal
+  `MacArtworkFetcher` (one entitled-helper run per artless track: `artwork-driver.pl`
+  loads the `artwork-bridge` dylib into `/usr/bin/perl`, whose `com.apple.perl*`
+  identity the daemon honours, for a single full-access `MRMediaRemoteGetNowPlayingInfo`
+  query; late art merges via `publishArtwork`, which drops stale replies), and the
+  Music.app AppleScript fallback inside the bridge (gated to `srcId com.apple.Music`
+  only — running it for other clients pasted Music's cover onto browser tracks).
 - The UI keeps a local `nowMs` clock ticking every 250ms while PLAYING so the vinyl and
   progress advance at frame time between 1s polls.
 
@@ -347,6 +361,12 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   (+ bluetoothd connect notifications) and prints `AUDIO`/`BT` markers on stdout; the
   audio-battery poller re-probes instantly on each marker. Same build gating as the
   now-playing bridge (`compileMacBtWatchBridge`).
+- macOS artwork: `native/macos/artwork_bridge.m` → `cc -dynamiclib` (Foundation) →
+  `resources/macos/artwork-bridge.dylib`, driven by `native/macos/artwork-driver.pl`
+  (synced by `syncMacArtworkDriver`) which loads it into `/usr/bin/perl` for one
+  entitled `MRMediaRemoteGetNowPlayingInfo` query per artless track. Original code
+  (not vendored): the perl-entitlement trick follows the mechanism documented by
+  `ungive/mediaremote-adapter` (BSD-3), but every line here is ours.
 
 ### 5.10 Window passthrough (`WindowPassthrough.kt`)
 
@@ -1198,6 +1218,29 @@ composeApp/
     correct exit is back through the app, since the app is what mints the
     loopback port.
 
+45. **A scripted MediaRemote caller never sees artwork, no matter how you ask.**
+    `osascript -l JavaScript` answers title/artist/album/position perfectly and
+    returns nothing for `kMRMediaRemoteNowPlayingInfoArtworkData` — not absent
+    keys, not an error, just never any bytes — because the daemon only includes
+    artwork for callers whose bundle identity starts with `com.apple.`. Reading
+    the key harder (different accessors, `allKeys` dumps) cannot fix an
+    entitlement denial. The working shape is the perl trick: `DynaLoader`
+    a small dylib into `/usr/bin/perl` (`com.apple.perl*`) and call the real
+    C API (`MRMediaRemoteGetNowPlayingInfo` via `CFBundleGetFunctionPointer`)
+    from inside it — that is `artwork_bridge.m` + `artwork-driver.pl`, all
+    original code following the mechanism `ungive/mediaremote-adapter`
+    documents. Same rule as pitfall 6 (the JXA subprocess): never "simplify"
+    the artwork fetch back into the scripted context.
+
+46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
+    while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
+    for small lines, but a base64 cover (hundreds of KB) fills the 64KB pipe
+    mid-write: the helper blocks forever, the wait times out, the kill discards
+    the bytes, and every fetch "fails". `MacArtworkFetcher` drains stdout on a
+    daemon thread concurrent with `waitFor`, then joins the drainer — the one
+    place in the codebase where read-during-wait is mandatory rather than
+    forbidden.
+
 42. **The calendar's OAuth consent UI lives on the website now; the token
     exchange cannot, and must not, move with it.** The site's `web/` is a fully
     static SvelteKit build (`adapter-static`, `prerender = true`, no server
@@ -1664,8 +1707,29 @@ composeApp/
   quiet gap. Final shape, after isolated flicks still moved several pages:
   mid-stream re-arming is impossible to get right (every "fresh intent"
   signal also occurs inside one long hard flick), so re-arm happens ONLY on
-  a 100ms quiet gap — no shove/rising/reversal exceptions — which momentum
+  a 100ms   quiet gap — no shove/rising/reversal exceptions — which momentum
   (single-digit-ms gaps) can never fake but every human pause satisfies.
+
+- (this session → HEAD): browser/Spotify covers on macOS via an entitled helper
+  (`feature/browser-artwork`) — the JXA poll context never sees artwork bytes
+  (pitfall 45), so `MacArtworkFetcher` runs one `artwork-driver.pl` +
+  `artwork-bridge.dylib` query per artless track inside `/usr/bin/perl` and
+  merges late art via `publishArtwork` (stale replies dropped, ± outcomes
+  settled per content id, stdout drained during the wait per pitfall 46). Same
+  pass gated the old Music AppleScript fallback to `srcId com.apple.Music` —
+  it used to paste Music's cover onto browser tracks. **Verified live** against
+  Chrome/YouTube Music: the daemon ships ~10KB JPEGs once entitled, and the
+  vinyl fills a few seconds after a switch with no restart. Three follow-up
+  fixes from that session, all live-proven: (1) a 4s empty-player grace in
+  `MediaControllerBase` (`EMPTY_GRACE_MS`) so the music page no longer unmounts
+  in the no-item beat between songs; (2) identity-gated merges — the helper
+  reports `title|artist|album` with the bytes and Kotlin merges only on a match,
+  with mismatch/timeout backoffs (3s/15s) instead of poisoned settles; (3) the
+  helper lingers up to ~7s in-process for late covers (browsers publish art
+  seconds after metadata) plus a bounded empty-retry budget, cutting the
+  switch-to-cover wait from ~9s to ~3-4s. Windows mirrors the efficiency half:
+  `smtc.ps1 status <id> <haveArt>` skips the thumbnail transfer once the app
+  holds art for the track (unverified — no Windows machine here).
 
 ---
 

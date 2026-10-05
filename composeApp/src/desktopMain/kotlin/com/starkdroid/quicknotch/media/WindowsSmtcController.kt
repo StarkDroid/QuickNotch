@@ -16,9 +16,14 @@ import java.util.concurrent.TimeUnit
  * PowerShell 7 dropped that projection, so `pwsh` is not used.
  *
  * One-shot poll per second: the script prints a single JSON line, identical in
- * shape to the macOS bridge, so [MediaControllerBase] decodes both. Commands
+ * shape to the macOS nowplaying-bridge, so [MediaControllerBase] decodes both. Commands
  * run the same script with a verb. At 1 Hz the process cost is negligible and
  * never touches the UI thread.
+ *
+ * The status poll tells the script which track the app already holds art for,
+ * so the thumbnail transfer happens once per track instead of once per second
+ * (see `smtc.ps1`): steady-state polls carry metadata only, and the per-id art
+ * cache in [MediaControllerBase] covers the omission.
  */
 internal class WindowsSmtcController : MediaControllerBase() {
 
@@ -27,6 +32,10 @@ internal class WindowsSmtcController : MediaControllerBase() {
     @Volatile
     private var script: File? = null
 
+    /** Content id (and whether it already has art) the last poll reported. */
+    private var statusId = ""
+    private var statusHaveArt = false
+
     override fun start() {
         val ps1 = NativeResources.extract("windows/smtc.ps1", ".ps1")
         if (ps1 == null) return
@@ -34,29 +43,45 @@ internal class WindowsSmtcController : MediaControllerBase() {
 
         ioScope.launch {
             while (isActive) {
-                val json = runCatching { invoke(null) }.getOrNull()
+                val json = runCatching { invoke(statusArguments()) }.getOrNull()
                 if (!json.isNullOrBlank()) publish(json)
+                val current = session.value
+                if (current != null) {
+                    statusId = current.contentId
+                    statusHaveArt = current.artwork != null
+                } else {
+                    statusId = ""
+                    statusHaveArt = false
+                }
                 kotlinx.coroutines.delay(1_000)
             }
         }
     }
 
-    override fun playPause() = invokeUnit("toggle")
-    override fun next() = invokeUnit("next")
-    override fun previous() = invokeUnit("previous")
-    override fun seekTo(positionMs: Long) = invokeUnit("seek $positionMs")
+    /**
+     * What the next status poll may skip: the thumbnail when the session
+     * already shows art for this exact track. Passed as separate argv elements
+     * (never one joined string), so ids containing spaces arrive intact.
+     */
+    private fun statusArguments(): List<String> =
+        listOf("status", statusId, if (statusHaveArt) "1" else "0")
 
-    private fun invokeUnit(argument: String) {
-        ioScope.launch { runCatching { invoke(argument) } }
+    override fun playPause() = invokeUnit(listOf("toggle"))
+    override fun next() = invokeUnit(listOf("next"))
+    override fun previous() = invokeUnit(listOf("previous"))
+    override fun seekTo(positionMs: Long) = invokeUnit(listOf("seek $positionMs"))
+
+    private fun invokeUnit(arguments: List<String>) {
+        ioScope.launch { runCatching { invoke(arguments) } }
     }
 
-    private fun invoke(argument: String?): String? {
+    private fun invoke(arguments: List<String>): String? {
         val file = script ?: return null
         val command = buildList {
             add("powershell.exe")
             add("-NoProfile"); add("-NonInteractive"); add("-ExecutionPolicy"); add("Bypass")
             add("-File"); add(file.absolutePath)
-            if (argument != null) add(argument)
+            addAll(arguments)
         }
         val process = ProcessBuilder(command).redirectErrorStream(false).start()
         val output = process.inputStream.bufferedReader().readText()
