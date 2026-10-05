@@ -83,14 +83,6 @@ import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
-import com.starkdroid.quicknotch.theme.WeatherClear
-import com.starkdroid.quicknotch.theme.WeatherCloudy
-import com.starkdroid.quicknotch.theme.WeatherFog
-import com.starkdroid.quicknotch.theme.WeatherMoon
-import com.starkdroid.quicknotch.theme.WeatherPartly
-import com.starkdroid.quicknotch.theme.WeatherRain
-import com.starkdroid.quicknotch.theme.WeatherSnow
-import com.starkdroid.quicknotch.theme.WeatherStorm
 import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.weather.WeatherDay
 import com.starkdroid.quicknotch.weather.WeatherState
@@ -152,24 +144,6 @@ internal fun WeatherCondition.label(isDay: Boolean = true): String = stringResou
     }
 )
 
-/**
- * Glyph tint for one condition in signature colours (Google-style):
- * amber sun, pale moon, blue rain, etc., on every surface alike.
- */
-internal fun weatherConditionTint(
-    condition: WeatherCondition,
-    isDay: Boolean,
-): Color {
-    return when (condition) {
-        WeatherCondition.CLEAR -> if (isDay) WeatherClear else WeatherMoon
-        WeatherCondition.PARTLY -> if (isDay) WeatherPartly else WeatherMoon
-        WeatherCondition.CLOUDY -> WeatherCloudy
-        WeatherCondition.FOG -> WeatherFog
-        WeatherCondition.RAIN -> WeatherRain
-        WeatherCondition.SNOW -> WeatherSnow
-        WeatherCondition.STORM -> WeatherStorm
-    }
-}
 
 /** Display temperature: the feed is always metric, Fahrenheit is a render conversion. */
 internal fun weatherTemp(celsius: Double, fahrenheit: Boolean): String {
@@ -204,7 +178,7 @@ internal fun WeatherQuickChip(
         Icon(
             painter = condition.painter(data.now.isDay),
             contentDescription = null,
-            tint = weatherConditionTint(condition, data.now.isDay),
+            tint = Color.Unspecified,
             modifier = Modifier.size(16.dp)
         )
         Text(
@@ -355,7 +329,7 @@ private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean) {
             Icon(
                 painter = condition.painter(data.now.isDay),
                 contentDescription = null,
-                tint = weatherConditionTint(condition, data.now.isDay),
+                tint = Color.Unspecified,
                 modifier = Modifier.size(30.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -442,7 +416,7 @@ private fun WeatherDayTile(
         Icon(
             painter = condition.painter(isDay = true),
             contentDescription = condition.label(isDay = true),
-            tint = weatherConditionTint(condition, isDay = true),
+            tint = Color.Unspecified,
             modifier = Modifier.size(15.dp)
         )
         Spacer(modifier = Modifier.height(3.dp))
