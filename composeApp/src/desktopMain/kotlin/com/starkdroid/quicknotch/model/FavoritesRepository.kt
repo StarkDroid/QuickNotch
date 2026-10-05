@@ -181,7 +181,7 @@ class FavoritesRepository(
         // because they reset their sizes would be a punishment.
         _config.value = defaultCfg.copy(onboardingDone = _config.value.onboardingDone)
         persist(PersistRequest.Favorites(defaults))
-        persist(PersistRequest.Config(defaultCfg))
+        persist(PersistRequest.Config(_config.value))
     }
 
     private fun getDefaultFavorites(): List<AppItem> {

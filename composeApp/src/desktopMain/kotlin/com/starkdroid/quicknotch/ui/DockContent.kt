@@ -38,10 +38,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -102,13 +102,12 @@ internal enum class WidgetPage { Apps, Music, Calendar, Weather }
 @Composable
 internal fun WidgetPages(
     pages: List<WidgetPage>,
-    pagePosition: Float,
+    pagePosition: State<Float>,
     favorites: List<AppItem>,
     config: NotchConfig,
     iconBitmaps: Map<String, ImageBitmap>,
     session: MediaSession?,
     media: MediaController,
-    nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
     volumeMuted: Boolean?,
@@ -128,12 +127,14 @@ internal fun WidgetPages(
 ) {
     Box(Modifier.fillMaxSize()) {
         pages.forEachIndexed { index, page ->
-            val relative = index - pagePosition
-            val isActive = abs(relative) < 0.5f
+            val isActive by remember(index) {
+                derivedStateOf { abs(index - pagePosition.value) < 0.5f }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
+                        val relative = index - pagePosition.value
                         alpha = (1f - abs(relative)).coerceIn(0f, 1f)
                         translationY = 0.35f * relative * size.height
                     }
@@ -168,7 +169,6 @@ internal fun WidgetPages(
                         MusicPage(
                             session = session,
                             media = media,
-                            nowMs = nowMs,
                             battery = battery,
                             volumePercent = volumePercent,
                             volumeMuted = volumeMuted,
@@ -189,7 +189,6 @@ internal fun WidgetPages(
 private fun MusicPage(
     session: MediaSession,
     media: MediaController,
-    nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
     volumeMuted: Boolean?,
@@ -206,7 +205,6 @@ private fun MusicPage(
         MusicContent(
             session = session,
             media = media,
-            nowMs = nowMs,
             battery = battery,
             volumePercent = volumePercent,
             volumeMuted = volumeMuted,
@@ -232,7 +230,6 @@ private fun MusicPage(
 private fun MusicContent(
     session: MediaSession,
     media: MediaController,
-    nowMs: Long,
     battery: AudioDeviceBattery?,
     volumePercent: Int?,
     volumeMuted: Boolean?,
@@ -243,6 +240,7 @@ private fun MusicContent(
     batteryRingModifier: Modifier
 ) {
     val playing = session.state == PlaybackState.PLAYING
+    val nowMs = rememberMediaNowMs(playing)
     val duration = session.durationMs.coerceAtLeast(0L)
     val elapsed = session.displayedPositionMs(nowMs).coerceAtLeast(0L)
         .coerceAtMost(if (duration > 0L) duration else Long.MAX_VALUE)
@@ -578,8 +576,14 @@ private fun DockIcon(
     onClick: () -> Unit
 ) {
     // Reading the pointer here (not in the dock body) keeps recomposition local
-    // to each icon as the cursor glides across the dock.
-    val targetScale = if (enabled) fisheyeScale(pointer.value, center, radiusPx, peakScale) else 1f
+    // to each icon as the cursor glides across the dock. derivedStateOf filters
+    // out repeated frames whose computed scale is unchanged (icons outside the
+    // fisheye radius publish 1f every tick, so they never invalidate).
+    val targetScale by remember(enabled, center, radiusPx, peakScale) {
+        derivedStateOf {
+            if (enabled) fisheyeScale(pointer.value, center, radiusPx, peakScale) else 1f
+        }
+    }
     val animatedScale by animateFloatAsState(targetScale, iconSpring(), label = "dockScale")
     val interaction = remember { MutableInteractionSource() }
 

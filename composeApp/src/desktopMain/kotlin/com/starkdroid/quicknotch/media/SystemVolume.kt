@@ -159,10 +159,12 @@ internal object SystemVolume {
     private fun runProcess(command: List<String>): String? {
         return runCatching {
             val process = ProcessBuilder(command).redirectErrorStream(true).start()
-            val output = process.inputStream.bufferedReader().readText().trim()
-            process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)
-            process.destroy()
-            output
+            if (!process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly()
+                process.waitFor(2, TimeUnit.SECONDS)
+                return@runCatching null
+            }
+            process.inputStream.bufferedReader().readText().trim()
         }.getOrNull()
     }
 }

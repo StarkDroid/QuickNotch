@@ -242,8 +242,12 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
         }
     }
 
+    private var lastRect: Rectangle? = null
+
     override fun apply(rect: Rectangle?) {
         val h = hwnd ?: return
+        if (rect == lastRect) return
+        lastRect = rect?.clone() as Rectangle?
         // Rect comes in the window's *physical* pixels (Compose px = dp ×
         // density), exactly what the Win32 region wants on a DPI-aware
         // process. A couple of points of slack on every side keep a click

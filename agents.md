@@ -655,6 +655,15 @@ composeApp/
 - Use monotonic clocks (`System.nanoTime()`-based) for extrapolation math; sample stamps
   in ms from the same clock.
 - Gate pollers behind `HostPlatform.is...` and make failed probes leave last value.
+- Collect high-frequency per-widget state (`media.session`, volume, batteries,
+  notification count) inside the window/subtree that draws it, not in the
+  `application {}` body, so every poll tick recomposes the notch subtree and
+  nothing above it.
+- Keep frame-cadence clocks (the 250 ms nowMs) local to the progress/playing UI
+  composable that owns them (see `rememberMediaNowMs`); an ancestor-body read
+  recomposes the whole overlay tree on each tick.
+- Probe subprocesses inside `waitFor(timeout)` + `destroyForcibly` and read stdout
+  after the timeout, never before; cache extracted bridge scripts by resource path.
 
 **DON'T**
 - Don't force the Skiko `SOFTWARE` renderer: it costs ~70ms of CPU per settings

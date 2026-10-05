@@ -54,9 +54,12 @@ object SystemAccent {
         return runCatching {
             val process = ProcessBuilder("/usr/bin/defaults", "read", "-g", "AppleAccentColor")
                 .redirectErrorStream(false).start()
+            if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                process.waitFor(2, TimeUnit.SECONDS)
+                return@runCatching null
+            }
             val output = process.inputStream.bufferedReader().readText().trim()
-            process.waitFor(3, TimeUnit.SECONDS)
-            process.destroy()
             if (output.isBlank()) null else accentFromMacIndex(output.toInt())
         }.getOrNull()
     }
@@ -68,9 +71,12 @@ object SystemAccent {
                 "powershell.exe", "-NoProfile", "-NonInteractive",
                 "-ExecutionPolicy", "Bypass", "-File", ps1.absolutePath
             ).redirectErrorStream(false).start()
+            if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                process.waitFor(2, TimeUnit.SECONDS)
+                return@runCatching null
+            }
             val output = process.inputStream.bufferedReader().readText().trim()
-            process.waitFor(3, TimeUnit.SECONDS)
-            process.destroy()
             if (output == "ERROR") null else accentFromHexRgb(output)
         }.getOrNull()
     }

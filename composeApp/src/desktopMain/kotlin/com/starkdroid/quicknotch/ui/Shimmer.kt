@@ -1,15 +1,15 @@
 package com.starkdroid.quicknotch.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -35,15 +35,25 @@ fun Modifier.shimmer(
     baseColor: Color = ShimmerBase,
     highlightColor: Color = ShimmerHighlight
 ): Modifier {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val progress = transition.animateFloat(
-        initialValue = -1f,
-        targetValue = 2f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
-        label = "shimmerProgress"
-    )
+    // Drive the band by a real-time, rate-capped tick (the other pill
+    // animations share PillAnimationFps), not an InfiniteTransition: a
+    // frame-clock subscription forces this icon to read display rate even
+    // when nothing else is animating.
+    var progress by remember { mutableFloatStateOf(-1f) }
+    LaunchedEffect(Unit) {
+        val periodNanos = 1_100_000_000L
+        var start = System.nanoTime()
+        while (true) {
+            delay(PillAnimationStepMillis)
+            val t = ((System.nanoTime() - start) % periodNanos).toDouble() / periodNanos
+            progress = (-1f + t * 3f).toFloat()
+            if (start + periodNanos < System.nanoTime() - 1_000_000_000L) {
+                start = System.nanoTime()
+            }
+        }
+    }
     return drawWithContent {
-        val bandStart = size.width * (progress.value - 1f)
+        val bandStart = size.width * (progress - 1f)
         val brush = Brush.linearGradient(
             colors = listOf(baseColor, highlightColor, baseColor),
             start = Offset(bandStart, 0f),

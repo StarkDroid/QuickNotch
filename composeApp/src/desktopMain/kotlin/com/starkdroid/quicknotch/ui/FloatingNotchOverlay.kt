@@ -53,7 +53,6 @@ import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.NotificationCount
-import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchSurface
@@ -185,21 +184,9 @@ internal fun FloatingNotchOverlay(
     val accent by SystemAccent.accent.collectAsState()
     LaunchedEffect(config.surface) {
         if (config.surface != NotchSurface.SYSTEM_ACCENT) return@LaunchedEffect
-        SystemAccent.refresh()
         while (true) {
+            withContext(Dispatchers.IO) { SystemAccent.refresh() }
             delay(SystemAccentPollMs)
-            SystemAccent.refresh()
-        }
-    }
-
-    // Position interpolation clock. The media bridge samples once per second;
-    // advancing a local clock between samples lets the vinyl and the progress
-    // strip move at frame time instead of stepping once per heartbeat.
-    var nowMs by remember { mutableStateOf(System.nanoTime() / 1_000_000) }
-    LaunchedEffect(musicLive, liveSession?.state) {
-        while (musicLive && liveSession?.state == PlaybackState.PLAYING) {
-            delay(250)
-            nowMs = System.nanoTime() / 1_000_000
         }
     }
 
@@ -352,7 +339,7 @@ internal fun FloatingNotchOverlay(
         }
         pager.resetAccum()
     }
-    val pagePosition by animateFloatAsState(pager.pageIndex.value.toFloat(), pageSpring(), label = "pagePosition")
+    val pagePosition = animateFloatAsState(pager.pageIndex.value.toFloat(), pageSpring(), label = "pagePosition")
 
     // Wheel events reach the Compose pointer pipeline on macOS (trackpad and
     // mouse alike), and the dock box fills the expanded window, so this one
@@ -471,7 +458,7 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface)
+                    .islandSurface(config.surface, accent)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {
@@ -552,7 +539,7 @@ internal fun FloatingNotchOverlay(
                 // one or the other, never both fighting for the same pixels.
                 val liveNow = if (musicLive) liveSession else null
                 if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
-                    LiveProgressStrip(fraction = liveNow.progressFraction(nowMs))
+                    LiveProgressStripForSession(session = liveNow)
                 }
             }
 
@@ -617,7 +604,6 @@ internal fun FloatingNotchOverlay(
                         iconBitmaps = iconBitmaps,
                         session = liveSession,
                         media = media,
-                        nowMs = nowMs,
                         battery = battery,
                         volumePercent = volumePercent,
                         volumeMuted = volumeMuted,

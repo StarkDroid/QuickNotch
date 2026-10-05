@@ -15,6 +15,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -276,6 +282,31 @@ internal fun QuickView(
             }
         }
     }
+}
+
+/**
+ * 250 ms interpolation clock for the media progress displays. Localizing this
+ * state keeps the 4 Hz tick from recomposing the whole overlay tree — only
+ * the composable that owns the state (the pill strip, the music page's
+ * transport/progress cluster) recomposes on each tick.
+ */
+@Composable
+internal fun rememberMediaNowMs(playing: Boolean): Long {
+    var nowMs by remember { mutableStateOf(System.nanoTime() / 1_000_000L) }
+    LaunchedEffect(playing) {
+        while (playing) {
+            delay(250)
+            nowMs = System.nanoTime() / 1_000_000L
+        }
+    }
+    return nowMs
+}
+
+/** Collapsed-pill live progress strip, owning its own 250 ms interpolation clock. */
+@Composable
+internal fun BoxScope.LiveProgressStripForSession(session: MediaSession) {
+    val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
+    LiveProgressStrip(fraction = session.progressFraction(nowMs))
 }
 
 /**

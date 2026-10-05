@@ -106,6 +106,11 @@ private val ProgressGradientEnd = Color(0xFF7DD3FC)
 internal fun isStyleEligibleForLiveActivity(config: NotchConfig): Boolean =
     config.style != NotchStyle.DRAG_HANDLE
 
+private
+ val progressBrush = Brush.horizontalGradient(
+    colors = listOf(ProgressGradientStart, LiveAccent, ProgressGradientEnd)
+)
+
 internal fun isMusicLive(config: NotchConfig, session: MediaSession?): Boolean =
     config.widgets.nowPlayingEnabled &&
         isStyleEligibleForLiveActivity(config) &&
@@ -245,16 +250,16 @@ internal fun MarqueeText(
     animate: Boolean = true
 ) {
     val measurer = rememberTextMeasurer()
-    val measured = remember(text, color, fontSize, fontWeight, lineHeight, measurer) {
-        measurer.measure(
-            AnnotatedString(text),
-            style = TextStyle(
-                color = color,
-                fontSize = fontSize,
-                fontWeight = fontWeight,
-                lineHeight = lineHeight
-            )
+    val textStyle = remember(color, fontSize, fontWeight, lineHeight) {
+        TextStyle(
+            color = color,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            lineHeight = lineHeight
         )
+    }
+    val measured = remember(text, textStyle, measurer) {
+        measurer.measure(AnnotatedString(text), style = textStyle)
     }
     val fullWidthPx = measured.size.width
 
@@ -300,27 +305,25 @@ internal fun MarqueeText(
             .onSizeChanged { viewportPx = it.width },
         contentAlignment = Alignment.CenterStart
     ) {
-        val offsetX = if (needsMarquee) {
-            scrollX // centred start; scrolls once text overflows
-        } else {
-            ((viewportPx - fullWidthPx) / 2).coerceAtLeast(0).toFloat()
-        }
         Text(
             text = AnnotatedString(text),
-            style = TextStyle(
-                color = color,
-                fontSize = fontSize,
-                fontWeight = fontWeight,
-                lineHeight = lineHeight
-            ),
+            style = textStyle,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Clip,
             // graphicsLayer, not Modifier.offset { }: the offset lambda runs in
             // the placement phase, so every tick of the scroll re-laid-out the
             // pill's row. A layer translation is a draw-phase change — the same
-            // pixels, one invalidation instead of a layout pass.
-            modifier = Modifier.graphicsLayer { translationX = offsetX }
+            // pixels, one invalidation instead of a layout pass. The scrollX
+            // state is likewise read inside the layer lambda, so each 30 Hz
+            // tick invalidates only the draw of this Text, never composition.
+            modifier = Modifier.graphicsLayer {
+                translationX = if (needsMarquee) {
+                    scrollX
+                } else {
+                    ((viewportPx - fullWidthPx) / 2).coerceAtLeast(0).toFloat()
+                }
+            }
         )
     }
 }
@@ -331,7 +334,7 @@ internal fun formatMs(ms: Long): String {
     val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
-    return "%d:%02d".format(minutes, seconds)
+    return "${minutes}:${seconds.toString().padStart(2, '0')}"
 }
 
 @Composable
@@ -415,9 +418,7 @@ internal fun TrackProgress(
                         .height(barHeight)
                         .clip(CircleShape)
                         .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(ProgressGradientStart, LiveAccent, ProgressGradientEnd)
-                            )
+                            progressBrush
                         )
                 )
             }
