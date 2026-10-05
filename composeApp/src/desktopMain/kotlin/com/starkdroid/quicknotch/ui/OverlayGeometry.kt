@@ -44,6 +44,11 @@ internal object DockLayout {
     /** Five date tiles need their own room even when no dock or music page does. */
     val CalendarPageWidth = 348.dp
     val NowPlayingWidth: Dp = 356.dp
+    /**
+     * Current conditions + 7 day tiles + today's high/low, precip and UV need
+     * the same room as the music page, so the window never clips the outlook.
+     */
+    val WeatherPageWidth: Dp = 356.dp
 
     /**
      * Collapsed pill length once a live session is showing, wide enough for
@@ -105,7 +110,8 @@ fun computeNotchMetrics(
     favoriteCount: Int,
     musicActive: Boolean = false,
     indicatorSlots: Int = 0,
-    calendarActive: Boolean = false
+    calendarActive: Boolean = false,
+    weatherActive: Boolean = false
 ): NotchMetrics {
     val calendarActiveWidth = if (calendarActive) DockLayout.CalendarPageWidth else 0.dp
     val base = config.baseIconSizeDp.dp
@@ -118,7 +124,8 @@ fun computeNotchMetrics(
                 DockLayout.AlongSafety
         } else 0.dp
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
-    val alongExpanded = maxOf(appsAlong, musicAlong, calendarActiveWidth)
+    val weatherAlong = if (weatherActive) DockLayout.WeatherPageWidth else 0.dp
+    val alongExpanded = maxOf(appsAlong, musicAlong, calendarActiveWidth, weatherAlong)
     val alongCollapsed = maxOf(
         config.quickViewWidthDp.dp + DockLayout.CollapsedMargin +
             DockLayout.QuickViewIndicatorSlot * indicatorSlots.coerceAtLeast(0),
@@ -151,8 +158,9 @@ fun computeNotchMetrics(
 /**
  * How many indicator slots the idle quickview actually renders right now: the
  * connected-device ring, the laptop ring (each gated by its own collapsed-only
- * toggle) and the notification bell (shown whenever the unread count is
- * readable AND its toggle is on). The window sizer and the overlay content MUST
+ * toggle), the notification bell (shown whenever the unread count is
+ * readable AND its toggle is on) and the weather chip (condition glyph + temperature,
+ * two slots wide). The window sizer and the overlay content MUST
  * agree on this — it widens the collapsed footprint by one slot per indicator
  * so nothing clips against the window edge. Gated to the idle branches: the
  * drag-handle style renders no indicators and a live media pill grows to its
@@ -164,7 +172,8 @@ fun quickViewIndicatorSlots(
     battery: AudioDeviceBattery?,
     deviceBattery: SystemBattery?,
     notificationCount: Int?,
-    calendarEventCount: Int
+    calendarEventCount: Int,
+    weatherVisible: Boolean = false
 ): Int {
     if (musicLive || config.style == NotchStyle.DRAG_HANDLE) return 0
     val notificationSlots =
@@ -172,9 +181,13 @@ fun quickViewIndicatorSlots(
     // The mail badge claims a slot only when it actually draws: a connected
     // calendar with an empty day shows nothing, so it must not widen the pill.
     val calendarSlots = if (config.widgets.showCalendar && calendarEventCount > 0) 1 else 0
+    // The weather chip (glyph + temperature) is ~48dp wide, so it claims two
+    // slots — but only while a forecast is loaded; an unlocated feed draws
+    // nothing and must not widen the pill (pitfall 15, again).
+    val weatherSlots = if (config.widgets.showWeather && weatherVisible) 2 else 0
     // Dots branch (no clock): only the bell and the mail badge sit beside the dots.
     if (!(config.clockDate || config.clockTime)) return notificationSlots + calendarSlots
-    return notificationSlots + calendarSlots + listOfNotNull(
+    return notificationSlots + calendarSlots + weatherSlots + listOfNotNull(
         battery.takeIf { config.widgets.showCollapsedBattery },
         deviceBattery.takeIf { config.widgets.showCollapsedDeviceBattery }
     ).size
@@ -184,7 +197,7 @@ fun quickViewIndicatorSlots(
  * Computes the top-left screen coordinate (in AWT points) for the overlay
  * window, hugging the top edge of the chosen screen and centred along it. On
  * macOS the notch hugs the very top of the panel ([hugMenuBar]) so it reads as
- * a real Dynamic Island. [edgeGapPx] floats capsule styles off the edge by
+ * a real top-edge notch. [edgeGapPx] floats capsule styles off the edge by
  * insetting the anchored coordinate, leaving the gap as ordinary desktop
  * (click-through) rather than dead window area.
  */
@@ -207,7 +220,7 @@ fun overlayScreenLocation(
 /**
  * Rounds only the two corners facing away from the anchored edge; the corners
  * touching the screen edge stay square so the notch reads as flush with the
- * display, like the hardware Dynamic Island.
+ * display, like a hardware notch.
  */
 internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape {
     if (style.capsule) {

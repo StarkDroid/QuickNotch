@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -37,6 +38,8 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.weather_hint
+import com.starkdroid.quicknotch.generated.resources.weather_section_title
 import com.starkdroid.quicknotch.generated.resources.show_labels_title
 import com.starkdroid.quicknotch.generated.resources.widget_apps_title
 import com.starkdroid.quicknotch.generated.resources.widget_music_title
@@ -57,6 +60,7 @@ import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
+import com.starkdroid.quicknotch.weather.Weather
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -195,6 +199,35 @@ internal fun WidgetsTab(
                         onCancel = onCancelCalendar,
                         onDisconnect = onDisconnectCalendar,
                         onRefresh = onRefreshCalendar
+                    )
+                }
+            }
+        }
+        item(key = "weather") {
+            // The tab owns this subscription like every other: config drives
+            // the toggles, the controller's flow drives the status row.
+            val weatherState by Weather.state.collectAsState()
+            val weatherFetching by Weather.fetching.collectAsState()
+            TabEntrance(index = 3) {
+                SettingsCard {
+                    SectionHeader(
+                        Icons.Default.WbSunny,
+                        stringResource(Res.string.weather_section_title),
+                        stringResource(Res.string.weather_hint)
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    WeatherSettings(
+                        state = weatherState,
+                        fetching = weatherFetching,
+                        showWeather = config.widgets.showWeather,
+                        onShowWeatherChange = { enabled ->
+                            onUpdate { it.copy(widgets = it.widgets.copy(showWeather = enabled)) }
+                        },
+                        fahrenheit = config.widgets.weatherFahrenheit,
+                        onFahrenheitChange = { enabled ->
+                            onUpdate { it.copy(widgets = it.widgets.copy(weatherFahrenheit = enabled)) }
+                        },
+                        onRefresh = Weather::refresh
                     )
                 }
             }

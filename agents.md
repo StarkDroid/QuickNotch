@@ -7,7 +7,7 @@ touch against the code — the file the comment narrates is the source of truth.
 
 ## 1. What this project is
 
-**QuickNotch** is a Dynamic-Island-style floating dock for **Windows 10/11** and
+**QuickNotch** is a floating notch-and-dock for **Windows 10/11** and
 **macOS 12+**: a small pill pinned to the top-centre of the screen. Hover it →
 it expands into a dock of pinned apps (fisheye magnification, launch on click),
 plus a growing set of **widgets**: a now-playing "live activity" (vinyl disc,
@@ -15,7 +15,7 @@ marquee title, volume + device-battery level rings, transport controls, seekable
 gradient progress bar) and an idle clock (date/time) in the quickview.
 
 On macOS the pill lives **inside the menu-bar band, flush against the true top
-of the screen** (above the menu bar itself — a real Dynamic Island placement),
+of the screen** (above the menu bar itself — a real top-edge notch placement),
 joins every Space and survives full-screen apps while Always-on-top is on. That
 position is unreachable through AWT, so an ObjC bridge parks/keeps the window
 there (see 5.10/5.11). The app is a **quiet agent when only the notch is open**
@@ -424,7 +424,7 @@ Dock-presence work. Findings in brief:
 - **AWT/Compose limits on macOS** (verified against JDK 17 source and live):
   `setAlwaysOnTop` tops out at `NSFloatingWindowLevel` (3) — *below* the menu bar
   (24) — and placement clamps to the visible frame (y ≥ menu-bar height). A
-  Dynamic Island therefore cannot live above the menu bar via AWT. `locationOnScreen`
+  A top-edge notch therefore cannot live above the menu bar via AWT. `locationOnScreen`
   returns a *cached* origin that never observes direct Cocoa frame moves, so any
   AWT-side screen math (hover gating, passthrough) drifts exactly by the menu-bar
   height once the window is parked above it.
@@ -475,10 +475,14 @@ composeApp/
     │   ├── kotlin/com/starkdroid/quicknotch/calendar/
     │   │   ├── CalendarApi.kt            # every Google request, on Ktor CIO (commonMain, no java.*)
     │   │   └── CalendarEvent.kt          # event model + ticker window (kotlinx-datetime)
+    │   ├── kotlin/com/starkdroid/quicknotch/weather/
+    │   │   └── WeatherApi.kt             # Open-Meteo forecast + ip-api locate, on Ktor CIO (no key,
+    │                                     #   no java.*); metric feed, Fahrenheit is a render conversion
     │   ├── composeResources/
     │   ├── values/strings.xml            # ALL user-facing strings
     │   └── drawable/                     # battery_{full,mid,low}/charging/volume/notification SVGs,
-    │                                     #   quicknotch_icon.png
+    │                                     #   weather_{clear,partly,cloud,fog,rain,snow,storm} condition
+    │                                     #   glyphs, quicknotch_icon.png
     └── desktopMain/
         ├── resources/                    # tray icon, synced windows/*.ps1, (mac) macos/nowplaying-bridge,
         │                                #   btwatch-bridge, passthrough-bridge.dylib
@@ -493,6 +497,9 @@ composeApp/
             ├── calendar/                 # GoogleCalendar: OAuth (PKCE + loopback) -> today's
             │                             #   events, tokens in calendar.json, ticker/Connected flows
             │                             #   (desktop only: loopback socket, file store, browser hand-off)
+            ├── weather/                  # Weather controller: IP-geolocated position + half-hourly
+            │                             #   Open-Meteo poll, last-known day in weather.json, Ready/
+            │                             #   Loading/Failed states (desktop only)
             ├── media/                    # Media/MediaController(+base), WindowsSmtcController,
             │                             # MacNowPlayingController, AudioBattery, SystemBattery,
             │                             # SystemVolume, NativeResources
@@ -516,6 +523,9 @@ composeApp/
                 ├── Shimmer.kt                # icon-skeleton shimmer (draw-phase-only invalidation)
                 ├── CalendarWidget.kt         # Widgets-tab Google Calendar (connect/refresh/status) +
                 │                             #   CalendarDayIndicator for the collapsed pill's mail badge
+                ├── WeatherWidget.kt          # weather quick chip (glyph + temp, left of the date) +
+                │                             #   WeatherNotchPage (today + 7-day outlook with UV/precip) +
+                │                             #   Widgets-tab status card (place, sync age, refresh, unit)
                 ├── OnboardingScreen.kt       # first-run flow: welcome -> style -> calendar -> apps, live notch
                 │                             #   preview carried between steps in a stage card + segmented progress;
                 │                             #   config.onboardingDone gates the overlay
@@ -616,6 +626,7 @@ composeApp/
 | Calendar schedule page in the expanded notch: a third wheel page (after Music/Apps, only while connected) in Google's schedule-view shape -- today's date big on the left (accented), then the next 4 event dates as "d MMM" tiles over count badges (today first, as "Today", when it still has events ahead), gaps skipped; `computeNotchMetrics` claims a 348dp width when the page exists; the fetch is open-ended (timeMin only, no timeMax -- the API has no schedule-mode endpoint, but omitting timeMax *is* schedule semantics: everything upcoming, capped by maxResults=250), because any day window amputated the months-out dates the page promises. The ticker is a notification now: it runs from 2 min before an event until the event ends (no linger), expanding the notch over it consumes it (`GoogleCalendar.dismissTicker`, state-based so a pre-tick dismissal still counts) and lands directly on the calendar page; collapse snaps back to page 0 and the next event re-arms the ticker. The pill badge shows today's still-upcoming events via `calendarUpcomingCount` (running counts, ended does not) and renders in ALL three pill branches -- the clock branch originally skipped it, so the sizer widened the notch for an icon that never drew (pitfall 15 again); the schedule's first tile is today ("Today", accented) when it has events still ahead, then the future dates; Refresh spinner + mutex unchanged. Every date on the expanded page -- today's block included -- is now a link into that exact day in the browser (`googleDayUrl` -> `https://calendar.google.com/calendar/u/0/r/day/<year>/<month>/<day>`, unpadded, matching Google's own documented form; `u/0` because no API reports the browser's account-slot index and `?authuser=` silently falls back to a *different* account when that one isn't signed in). Tiles carry the same hover language as the transport buttons (accent capsule + 1.05 spring) plus an `Open <date> in Google Calendar` semantics label, and the click hops to `Dispatchers.IO` because `AppLauncher.browse` waits on `open` for up to 10s (the same `waitFor` mistake the transport buttons made). Pointer modifiers hang off `interactive` like the dock icons -- a hit-testable node on an alpha-0 page would sit in the hit path of the page beneath it (pitfall 24). Decay is live: `GoogleCalendar.minuteTick` (minute-granular, published from the existing 1s ticker loop, one write per minute change per pitfall 29) feeds the badge, both notch sizers and the page, so an ended event drops out within a minute -- and fetched-vs-displayed reconciles as `fetched = shown + ended`, by design | done (this session) -- stub harness: 9-case green incl. a simulated end-of-today tick; the schedule layout itself needs eyes |
 | First-run onboarding: a four-step flow (welcome -> pill style cards -> Google Calendar connect -> pinned apps) that owns the settings window until finished, with the notch preview carried between steps as a shared element and applying choices to the config live; each step skippable; the real overlay does not compose until `config.onboardingDone` flips (verified: no passthrough-armed line while onboarding), and closing the window mid-flow finishes it so the notch always ends up existing; `resetToDefaults` preserves the flag | done (this session) -- compiles, smoke-verified (overlay absent during onboarding); the transitions and step layouts themselves need eyes |
 | Google Calendar in the notch: OAuth connect in Widgets, today's events fetched on a 30-min poll + manual refresh, a calendar glyph badged with the day's count in the collapsed pill, and the event title on a ticker from 2 min before to 30 min after | done (this session) — **verified against a local stub of Google's endpoints** (consent redirect -> code -> token -> userinfo -> events, `expires_in: 0` to force the refresh branch): 3 of 5 events kept (cancelled + unnamed "Busy" dropped, all-day kept), all six ticker-window assertions pass, token/event caches written, a 503 on events keeps the last known day with `staleError`, `invalid_grant` clears the token and reports revoked, disconnect drops both. **The real consent screen is unverified** (needs the user's Google login). **The consent UI has since moved to the marketing site** (`quicknotch.app/connect` -> `/oauth/callback` -> loopback), see pitfall 42: `state`/`code_challenge` echo through Google's URL and the callback's loopback hop arrives with `code`+`state` intact (Playwright, production build), but a real Google consent round-trip still needs the user's login **and** `https://quicknotch.app/oauth/callback` registered as an authorized redirect URI on the client |
+| Weather in the notch: zero-config (IP-geolocated, Open-Meteo, no key, metric feed with Fahrenheit as a render conversion) — condition glyph + temperature left of the date in the idle pill (claims 2 indicator slots), and an expanded wheel page between Apps and Calendar (today block with high/low, precipitation chance and UV index + 7 day tiles), gated like the calendar page so a failed feed with no cache is never a dead stop | done (this session) — **verified live against the real APIs**: IP lookup resolved the city, the 7-day forecast parsed and cached to `weather.json`, pill/page/sizer agree via `quickViewIndicatorSlots` + `WeatherPageWidth` (356dp), compile + jar + detekt + `:composeApp:run` green with no exceptions. The expanded *layout* itself still needs eyes (depth budget is tight: 4-row day tiles) |
 | macOS Dock presence tied to the Settings window: accessory agent (no Dock icon, no app menu bar) while only the notch runs; Regular + activate while Settings is open — `MacDockPresence` via `setActivationPolicy` + reconcile loop | done (this session) — **verified live**: `lsappinfo` reports `type="UIElement"` notch-only and `type="Foreground"` (Dock icon, in front) with Settings open; closing Settings returns to accessory. Activation is **one-shot on the open transition** — the reconcile loop only re-asserts the policy, so another app keeps focus (verified: TextEdit stays frontmost across ~12 ticks with Settings open, and stays front while media ticks fire with music playing — the presence controller lives in `DisposableEffect(Unit)`, not the composition body, see pitfall 20). Windows analog: overlay built with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` (no taskbar/Alt+Tab slot, no focus steal) — unverified until a Windows run |
 
 **Verification matrix (important!):**
@@ -644,6 +655,15 @@ composeApp/
 - Use monotonic clocks (`System.nanoTime()`-based) for extrapolation math; sample stamps
   in ms from the same clock.
 - Gate pollers behind `HostPlatform.is...` and make failed probes leave last value.
+- Collect high-frequency per-widget state (`media.session`, volume, batteries,
+  notification count) inside the window/subtree that draws it, not in the
+  `application {}` body, so every poll tick recomposes the notch subtree and
+  nothing above it.
+- Keep frame-cadence clocks (the 250 ms nowMs) local to the progress/playing UI
+  composable that owns them (see `rememberMediaNowMs`); an ancestor-body read
+  recomposes the whole overlay tree on each tick.
+- Probe subprocesses inside `waitFor(timeout)` + `destroyForcibly` and read stdout
+  after the timeout, never before; cache extracted bridge scripts by resource path.
 
 **DON'T**
 - Don't force the Skiko `SOFTWARE` renderer: it costs ~70ms of CPU per settings
@@ -776,7 +796,7 @@ composeApp/
     stale the moment Cocoa moves the window** (both verified live + in JDK 17
     source). `setAlwaysOnTop(true)` maps to `NSFloatingWindowLevel` (3) — below
     the menu bar's `kCGMainMenuWindowLevel` (24) — and AWT placement clamps to
-    the visible frame (y ≥ menu-bar height), so a Dynamic Island always parks
+    the visible frame (y ≥ menu-bar height), so a top-edge notch always parks
     *under* the menu bar ("below the screen"). Both are fixed by the compiled
     bridge: `NSStatusWindowLevel` (25) + `frame-top-gap` + the Spaces collection
     behavior, re-asserted on a ~700 ms reconcile loop because Compose placement
@@ -1608,6 +1628,45 @@ composeApp/
   overrides, `PRODUCTION_WEB_BASE` (KDoc-referenced), `onClose`/`wakeSignal`
   (signature/channel-drain). No formatter (would churn every file).
 
+- (this session → HEAD): weather widget on `feature/weather-widget` — `WeatherApi`
+  (commonMain, Open-Meteo + ip-api on Ktor CIO, no key anywhere) → `Weather`
+  controller (desktop, half-hourly poll + `weather.json` cache, Ready/Loading/
+  Failed) → `WeatherWidget.kt` UI (quick chip left of the date, expanded page
+  with today + 7-day outlook, settings status card). Follows the calendar's
+  shape (page gating, sizer agreement, retry gating per pitfall 24) without its
+  OAuth: `showWeather` defaults on, Fahrenheit is a render conversion so the
+  unit toggle never refetches. New detekt findings were fixed (unused import,
+  missing newline, `WeatherErrorPage` extraction) and the page-layout
+  complexity re-baselined like the other pages. The condition glyph follows
+  the feed's `is_day` (moon variants after dark; outlook tiles stay daytime)
+  and the Widgets-tab card has an icon-style dropdown: colorful
+  per-condition tints (default on) vs. the monochrome text tint.
+  `isDay`/`weatherColorfulIcons` are defaulted fields, so old caches and
+  configs load unchanged; the longer signatures re-cut the detekt baseline
+  like the other pages.
+
+- (this session → HEAD): wheel paging flips at most ONE page per swipe burst
+  (`OverlayPager`: first threshold crossing takes the page, the burst's
+  momentum tail is swallowed, next flip waits for 180ms of quiet). Before it,
+  a hard swipe crossed the step several times and blew straight past middle
+  pages — the weather page only ever flashed by mid-flight and read as
+  unreachable. Diagnosed from `quicknotch.log` (`pages=[Apps, Weather,
+  Calendar]` with the index demonstrably stopping on weather while the user
+  saw nothing settle). Order stays Music? → Apps → Weather → Calendar, so no
+  widget is ever skipped at any swipe strength. Follow-up: repeats inside the
+  tail still died (moving the cursor only helped by passing time), so a fresh
+  intent also re-arms mid-tail — a full-step shove, a 2× rising edge, or an
+  explicit reversal landing >100ms after the flip, while the flick's own
+  follow-through (large but within milliseconds) stays swallowed. A second
+  follow-up made each turn land decisively instead of reading as scrolling:
+  `pageSpring` went 0.9/900 → 1.0/1600 (~200ms, critically damped) and an
+  explicit reversal breaks the burst, so corrections never wait out the
+  quiet gap. Final shape, after isolated flicks still moved several pages:
+  mid-stream re-arming is impossible to get right (every "fresh intent"
+  signal also occurs inside one long hard flick), so re-arm happens ONLY on
+  a 100ms quiet gap — no shove/rising/reversal exceptions — which momentum
+  (single-digit-ms gaps) can never fake but every human pause satisfies.
+
 ---
 
 ## 15. Quick constants reference
@@ -1618,6 +1677,7 @@ composeApp/
 | `expandedNotchHeightDp` | 78 (slider 70–86) | `NotchConfig`, `DockSizingTab` |
 | island depth | height + 6dp | `OverlayGeometry` |
 | `NowPlayingWidth` / `LiveCollapsedWidth` | 356dp / 236dp | `DockLayout` |
+| `WeatherPageWidth` | 356dp (current + 7 tiles + H/L·precip·UV) | `DockLayout` |
 | `FisheyeRadiusFactor` / `IconLift` | 1.5× / 8dp | overlay |
 | `HoverGlow` / `IslandSettleTimeoutMs` | 10dp / 650ms | overlay |
 | springs | notch 0.9/340, sharedBounds 0.9/320, icon 0.8/1000 | overlay |
@@ -1627,7 +1687,7 @@ composeApp/
 | Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope, pause ramp 250ms to a 12% flat line | `MediaWidgets` |
 | Pill animation tick | `PillAnimationFps` 30 via `delay` + nanoTime deltas (never `withFrameNanos`) | `NotchMotion` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
-| Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s | media pollers |
+| Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s, weather 30min | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |
 | Page step | 30 dp of wheel travel | `OverlayPager` |
 

@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
-import com.starkdroid.quicknotch.datasource.SystemAccent
 import com.starkdroid.quicknotch.model.NotchSurface
 
 /**
@@ -71,7 +70,7 @@ internal object IslandSurface {
 
     fun styleFor(
         surface: NotchSurface,
-        accent: Color? = SystemAccent.current()
+        accent: Color?
     ): Style =
         if (surface == NotchSurface.SYSTEM_ACCENT) {
             styleForAccent(accent)
@@ -120,8 +119,8 @@ internal object IslandSurface {
  * glass. The rim is applied separately by callers so each can match its own
  * shape.
  */
-internal fun Modifier.islandSurface(surface: NotchSurface): Modifier {
-    val style = IslandSurface.styleFor(surface)
+internal fun Modifier.islandSurface(surface: NotchSurface, accent: Color? = null): Modifier {
+    val style = IslandSurface.styleFor(surface, accent)
     var m = this.background(style.fill)
     if (style.sheen != null) m = m.background(style.sheen)
     return m

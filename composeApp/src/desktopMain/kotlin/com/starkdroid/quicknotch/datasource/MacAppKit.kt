@@ -110,13 +110,14 @@ internal object MacAppKit {
      * Passthrough's cursor-over math needs this real origin. Null when the
      * native side can't answer (bridge missing, window not mapped).
      */
+    private val originXBuf: Memory by lazy { Memory(8) }
+    private val originYBuf: Memory by lazy { Memory(8) }
+
     fun windowCgOrigin(ptr: Long): Point? {
         val getter = fn("quicknotch_get_window_cg_origin") ?: return null
         return try {
-            val x = Memory(8)
-            val y = Memory(8)
-            if (getter.invokeInt(arrayOf(ptr, x, y)) == 1) {
-                Point(x.getDouble(0).toInt(), y.getDouble(0).toInt())
+            if (getter.invokeInt(arrayOf(ptr, originXBuf, originYBuf)) == 1) {
+                Point(originXBuf.getDouble(0).toInt(), originYBuf.getDouble(0).toInt())
             } else null
         } catch (_: Throwable) {
             null
@@ -154,7 +155,7 @@ internal object MacAppKit {
 }
 
 /**
- * macOS-only per-overlay controller that gives the notch its Dynamic Island
+ * macOS-only per-overlay controller that gives the notch its above-menu-bar
  * home: raised above the menu bar, flush against the true top of the screen
  * (AWT cannot reach that position — it clamps placement to the visible area),
  * joining every Space and surviving full-screen apps.

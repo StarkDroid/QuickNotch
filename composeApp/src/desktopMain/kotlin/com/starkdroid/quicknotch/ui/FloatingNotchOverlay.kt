@@ -53,11 +53,12 @@ import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.NotificationCount
-import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
+import com.starkdroid.quicknotch.weather.Weather
+import com.starkdroid.quicknotch.weather.WeatherState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -125,6 +126,17 @@ internal fun FloatingNotchOverlay(
     val calendarTicker by GoogleCalendar.ticker.collectAsState()
     val calendarEventCount =
         if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
+    // Weather for the quickview chip and the expanded outlook page. Collected
+    // here because the pill and the pager are the only drawers; the controller
+    // polls on its own half-hourly loop, so observing never triggers a fetch.
+    val weatherState by Weather.state.collectAsState()
+    val weatherFetching by Weather.fetching.collectAsState()
+    val weatherData = (weatherState as? WeatherState.Ready)?.data
+    // The page exists while a forecast is showing or arriving — never as an
+    // empty stop: a failed feed with no cache stays off the wheel entirely,
+    // the same rule the calendar page follows.
+    val weatherReady = config.widgets.showWeather &&
+        (weatherData != null || weatherFetching || weatherState is WeatherState.Loading)
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -172,21 +184,9 @@ internal fun FloatingNotchOverlay(
     val accent by SystemAccent.accent.collectAsState()
     LaunchedEffect(config.surface) {
         if (config.surface != NotchSurface.SYSTEM_ACCENT) return@LaunchedEffect
-        SystemAccent.refresh()
         while (true) {
+            withContext(Dispatchers.IO) { SystemAccent.refresh() }
             delay(SystemAccentPollMs)
-            SystemAccent.refresh()
-        }
-    }
-
-    // Position interpolation clock. The media bridge samples once per second;
-    // advancing a local clock between samples lets the vinyl and the progress
-    // strip move at frame time instead of stepping once per heartbeat.
-    var nowMs by remember { mutableStateOf(System.nanoTime() / 1_000_000) }
-    LaunchedEffect(musicLive, liveSession?.state) {
-        while (musicLive && liveSession?.state == PlaybackState.PLAYING) {
-            delay(250)
-            nowMs = System.nanoTime() / 1_000_000
         }
     }
 
@@ -256,10 +256,11 @@ internal fun FloatingNotchOverlay(
         )
     }
     val calendarConnected = calendarState is CalendarState.Connected
-    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarConnected) {
+    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarConnected, weatherReady) {
         buildList {
             if (musicLive) add(WidgetPage.Music)
             if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
+            if (weatherReady) add(WidgetPage.Weather)
             // Last so the wheel reaches it after the dock, and only when there
             // is a connection behind it -- an empty page would be a dead stop.
             if (calendarConnected) add(WidgetPage.Calendar)
@@ -338,7 +339,7 @@ internal fun FloatingNotchOverlay(
         }
         pager.resetAccum()
     }
-    val pagePosition by animateFloatAsState(pager.pageIndex.value.toFloat(), pageSpring(), label = "pagePosition")
+    val pagePosition = animateFloatAsState(pager.pageIndex.value.toFloat(), pageSpring(), label = "pagePosition")
 
     // Wheel events reach the Compose pointer pipeline on macOS (trackpad and
     // mouse alike), and the dock box fills the expanded window, so this one
@@ -369,11 +370,12 @@ internal fun FloatingNotchOverlay(
     // the footprint. Gated to the idle branches: the drag-handle style renders
     // no indicators and a live media pill grows to its own fixed width.
     val indicatorSlots = quickViewIndicatorSlots(
-        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
+        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
+        weatherVisible = weatherData != null
     )
 
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarConnected) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarConnected)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady)
     }
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
@@ -456,7 +458,7 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface)
+                    .islandSurface(config.surface, accent)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {
@@ -510,6 +512,9 @@ internal fun FloatingNotchOverlay(
                         showCalendar = config.widgets.showCalendar,
                         calendarEvent = calendarTicker?.summary,
                         calendarEventCount = calendarEventCount,
+                        showWeather = config.widgets.showWeather,
+                        weather = weatherData,
+                        fahrenheit = config.widgets.weatherFahrenheit,
                         showWaveform = config.widgets.showCollapsedWaveform,
                         waveformColor = waveformColor,
                         waveformHidesTitle =
@@ -534,7 +539,7 @@ internal fun FloatingNotchOverlay(
                 // one or the other, never both fighting for the same pixels.
                 val liveNow = if (musicLive) liveSession else null
                 if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
-                    LiveProgressStrip(fraction = liveNow.progressFraction(nowMs))
+                    LiveProgressStripForSession(session = liveNow)
                 }
             }
 
@@ -599,7 +604,6 @@ internal fun FloatingNotchOverlay(
                         iconBitmaps = iconBitmaps,
                         session = liveSession,
                         media = media,
-                        nowMs = nowMs,
                         battery = battery,
                         volumePercent = volumePercent,
                         volumeMuted = volumeMuted,
@@ -611,6 +615,10 @@ internal fun FloatingNotchOverlay(
                         batteryRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingBatteryKey, dockScope),
                         calendarState = calendarState,
                         calendarRefreshing = calendarRefreshing,
+                        weatherState = weatherState,
+                        weatherFetching = weatherFetching,
+                        fahrenheit = config.widgets.weatherFahrenheit,
+                        onRefreshWeather = { Weather.refresh() },
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)

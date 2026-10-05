@@ -4,7 +4,7 @@
 
 ![QuickNotch Banner](https://raw.githubusercontent.com/StarkDroid/QuickNotch/main/banner.png)
 
-**A Dynamic Island–style floating dock that pins apps so you can launch them from anywhere on Windows and macOS.**
+**A floating notch and dock that pins apps so you can launch them from anywhere on Windows and macOS.**
 
 [![Build & Release](https://github.com/StarkDroid/QuickNotch/actions/workflows/release.yml/badge.svg)](https://github.com/StarkDroid/QuickNotch/actions)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
@@ -25,7 +25,7 @@ QuickNotch lives as a small pill at the top-centre of the screen. Hover it to ex
 
 ## Features
 
-- **Floating notch** — Collapsed pill that morphs into a dock, anchored to the top-centre of the screen. It stays perfectly still while it expands and collapses (on macOS it hugs the menu bar like a Dynamic Island).
+- **Floating notch** — Collapsed pill that morphs into a dock, anchored to the top-centre of the screen. It stays perfectly still while it expands and collapses (on macOS it sits above the menu bar, flush against the true top of the screen).
 - **Dock fisheye wave** — Cosine-squared magnification and lift that track the cursor exactly; the wave radius is derived from icon size automatically.
 - **Pin any app** — Search installed apps or browse for a custom executable / `.app` bundle. Reorder and remove from Settings.
 - **Native icons**

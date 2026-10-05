@@ -63,7 +63,7 @@ const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"
 	<text x="600" y="235" text-anchor="middle" font-family="${DISPLAY}" font-size="96" font-weight="700" fill="#211c13" letter-spacing="-4">Everything you need.</text>
 	<text x="600" y="335" text-anchor="middle" font-family="${DISPLAY}" font-size="96" font-weight="700" fill="#b83a10" letter-spacing="-4">One tiny notch.</text>
 
-	<text x="600" y="395" text-anchor="middle" font-family="${FONT}" font-size="24" font-weight="400" fill="#4c4437">The free Dynamic Island-style notch and app dock for Windows and macOS.</text>
+	<text x="600" y="395" text-anchor="middle" font-family="${FONT}" font-size="24" font-weight="400" fill="#4c4437">The free floating notch and app dock for Windows and macOS.</text>
 
 	${dots}
 

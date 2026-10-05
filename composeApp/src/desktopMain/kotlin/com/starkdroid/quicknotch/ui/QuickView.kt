@@ -15,6 +15,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +38,7 @@ import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.model.NotchSurface
 import org.jetbrains.compose.resources.stringResource
@@ -79,6 +86,14 @@ internal fun QuickView(
     showCalendar: Boolean = false,
     calendarEvent: String? = null,
     calendarEventCount: Int = 0,
+    /**
+     * Current-conditions chip (collapsed idle pill only): condition glyph +
+     * temperature left of the date. Null until a forecast loads, which hides
+     * the chip rather than showing a false reading.
+     */
+    showWeather: Boolean = false,
+    weather: WeatherData? = null,
+    fahrenheit: Boolean = false,
     /** Shared-element morph modifiers for the live-activity disc/title/rings. */
     discModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
@@ -108,7 +123,7 @@ internal fun QuickView(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
                 // Same vinyl treatment as the expanded page's disc — art on a
                 // grooved disc with a spindle hub, gently rotating while
@@ -239,7 +254,9 @@ internal fun QuickView(
                 battery = if (showBattery) battery else null,
                 deviceBattery = if (showDeviceBattery) deviceBattery else null,
                 notificationCount = notificationCount,
-                calendarEventCount = if (showCalendar) calendarEventCount else 0
+                calendarEventCount = if (showCalendar) calendarEventCount else 0,
+                weather = if (showWeather) weather else null,
+                fahrenheit = fahrenheit,
             )
         } else {
             // Idle dots; the notification bell, when readable, caps the row.
@@ -265,6 +282,31 @@ internal fun QuickView(
             }
         }
     }
+}
+
+/**
+ * 250 ms interpolation clock for the media progress displays. Localizing this
+ * state keeps the 4 Hz tick from recomposing the whole overlay tree — only
+ * the composable that owns the state (the pill strip, the music page's
+ * transport/progress cluster) recomposes on each tick.
+ */
+@Composable
+internal fun rememberMediaNowMs(playing: Boolean): Long {
+    var nowMs by remember { mutableStateOf(System.nanoTime() / 1_000_000L) }
+    LaunchedEffect(playing) {
+        while (playing) {
+            delay(250)
+            nowMs = System.nanoTime() / 1_000_000L
+        }
+    }
+    return nowMs
+}
+
+/** Collapsed-pill live progress strip, owning its own 250 ms interpolation clock. */
+@Composable
+internal fun BoxScope.LiveProgressStripForSession(session: MediaSession) {
+    val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
+    LiveProgressStrip(fraction = session.progressFraction(nowMs))
 }
 
 /**

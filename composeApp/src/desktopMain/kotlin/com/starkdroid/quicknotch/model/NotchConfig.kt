@@ -15,8 +15,9 @@ enum class NotchStyle(
     /** Round every corner into a capsule, vs. keeping the edge side square. */
     val capsule: Boolean
 ) {
-    /** Flush to the edge, inner corners rounded — the Dynamic-Island default. */
-    DYNAMIC_ISLAND(0, false),
+    /** Flush to the edge, inner corners rounded — the default. */
+    @SerialName("DYNAMIC_ISLAND")
+    NOTCH(0, false),
 
     /** Detached stadium-shaped pill floating a few points off the edge. */
     FLOATING_PILL(14, true),
@@ -95,6 +96,20 @@ data class WidgetsConfig(
      * Requires a connection (see the Calendar widget in the Widgets tab).
      */
     val showCalendar: Boolean = false,
+    /**
+     * Weather in the collapsed pill (condition glyph + temperature, left of
+     * the date) and as an expanded wheel page (today plus the 7-day outlook
+     * with UV index and precipitation chances). Zero-config: the position is
+     * IP-geolocated, so no account or setup is needed.
+     */
+    val showWeather: Boolean = true,
+    /** Display temperatures in Fahrenheit instead of Celsius. */
+    val weatherFahrenheit: Boolean = false,
+    /**
+     * Paint condition glyphs in per-condition colours (amber sun, blue rain,
+     * …) instead of the monochrome text tint. Purely a render choice — the
+     * same glyphs, only the tint changes.
+     */
     /** Album-art-derived or constant white; see [WaveformTint]. */
     val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
     /**
@@ -137,7 +152,7 @@ enum class ClockDateFormat(val pattern: String) {
 @Immutable
 @Serializable
 data class NotchConfig(
-    val style: NotchStyle = NotchStyle.DYNAMIC_ISLAND,
+    val style: NotchStyle = NotchStyle.NOTCH,
 
     /**
      * Set once the first-run onboarding has been walked through (or skipped

@@ -24,6 +24,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.starkdroid.quicknotch.ui.OnboardingScreen
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
+import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppPaths
 import com.starkdroid.quicknotch.datasource.HostPlatform
@@ -43,10 +44,11 @@ import com.starkdroid.quicknotch.generated.resources.onboarding_window_title
 import com.starkdroid.quicknotch.generated.resources.reset_defaults
 import com.starkdroid.quicknotch.generated.resources.settings_window_title
 import com.starkdroid.quicknotch.media.AudioBattery
-import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
 import com.starkdroid.quicknotch.media.NotificationCount
+import com.starkdroid.quicknotch.weather.Weather
+import com.starkdroid.quicknotch.weather.WeatherState
 import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
@@ -110,17 +112,6 @@ fun main(args: Array<String>) {
         // One system-wide media feed for the whole app: the tray, the overlay
         // and the settings window all observe the same session.
         val media = remember { MediaControllerFactory.create() }
-        val liveSession by media.session.collectAsState()
-
-        // Master volume drives the collapsed music pill's percentage chip; it
-        // is polled separately from the session feed (SMTC/MediaRemote carry
-        // no volume) and simply stays hidden whenever a query fails. The same
-        // goes for the connected audio device's battery level.
-        val volumePercent by SystemVolume.percent.collectAsState()
-        val volumeMuted by SystemVolume.muted.collectAsState()
-        val battery by AudioBattery.info.collectAsState()
-        val deviceBattery by SystemBattery.state.collectAsState()
-        val notificationCount by NotificationCount.count.collectAsState()
         DisposableEffect(Unit) {
             media.start()
             SystemVolume.start()
@@ -130,12 +121,16 @@ fun main(args: Array<String>) {
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
             GoogleCalendar.start()
+            // Weather locates itself over IP and caches the day to disk, so a
+            // cold start paints the last known forecast on the first frame.
+            Weather.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
                 AudioBattery.stop()
                 SystemBattery.stop()
                 NotificationCount.stop()
+                Weather.stop()
             }
         }
 
@@ -145,7 +140,6 @@ fun main(args: Array<String>) {
             repository.config.map { it.onboardingDone }.distinctUntilChanged()
         }.collectAsState(initial = repository.config.value.onboardingDone)
 
-        val musicLive = isMusicLive(config, liveSession)
         var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
@@ -201,14 +195,8 @@ fun main(args: Array<String>) {
             NotchOverlayWindow(
                 repository = repository,
                 media = media,
-                musicLive = musicLive,
                 appIcon = appIcon,
                 isExpanded = isExpanded,
-                volumePercent = volumePercent,
-                volumeMuted = volumeMuted,
-                battery = battery,
-                deviceBattery = deviceBattery,
-                notificationCount = notificationCount,
                 onExpandedChange = { isExpanded = it }
             )
         }
@@ -301,31 +289,42 @@ fun main(args: Array<String>) {
 private fun NotchOverlayWindow(
     repository: FavoritesRepository,
     media: MediaController,
-    musicLive: Boolean,
     appIcon: ImageBitmap,
     isExpanded: Boolean,
-    volumePercent: Int?,
-    volumeMuted: Boolean?,
-    battery: AudioDeviceBattery?,
-    deviceBattery: SystemBattery?,
-    notificationCount: Int?,
     onExpandedChange: (Boolean) -> Unit
 ) {
     val config by repository.config.collectAsState()
+    val liveSession by media.session.collectAsState()
+    val musicLive = isMusicLive(config, liveSession)
+    val volumePercent by SystemVolume.percent.collectAsState()
+    val volumeMuted by SystemVolume.muted.collectAsState()
+    val battery by AudioBattery.info.collectAsState()
+    val deviceBattery by SystemBattery.state.collectAsState()
+    val notificationCount by NotificationCount.count.collectAsState()
     val favorites by repository.favorites.collectAsState()
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarTick by GoogleCalendar.minuteTick.collectAsState()
+    val calendarConnected = calendarState is CalendarState.Connected
     // The native window and the overlay content must size the quickview
     // identically, or the indicator slots (device + laptop battery + the
     // notification bell, the calendar mail badge) clip off the far edge. Both
     // derive the slot count through the same helper.
     val calendarEventCount =
         if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
+    // The weather chip draws while a forecast is loaded; the expanded outlook
+    // page exists under the same condition the overlay uses, so both sizers
+    // claim the identical footprint.
+    val weatherState by Weather.state.collectAsState()
+    val weatherFetching by Weather.fetching.collectAsState()
+    val weatherData = (weatherState as? WeatherState.Ready)?.data
+    val weatherReady = config.widgets.showWeather &&
+        (weatherData != null || weatherFetching || weatherState is WeatherState.Loading)
     val indicatorSlots = quickViewIndicatorSlots(
-        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount
+        config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
+        weatherVisible = weatherData != null
     )
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady)
     }
     // The native window keeps the expanded footprint at all times (see class
     // doc): opening/collapsing never resizes the transparent window, which is

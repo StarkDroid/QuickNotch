@@ -14,8 +14,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -260,17 +262,20 @@ internal fun OnboardingScreen(
                             modifier = Modifier.width(460.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    TabEntrance(index = 0) {
+                            Row(
+                                modifier = Modifier.height(IntrinsicSize.Min),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    TabEntrance(index = 0, modifier = Modifier.fillMaxHeight()) {
                                         FeatureCard(
                                             Icons.AutoMirrored.Filled.Launch,
                                             stringResource(Res.string.onboarding_feature_apps)
                                         )
                                     }
                                 }
-                                Box(modifier = Modifier.weight(1f)) {
-                                    TabEntrance(index = 1) {
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    TabEntrance(index = 1, modifier = Modifier.fillMaxHeight()) {
                                         FeatureCard(
                                             Icons.Default.MusicNote,
                                             stringResource(Res.string.onboarding_feature_media)
@@ -278,17 +283,20 @@ internal fun OnboardingScreen(
                                     }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    TabEntrance(index = 2) {
+                            Row(
+                                modifier = Modifier.height(IntrinsicSize.Min),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    TabEntrance(index = 2, modifier = Modifier.fillMaxHeight()) {
                                         FeatureCard(
                                             null,
                                             stringResource(Res.string.onboarding_feature_calendar)
                                         )
                                     }
                                 }
-                                Box(modifier = Modifier.weight(1f)) {
-                                    TabEntrance(index = 3) {
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    TabEntrance(index = 3, modifier = Modifier.fillMaxHeight()) {
                                         FeatureCard(
                                             Icons.Default.VisibilityOff,
                                             stringResource(Res.string.onboarding_feature_quiet)
@@ -641,7 +649,7 @@ private fun StyleCards(
                     Text(
                         text = stringResource(
                             when (style) {
-                                NotchStyle.DYNAMIC_ISLAND -> Res.string.style_default
+                                NotchStyle.NOTCH -> Res.string.style_default
                                 NotchStyle.FLOATING_PILL -> Res.string.style_floating_pill
                                 NotchStyle.DRAG_HANDLE -> Res.string.style_drag_handle
                             }
@@ -650,7 +658,7 @@ private fun StyleCards(
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         color = if (isSelected) TextPrimary else TextSecondary
                     )
-                    if (isSelected) {
+                    if (false) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
@@ -674,18 +682,22 @@ private fun StyleCards(
 
 /**
  * One "what the app can do" card: icon chip over a short promise on a solid
- * surface. Grid siblings share the same height via weight.
+ * surface. Row siblings share the tallest card's height (the row sizes itself
+ * to its tallest child and every card stretches to fill it), so wrapped
+ * labels never clip and all four boxes stay proportionate.
  */
 @Composable
 private fun FeatureCard(icon: androidx.compose.ui.graphics.vector.ImageVector?, label: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight()
             .clip(RoundedCornerShape(14.dp))
             .background(SettingsCard)
             .border(1.dp, SettingsBorder, RoundedCornerShape(14.dp))
             .padding(14.dp),
-        horizontalAlignment = Alignment.Start
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
         Box(
             modifier = Modifier

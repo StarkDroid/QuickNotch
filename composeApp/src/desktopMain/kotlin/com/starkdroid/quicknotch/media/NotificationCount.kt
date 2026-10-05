@@ -114,11 +114,9 @@ internal object NotificationCount {
      */
     fun poke() {
         if (!HostPlatform.isMac) return
-        val active = scope ?: run {
-            val created = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            scope = created
-            created
-        }
+        // No new scope here: NotificationCount.start/stop own the only one, and
+        // recreating it after stop() would leak an uncancelled coroutine.
+        val active = scope ?: return
         if (active.isActive) active.launch { query()?.let { _count.value = it } }
     }
 
@@ -171,9 +169,11 @@ internal object NotificationCount {
             "/usr/bin/sqlite3", "-noheader", "-batch", db,
             "select count(*) from record;"
         ).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)
-        process.destroyForcibly()
-        output.toIntOrNull()
+        if (!process.waitFor(ProcTimeoutMs, TimeUnit.MILLISECONDS)) {
+            process.destroyForcibly()
+            process.waitFor(2, TimeUnit.SECONDS)
+            return@runCatching null
+        }
+        process.inputStream.bufferedReader().readText().trim().toIntOrNull()
     }.getOrNull()
 }

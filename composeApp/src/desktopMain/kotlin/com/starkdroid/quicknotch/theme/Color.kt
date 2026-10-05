@@ -19,6 +19,10 @@ val TextPrimary = Color(0xFFF8FAFC)
 val TextSecondary = Color(0xFF94A3B8)
 val TextMuted = Color(0xFF64748B)
 
+// ── Weather condition tints (the "colorful" icon style) ─────────────────────
+// One signature colour per condition; the monochrome style ignores these and
+// tints every glyph with the surrounding text colour instead.
+
 // ── Modern settings design tokens (all solid flats — no gradients) ───────────
 // Refined sidebar + card system for the settings window and onboarding flow.
 // Every token is a flat solid so surfaces stay crisp on the CPU rasterizer and

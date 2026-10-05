@@ -103,6 +103,7 @@ internal fun LevelRing(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = strokeWidth.toPx()
+            val ringStyle = Stroke(width = stroke, cap = StrokeCap.Round)
             val inset = stroke / 2f
             val arcTopLeft = Offset(inset, inset)
             val arcSize = Size(size.width - stroke, size.height - stroke)
@@ -113,7 +114,7 @@ internal fun LevelRing(
                 useCenter = false,
                 topLeft = arcTopLeft,
                 size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
+                style = ringStyle
             )
             if (fraction > 0f) {
                 drawArc(
@@ -123,7 +124,7 @@ internal fun LevelRing(
                     useCenter = false,
                     topLeft = arcTopLeft,
                     size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                    style = ringStyle
                 )
             }
         }

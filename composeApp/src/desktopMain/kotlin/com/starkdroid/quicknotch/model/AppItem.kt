@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 /**
- * Represents an application item that can be pinned to the Dynamic Island / Dock.
+ * Represents an application item that can be pinned to the notch dock.
  */
 @Immutable
 @Serializable
