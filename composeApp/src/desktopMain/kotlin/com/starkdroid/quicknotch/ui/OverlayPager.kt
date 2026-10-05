@@ -1,6 +1,5 @@
 package com.starkdroid.quicknotch.ui
 
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlin.math.abs
@@ -34,7 +33,7 @@ internal class OverlayPager(
     /** Holds Compose's `showDock` so wheel input can be gated on it outside composition. */
     val dockVisible = mutableStateOf(false)
 
-    private val scrollAccum = mutableFloatStateOf(0f)
+    private var scrollAccum = 0f
 
     /**
      * Quiet gap after which the previous burst is over and the next swipe
@@ -58,18 +57,18 @@ internal class OverlayPager(
         val now = System.nanoTime()
         if (now - lastEventNanos > gestureGapNs) {
             burstFlipped = false
-            scrollAccum.value = 0f
+            scrollAccum = 0f
         }
         lastEventNanos = now
         if (burstFlipped) return
-        scrollAccum.value += deltaPx
-        if (abs(scrollAccum.value) >= stepPx) flipOnce()
+        scrollAccum += deltaPx
+        if (abs(scrollAccum) >= stepPx) flipOnce()
     }
 
     private fun flipOnce() {
-        val step = if (scrollAccum.value > 0) 1 else -1
+        val step = if (scrollAccum > 0) 1 else -1
         val next = (pageIndex.value + step).coerceIn(0, pageCount - 1)
-        scrollAccum.value = 0f
+        scrollAccum = 0f
         if (next != pageIndex.value) {
             pageIndex.value = next
         }
@@ -78,7 +77,7 @@ internal class OverlayPager(
 
     /** Resets accumulated wheel travel, e.g. after a page change via UI. */
     fun resetAccum() {
-        scrollAccum.value = 0f
+        scrollAccum = 0f
         burstFlipped = false
     }
 }
