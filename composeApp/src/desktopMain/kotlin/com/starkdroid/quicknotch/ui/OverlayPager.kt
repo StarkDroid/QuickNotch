@@ -16,14 +16,12 @@ import kotlin.math.abs
  * this state from the AWT event thread — the same thread Compose Desktop
  * renders on, so no synchronization is needed.
  *
- * Gesture model: ONE continuous scroll impulse (trackpad flick + its momentum
- * tail, or one AWT wheel tick with |rotation|≥1) flips at most ONE page.
- * The burst re-arms on a genuine *re-flick*: the previous impulse's
- * envelope first decays to near the floor, then a new strong event arrives —
- * the finger lifted and a new swipe began. A continuous keep-finger-down
- * drag never produces this shape (its tail is a single decaying wave), so
- * one held swipe = one page, while repeated flicks after a brief settle
- * flip at once. Direction reversals count as re-flicks immediately.
+ * Gesture model: ONE continuous event stream flips at most ONE page. The
+ * burst locks on the first flip, swallows everything that follows (trackpad
+ * momentum included), and only releases when the stream has been quiet for
+ * [gestureGapNs] — which is exactly when the fingers have left the surface.
+ * A new swipe can therefore be switched instantly, and every swipe that
+ * actually delivers travel will always page exactly once.
  */
 internal class OverlayPager(
     /** Scroll pixels required to flip one page. */
@@ -39,25 +37,12 @@ internal class OverlayPager(
     private val scrollAccum = mutableFloatStateOf(0f)
 
     /**
-     * Quiet gap after which the current burst is considered over and a
-     * guaranteed-fresh gesture may start. Trackpad impulses deliver events
-     * continuously (~16 ms cadence), so 60 ms of true silence is unambiguous.
+     * Quiet gap after which the previous burst is over and the next swipe
+     * (or wheel notch stream) can take effect.
      */
-    private val gestureGapNs = 60_000_000L
+    private val gestureGapNs = 40_000_000L
     private var lastEventNanos = 0L
     private var burstFlipped = false
-    private var lastEventSign = 0
-
-    // Per-burst tail envelope used to recognize a *new* trackpad flick after
-    // the previous impulse has settled. decayPeak tracks the strongest event
-    // of the post-flip tail; postFlipSawDecay marks that the tail had time to
-    // drop to a fraction of that peak (quiet floor), and postFlipTrough keeps
-    // the event where. A new flick is recognized when the instantaneous
-    // magnitude rises back over the trough significantly.
-    private var decayPeak = 0f
-    private var postFlipSawDecay = false
-    private var postFlipTroughSeen = false
-    private var postFlipTrough = 0f
 
     /** Current number of widget pages (Apps, Music, …). Synced by the overlay. */
     var pageCount: Int = 1
@@ -71,46 +56,14 @@ internal class OverlayPager(
     fun consumeWheel(deltaPx: Float) {
         if (!dockVisible.value || pageCount <= 1 || deltaPx == 0f) return
         val now = System.nanoTime()
-        val sign = if (deltaPx > 0f) 1 else -1
-        val mag = abs(deltaPx)
-        val streamPaused = now - lastEventNanos > gestureGapNs
-
-        if (burstFlipped) {
-            // After the flip, a new page can only come from a genuinely *fresh*
-            // impulse. On a trackpad that means the previous impulse's envelope
-            // first decayed back toward stillness and then rose again — exactly
-            // the quality of a second, separate flick. A single slow
-            // keep-finger-down drag keeps delivering the tail's same-direction
-            // travel and therefore never re-arms.
-            val decayedToQuiet = postFlipSawDecay && mag <= decayPeak * 0.25f
-            if (decayedToQuiet) {
-                postFlipTroughSeen = true
-                postFlipTrough = mag
-            }
-            val freshImpulse = postFlipTroughSeen &&
-                mag >= maxOf(postFlipTrough * 3f, decayPeak * 0.5f)
-            val signFlip = lastEventSign != 0 && sign != lastEventSign && postFlipTroughSeen
-            val restartGesture = streamPaused || freshImpulse || signFlip
-            if (restartGesture) {
-                burstFlipped = false
-                postFlipSawDecay = false
-                postFlipTroughSeen = false
-                decayPeak = 0f
-                postFlipTrough = 0f
-                scrollAccum.value = if (streamPaused) 0f else deltaPx
-                if (abs(scrollAccum.value) >= stepPx) flipOnce()
-            } else {
-                if (mag > decayPeak) decayPeak = mag
-                if (mag <= 0.25f * decayPeak.coerceAtLeast(stepPx)) postFlipSawDecay = true
-            }
-        } else {
-            if (streamPaused) scrollAccum.value = 0f
-            scrollAccum.value += deltaPx
-            if (abs(scrollAccum.value) >= stepPx) flipOnce()
+        if (now - lastEventNanos > gestureGapNs) {
+            burstFlipped = false
+            scrollAccum.value = 0f
         }
-
         lastEventNanos = now
-        lastEventSign = sign
+        if (burstFlipped) return
+        scrollAccum.value += deltaPx
+        if (abs(scrollAccum.value) >= stepPx) flipOnce()
     }
 
     private fun flipOnce() {
@@ -121,17 +74,11 @@ internal class OverlayPager(
             pageIndex.value = next
         }
         burstFlipped = true
-        postFlipSawDecay = false
-        postFlipTroughSeen = false
-        decayPeak = 0f
-        postFlipTrough = 0f
     }
-
 
     /** Resets accumulated wheel travel, e.g. after a page change via UI. */
     fun resetAccum() {
         scrollAccum.value = 0f
         burstFlipped = false
-        lastEventSign = 0
     }
 }
