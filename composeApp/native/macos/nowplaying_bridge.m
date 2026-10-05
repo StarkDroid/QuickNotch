@@ -16,9 +16,12 @@
 //     "artist":"…","album":"…","pos":12345,"dur":234567,"art":"…","id":"…"}
 //
 //  `art` is emitted from `kMRMediaRemoteNowPlayingInfoArtworkData` when the
-//  entitled context provides it; most sources don't, so when the playing client
-//  is the system Music app the script also pulls the cover via Music's own
-//  AppleScript interface. Other sources fall back to the placeholder vinyl.
+//  scripted context provides it (rare); when the playing client is the system
+//  Music app the bridge also pulls the cover via Music's own AppleScript
+//  interface. Every other artless source is covered Kotlin-side by the
+//  entitled helper (`MacArtworkFetcher` → `artwork-driver.pl` +
+//  `artwork_bridge` dylib inside `/usr/bin/perl`), which sees the bytes the
+//  scripted context is denied.
 //
 //  Usage:
 //    nowplaying-bridge            — poll every 2s, stream until killed
@@ -184,9 +187,15 @@ static NSString *RunMusicArtScript(void) {
  * Fills in missing artwork on the fly. Only refetches when the content id
  * moves; a negative result is also cached so non-Music sources never spin up
  * an osascript per poll.
+ *
+ * Music.app only: the script reads Music's own `current track`, so running it
+ * for any other client would paste Music's cover onto e.g. a browser video
+ * (and cache it under that video's id). The Kotlin side's entitled helper
+ * (`MacArtworkFetcher`) is the universal path for every other source.
  */
 static void AttachMusicArt(NSString **line) {
     if (![*line containsString:@"\"art\":null"]) return;
+    if (![*line containsString:@"\"srcId\":\"com.apple.Music\""]) return;
     NSString *idKey = ContentIdFromLine(*line);
     if (!idKey.length) return;
     if ([idKey isEqualToString:artContentId]) {

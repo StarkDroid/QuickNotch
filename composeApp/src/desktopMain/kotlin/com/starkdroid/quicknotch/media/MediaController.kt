@@ -61,6 +61,13 @@ internal object MediaJson {
 }
 
 /**
+ * How long an empty player holds the last session before clearing it. Covers
+ * the no-item beat between songs (the bridge polls at 1–2s) without turning a
+ * genuine stop into a lingering pill.
+ */
+private const val EMPTY_GRACE_MS = 4_000L
+
+/**
  * Shared snapshot decoding for every backend: JSON parsing, monotonic
  * stamping, and artwork decoding cached by content id so a base64 blob is
  * rasterized exactly once per track. All decoding runs on the caller's worker
@@ -76,30 +83,74 @@ internal abstract class MediaControllerBase : MediaController {
     // The waveform tint rides the artwork cache: one histogram pass per track,
     // on the poller's worker thread, never again until the cover changes.
     private var artworkTintCache: Color? = null
+    // The poller and the detached artwork fetcher share the cache above from
+    // different IO coroutines; every read/write below takes this lock.
+    private val artLock = Any()
 
     /** Raw `pos`/`id` of the last published PLAYING sample, used to detect
      *  bridges whose timeline position is pinned instead of advancing. */
     private var previousPlayingRawPosition: Long? = null
     private var previousPlayingRawId: String? = null
 
-    protected fun publish(jsonLine: String) {
+    /**
+     * The last playable snapshot and when it arrived (monotonic ms). An empty
+     * player holds onto these for [EMPTY_GRACE_MS] instead of clearing the
+     * session at once — the bridge reports no item for a beat between songs,
+     * and without the hold the whole music page would unmount and remount on
+     * every track change.
+     */
+    private var lastSnapshot: MediaSnapshot? = null
+    private var lastPlayableAtMs: Long = 0L
+
+    /**
+     * Parses one bridge line into a playable snapshot. A playable line refreshes
+     * the hold; anything else serves the held snapshot while the grace is open
+     * and clears the session only once it expires — so a track switch (or a
+     * corrupt sample) never blanks the pill, while a real stop still lands a
+     * few seconds later.
+     */
+    private fun playableSnapshot(jsonLine: String): MediaSnapshot? {
         val snapshot = runCatching {
             MediaJson.parser.decodeFromString(MediaSnapshot.serializer(), jsonLine)
-        }.getOrNull() ?: return
+        }.getOrNull()
+        val playable = snapshot != null &&
+            stateOf(snapshot) != PlaybackState.NONE && snapshot.title.isNotBlank()
+        val result: MediaSnapshot? = if (playable) {
+            lastSnapshot = snapshot
+            lastPlayableAtMs = System.nanoTime() / 1_000_000
+            snapshot
+        } else if (lastSnapshot != null &&
+            System.nanoTime() / 1_000_000 - lastPlayableAtMs < EMPTY_GRACE_MS
+        ) {
+            lastSnapshot
+        } else {
+            previousPlayingRawPosition = null
+            previousPlayingRawId = null
+            _session.value = null
+            lastSnapshot = null
+            null
+        }
+        return result
+    }
 
-        val state = when (snapshot.state.lowercase()) {
+    private fun stateOf(snapshot: MediaSnapshot): PlaybackState =
+        when (snapshot.state.lowercase()) {
             "playing" -> PlaybackState.PLAYING
             "paused" -> PlaybackState.PAUSED
             "stopped" -> PlaybackState.STOPPED
             else -> PlaybackState.NONE
         }
 
-        if (state == PlaybackState.NONE || snapshot.title.isBlank()) {
-            previousPlayingRawPosition = null
-            previousPlayingRawId = null
-            _session.value = null
-            return
-        }
+    /**
+     * Decodes one bridge snapshot into the session flow. Returns the snapshot
+     * when it produced (or refreshed) a session, null when the line carried
+     * nothing playable — macOS uses the returned snapshot to decide whether
+     * the track still needs cover art from the entitled helper.
+     */
+    protected fun publish(jsonLine: String): MediaSnapshot? {
+        val snapshot = playableSnapshot(jsonLine)
+        if (snapshot == null) return null
+        val state = stateOf(snapshot)
 
         // Browsers (Chrome/Edge) register with SMTC but do not pump timeline
         // position updates while a track plays: `Position` stays pinned at its
@@ -112,26 +163,10 @@ internal abstract class MediaControllerBase : MediaController {
         // players that genuinely advance (Spotify, Music, foobar) and seeks
         // (which do update `Position`) never match and keep their raw value.
         val sampledAt = System.nanoTime() / 1_000_000
-        val positionMs = if (
-            state == PlaybackState.PLAYING &&
-            snapshot.positionMs == previousPlayingRawPosition &&
-            snapshot.contentId == previousPlayingRawId
-        ) {
-            val previous = _session.value
-            if (previous != null && previous.state == PlaybackState.PLAYING) {
-                previous.positionMs + (sampledAt - previous.sampledAt)
-            } else {
-                snapshot.positionMs
-            }
-        } else {
-            snapshot.positionMs
-        }
-        previousPlayingRawPosition =
-            if (state == PlaybackState.PLAYING) snapshot.positionMs else null
-        previousPlayingRawId =
-            if (state == PlaybackState.PLAYING) snapshot.contentId else null
+        val positionMs = extrapolatedPosition(state, snapshot, sampledAt)
 
-        val art = decodeArtwork(snapshot)
+        // Bridges may omit artwork for an unchanged track id; the cache carries it.
+        val art = decodeArtworkBytes(snapshot.artworkBase64, snapshot.contentId)
         _session.value = MediaSession(
             source = snapshot.source,
             sourceId = snapshot.sourceId,
@@ -147,39 +182,107 @@ internal abstract class MediaControllerBase : MediaController {
             contentId = snapshot.contentId,
             canSeek = supportsSeek
         )
+        return snapshot
     }
 
-    /** Bridges may omit artwork for an unchanged track id; the cache carries it. */
-    private fun decodeArtwork(snapshot: MediaSnapshot): DecodedArtwork {
-        val b64 = snapshot.artworkBase64
-        if (b64.isNullOrBlank()) {
-            return artworkCache.takeIf { artworkKey == snapshot.contentId }
-                .let { DecodedArtwork(it, artworkTintCache.takeIf { artworkKey == snapshot.contentId }) }
+    /**
+     * Pins the last PLAYING sample's raw position/id so the next sample can
+     * tell a genuinely advancing timeline from a pinned one, and extrapolates
+     * the playhead forward when it is pinned.
+     */
+    private fun extrapolatedPosition(
+        state: PlaybackState,
+        snapshot: MediaSnapshot,
+        sampledAt: Long
+    ): Long {
+        val pinned = state == PlaybackState.PLAYING &&
+            snapshot.positionMs == previousPlayingRawPosition &&
+            snapshot.contentId == previousPlayingRawId
+        val positionMs = if (pinned) {
+            val previous = _session.value
+            if (previous != null && previous.state == PlaybackState.PLAYING) {
+                previous.positionMs + (sampledAt - previous.sampledAt)
+            } else {
+                snapshot.positionMs
+            }
+        } else {
+            snapshot.positionMs
         }
-        if (artworkKey == snapshot.contentId && artworkCache != null) {
-            return DecodedArtwork(artworkCache, artworkTintCache)
-        }
+        previousPlayingRawPosition =
+            if (state == PlaybackState.PLAYING) snapshot.positionMs else null
+        previousPlayingRawId =
+            if (state == PlaybackState.PLAYING) snapshot.contentId else null
+        return positionMs
+    }
 
+    /**
+     * Fills in cover art that arrived late — the macOS entitled helper answers
+     * one track behind the poll loop by design. Drops the bytes when the track
+     * has already moved on (or another source already supplied art), so a slow
+     * fetch can never paste a cover onto the wrong song.
+     */
+    protected fun publishArtwork(contentId: String, base64: String) {
+        if (base64.isBlank() || contentId.isBlank()) return
+        val art = decodeArtworkBytes(base64, contentId)
+        val current = _session.value
+        if (art.bitmap != null && current != null) {
+            if (current.contentId == contentId && current.artwork == null) {
+                _session.value = current.copy(artwork = art.bitmap, artTint = art.tint)
+            }
+        }
+    }
+
+    /**
+     * Decodes one base64 cover straight to display size and caches it under
+     * [contentId]. Blank input (or a failed decode) falls back to whatever the
+     * cache holds for that id, so a track the helper has no art for simply
+     * keeps the placeholder vinyl.
+     */
+    private fun decodeArtworkBytes(base64: String?, contentId: String): DecodedArtwork {
+        val result = if (base64.isNullOrBlank()) {
+            cachedArtwork(contentId)
+        } else {
+            cacheHit(contentId) ?: decodeAndStore(base64, contentId) ?: cachedArtwork(contentId)
+        }
+        return result
+    }
+
+    /** Cache read fast-path, shared by the poller and the artwork fetcher. */
+    private fun cacheHit(contentId: String): DecodedArtwork? {
+        synchronized(artLock) {
+            if (artworkKey == contentId && artworkCache != null) {
+                return DecodedArtwork(artworkCache, artworkTintCache)
+            }
+            return null
+        }
+    }
+
+    /** Full decode plus one cache write; null when the bytes do not rasterize. */
+    private fun decodeAndStore(base64: String, contentId: String): DecodedArtwork? {
         val decoded = runCatching {
-            val img = decodeArtBytes(Base64.getMimeDecoder().decode(b64))
-                ?: return@runCatching null
-            // The histogram reads the *downscaled* image we are about to ship, so
-            // the tint is sampled from exactly the pixels the pill draws rather
-            // than from a 1200px original that is thrown away a moment later.
-            val small = scaleToMax(img, MediaJson.artworkMaxPx)
-            small.toComposeImageBitmap() to dominantArtTint(small)
-        }.getOrNull()
-
-        if (decoded != null) {
-            artworkKey = snapshot.contentId
+            decodeArtBytes(Base64.getMimeDecoder().decode(base64))?.let { img ->
+                // The histogram reads the *downscaled* image we are about to
+                // ship, so the tint is sampled from exactly the pixels the pill
+                // draws rather than from a 1200px original that is thrown away
+                // a moment later.
+                val small = scaleToMax(img, MediaJson.artworkMaxPx)
+                small.toComposeImageBitmap() to dominantArtTint(small)
+            }
+        }.getOrNull() ?: return null
+        synchronized(artLock) {
+            artworkKey = contentId
             artworkCache = decoded.first
             artworkTintCache = decoded.second
-            return DecodedArtwork(decoded.first, decoded.second)
         }
-        return DecodedArtwork(
-            artworkCache.takeIf { artworkKey == snapshot.contentId },
-            artworkTintCache.takeIf { artworkKey == snapshot.contentId }
-        )
+        return DecodedArtwork(decoded.first, decoded.second)
+    }
+
+    private fun cachedArtwork(contentId: String): DecodedArtwork {
+        synchronized(artLock) {
+            val bitmap = artworkCache.takeIf { artworkKey == contentId }
+            val tint = artworkTintCache.takeIf { artworkKey == contentId }
+            return DecodedArtwork(bitmap, tint)
+        }
     }
 
     override fun stop() {
