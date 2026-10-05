@@ -1739,7 +1739,10 @@ composeApp/
   twice (`weatherTemp` already carries `°`, so the unit letter is now `"F"`/`"C"`
   via `weatherTempUnitLetter`). Swept every `%`/`°` in strings + code — those
   were the only three. Collapsed-pill side insets trimmed 4dp → 2dp on both
-  quickview rows.
+  quickview rows. Follow-up: the width slider floor dropped 140 → 110
+  (`DockLayout.QuickViewWidthMinDp/MaxDp`), the default 150 → 136, and files
+  still sitting exactly on the old default migrate to 136 on load (a moved
+  slider is never touched).
 
 ---
 

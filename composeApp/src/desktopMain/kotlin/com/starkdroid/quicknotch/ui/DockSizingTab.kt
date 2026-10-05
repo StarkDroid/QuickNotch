@@ -167,10 +167,16 @@ internal fun DockSizingTab(
                         title = stringResource(Res.string.quickview_width_title),
                         valueLabel = stringResource(
                             Res.string.value_dp,
-                            config.quickViewWidthDp.coerceIn(140, 190).toString()
+                            config.quickViewWidthDp.coerceIn(
+                                DockLayout.QuickViewWidthMinDp,
+                                DockLayout.QuickViewWidthMaxDp
+                            ).toString()
                         ),
-                        value = config.quickViewWidthDp.toFloat().coerceIn(140f, 190f),
-                        valueRange = 140f..190f,
+                        value = config.quickViewWidthDp.toFloat().coerceIn(
+                            DockLayout.QuickViewWidthMinDp.toFloat(),
+                            DockLayout.QuickViewWidthMaxDp.toFloat()
+                        ),
+                        valueRange = DockLayout.QuickViewWidthMinDp.toFloat()..DockLayout.QuickViewWidthMaxDp.toFloat(),
                         onValueChange = { onUpdate { cfg -> cfg.copy(quickViewWidthDp = it.toInt()) } }
                     )
 

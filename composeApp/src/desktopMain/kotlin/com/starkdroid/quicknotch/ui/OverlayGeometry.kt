@@ -32,6 +32,15 @@ internal object DockLayout {
     /** Collapsed cross-axis thickness (dp) of the slim drag-handle style. */
     const val DragHandleHeightDp: Int = 8
 
+    /**
+     * Collapsed-pill width slider bounds. The floor hugs a clock-only pill
+     * instead of stranding ~15dp of dead air on each side of it; indicator
+     * slots widen the footprint from whatever base is chosen, so a low base
+     * never clips.
+     */
+    const val QuickViewWidthMinDp: Int = 110
+    const val QuickViewWidthMaxDp: Int = 190
+
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
 
