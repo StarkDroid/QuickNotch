@@ -605,7 +605,7 @@ composeApp/
 | Pinned-apps drag reorder (handle at left, `animateItem`, `onMove` committed on release) | done (`a4e4576`) |
 | Settings scrolling is smooth: METAL (skiko 0.8.25) renders the window, so a scroll frame costs ~3.4ms of process CPU instead of ~70ms on the software rasterizer — measured 61fps (vsync-capped) vs 14.5fps; the collapsed pill also stops animating while settings is in front (16.1% → 3.9% of a core) | done (this session) — the "Metal crashes" conclusion was wrong (the forced-SOFTWARE property shadowed the env var, and skiko 0.8.18's Metal really does SIGTRAP; pitfall 28) |
 | Now-playing pill + detailed music page + transport | done |
-| Transport hit areas are exactly the drawn controls: prev/next = flat 30dp `Box` clickables, play/pause = one 34dp clickable circle (`clip` **before** `clickable` so the hit area is the circle), each with a hover scale (1.16 / 1.12, spring 0.6/380) | done (this session) — measured by a synthetic point sweep on the installed build: prev 774–800, play 803–837, next 844–868 all fire, everything outside is dead (pitfalls 24/25) |
+| Transport hit areas are exactly the drawn controls: prev/next = flat 30dp `Box` clickables, play/pause = one 36dp clickable circle (`clip` **before** `clickable` so the hit area is the circle), each with a hover scale (1.16 / 1.12, spring 0.6/380) | done (this session) — the 2026-10 modernization pass resized play 34→36dp and button spacing 2→4dp, so the old point-sweep numbers (prev 774–800, play 803–837, next 844–868) no longer apply; re-sweep on the installed build before trusting them (pitfalls 24/25) |
 | Expand-into-music + shared-element morph (single-content: `sharedElement`, no mid-flight dual copy) | done (`a02cdc1`, `0c9a9a7`, de-duplicated this session) |
 | Idle "curtain" expansion: quickview slides down while pinned apps scale up from behind it, gated off during live music | done (this session) — visual pass pending |
 | Blink-free open/collapse: overlay native window keeps a single fixed (expanded) footprint, never resizes during the animation | done (this session) — margin click-swallow handled by the click-through row below |
@@ -734,7 +734,7 @@ composeApp/
 11. **Settings slider spam**: rely on `FavoritesRepository` coalescing; don't add
     per-tick persistence.
 12. **Expanded page vertical budget**: `expandedNotchHeightDp` is 70–86 (+6 margin). The
-    music page's right cluster (rings 28 + 4 + transport 34 + 8 floor = 74dp) fits the
+    music page's right cluster (rings 30 + 4 + transport 36 + 4 floor = 74dp) fits the
     minimum; don't silently exceed it.
 13. **Level-ring glyphs must be solid `fill="currentColor"` silhouettes**: stroke-based
     icons (e.g. a `stroke="#000" stroke-opacity="0.32"` battery casing) render at ~1/3
@@ -1515,7 +1515,9 @@ composeApp/
   `destroyForcibly` after its 4s wait. Verified on the installed DMG by
   synthetic point sweep: prev 774–800, play 803–837, next 844–868 pt all
   fire and everything outside is dead; play toggles both directions, next
-  changes track, prev resets the position. The long detour that got us here
+  changes track, prev resets the position. (Stale after the 2026-10 music
+  modernization: play is 36dp now and button spacing is 4dp, so re-sweep
+  before trusting those bands.) The long detour that got us here
   is worth remembering: the "dead" prev button was **Music's own ⏮ semantics**
   (restart when elapsed > ~3s), which made a working button look broken, and
   no `CGEvent` scroll of any flavour reaches this overlay window, so the
@@ -1666,6 +1668,19 @@ composeApp/
   signal also occurs inside one long hard flick), so re-arm happens ONLY on
   a 100ms quiet gap — no shove/rising/reversal exceptions — which momentum
   (single-digit-ms gaps) can never fake but every human pause satisfies.
+
+- (2026-10 → HEAD): expanded music player modernization (`feature/modern-music-player`) —
+  the vinyl keeps its treatment but now sits in an album-tinted halo
+  (`session.artTint` at 18%, accent cyan with no cover) with a live-status dot
+  on its lower edge (accent while playing, dimmed white on pause); the subtitle
+  line became "Artist — Album" (either half alone still reads); the title block
+  crossfades with a slight vertical glide on every track change (keyed on
+  `contentId`, so the words move even when the cover lands a poll late); the
+  playhead strip thickened (4dp bar, 10dp head) with tighter 22dp time frames;
+  the right stack grew into the same 74dp budget (30dp rings at 10dp spacing,
+  36dp play circle, 4dp button gaps). Nothing removed: vinyl, morph keys,
+  mute-toggle ring, battery ring, transport, seek all intact — the old
+  point-sweep hit bands no longer apply, re-sweep before trusting them.
 
 ---
 
