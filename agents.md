@@ -1763,7 +1763,7 @@ composeApp/
 | --- | --- | --- |
 | `quickViewWidthDp` / `quickViewHeightDp` | 136 / 30 (default; slider 110–190; serialised as `collapsedPillWidthDp`/`collapsedPillHeightDp`; exact-150 files migrate to 136) | `NotchConfig` |
 | `HugMinWidth` | 32dp floor for the content-hugging clock/dots pill | `DockLayout` |
-| `HugPadding` | 4dp breathing room around the hugged content (both ends) | `DockLayout` |
+| `HugPadding` | 8dp breathing room around the hugged content (both ends) | `DockLayout` |
 | `expandedNotchHeightDp` | 78 (slider 70–86) | `NotchConfig`, `DockSizingTab` |
 | island depth | height + 6dp | `OverlayGeometry` |
 | `NowPlayingWidth` / `LiveCollapsedWidth` | 356dp / 236dp | `DockLayout` |
