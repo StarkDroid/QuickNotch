@@ -367,6 +367,16 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   entitled `MRMediaRemoteGetNowPlayingInfo` query per artless track. Original code
   (not vendored): the perl-entitlement trick follows the mechanism documented by
   `ungive/mediaremote-adapter` (BSD-3), but every line here is ours.
+- Backdrop blur (`config.blurBackground`, Appearance toggle): macOS parks an
+  `NSVisualEffectView` under the Skiko canvas via a new
+  `quicknotch_set_content_blur` export in `passthrough_bridge.m` (no new Gradle
+  task — the dylib just recompiled), sized to the island rect on every size
+  frame so the click-through margin stays truly clear; Windows flips the DWM
+  accent policy to acrylic from pure JNA (`datasource/WindowBlur.kt`, no C
+  build — the existing `SetWindowRgn` clip already follows the island, so no
+  rect is needed there). Both driven from the overlay (`LaunchedEffect` on
+  toggle + island size); Compose draws only a dark scrim over the blur.
+  Fail-soft to the painted surfaces everywhere.
 
 ### 5.10 Window passthrough (`WindowPassthrough.kt`)
 
@@ -1232,6 +1242,16 @@ composeApp/
     documents. Same rule as pitfall 6 (the JXA subprocess): never "simplify"
     the artwork fetch back into the scripted context.
 
+47. **Backdrop blur has three sharp edges.** (a) The effect must be sized to
+    the *island*, never the window: a full-window `NSVisualEffectView` turns
+    the click-through margin into a blurred slab instead of clear desktop
+    (Windows is exempt — its `SetWindowRgn` clip already follows the island).
+    (b) `NSView.tag` is get-only (`setTag:` does not exist) — hold the effect
+    view in a static instead of tagging it. (c) JNA struct packing must be
+    forced to `ALIGN_MSVC` or the trailing ULONG misaligns, and a JNA method
+    name must match the Win32 export exactly (`SetWindowCompositionAttribute`
+    keeps its capital, with a targeted `@Suppress("FunctionNaming")`).
+
 46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
     while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
     for small lines, but a base64 cover (hundreds of KB) fills the 64KB pipe
@@ -1731,6 +1751,12 @@ composeApp/
   `smtc.ps1 status <id> <haveArt>` skips the thumbnail transfer once the app
   holds art for the track (unverified — no Windows machine here).
 
+- (this session → HEAD): real backdrop blur (`feature/notch-blur-background`) —
+  a `blurBackground` toggle in the Appearance section (off by default) that
+  blurs the actual desktop behind the island: `NSVisualEffectView` (dark HUD,
+  always-active) under the canvas on macOS, DWM acrylic with a dark tint on
+  Windows, Compose drawing only a 55% black scrim over it. macOS smoke-clean
+  with the toggle on; the *look* needs eyes, Windows needs a whole machine.
 - (this session → HEAD): content-hugging collapsed pill
   (`fix/weather-units-quickview-padding`) — the wrapping quickview branches
   (idle clock, idle dots) report their measured width and the drawn island

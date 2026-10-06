@@ -50,7 +50,9 @@ import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
+import com.starkdroid.quicknotch.datasource.MacContentBlur
 import com.starkdroid.quicknotch.datasource.SystemAccent
+import com.starkdroid.quicknotch.datasource.WindowsBackdropBlur
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
@@ -401,8 +403,8 @@ internal fun FloatingNotchOverlay(
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
-    val surface = remember(config.surface, accent) {
-        IslandSurface.styleFor(config.surface, accent)
+    val surface = remember(config.surface, accent, config.blurBackground) {
+        IslandSurface.styleFor(config.surface, accent, config.blurBackground)
     }
 
     // The dock reveal is a layer animation (fade + scale) over the always
@@ -440,6 +442,23 @@ internal fun FloatingNotchOverlay(
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
+
+    // Real backdrop blur behind the island (NSVisualEffectView on macOS, DWM
+    // acrylic on Windows) with the dark scrim above for legibility. macOS
+    // re-asserts the effect rect on every size frame because the island
+    // animates; Windows applies once per toggle (its region clip already
+    // follows the island). Both fail soft to the painted surfaces.
+    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
+    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
+    LaunchedEffect(config.blurBackground, animatedWidth, animatedHeight, islandExpanded) {
+        windowsBlur?.setEnabled(config.blurBackground)
+        macBlur.apply(
+            config.blurBackground,
+            DpSize(animatedWidth, animatedHeight),
+            metrics.expanded,
+            islandExpanded
+        )
+    }
 
     // Open: hold the dock hidden until the size spring has actually settled,
     // then fade it in. Close: fade the dock out and let the island spring back.
@@ -496,7 +515,7 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface, accent)
+                    .islandSurface(config.surface, accent, config.blurBackground)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {

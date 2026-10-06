@@ -171,3 +171,47 @@ void quicknotch_activate_app(void) {
         [NSApp activateIgnoringOtherApps:YES];
     });
 }
+
+// Backdrop blur behind the island. AWT/Compose cannot blur what is behind a
+// transparent window, so an NSVisualEffectView is parked directly under the
+// Skiko canvas inside the window's content view, sized to the island rect the
+// Kotlin side passes in (AppKit points, bottom-left origin — the island hugs
+// the window's top edge, so y = windowHeight - islandHeight). Sizing it to the
+// island (rather than the whole window) keeps the transparent click-through
+// margin truly see-through instead of a big blurred slab, and the rounded
+// layer corners keep the effect inside the pill shape. Material is the dark
+// HUD blur with an always-active state (the overlay never activates, and an
+// inactive effect would render desaturated). Disabled removes the view.
+static NSVisualEffectView *sBlurEffect = nil;
+
+void quicknotch_set_content_blur(void *nsWindow, int enabled,
+                                 double x, double y, double w, double h,
+                                 double radius) {
+    NSWindow *window = (__bridge NSWindow *)nsWindow;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSView *content = window.contentView;
+        if (content == nil) return;
+        if (!enabled) {
+            [sBlurEffect removeFromSuperview];
+            return;
+        }
+        if (w <= 0 || h <= 0) return;
+        if (sBlurEffect == nil || sBlurEffect.window != window) {
+            [sBlurEffect removeFromSuperview];
+            sBlurEffect = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
+            sBlurEffect.material = NSVisualEffectMaterialHUDWindow;
+            sBlurEffect.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+            sBlurEffect.state = NSVisualEffectStateActive;
+            sBlurEffect.wantsLayer = YES;
+            [content addSubview:sBlurEffect positioned:NSWindowBelow relativeTo:nil];
+        } else if ([content.subviews firstObject] != (NSView *)sBlurEffect) {
+            // AWT reordered the canvas above our bookkeeping: re-pin the
+            // effect behind everything so the blur never covers the island.
+            [sBlurEffect removeFromSuperview];
+            [content addSubview:sBlurEffect positioned:NSWindowBelow relativeTo:nil];
+        }
+        sBlurEffect.frame = NSMakeRect(x, y, w, h);
+        sBlurEffect.layer.cornerRadius = radius;
+        sBlurEffect.layer.masksToBounds = YES;
+    });
+}

@@ -149,6 +149,24 @@ internal object MacAppKit {
         call("quicknotch_set_activation_policy", policy)
     }
 
+    /**
+     * Backdrop blur behind the island: parks an NSVisualEffectView under the
+     * canvas, sized to the island rect in AppKit points (bottom-left origin).
+     * Fire-and-forget on AppKit's main queue; a no-op without the bridge.
+     */
+    fun setContentBlur(ptr: Long, enabled: Boolean, frame: BlurFrame) {
+        call(
+            "quicknotch_set_content_blur",
+            ptr,
+            if (enabled) 1 else 0,
+            frame.x,
+            frame.y,
+            frame.w,
+            frame.h,
+            frame.radius
+        )
+    }
+
     fun activateApp() {
         call("quicknotch_activate_app")
     }

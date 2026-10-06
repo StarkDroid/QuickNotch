@@ -162,6 +162,12 @@ data class NotchConfig(
      */
     val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
+    /**
+     * Real backdrop blur behind the island (NSVisualEffectView on macOS, DWM
+     * acrylic on Windows) with a dark scrim for legibility, instead of the
+     * painted translucent glass. Defaults off; old files load fine.
+     */
+    val blurBackground: Boolean = false,
     val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,
     val baseIconSizeDp: Int = 38,
