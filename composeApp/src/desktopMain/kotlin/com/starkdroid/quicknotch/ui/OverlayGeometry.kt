@@ -55,7 +55,7 @@ internal object DockLayout {
      * components never kiss the pill border, little enough that no dead air
      * reads.
      */
-    val HugPadding: Dp = 8.dp
+    val HugPadding: Dp = 16.dp
 
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
