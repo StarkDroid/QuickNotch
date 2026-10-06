@@ -167,7 +167,7 @@ data class NotchConfig(
     val baseIconSizeDp: Int = 38,
     /** Quickview (collapsed pill) footprint; serialised under the old names so existing files load. */
     @SerialName("collapsedPillWidthDp")
-    val quickViewWidthDp: Int = 150,
+    val quickViewWidthDp: Int = 136,
     @SerialName("collapsedPillHeightDp")
     val quickViewHeightDp: Int = 30,
     val expandedNotchHeightDp: Int = 78,

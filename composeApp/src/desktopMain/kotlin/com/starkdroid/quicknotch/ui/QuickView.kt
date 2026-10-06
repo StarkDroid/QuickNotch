@@ -26,7 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.Res
@@ -99,7 +102,15 @@ internal fun QuickView(
     titleModifier: Modifier = Modifier,
     volumeRingModifier: Modifier = Modifier,
     batteryRingModifier: Modifier = Modifier,
-    clock: ClockPrefs
+    clock: ClockPrefs,
+    /**
+     * Reports the measured width of the wrapping branches (idle clock, idle
+     * dots) so the overlay can hug the pill to its content. The fill branches
+     * (live media, ticker) never report: measuring them would read the island
+     * back into itself. The overlay clears staleness itself by only consuming
+     * the value while a wrapping branch is showing.
+     */
+    onWrapWidthChange: (Dp?) -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
         if (style == NotchStyle.DRAG_HANDLE) {
@@ -123,7 +134,7 @@ internal fun QuickView(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .padding(horizontal = 2.dp, vertical = 4.dp)
             ) {
                 // Same vinyl treatment as the expanded page's disc — art on a
                 // grooved disc with a spindle hub, gently rotating while
@@ -248,22 +259,25 @@ internal fun QuickView(
             // Idle clock: date / time replace the dots while nothing plays.
             // Depending on the chosen format and pill width the whole phrase
             // usually fits; the pill clips rather than stretching.
-            IdleClockRow(
-                clock = clock,
-                tint = islandTint(surface),
-                battery = if (showBattery) battery else null,
-                deviceBattery = if (showDeviceBattery) deviceBattery else null,
-                notificationCount = notificationCount,
-                calendarEventCount = if (showCalendar) calendarEventCount else 0,
-                weather = if (showWeather) weather else null,
-                fahrenheit = fahrenheit,
-            )
+            WrapWidthReporter(onWrapWidthChange = onWrapWidthChange) {
+                IdleClockRow(
+                    clock = clock,
+                    tint = islandTint(surface),
+                    battery = if (showBattery) battery else null,
+                    deviceBattery = if (showDeviceBattery) deviceBattery else null,
+                    notificationCount = notificationCount,
+                    calendarEventCount = if (showCalendar) calendarEventCount else 0,
+                    weather = if (showWeather) weather else null,
+                    fahrenheit = fahrenheit,
+                )
+            }
         } else {
             // Idle dots; the notification bell, when readable, caps the row.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            WrapWidthReporter(onWrapWidthChange = onWrapWidthChange) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 val dot = islandTint(surface)
                 Box(Modifier.size(5.dp).clip(CircleShape).background(dot.copy(alpha = 0.28f)))
                 Box(
@@ -279,8 +293,32 @@ internal fun QuickView(
                 if (showCalendar) {
                     CalendarDayIndicator(count = calendarEventCount)
                 }
+                }
             }
         }
+    }
+}
+
+/**
+ * Reports a wrapping row's measured width to the island sizer. The wrapper
+ * sizes itself to the content (both branches wrap rather than fill), so the
+ * reported width is the content width including the row's own insets — the
+ * island adds nothing on top and the pill hugs with exactly the row's
+ * side padding on each end.
+ */
+@Composable
+private fun WrapWidthReporter(
+    onWrapWidthChange: (Dp?) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    Box(
+        modifier = Modifier.onSizeChanged { size ->
+            onWrapWidthChange(with(density) { size.width.toDp() })
+        },
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
 
