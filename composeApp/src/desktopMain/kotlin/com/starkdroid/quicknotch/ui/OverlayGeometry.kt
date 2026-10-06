@@ -44,10 +44,18 @@ internal object DockLayout {
     /**
      * Degenerate-measurement guard for the content-hugging pill: the island
      * never contracts past this, so a zero-size first frame (or a future
-     * empty branch) cannot collapse it into a sliver. Well under every real
+     * empty branch) never collapses it into a sliver. Well under every real
      * branch's width, so it only ever binds on garbage input.
      */
     val HugMinWidth: Dp = 32.dp
+
+    /**
+     * Breathing room the hugging island adds around the measured row, total
+     * across both ends (on top of the row's own insets) — enough that edge
+     * components never kiss the pill border, little enough that no dead air
+     * reads.
+     */
+    val HugPadding: Dp = 4.dp
 
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2

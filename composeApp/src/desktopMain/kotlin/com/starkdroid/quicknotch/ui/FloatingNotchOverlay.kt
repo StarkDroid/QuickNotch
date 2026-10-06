@@ -100,7 +100,8 @@ private fun hugCollapsedWidth(
     window: DpSize
 ): Dp {
     if (!hugVisible) return formula.width
-    return hugWidth?.coerceIn(DockLayout.HugMinWidth, window.width) ?: formula.width
+    return hugWidth?.let { (it + DockLayout.HugPadding).coerceIn(DockLayout.HugMinWidth, window.width) }
+        ?: formula.width
 }
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalSharedTransitionApi::class)
