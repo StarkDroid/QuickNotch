@@ -1256,7 +1256,7 @@ composeApp/
     documents. Same rule as pitfall 6 (the JXA subprocess): never "simplify"
     the artwork fetch back into the scripted context.
 
-47. **Backdrop blur has five sharp edges.** (a) An `NSVisualEffectView` never
+47. **Backdrop blur has seven sharp edges.** (a) An `NSVisualEffectView` never
     sampled the backdrop behind this JVM/Metal canvas in any placement — inside
     `AWTView` it covers the controls, as a sibling under `NSNextStepFrame` it
     renders fill or nothing, and stripping the fill leaves plain transparency.
@@ -1296,7 +1296,28 @@ composeApp/
     (`SetWindowCompositionAttribute` keeps its capital, with a targeted
     `@Suppress("FunctionNaming")`). macOS needs no overlay-window resize
     for blur: the helper panel tracks the island rect, so the overlay's fixed
-    footprint (pitfall 17) is untouched.
+    footprint (pitfall 17) is untouched. (f) **`cornerRadius` + `maskedCorners`
+    on the effect view's layer never reshape the frost** — the backdrop pass
+    draws the effect view's full square frame regardless of its layer mask, so
+    the helper frosted a square lip past `notchShape()`'s rounded bottom
+    corners (the "sharp blurred edges at the bottom" report). Shape it with an
+    explicit `CAShapeLayer` mask on **both** the effect view and the window's
+    content view (`applyHelperShapeMask`), one path per view built corner-by-
+    corner (`createIslandPath`: bottom pair rounded on the flush style, all
+    four on capsule — `CGPathCreateWithRoundedRect` rounds everything it is
+    given, so it cannot express the notch shape). Two traps: the helper's
+    coordinate space is unflipped (`isFlipped=NO`, y-up), so a path authored
+    y-down rounds the *wrong* pair — the first attempt came out top-rounded/
+    bottom-square, exactly inverted; choose each edge's radius from that view's
+    `isFlipped`. And verify with `screencapture -o -l<WID>` of the helper's own
+    window id (from `CGWindowList`, printed by the `listwin` tool in the
+    scratch dir): corner alpha must die to 0 over a ramp ≈ the radius. The dylib
+    needs `-framework QuartzCore` for `CAShapeLayer`. (g) **Don't draw a rim
+    over the frost**: `IslandSurface.blurScrim` shipped with
+    `border = White @ 30%` at 0.75dp, a white hairline around the blur that
+    reads as a border drawn around the frost (pixel-exact: white 0.30 over the
+    interior equals the measured rim). The frost's own edge already delimits
+    the island — `blurScrim.border` stays `Color.Transparent`.
 
 46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
     while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
@@ -1814,7 +1835,16 @@ composeApp/
   47): the helper is standalone now, ordered below the overlay and re-synced
   (frame/level/order/visibility) on a 250 ms timer, verified by a
   same-content A/B correlation (behind-island ρ≈0 vs never-occluded ρ=1.0).
-  The look still needs human eyes, and Windows requires a whole machine.
+  Follow-up (this session): the frost's corners and rim are cleaned up —
+  `cornerRadius`/`maskedCorners` never reshaped the rendered output, so the
+  helper frosted square lips past the rounded bottom corners; both the effect
+  view and the content view now carry an explicit per-corner `CAShapeLayer`
+  mask oriented by `isFlipped` (the first y-down path inverted the rounding),
+  verified by `screencapture -l` corner-alpha ramps in both collapsed and
+  expanded states, and the white hairline the scrim's 30% white border drew
+  over the frost is gone (`blurScrim.border` transparent). The intensity
+  path was not touched. The look still needs human eyes, and Windows
+  requires a whole machine.
 - (this session → HEAD): content-hugging collapsed pill
   (`fix/weather-units-quickview-padding`) — the wrapping quickview branches
   (idle clock, idle dots) report their measured width and the drawn island

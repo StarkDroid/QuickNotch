@@ -73,8 +73,11 @@ internal object IslandSurface {
     private val blurScrim = Style(
         fill = SolidColor(Color.Black.copy(alpha = 0.18f)),
         sheen = glassSheen,
-        border = Color.White.copy(alpha = 0.30f),
-        borderWidth = 0.75f
+        // No rim in blurred mode: the frost's own edge already delimits the
+        // island against the desktop, and a white hairline drawn over it
+        // reads as a bright border around the blur.
+        border = Color.Transparent,
+        borderWidth = 0f
     )
 
     // The accent style is a function of the OS accent, so it can't live in the

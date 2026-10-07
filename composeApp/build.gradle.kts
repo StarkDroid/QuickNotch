@@ -153,6 +153,7 @@ val compileMacPassthroughBridge by tasks.registering(Exec::class) {
         "-dynamiclib",
         "-framework", "Foundation",
         "-framework", "AppKit",
+        "-framework", "QuartzCore",
         "passthrough_bridge.m",
         "-o", project.file("src/desktopMain/resources/macos/passthrough-bridge.dylib")
     )

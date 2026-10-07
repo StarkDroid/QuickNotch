@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
 
 // In-process bridge loaded by `WindowPassthrough` (macOS) plus the overlay's
 // window policy and Dock-presence controllers. All AppKit window/application
@@ -230,6 +231,71 @@ static long long sBlurAppliedRadius = -1;
 
 static void applyHelperBlurRadius(long long radius);
 
+// Per-corner rounded-rect path in view/layer coordinates. The two corners
+// are given per coordinate-space edge: `rEdge0` rounds the corner at y=0,
+// `rEdgeH` the corner at y+height — the caller decides which is the visual
+// top or bottom from the view's flippedness (an unflipped view reads its
+// bounds y-up, so the path built "y-down" rounded the WRONG pair: top rounded,
+// bottom square — exactly the inversion the window capture showed).
+// notchShape() (OverlayGeometry.kt) rounds only the visual bottom pair on
+// the flush style and all four on capsule styles, so the corners have to be
+// chosen one-by-one — CGPathCreateWithRoundedRect rounds everything it is
+// given. Quad curves rather than arcs: at these radii (13–18pt) the parabola
+// tracks the true quarter-circle to well under a point, and the path builder
+// stays free of angle bookkeeping.
+static CGPathRef createIslandPath(CGRect b, double rEdge0, double rEdgeH) {
+    CGMutablePathRef p = CGPathCreateMutable();
+    double x = b.origin.x, y = b.origin.y, w = b.size.width, h = b.size.height;
+    CGPathMoveToPoint(p, NULL, x + rEdge0, y);
+    CGPathAddLineToPoint(p, NULL, x + w - rEdge0, y);
+    if (rEdge0 > 0) CGPathAddQuadCurveToPoint(p, NULL, x + w, y, x + w, y + rEdge0);
+    CGPathAddLineToPoint(p, NULL, x + w, y + h - rEdgeH);
+    if (rEdgeH > 0) CGPathAddQuadCurveToPoint(p, NULL, x + w, y + h, x + w - rEdgeH, y + h);
+    CGPathAddLineToPoint(p, NULL, x + rEdgeH, y + h);
+    if (rEdgeH > 0) CGPathAddQuadCurveToPoint(p, NULL, x, y + h, x, y + h - rEdgeH);
+    CGPathAddLineToPoint(p, NULL, x, y + rEdge0);
+    if (rEdge0 > 0) CGPathAddQuadCurveToPoint(p, NULL, x, y, x + rEdge0, y);
+    CGPathCloseSubpath(p);
+    return p;
+}
+
+// Shape the frost with an explicit CAShapeLayer mask on BOTH the effect view
+// and the window's content view. Setting cornerRadius + maskedCorners on the
+// effect layer alone never reshaped the rendered output: a window-server
+// capture of the helper showed a fully opaque (alpha 255) square right into
+// the bottom-left corner — the backdrop/vibrancy pass draws the effect
+// view's full square frame regardless of its layer mask. Clipping the parent
+// content view too gives the pass a mask somewhere up its own layer tree;
+// verified by capture: the helper's own output now dies to alpha 0 at the
+// rounded corners. Each view gets its own path orientation from isFlipped,
+// so a flipped effect view and an unflipped content view can't disagree.
+static void applyHelperShapeMask(double cornerRadius, int roundTop) {
+    if (sBlurWindow == nil) return;
+    CGRect b = sBlurWindow.contentView.bounds;
+    if (b.size.width <= 0 || b.size.height <= 0) return;
+    double rVisualTop = roundTop ? cornerRadius : 0.0;
+    double rVisualBot = cornerRadius;
+    NSView *views[2] = { sBlurWindow.contentView, (NSView *)sBlurEffect };
+    for (int i = 0; i < 2; i++) {
+        NSView *v = views[i];
+        if (v == nil) continue;
+        v.wantsLayer = YES;
+        CALayer *layer = v.layer;
+        if (layer == nil) continue;
+        // y=0 edge is the visual top only in a flipped coordinate system.
+        BOOL flipped = v.isFlipped;
+        CGPathRef path = createIslandPath(b, flipped ? rVisualTop : rVisualBot,
+                                          flipped ? rVisualBot : rVisualTop);
+        CAShapeLayer *mask = (CAShapeLayer *)layer.mask;
+        if (![mask isKindOfClass:[CAShapeLayer class]]) {
+            mask = [CAShapeLayer layer];
+            layer.mask = mask;
+        }
+        mask.path = path;
+        CGPathRelease(path);
+    }
+}
+
 // The helper used to be an addChildWindow: of the overlay — but the overlay
 // is an AWT window, and a CGS backdrop radius on a child of an AWT window
 // returns success yet never blurs (verified: the identical helper parented
@@ -342,10 +408,12 @@ void quicknotch_set_content_blur(void *nsWindow, int enabled,
                           styleMask:(NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel)
                             backing:NSBackingStoreBuffered
                               defer:NO];
-            // Load-bearing: the compositor only blurs a window whose background
-            // is NOT fully transparent (alpha 0 = "irregular window" mode, blur
-            // skipped) — 1% is the iTerm2/Terminal.app value.
-            sBlurWindow.backgroundColor = [[NSColor clearColor] colorWithAlphaComponent:0.01];
+            // EXPERIMENT: fully clear background — no window-level alpha gate.
+            // The 1%-alpha fill made the compositor blur the WHOLE square
+            // window (per-pixel or not), spilling a square frost lip past
+            // the rounded effect-view mask at the bottom corners. If the
+            // effect view alone still frosts, the gate is unnecessary.
+            sBlurWindow.backgroundColor = NSColor.clearColor;
             sBlurWindow.opaque = NO;
             sBlurWindow.hasShadow = NO;
             [(NSPanel *)sBlurWindow setHidesOnDeactivate:NO];
@@ -386,16 +454,18 @@ void quicknotch_set_content_blur(void *nsWindow, int enabled,
                 [sBlurWindow setFrame:island display:NO];
             }
         }
-        // The panel tracks the island while it animates; keep the effect's
+        // The panel tracks the island while it animates; keep the frost's
         // rounded mask matched to the notch shape, and its opacity plus the
         // compositor radius on the intensity slider.
         sBlurEffect.alphaValue = clamped / 40.0;
-        sBlurEffect.layer.cornerRadius = cornerRadius;
-        sBlurEffect.layer.maskedCorners = roundTop
-            ? kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
-              kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner
-            : kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-        sBlurEffect.layer.masksToBounds = YES;
+        // notchShape() (OverlayGeometry.kt) rounds only the two corners
+        // facing away from the anchored edge — the BOTTOM in screen
+        // coordinates — keeping the top square on the flush style so the
+        // island reads as cut into the display; capsule styles round all
+        // four. The frost mask must follow exactly: an inverted mask left a
+        // square lip past the rounded bottom corners (visible spill at the
+        // bottom-left/bottom-right of the notch).
+        applyHelperShapeMask(cornerRadius, roundTop);
         if (!sBlurWindow.visible) {
             [sBlurWindow orderWindow:NSWindowBelow relativeTo:[window windowNumber]];
         }
