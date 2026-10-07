@@ -26,9 +26,9 @@ import com.starkdroid.quicknotch.model.NotchSurface
  * desktop accent recolours the notch in place without a restart.
  *
  * A literal backdrop blur comes from the OS window, not from Compose: with
- * [NotchConfig.blurBackground] on, the native bridge blurs the desktop behind
- * the island (NSVisualEffectView on macOS, DWM acrylic on Windows) and the
- * island itself draws only the dark [BlurScrim] below for legibility.
+ * the Blurred surface active, the native bridge blurs the desktop behind the
+ * island and the island itself draws only the dark scrim below for legibility.
+ * Where the bridge is missing, Blurred falls back to the painted glass.
  */
 internal object IslandSurface {
 
@@ -66,9 +66,9 @@ internal object IslandSurface {
     )
 
     /**
-     * Light dark scrim drawn over the natively blurred backdrop when blur is
-     * on: the OS supplies the frosted texture, this supplies the contrast.
-     * One flat fill, shared by every surface choice while blurred.
+     * Light dark scrim drawn over the natively blurred backdrop when the
+     * Blurred surface is active and the native bridge answered: the OS
+     * supplies the frosted texture, this supplies the contrast.
      */
     private val blurScrim = Style(
         fill = SolidColor(Color.Black.copy(alpha = 0.18f)),

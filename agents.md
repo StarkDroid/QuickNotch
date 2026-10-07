@@ -367,16 +367,21 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   entitled `MRMediaRemoteGetNowPlayingInfo` query per artless track. Original code
   (not vendored): the perl-entitlement trick follows the mechanism documented by
   `ungive/mediaremote-adapter` (BSD-3), but every line here is ours.
-- Backdrop blur (`config.blurBackground`, Appearance toggle): macOS sets a
-  WindowServer blur radius on the whole window
-  (`quicknotch_set_window_blur_radius`, private SkyLight
-  `CGSSetWindowBackgroundBlurRadius` resolved at runtime — the `NSVisualEffectView`
-  never sampled the backdrop behind this JVM/Metal canvas in any placement).
-  Windows uses DWM acrylic via JNA; its `SetWindowRgn` already clips to the
-  island. The macOS radius covers the transparent margin too, so it reads as a
-  soft halo rather than a masked capsule. Compose draws an 18% black scrim over
-  either backdrop. Both apply on toggle only and are driven from the overlay's
-  `LaunchedEffect`; missing bridges fail soft.
+- Backdrop blur (Surface Theme → Blurred; the old Translucent entry is gone):
+  `NotchSurface.TRANSLUCENT` (still serialised as "BLUR") now means native
+  backdrop blur with a dark scrim — macOS sets a WindowServer blur radius on
+  the whole window (`quicknotch_set_window_blur_radius`, private SkyLight
+  `CGSSetWindowBackgroundBlurRadius` resolved at runtime — the
+  `NSVisualEffectView` never sampled the backdrop behind this JVM/Metal canvas
+  in any placement). Windows uses DWM acrylic via JNA (`datasource/WindowBlur.kt`,
+  no C build); its `SetWindowRgn` clip already follows the island. The macOS
+  radius covers the transparent margin too, so it reads as a soft halo rather
+  than a masked capsule. Compose draws an 18% black scrim over either backdrop.
+  Both apply on surface change only and are driven from the overlay's
+  `LaunchedEffect`; where the bridge is missing, Blurred falls back to painted
+  glass. A `takeInstanceLock` file guard in `main()` keeps exactly one notch
+  alive — a second process used to stack an identical overlay that read as one
+  frozen, misbehaving notch (e.g. a blurred box ignoring expand/collapse).
 
 ### 5.10 Window passthrough (`WindowPassthrough.kt`)
 
@@ -1761,15 +1766,17 @@ composeApp/
   holds art for the track (unverified — no Windows machine here).
 
 - (this session → HEAD): real backdrop blur (`feature/notch-blur-background`) —
-  a `blurBackground` toggle in the Appearance section (off by default) that
-  blurs the actual desktop behind the island: private SkyLight
+  Surface Theme → Blurred (Translucent removed): private SkyLight
   `CGSSetWindowBackgroundBlurRadius` on macOS (the `NSVisualEffectView` never
   sampled the backdrop behind this canvas — inside `AWTView` it covered the
   controls, as a sibling it rendered fill, then translucency, then nothing),
   DWM acrylic with a lighter dark tint on Windows, Compose drawing an 18%
   black scrim over it. The macOS radius covers the margin too, so it reads as
-  a soft halo; the look still needs human eyes, and Windows requires a whole
-  machine.
+  a soft halo. Follow-up, per the "frozen expanded-size blurred box" report:
+  the toggle is gone (blur follows the surface entry), and a file-lock
+  single-instance guard stops the stacked second overlay that best explains
+  that report — two identical processes read as one frozen notch. The look
+  still needs human eyes, and Windows requires a whole machine.
 - (this session → HEAD): content-hugging collapsed pill
   (`fix/weather-units-quickview-padding`) — the wrapping quickview branches
   (idle clock, idle dots) report their measured width and the drawn island

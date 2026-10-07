@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Straighten
@@ -24,8 +23,6 @@ import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.base_icon_size_title
-import com.starkdroid.quicknotch.generated.resources.blur_background_desc
-import com.starkdroid.quicknotch.generated.resources.blur_background_title
 import com.starkdroid.quicknotch.generated.resources.clock_24h
 import com.starkdroid.quicknotch.generated.resources.clock_date_format
 import com.starkdroid.quicknotch.generated.resources.clock_show_date
@@ -118,16 +115,6 @@ internal fun DockSizingTab(
                         optionLabel = { it.label() },
                         onSelect = { surface -> onUpdate { it.copy(surface = surface) } },
                         modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    BehaviorSwitchRow(
-                        icon = Icons.Default.BlurOn,
-                        title = stringResource(Res.string.blur_background_title),
-                        subtitle = stringResource(Res.string.blur_background_desc),
-                        checked = config.blurBackground,
-                        onCheckedChange = { checked ->
-                            onUpdate { it.copy(blurBackground = checked) }
-                        }
                     )
                 }
             }

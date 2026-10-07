@@ -65,6 +65,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
+import java.io.FileOutputStream
+import java.nio.channels.FileChannel
 import java.awt.event.WindowEvent
 import java.awt.event.WindowFocusListener
 import java.awt.image.BufferedImage
@@ -72,7 +74,36 @@ import javax.imageio.ImageIO
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
+/** File lock held for the whole process lifetime; released on exit. */
+private var instanceLockChannel: FileChannel? = null
+
+/**
+ * Lets exactly one notch exist. A second process would stack a second
+ * identical overlay (same position, same level) that reads as one frozen,
+ * misbehaving notch — e.g. a blurred box that ignores expand/collapse while
+ * the live instance underneath keeps working. Fails open: a lock hiccup must
+ * never prevent launch.
+ */
+private fun takeInstanceLock(): Boolean = try {
+    val lockFile = AppPaths.configDir.resolve("instance.lock")
+    lockFile.parentFile?.mkdirs()
+    val channel = FileOutputStream(lockFile, true).channel
+    if (channel.tryLock() == null) {
+        channel.close()
+        false
+    } else {
+        instanceLockChannel = channel
+        true
+    }
+} catch (_: Exception) {
+    true
+}
+
 fun main(args: Array<String>) {
+    if (!takeInstanceLock()) {
+        System.err.println("QuickNotch: another instance is already running, exiting")
+        return
+    }
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")

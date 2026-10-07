@@ -131,6 +131,10 @@ internal class MacContentBlur(window: Window?) {
     private val ptr: Long =
         if (HostPlatform.isMac && window != null) resolveMacWindowPtr(window) ?: 0L else 0L
 
+    /** True once the bridge answers for this window; gates the blur scrim. */
+    val available: Boolean
+        get() = HostPlatform.isMac && ptr != 0L && MacAppKit.windowResponds(ptr)
+
     fun apply(enabled: Boolean) {
         if (!HostPlatform.isMac || ptr == 0L) return
         MacAppKit.setWindowBlurRadius(ptr, if (enabled) WINDOW_BLUR_RADIUS else 0L)

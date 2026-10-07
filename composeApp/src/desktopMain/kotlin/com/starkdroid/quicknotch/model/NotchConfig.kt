@@ -28,18 +28,22 @@ enum class NotchStyle(
 
 /**
  * The body's material. All entries resolve to brushes built once and cached, so
- * none is rebuilt per frame while the island animates. [TRANSLUCENT] and
- * [SYSTEM_ACCENT] are deliberately texture-free glass: a tinted body that lets
- * the desktop bleed through the transparent window plus a smooth light sheen.
- * A literal blur of the pixels behind a borderless window is unreachable from
- * Compose without a native screen-capture loop.
+ * none is rebuilt per frame while the island animates. [SYSTEM_ACCENT] is
+ * deliberately texture-free glass: a tinted body that lets the desktop bleed
+ * through the transparent window plus a smooth light sheen.
+ *
+ * [TRANSLUCENT] is the real thing: the OS blurs the desktop behind the island
+ * (compositor blur radius on macOS, DWM acrylic on Windows) under a dark
+ * scrim. Where the native bridge is missing it falls back to the painted
+ * translucent glass. (Serialised as "BLUR", which is what this entry has
+ * always been called on disk.)
  */
 @Serializable
 enum class NotchSurface {
     /** Fully opaque black — the default. */
     SOLID,
 
-    /** Translucent, smooth glass. (Serialised as the former name "BLUR".) */
+    /** Frosted glass: native backdrop blur plus a dark scrim. */
     @SerialName("BLUR")
     TRANSLUCENT,
 
@@ -162,12 +166,6 @@ data class NotchConfig(
      */
     val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
-    /**
-     * Real backdrop blur behind the island (NSVisualEffectView on macOS, DWM
-     * acrylic on Windows) with a dark scrim for legibility, instead of the
-     * painted translucent glass. Defaults off; old files load fine.
-     */
-    val blurBackground: Boolean = false,
     val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,
     val baseIconSizeDp: Int = 38,

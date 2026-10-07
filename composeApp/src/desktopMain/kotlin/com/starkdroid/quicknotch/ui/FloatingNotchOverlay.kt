@@ -403,8 +403,16 @@ internal fun FloatingNotchOverlay(
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
-    val surface = remember(config.surface, accent, config.blurBackground) {
-        IslandSurface.styleFor(config.surface, accent, config.blurBackground)
+    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
+    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
+    // The Blurred surface means native backdrop blur wherever the bridge
+    // answers (compositor radius on macOS, DWM acrylic on Windows), falling
+    // back to painted glass where it does not. Only the scrim differs between
+    // the two, so it rides the same remember key as the surface.
+    val blurNative = windowsBlur != null || macBlur.available
+    val blurActive = config.surface == NotchSurface.TRANSLUCENT && blurNative
+    val surface = remember(config.surface, accent, blurActive) {
+        IslandSurface.styleFor(config.surface, accent, blurActive)
     }
 
     // The dock reveal is a layer animation (fade + scale) over the always
@@ -443,15 +451,12 @@ internal fun FloatingNotchOverlay(
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
 
-    // Real backdrop blur behind the island (compositor blur radius on macOS,
-    // DWM acrylic on Windows) with the dark scrim above for legibility. Both
-    // apply on toggle only — no per-frame work — and fail soft to the painted
-    // surfaces.
-    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
-    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
-    LaunchedEffect(config.blurBackground) {
-        windowsBlur?.setEnabled(config.blurBackground)
-        macBlur.apply(config.blurBackground)
+    // The native blur follows the surface, not a toggle: picking Blurred
+    // enables it, any other surface clears it. Both apply on surface change
+    // only — no per-frame work — and fail soft to the painted surfaces.
+    LaunchedEffect(blurActive) {
+        windowsBlur?.setEnabled(blurActive)
+        macBlur.apply(blurActive)
     }
 
     // Open: hold the dock hidden until the size spring has actually settled,
@@ -509,7 +514,7 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface, accent, config.blurBackground)
+                    .islandSurface(config.surface, accent, blurActive)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {
