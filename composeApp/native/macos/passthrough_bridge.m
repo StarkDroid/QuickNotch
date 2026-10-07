@@ -172,19 +172,16 @@ void quicknotch_activate_app(void) {
     });
 }
 
-// Backdrop blur behind the island via the WindowServer compositor directly.
-// An NSVisualEffectView never sampled the backdrop behind this JVM/Metal
-// canvas in any placement (inside the canvas it covered the controls; as a
-// sibling or stripped of its fill it rendered nothing at all), so the blur
-// is applied one level lower instead: CGSSetWindowBackgroundBlurRadius blurs
-// everything behind the whole window at the given radius, exactly the
-// mechanism Warp/Alacritty/iTerm2/WezTerm use for translucent terminals.
-// Private SkyLight API, resolved at runtime with dlopen/dlsym so nothing
-// links against it at build time; direct distribution only (never the App
-// Store). Trade-off vs. the effect view: the radius covers the full native
-// window including the transparent click-through margin, which reads as a
-// soft blurred halo around the pill rather than a sharply masked capsule.
-// Compose still draws its light scrim over the island for legibility.
+// Backdrop blur behind the island through a dedicated helper window. An
+// NSVisualEffectView never sampled the backdrop behind this JVM/Metal canvas
+// in any placement, so the helper panel carries a tunable compositor blur
+// radius instead (private SkyLight CGSSetWindowBackgroundBlurRadius, resolved
+// at runtime — the mechanism Warp/Alacritty/iTerm2/WezTerm use; direct
+// distribution only). The panel is sized to the island itself and positioned
+// over it, so the frosted shape tracks expand/collapse with no halo: a
+// borderless nonactivating child below the overlay (locked z-order, follows
+// the parent across Spaces, never takes focus, never takes clicks). Compose
+// still draws its light scrim over the island for legibility.
 #import <dlfcn.h>
 
 typedef void *CGSConnectionID;
@@ -217,36 +214,102 @@ static void resolveBlurSymbols(void) {
     }
 }
 
-static long long sLastRequestedBlurRadius = -1;
+static NSWindow *sBlurWindow = nil;
+static long sBlurAppliedWid = -1;
+static long long sBlurAppliedRadius = -1;
 
-static void applyWindowBlurRadius(NSWindow *window, long long radius) {
-    long windowId = (long)[window windowNumber];
+static void applyHelperBlurRadius(long long radius) {
+    if (sCGSMainConnectionID == NULL || sCGSSetWindowBackgroundBlurRadius == NULL) return;
+    long windowId = (sBlurWindow != nil) ? (long)[sBlurWindow windowNumber] : 0;
     if (windowId == 0) return;
+    // Same (window, radius) twice is a no-op for the daemon; skipping it
+    // keeps per-frame size updates free of redundant compositor traffic.
+    if (windowId == sBlurAppliedWid && radius == sBlurAppliedRadius) return;
     int result = sCGSSetWindowBackgroundBlurRadius(sCGSMainConnectionID(), windowId, radius);
-    fprintf(stderr, "QuickNotch window blur: wid=%ld radius=%lld result=%d\n",
+    fprintf(stderr, "QuickNotch helper blur: wid=%ld radius=%lld result=%d\n",
             windowId, radius, result);
+    sBlurAppliedWid = windowId;
+    sBlurAppliedRadius = radius;
 }
 
-void quicknotch_set_window_blur_radius(void *nsWindow, long long radius) {
+static void closeBlurWindow(void) {
+    if (sBlurWindow != nil) {
+        NSWindow *parent = [sBlurWindow parentWindow];
+        if (parent != nil) [parent removeChildWindow:sBlurWindow];
+        [sBlurWindow close];
+        sBlurWindow = nil;
+    }
+    sBlurAppliedWid = -1;
+    sBlurAppliedRadius = -1;
+}
+
+void quicknotch_set_content_blur(void *nsWindow, int enabled,
+                                 double w, double h, long long radius) {
     NSWindow *window = (__bridge NSWindow *)nsWindow;
     dispatch_async(dispatch_get_main_queue(), ^{
         resolveBlurSymbols();
-        if (sCGSMainConnectionID == NULL || sCGSSetWindowBackgroundBlurRadius == NULL) {
-            fprintf(stderr, "QuickNotch window blur: CGS symbols unavailable\n");
+        if (!enabled) {
+            // Explicit teardown: clear the sticky compositor state, then close
+            // (not merely order out). Re-showing an ordered-out panel is what
+            // left the frozen slab behind; every enable below starts fresh.
+            if (sBlurWindow != nil) {
+                long windowId = (long)[sBlurWindow windowNumber];
+                if (windowId != 0 && sCGSSetWindowBackgroundBlurRadius != NULL &&
+                    sCGSMainConnectionID != NULL) {
+                    int result = sCGSSetWindowBackgroundBlurRadius(
+                        sCGSMainConnectionID(), windowId, 0);
+                    fprintf(stderr, "QuickNotch helper blur: disable wid=%ld result=%d\n",
+                            windowId, result);
+                }
+                closeBlurWindow();
+            }
             return;
         }
-        sLastRequestedBlurRadius = radius;
-        applyWindowBlurRadius(window, radius);
-        if (radius == 0) {
-            // The radius call is sticky: re-assert the clear shortly after in
-            // case the compositor drops a lone zero, unless a re-enable has
-            // arrived in the meantime.
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 350 * NSEC_PER_MSEC),
+        if (w <= 0 || h <= 0) return;
+        if (sBlurWindow == nil || [sBlurWindow parentWindow] != window) {
+            closeBlurWindow();
+        }
+        if (sBlurWindow == nil) {
+            // Island rect in screen coordinates: top-centred over the overlay.
+            // Island-sized (not overlay-sized) so the frosted shape is the
+            // pill itself, with no halo and no corner-nub problem.
+            NSRect parent = window.frame;
+            NSRect island = NSMakeRect(NSMidX(parent) - w / 2.0,
+                                       NSMaxY(parent) - h, w, h);
+            sBlurWindow = [[NSPanel alloc]
+                initWithContentRect:island
+                          styleMask:(NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel)
+                            backing:NSBackingStoreBuffered
+                              defer:NO];
+            sBlurWindow.backgroundColor = NSColor.clearColor;
+            sBlurWindow.opaque = NO;
+            sBlurWindow.hasShadow = NO;
+            [(NSPanel *)sBlurWindow setHidesOnDeactivate:NO];
+            sBlurWindow.collectionBehavior =
+                NSWindowCollectionBehaviorCanJoinAllSpaces |
+                NSWindowCollectionBehaviorStationary |
+                NSWindowCollectionBehaviorFullScreenAuxiliary |
+                NSWindowCollectionBehaviorIgnoresCycle;
+            sBlurWindow.level = window.level;
+            sBlurWindow.ignoresMouseEvents = YES;
+            [window addChildWindow:sBlurWindow ordered:NSWindowBelow];
+        } else {
+            NSRect parent = window.frame;
+            NSRect island = NSMakeRect(NSMidX(parent) - w / 2.0,
+                                       NSMaxY(parent) - h, w, h);
+            if (!NSEqualRects(sBlurWindow.frame, island)) {
+                [sBlurWindow setFrame:island display:NO];
+            }
+        }
+        if (!sBlurWindow.visible) {
+            [sBlurWindow orderFront:nil];
+            // Freshly ordered panels have no window number yet; retry the
+            // radius once it exists so the first enable never stays clear.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC),
                            dispatch_get_main_queue(), ^{
-                if (sLastRequestedBlurRadius == 0) {
-                    applyWindowBlurRadius(window, 0);
-                }
+                applyHelperBlurRadius(radius);
             });
         }
+        applyHelperBlurRadius(radius);
     });
 }
