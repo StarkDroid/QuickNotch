@@ -172,46 +172,81 @@ void quicknotch_activate_app(void) {
     });
 }
 
-// Backdrop blur behind the island. AWT/Compose cannot blur what is behind a
-// transparent window, so an NSVisualEffectView is parked directly under the
-// Skiko canvas inside the window's content view, sized to the island rect the
-// Kotlin side passes in (AppKit points, bottom-left origin — the island hugs
-// the window's top edge, so y = windowHeight - islandHeight). Sizing it to the
-// island (rather than the whole window) keeps the transparent click-through
-// margin truly see-through instead of a big blurred slab, and the rounded
-// layer corners keep the effect inside the pill shape. Material is the dark
-// HUD blur with an always-active state (the overlay never activates, and an
-// inactive effect would render desaturated). Disabled removes the view.
-static NSVisualEffectView *sBlurEffect = nil;
+// Backdrop blur behind the island via the WindowServer compositor directly.
+// An NSVisualEffectView never sampled the backdrop behind this JVM/Metal
+// canvas in any placement (inside the canvas it covered the controls; as a
+// sibling or stripped of its fill it rendered nothing at all), so the blur
+// is applied one level lower instead: CGSSetWindowBackgroundBlurRadius blurs
+// everything behind the whole window at the given radius, exactly the
+// mechanism Warp/Alacritty/iTerm2/WezTerm use for translucent terminals.
+// Private SkyLight API, resolved at runtime with dlopen/dlsym so nothing
+// links against it at build time; direct distribution only (never the App
+// Store). Trade-off vs. the effect view: the radius covers the full native
+// window including the transparent click-through margin, which reads as a
+// soft blurred halo around the pill rather than a sharply masked capsule.
+// Compose still draws its light scrim over the island for legibility.
+#import <dlfcn.h>
 
-void quicknotch_set_content_blur(void *nsWindow, int enabled,
-                                 double x, double y, double w, double h,
-                                 double radius) {
+typedef void *CGSConnectionID;
+typedef CGSConnectionID (*CGSMainConnectionIDFn)(void);
+typedef int (*CGSSetWindowBackgroundBlurRadiusFn)(CGSConnectionID, long, long long);
+
+static CGSMainConnectionIDFn sCGSMainConnectionID = NULL;
+static CGSSetWindowBackgroundBlurRadiusFn sCGSSetWindowBackgroundBlurRadius = NULL;
+static BOOL sCGSResolved = NO;
+
+static void resolveBlurSymbols(void) {
+    if (sCGSResolved) return;
+    sCGSResolved = YES;
+    sCGSMainConnectionID = (CGSMainConnectionIDFn)dlsym(RTLD_DEFAULT, "CGSMainConnectionID");
+    sCGSSetWindowBackgroundBlurRadius =
+        (CGSSetWindowBackgroundBlurRadiusFn)dlsym(RTLD_DEFAULT, "CGSSetWindowBackgroundBlurRadius");
+    if (sCGSSetWindowBackgroundBlurRadius == NULL) {
+        void *skyLight = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_NOW);
+        if (skyLight == NULL) {
+            skyLight = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices",
+                              RTLD_NOW);
+        }
+        if (skyLight != NULL) {
+            if (sCGSMainConnectionID == NULL) {
+                sCGSMainConnectionID = (CGSMainConnectionIDFn)dlsym(skyLight, "CGSMainConnectionID");
+            }
+            sCGSSetWindowBackgroundBlurRadius =
+                (CGSSetWindowBackgroundBlurRadiusFn)dlsym(skyLight, "CGSSetWindowBackgroundBlurRadius");
+        }
+    }
+}
+
+static long long sLastRequestedBlurRadius = -1;
+
+static void applyWindowBlurRadius(NSWindow *window, long long radius) {
+    long windowId = (long)[window windowNumber];
+    if (windowId == 0) return;
+    int result = sCGSSetWindowBackgroundBlurRadius(sCGSMainConnectionID(), windowId, radius);
+    fprintf(stderr, "QuickNotch window blur: wid=%ld radius=%lld result=%d\n",
+            windowId, radius, result);
+}
+
+void quicknotch_set_window_blur_radius(void *nsWindow, long long radius) {
     NSWindow *window = (__bridge NSWindow *)nsWindow;
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSView *content = window.contentView;
-        if (content == nil) return;
-        if (!enabled) {
-            [sBlurEffect removeFromSuperview];
+        resolveBlurSymbols();
+        if (sCGSMainConnectionID == NULL || sCGSSetWindowBackgroundBlurRadius == NULL) {
+            fprintf(stderr, "QuickNotch window blur: CGS symbols unavailable\n");
             return;
         }
-        if (w <= 0 || h <= 0) return;
-        if (sBlurEffect == nil || sBlurEffect.window != window) {
-            [sBlurEffect removeFromSuperview];
-            sBlurEffect = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-            sBlurEffect.material = NSVisualEffectMaterialHUDWindow;
-            sBlurEffect.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-            sBlurEffect.state = NSVisualEffectStateActive;
-            sBlurEffect.wantsLayer = YES;
-            [content addSubview:sBlurEffect positioned:NSWindowBelow relativeTo:nil];
-        } else if ([content.subviews firstObject] != (NSView *)sBlurEffect) {
-            // AWT reordered the canvas above our bookkeeping: re-pin the
-            // effect behind everything so the blur never covers the island.
-            [sBlurEffect removeFromSuperview];
-            [content addSubview:sBlurEffect positioned:NSWindowBelow relativeTo:nil];
+        sLastRequestedBlurRadius = radius;
+        applyWindowBlurRadius(window, radius);
+        if (radius == 0) {
+            // The radius call is sticky: re-assert the clear shortly after in
+            // case the compositor drops a lone zero, unless a re-enable has
+            // arrived in the meantime.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 350 * NSEC_PER_MSEC),
+                           dispatch_get_main_queue(), ^{
+                if (sLastRequestedBlurRadius == 0) {
+                    applyWindowBlurRadius(window, 0);
+                }
+            });
         }
-        sBlurEffect.frame = NSMakeRect(x, y, w, h);
-        sBlurEffect.layer.cornerRadius = radius;
-        sBlurEffect.layer.masksToBounds = YES;
     });
 }

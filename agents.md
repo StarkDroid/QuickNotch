@@ -367,16 +367,16 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   entitled `MRMediaRemoteGetNowPlayingInfo` query per artless track. Original code
   (not vendored): the perl-entitlement trick follows the mechanism documented by
   `ungive/mediaremote-adapter` (BSD-3), but every line here is ours.
-- Backdrop blur (`config.blurBackground`, Appearance toggle): macOS parks an
-  `NSVisualEffectView` under the Skiko canvas via a new
-  `quicknotch_set_content_blur` export in `passthrough_bridge.m` (no new Gradle
-  task — the dylib just recompiled), sized to the island rect on every size
-  frame so the click-through margin stays truly clear; Windows flips the DWM
-  accent policy to acrylic from pure JNA (`datasource/WindowBlur.kt`, no C
-  build — the existing `SetWindowRgn` clip already follows the island, so no
-  rect is needed there). Both driven from the overlay (`LaunchedEffect` on
-  toggle + island size); Compose draws only a dark scrim over the blur.
-  Fail-soft to the painted surfaces everywhere.
+- Backdrop blur (`config.blurBackground`, Appearance toggle): macOS sets a
+  WindowServer blur radius on the whole window
+  (`quicknotch_set_window_blur_radius`, private SkyLight
+  `CGSSetWindowBackgroundBlurRadius` resolved at runtime — the `NSVisualEffectView`
+  never sampled the backdrop behind this JVM/Metal canvas in any placement).
+  Windows uses DWM acrylic via JNA; its `SetWindowRgn` already clips to the
+  island. The macOS radius covers the transparent margin too, so it reads as a
+  soft halo rather than a masked capsule. Compose draws an 18% black scrim over
+  either backdrop. Both apply on toggle only and are driven from the overlay's
+  `LaunchedEffect`; missing bridges fail soft.
 
 ### 5.10 Window passthrough (`WindowPassthrough.kt`)
 
@@ -1242,15 +1242,24 @@ composeApp/
     documents. Same rule as pitfall 6 (the JXA subprocess): never "simplify"
     the artwork fetch back into the scripted context.
 
-47. **Backdrop blur has three sharp edges.** (a) The effect must be sized to
-    the *island*, never the window: a full-window `NSVisualEffectView` turns
-    the click-through margin into a blurred slab instead of clear desktop
-    (Windows is exempt — its `SetWindowRgn` clip already follows the island).
-    (b) `NSView.tag` is get-only (`setTag:` does not exist) — hold the effect
-    view in a static instead of tagging it. (c) JNA struct packing must be
-    forced to `ALIGN_MSVC` or the trailing ULONG misaligns, and a JNA method
-    name must match the Win32 export exactly (`SetWindowCompositionAttribute`
-    keeps its capital, with a targeted `@Suppress("FunctionNaming")`).
+47. **Backdrop blur has four sharp edges.** (a) An `NSVisualEffectView` never
+    sampled the backdrop behind this JVM/Metal canvas in any placement — inside
+    `AWTView` it covers the controls, as a sibling under `NSNextStepFrame` it
+    renders fill or nothing, and stripping the fill leaves plain transparency.
+    The working macOS shape is the private SkyLight
+    `CGSSetWindowBackgroundBlurRadius` (resolved at runtime, direct
+    distribution only), which blurs the whole window including the transparent
+    margin — a soft halo, not a masked capsule. (b) That call is sticky: always
+    pass radius 0 when disabling, then re-assert it ~350ms later (guarded by
+    the last-requested radius so a quick re-enable wins) in case the compositor
+    drops a lone zero. Every call logs `QuickNotch window blur: wid=… radius=…
+    result=…` — a toggle that prints nothing never reached the bridge, and a
+    nonzero result means the daemon refused that radius. (c) JNA struct
+    packing must be forced to `ALIGN_MSVC` or the trailing ULONG misaligns,
+    and a JNA method name must match the Win32 export exactly
+    (`SetWindowCompositionAttribute` keeps its capital, with a targeted
+    `@Suppress("FunctionNaming")`). (d) macOS needs no per-frame blur work:
+    the radius is window-level, so the overlay applies on toggle only.
 
 46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
     while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
@@ -1753,10 +1762,14 @@ composeApp/
 
 - (this session → HEAD): real backdrop blur (`feature/notch-blur-background`) —
   a `blurBackground` toggle in the Appearance section (off by default) that
-  blurs the actual desktop behind the island: `NSVisualEffectView` (dark HUD,
-  always-active) under the canvas on macOS, DWM acrylic with a dark tint on
-  Windows, Compose drawing only a 55% black scrim over it. macOS smoke-clean
-  with the toggle on; the *look* needs eyes, Windows needs a whole machine.
+  blurs the actual desktop behind the island: private SkyLight
+  `CGSSetWindowBackgroundBlurRadius` on macOS (the `NSVisualEffectView` never
+  sampled the backdrop behind this canvas — inside `AWTView` it covered the
+  controls, as a sibling it rendered fill, then translucency, then nothing),
+  DWM acrylic with a lighter dark tint on Windows, Compose drawing an 18%
+  black scrim over it. The macOS radius covers the margin too, so it reads as
+  a soft halo; the look still needs human eyes, and Windows requires a whole
+  machine.
 - (this session → HEAD): content-hugging collapsed pill
   (`fix/weather-units-quickview-padding`) — the wrapping quickview branches
   (idle clock, idle dots) report their measured width and the drawn island
