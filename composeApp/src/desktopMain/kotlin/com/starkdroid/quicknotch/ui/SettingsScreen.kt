@@ -81,7 +81,7 @@ import com.starkdroid.quicknotch.generated.resources.style_drag_handle
 import com.starkdroid.quicknotch.generated.resources.style_floating_pill
 import com.starkdroid.quicknotch.generated.resources.surface_solid
 import com.starkdroid.quicknotch.generated.resources.surface_system_accent
-import com.starkdroid.quicknotch.generated.resources.surface_translucent
+import com.starkdroid.quicknotch.generated.resources.surface_blurred
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_album_art
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_white
 import com.starkdroid.quicknotch.generated.resources.tab_behavior
@@ -412,7 +412,7 @@ internal fun NotchStyle.label(): String = stringResource(
 internal fun NotchSurface.label(): String = stringResource(
     when (this) {
         NotchSurface.SOLID -> Res.string.surface_solid
-        NotchSurface.TRANSLUCENT -> Res.string.surface_translucent
+        NotchSurface.TRANSLUCENT -> Res.string.surface_blurred
         NotchSurface.SYSTEM_ACCENT -> Res.string.surface_system_accent
     }
 )

@@ -136,7 +136,7 @@ internal interface WindowPassthroughPlatform {
  * The AWT peer behind a [Window] is hidden behind module encapsulation; look it
  * up with reflection so the actual peer type never leaks into compilation.
  */
-private fun windowPeer(window: Window): Any? {
+internal fun windowPeer(window: Window): Any? {
     return try {
         // Component.getPeer() is package-private and there is no public
         // accessor, so read the private `peer` field (+ --add-opens below).
@@ -149,7 +149,7 @@ private fun windowPeer(window: Window): Any? {
 }
 
 /** Walks a peer class hierarchy for the given native-handle accessor. */
-private fun resolvePeerLong(peer: Any?, methodName: String): Long? {
+internal fun resolvePeerLong(peer: Any?, methodName: String): Long? {
     var ptr: Long? = null
     try {
         var cls: Class<*>? = peer?.javaClass

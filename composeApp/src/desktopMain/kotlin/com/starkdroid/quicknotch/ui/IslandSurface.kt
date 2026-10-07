@@ -19,14 +19,16 @@ import com.starkdroid.quicknotch.model.NotchSurface
  * texture-free: a mottled or grainy overlay reads as paper, not glass. They
  * instead compose two perfectly smooth gradients — a translucent tinted body
  * that lets the real desktop bleed through the transparent window, plus a soft
- * diagonal light sheen — which is what reads visually as glass. A literal
- * gaussian blur of the pixels behind a borderless transparent window is not
- * reachable from Compose without a native screen-capture loop (which would
- * also recapture the island itself). [NotchSurface.SYSTEM_ACCENT] is that same
+ * diagonal light sheen — which is what reads visually as glass. [NotchSurface.SYSTEM_ACCENT] is that same
  * glass with the desktop's accent colour blended into the body, rim and a
  * faint sheen glint. The accent is passed in by callers (see [SystemAccent]);
  * the accented style is rebuilt only when that colour changes, so switching the
  * desktop accent recolours the notch in place without a restart.
+ *
+ * A literal backdrop blur comes from the OS window, not from Compose: with
+ * the Blurred surface active, the native bridge blurs the desktop behind the
+ * island and the island itself draws only the dark scrim below for legibility.
+ * Where the bridge is missing, Blurred falls back to the painted glass.
  */
 internal object IslandSurface {
 
@@ -35,6 +37,13 @@ internal object IslandSurface {
         val sheen: Brush?,
         val border: Color,
         val borderWidth: Float
+    )
+
+    private val glassSheen = Brush.linearGradient(
+        0f to Color.White.copy(alpha = 0.10f),
+        0.35f to Color.White.copy(alpha = 0.025f),
+        0.7f to Color.Transparent,
+        1f to Color.White.copy(alpha = 0.05f)
     )
 
     private val styles: Map<NotchSurface, Style> = mapOf(
@@ -50,15 +59,25 @@ internal object IslandSurface {
                 0.55f to Color(0xAB101723),
                 1f to Color(0xB80A0D15)
             ),
-            sheen = Brush.linearGradient(
-                0f to Color.White.copy(alpha = 0.10f),
-                0.35f to Color.White.copy(alpha = 0.025f),
-                0.7f to Color.Transparent,
-                1f to Color.White.copy(alpha = 0.05f)
-            ),
+            sheen = glassSheen,
             border = Color.White.copy(alpha = 0.28f),
             borderWidth = 0.75f
         )
+    )
+
+    /**
+     * Light dark scrim drawn over the natively blurred backdrop when the
+     * Blurred surface is active and the native bridge answered: the OS
+     * supplies the frosted texture, this supplies the contrast.
+     */
+    private val blurScrim = Style(
+        fill = SolidColor(Color.Black.copy(alpha = 0.18f)),
+        sheen = glassSheen,
+        // No rim in blurred mode: the frost's own edge already delimits the
+        // island against the desktop, and a white hairline drawn over it
+        // reads as a bright border around the blur.
+        border = Color.Transparent,
+        borderWidth = 0f
     )
 
     // The accent style is a function of the OS accent, so it can't live in the
@@ -70,9 +89,12 @@ internal object IslandSurface {
 
     fun styleFor(
         surface: NotchSurface,
-        accent: Color?
+        accent: Color?,
+        blurred: Boolean = false
     ): Style =
-        if (surface == NotchSurface.SYSTEM_ACCENT) {
+        if (blurred) {
+            blurScrim
+        } else if (surface == NotchSurface.SYSTEM_ACCENT) {
             styleForAccent(accent)
         } else {
             styles.getValue(surface)
@@ -119,8 +141,12 @@ internal object IslandSurface {
  * glass. The rim is applied separately by callers so each can match its own
  * shape.
  */
-internal fun Modifier.islandSurface(surface: NotchSurface, accent: Color? = null): Modifier {
-    val style = IslandSurface.styleFor(surface, accent)
+internal fun Modifier.islandSurface(
+    surface: NotchSurface,
+    accent: Color? = null,
+    blurred: Boolean = false
+): Modifier {
+    val style = IslandSurface.styleFor(surface, accent, blurred)
     var m = this.background(style.fill)
     if (style.sheen != null) m = m.background(style.sheen)
     return m

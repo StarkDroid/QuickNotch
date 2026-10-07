@@ -22,7 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.datasource.BlurRadiusMax
+import com.starkdroid.quicknotch.datasource.BlurRadiusMin
 import com.starkdroid.quicknotch.generated.resources.base_icon_size_title
+import com.starkdroid.quicknotch.generated.resources.blur_intensity_title
 import com.starkdroid.quicknotch.generated.resources.clock_24h
 import com.starkdroid.quicknotch.generated.resources.clock_date_format
 import com.starkdroid.quicknotch.generated.resources.clock_show_date
@@ -116,6 +119,20 @@ internal fun DockSizingTab(
                         onSelect = { surface -> onUpdate { it.copy(surface = surface) } },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (config.surface == NotchSurface.TRANSLUCENT) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        MinimalistSliderRow(
+                            title = stringResource(Res.string.blur_intensity_title),
+                            valueLabel = config.blurRadius.coerceIn(
+                                BlurRadiusMin, BlurRadiusMax
+                            ).toString(),
+                            value = config.blurRadius.coerceIn(
+                                BlurRadiusMin, BlurRadiusMax
+                            ).toFloat(),
+                            valueRange = BlurRadiusMin.toFloat()..BlurRadiusMax.toFloat(),
+                            onValueChange = { onUpdate { cfg -> cfg.copy(blurRadius = it.toInt()) } }
+                        )
+                    }
                 }
             }
         }

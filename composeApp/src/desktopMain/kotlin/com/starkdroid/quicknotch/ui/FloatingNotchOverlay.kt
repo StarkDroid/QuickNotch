@@ -48,9 +48,13 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.BlurRadiusMax
+import com.starkdroid.quicknotch.datasource.BlurRadiusMin
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
+import com.starkdroid.quicknotch.datasource.MacContentBlur
 import com.starkdroid.quicknotch.datasource.SystemAccent
+import com.starkdroid.quicknotch.datasource.WindowsBackdropBlur
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
@@ -401,8 +405,16 @@ internal fun FloatingNotchOverlay(
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
-    val surface = remember(config.surface, accent) {
-        IslandSurface.styleFor(config.surface, accent)
+    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
+    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
+    // The Blurred surface means native backdrop blur wherever the bridge
+    // answers (compositor radius on macOS, DWM acrylic on Windows), falling
+    // back to painted glass where it does not. Only the scrim differs between
+    // the two, so it rides the same remember key as the surface.
+    val blurNative = windowsBlur != null || macBlur.available
+    val blurActive = config.surface == NotchSurface.TRANSLUCENT && blurNative
+    val surface = remember(config.surface, accent, blurActive) {
+        IslandSurface.styleFor(config.surface, accent, blurActive)
     }
 
     // The dock reveal is a layer animation (fade + scale) over the always
@@ -440,6 +452,22 @@ internal fun FloatingNotchOverlay(
     val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
+
+    // The native blur follows the surface, not a toggle: picking Blurred
+    // enables it, any other surface clears it. The mac panel tracks the island
+    // while it animates; Windows applies once per surface or intensity change.
+    // Both fail soft to the painted surfaces.
+    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    LaunchedEffect(blurActive, animatedWidth, animatedHeight, blurIntensity, islandExpanded) {
+        windowsBlur?.setBlur(blurActive, blurIntensity)
+        macBlur.apply(
+            blurActive,
+            DpSize(animatedWidth, animatedHeight),
+            islandExpanded,
+            config.style,
+            blurIntensity
+        )
+    }
 
     // Open: hold the dock hidden until the size spring has actually settled,
     // then fade it in. Close: fade the dock out and let the island spring back.
@@ -496,7 +524,7 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface, accent)
+                    .islandSurface(config.surface, accent, blurActive)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {

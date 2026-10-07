@@ -149,6 +149,25 @@ internal object MacAppKit {
         call("quicknotch_set_activation_policy", policy)
     }
 
+    /**
+     * Backdrop blur behind the island, via the island-sized helper window
+     * (created, positioned and torn down inside the bridge; the compositor
+     * radius + effect view inside it both follow `frame.intensity`).
+     * Fire-and-forget on AppKit's main queue; a no-op without the bridge.
+     */
+    fun setContentBlur(ptr: Long, enabled: Boolean, frame: BlurFrame) {
+        call(
+            "quicknotch_set_content_blur",
+            ptr,
+            if (enabled) 1 else 0,
+            frame.w,
+            frame.h,
+            frame.cornerRadius,
+            if (frame.roundTop) 1 else 0,
+            frame.intensity
+        )
+    }
+
     fun activateApp() {
         call("quicknotch_activate_app")
     }
