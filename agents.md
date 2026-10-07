@@ -369,16 +369,21 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   `ungive/mediaremote-adapter` (BSD-3), but every line here is ours.
 - Backdrop blur (Surface Theme → Blurred; the old Translucent entry is gone):
   `NotchSurface.TRANSLUCENT` (still serialised as "BLUR") now means native
-  backdrop blur with a dark scrim — macOS shows a dedicated helper window
-  carrying a tunable compositor blur radius (`quicknotch_set_content_blur`:
-  borderless nonactivating child panel below the overlay, sized to the island
-  itself so the frosted shape tracks expand/collapse with no halo;
-  `config.blurRadius`, 0–40, with a slider in Appearance while Blurred is
-  picked). Disable closes the panel outright — re-showing an ordered-out panel
-  left the frozen slab behind. The effect
+  backdrop blur with a dark scrim — macOS shows a dedicated **standalone**
+  helper panel holding one effect view (`quicknotch_set_content_blur`:
+  borderless nonactivating level-25 panel ordered directly below the overlay,
+  sized to the island itself so the frosted shape tracks expand/collapse with
+  no halo; it must NOT be an `addChildWindow:` of the overlay — the overlay is
+  an AWT window and the CGS radius silently never blurs on an AWT child, see
+  pitfall 47 — so a 250 ms sync timer re-asserts frame, level, z-order-below
+  and parent visibility instead; `config.blurRadius`, 0–40, drives **both**
+  the compositor radius and effect opacity while Blurred is picked). Disable
+  closes the panel outright — re-showing an ordered-out panel left the frozen
+  slab behind. The effect
   view never sampled the backdrop behind this JVM/Metal canvas when grafted
-  onto the overlay window itself, and the compositor blur radius froze a
-  full-window slab that ignored expand/collapse. Windows uses DWM acrylic via
+  onto the overlay window itself, and the compositor blur radius on the
+  overlay window itself froze a full-window slab that ignored
+  expand/collapse. Windows uses DWM acrylic via
   JNA (`datasource/WindowBlur.kt`, no C build); its `SetWindowRgn` clip already
   follows the island. Compose draws an 18% black scrim over either backdrop.
   Both driven from the overlay's `LaunchedEffect`; where the bridge is missing,
@@ -1251,22 +1256,45 @@ composeApp/
     documents. Same rule as pitfall 6 (the JXA subprocess): never "simplify"
     the artwork fetch back into the scripted context.
 
-47. **Backdrop blur has four sharp edges.** (a) An `NSVisualEffectView` never
+47. **Backdrop blur has five sharp edges.** (a) An `NSVisualEffectView` never
     sampled the backdrop behind this JVM/Metal canvas in any placement — inside
     `AWTView` it covers the controls, as a sibling under `NSNextStepFrame` it
     renders fill or nothing, and stripping the fill leaves plain transparency.
     Size the blur to the *island*, never the window: a full-window effect (or
     radius) turns the click-through margin into a blurred slab instead of clear
     desktop (Windows is exempt — its `SetWindowRgn` clip already follows the
-    island). The working macOS shape is an island-sized helper panel carrying
-    a small compositor radius (`quicknotch_set_content_blur`: borderless
-    nonactivating child panel below the overlay). (b) Disabling must order the
-    helper out explicitly and clear the sticky radius call; log lines succeeding
-    while a frozen slab stays on screen means the clear never landed. (c) JNA
+    island). The working macOS shape is an island-sized helper panel holding
+    the effect view (the popover pattern: it demonstrably draws there). (b)
+    **`CGSSetWindowBackgroundBlurRadius` on a child of an AWT window returns
+    success (`result=0`) and never blurs.** An isolated test matrix proved
+    every other factor innocent — the identical helper blurs as a plain
+    standalone panel, as a child of a plain Cocoa panel, with the effect view
+    stacked over it (blur reads through the tint), with the production corner
+    mask, and it *survives* parent moves, child `setFrame`s and level/order
+    re-asserts applied after the radius — only the AWT parent silences it.
+    So the helper must be **standalone**: created at the parent's level,
+    stacked directly below it with `orderWindow:NSWindowBelow`, and kept in
+    sync by a 250 ms timer (island rect from the parent's frame + last w/h,
+    level, z-order). The timer also mirrors **parent visibility** — the tray's
+    "hide notch" hides the AWT window without unmounting composition, which
+    `addChildWindow:` used to handle implicitly, and an orphan frost slab
+    would otherwise float at the top of the screen; the hidden→visible edge
+    re-applies the radius because the window server may drop it across an
+    `orderOut`. Steady-state measurement showed the overlay never moves
+    (25/25 identical bounds over 5 s), so 250 ms sync latency is invisible.
+    Verify with a same-content A/B (collapsed capture = ground truth, expanded
+    capture behind the island): correlation of the behind-island pixels
+    against their sharp original must collapse to ≈0 while never-occluded
+    regions stay at 1.0 — dimming alone cannot fake this because the metric is
+    brightness-invariant. (c) The intensity slider drives **both** the
+    compositor radius and the effect's alpha; at alpha 1.0 the effect view
+    hides everything beneath it, so read blur-vs-tint tests at the shipped
+    0.775 or lower. (d) Disabling must close the helper outright; re-showing an
+    ordered-out panel left the frozen slab behind. (e) JNA
     struct packing must be forced to `ALIGN_MSVC` or the trailing ULONG
     misaligns, and a JNA method name must match the Win32 export exactly
     (`SetWindowCompositionAttribute` keeps its capital, with a targeted
-    `@Suppress("FunctionNaming")`). (d) macOS needs no overlay-window resize
+    `@Suppress("FunctionNaming")`). macOS needs no overlay-window resize
     for blur: the helper panel tracks the island rect, so the overlay's fixed
     footprint (pitfall 17) is untouched.
 
@@ -1779,6 +1807,13 @@ composeApp/
   Compose drawing an 18% black scrim over it. Follow-up, per the "frozen
   expanded-size blurred box" report: the toggle is gone (blur follows the surface
   entry), and a file-lock single-instance guard stops stacked duplicate overlays.
+  Follow-up (this session): the intensity slider now drives **both** the
+  compositor radius and the effect opacity, and the radius works at last — it
+  used to return success while rendering nothing because the helper was an
+  `addChildWindow:` of the AWT overlay, which silences the CGS radius (pitfall
+  47): the helper is standalone now, ordered below the overlay and re-synced
+  (frame/level/order/visibility) on a 250 ms timer, verified by a
+  same-content A/B correlation (behind-island ρ≈0 vs never-occluded ρ=1.0).
   The look still needs human eyes, and Windows requires a whole machine.
 - (this session → HEAD): content-hugging collapsed pill
   (`fix/weather-units-quickview-padding`) — the wrapping quickview branches

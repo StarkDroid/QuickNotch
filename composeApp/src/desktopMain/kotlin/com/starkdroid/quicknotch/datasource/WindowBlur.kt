@@ -1,6 +1,7 @@
 package com.starkdroid.quicknotch.datasource
 
 import androidx.compose.ui.unit.DpSize
+import com.starkdroid.quicknotch.model.NotchStyle
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
@@ -11,14 +12,16 @@ import java.awt.Window
 /**
  * Real backdrop blur behind the notch island, per platform.
  *
- * macOS shows a dedicated helper window holding one effect view (see the
+ * macOS shows a dedicated helper window (see the
  * `quicknotch_set_content_blur` export in `passthrough_bridge.m`), sized to
- * the island rect while it animates. Windows flips the window's DWM accent
- * policy to acrylic once per surface change — no rect is needed there because
- * the existing `SetWindowRgn` clip already follows the island. Compose draws
- * a translucent dark scrim ([IslandSurface] blur style) over the effect for
- * legibility; with any other surface (or when any handle/bridge is missing)
- * the island renders exactly as before.
+ * the island rect while it animates; the intensity slider drives both its
+ * compositor blur radius and its effect view's opacity. Windows flips the
+ * window's DWM accent policy to acrylic once per
+ * surface change — no rect is needed there because the existing `SetWindowRgn`
+ * clip already follows the island. Compose draws a translucent dark scrim
+ * ([IslandSurface] blur style) over the effect for legibility; with any other
+ * surface (or when any handle/bridge is missing) the island renders exactly
+ * as before.
  */
 internal class WindowsBackdropBlur private constructor(private val hwnd: WinDef.HWND) {
 
@@ -126,6 +129,15 @@ private interface User32Ex : Library {
     fun SetWindowCompositionAttribute(hwnd: WinDef.HWND, data: WinCompAttrData): Boolean
 }
 
+/** Island size, corner mask and intensity for the helper window. */
+internal data class BlurFrame(
+    val w: Double,
+    val h: Double,
+    val cornerRadius: Double,
+    val roundTop: Boolean,
+    val intensity: Double
+)
+
 /**
  * macOS side of the backdrop blur: resolves the NSWindow once, then drives
  * the helper blur window (created, island-sized, torn down inside the
@@ -141,18 +153,28 @@ internal class MacContentBlur(window: Window?) {
     val available: Boolean
         get() = HostPlatform.isMac && ptr != 0L && MacAppKit.windowResponds(ptr)
 
-    fun apply(enabled: Boolean, island: DpSize, intensity: Int) {
+    fun apply(
+        enabled: Boolean,
+        island: DpSize,
+        expanded: Boolean,
+        style: NotchStyle,
+        intensity: Int
+    ) {
         if (!HostPlatform.isMac || ptr == 0L) return
         if (!enabled) {
-            MacAppKit.setContentBlur(ptr, false, 0.0, 0.0, 0L)
+            MacAppKit.setContentBlur(ptr, false, BlurFrame(0.0, 0.0, 0.0, false, 0.0))
             return
         }
         MacAppKit.setContentBlur(
             ptr,
             true,
-            island.width.value.toDouble(),
-            island.height.value.toDouble(),
-            intensity.coerceIn(BlurRadiusMin, BlurRadiusMax).toLong()
+            BlurFrame(
+                w = island.width.value.toDouble(),
+                h = island.height.value.toDouble(),
+                cornerRadius = if (expanded) 18.0 else if (style.capsule) 14.0 else 13.0,
+                roundTop = style.capsule,
+                intensity = intensity.coerceIn(BlurRadiusMin, BlurRadiusMax).toDouble()
+            )
         )
     }
 }

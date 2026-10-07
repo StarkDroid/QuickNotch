@@ -458,11 +458,13 @@ internal fun FloatingNotchOverlay(
     // while it animates; Windows applies once per surface or intensity change.
     // Both fail soft to the painted surfaces.
     val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
-    LaunchedEffect(blurActive, animatedWidth, animatedHeight, blurIntensity) {
+    LaunchedEffect(blurActive, animatedWidth, animatedHeight, blurIntensity, islandExpanded) {
         windowsBlur?.setBlur(blurActive, blurIntensity)
         macBlur.apply(
             blurActive,
             DpSize(animatedWidth, animatedHeight),
+            islandExpanded,
+            config.style,
             blurIntensity
         )
     }
