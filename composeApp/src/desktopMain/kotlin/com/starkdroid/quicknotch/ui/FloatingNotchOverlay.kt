@@ -48,6 +48,8 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.BlurRadiusMax
+import com.starkdroid.quicknotch.datasource.BlurRadiusMin
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
 import com.starkdroid.quicknotch.datasource.MacContentBlur
@@ -452,11 +454,17 @@ internal fun FloatingNotchOverlay(
     val shape = notchShape(islandExpanded, config.style)
 
     // The native blur follows the surface, not a toggle: picking Blurred
-    // enables it, any other surface clears it. Both apply on surface change
-    // only — no per-frame work — and fail soft to the painted surfaces.
-    LaunchedEffect(blurActive) {
-        windowsBlur?.setEnabled(blurActive)
-        macBlur.apply(blurActive)
+    // enables it, any other surface clears it. The mac panel tracks the island
+    // while it animates; Windows applies once per surface or intensity change.
+    // Both fail soft to the painted surfaces.
+    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    LaunchedEffect(blurActive, animatedWidth, animatedHeight, blurIntensity) {
+        windowsBlur?.setBlur(blurActive, blurIntensity)
+        macBlur.apply(
+            blurActive,
+            DpSize(animatedWidth, animatedHeight),
+            blurIntensity
+        )
     }
 
     // Open: hold the dock hidden until the size spring has actually settled,

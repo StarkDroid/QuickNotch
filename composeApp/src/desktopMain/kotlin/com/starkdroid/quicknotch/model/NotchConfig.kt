@@ -166,6 +166,12 @@ data class NotchConfig(
      */
     val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
+    /**
+     * Backdrop blur intensity for the Blurred surface (macOS compositor blur
+     * radius; on Windows it scales the acrylic tint instead, since DWM has no
+     * radius knob). Old files load the default.
+     */
+    val blurRadius: Int = 22,
     val widgets: WidgetsConfig = WidgetsConfig(),
     val dockScaleFactor: Float = 1.35f,
     val baseIconSizeDp: Int = 38,

@@ -57,6 +57,7 @@
     <string name="reset">Reset</string>
     <string name="notch_style">Notch Style</string>
     <string name="surface_theme">Surface Theme</string>
+    <string name="blur_intensity_title">Blur Intensity</string>
     <string name="fisheye_title">Icon Fish-eye Magnification</string>
     <string name="peak_scale_title">Magnification Peak Scale</string>
     <string name="base_icon_size_title">Base Icon Size</string>

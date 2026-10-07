@@ -150,13 +150,19 @@ internal object MacAppKit {
     }
 
     /**
-     * Backdrop blur behind the island: sets the WindowServer blur radius for
-     * the whole window (0 clears it — the state is sticky, so disabling must
-     * pass 0 explicitly). Fire-and-forget on AppKit's main queue; a no-op
-     * without the bridge.
+     * Backdrop blur behind the island, via the island-sized helper window
+     * (created, positioned and torn down inside the bridge). Fire-and-forget
+     * on AppKit's main queue; a no-op without the bridge.
      */
-    fun setWindowBlurRadius(ptr: Long, radius: Long) {
-        call("quicknotch_set_window_blur_radius", ptr, radius)
+    fun setContentBlur(ptr: Long, enabled: Boolean, w: Double, h: Double, radius: Long) {
+        call(
+            "quicknotch_set_content_blur",
+            ptr,
+            if (enabled) 1 else 0,
+            w,
+            h,
+            radius
+        )
     }
 
     fun activateApp() {

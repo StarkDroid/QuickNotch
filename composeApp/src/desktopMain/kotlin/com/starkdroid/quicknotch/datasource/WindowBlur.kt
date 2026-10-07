@@ -1,5 +1,6 @@
 package com.starkdroid.quicknotch.datasource
 
+import androidx.compose.ui.unit.DpSize
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
@@ -10,16 +11,14 @@ import java.awt.Window
 /**
  * Real backdrop blur behind the notch island, per platform.
  *
- * macOS sets a WindowServer blur radius on the whole window (see the
- * `quicknotch_set_window_blur_radius` export in `passthrough_bridge.m`).
- * Windows flips the window's DWM accent policy to acrylic once per toggle —
- * no rect is needed there because the existing `SetWindowRgn` clip already
- * follows the island. Compose draws a translucent dark scrim ([IslandSurface]
- * blur style) over the effect for legibility; with the toggle off (or when
- * any handle/bridge is missing) the island renders exactly as before.
- *
- * Driven from the overlay with one `LaunchedEffect` on the toggle; both
- * platforms apply on toggle only, with no per-frame work.
+ * macOS shows a dedicated helper window holding one effect view (see the
+ * `quicknotch_set_content_blur` export in `passthrough_bridge.m`), sized to
+ * the island rect while it animates. Windows flips the window's DWM accent
+ * policy to acrylic once per surface change — no rect is needed there because
+ * the existing `SetWindowRgn` clip already follows the island. Compose draws
+ * a translucent dark scrim ([IslandSurface] blur style) over the effect for
+ * legibility; with any other surface (or when any handle/bridge is missing)
+ * the island renders exactly as before.
  */
 internal class WindowsBackdropBlur private constructor(private val hwnd: WinDef.HWND) {
 
@@ -27,24 +26,31 @@ internal class WindowsBackdropBlur private constructor(private val hwnd: WinDef.
     private var applied = false
     private var reported = false
 
-    fun setEnabled(enabled: Boolean) {
-        if (enabled == applied) return
-        val ok = runCatching { applyAccent(enabled) }.getOrElse { false }
+    fun setBlur(enabled: Boolean, intensity: Int) {
+        val level = intensity.coerceIn(BlurRadiusMin, BlurRadiusMax)
+        if (enabled == applied && level == appliedLevel) return
+        val ok = runCatching { applyAccent(enabled, level) }.getOrElse { false }
         if (ok) {
             applied = enabled
+            appliedLevel = level
         } else if (!reported) {
             reported = true
             System.err.println("QuickNotch: Windows backdrop blur failed to apply (DWM composition off?)")
         }
     }
 
-    private fun applyAccent(enabled: Boolean): Boolean {
+    private var appliedLevel = BlurRadiusMin
+
+    private fun applyAccent(enabled: Boolean, intensity: Int): Boolean {
         val policy = AccentPolicy()
         if (enabled) {
             policy.accentState = ACCENT_ENABLE_ACRYLICBLURBEHIND
             policy.accentFlags = 0
-            // 40% black tint (0xAABBGGRR) leaves the background visible.
-            policy.gradientColor = 0x66000000
+            // DWM has no radius knob, so intensity scales the tint instead:
+            // 0xAABBGGRR with alpha from ~20% (clear) to ~50% (frosted).
+            // Unverified on Windows hardware — see the mac side for the
+            // behaviour contract.
+            policy.gradientColor = (0x33 + intensity * 2).coerceIn(0x33, 0xCC) shl 24
             policy.animationId = 0
         }
         policy.write()
@@ -121,10 +127,10 @@ private interface User32Ex : Library {
 }
 
 /**
- * macOS side of the backdrop blur: resolves the NSWindow once, then sets the
- * compositor blur radius for the whole window. Window-level (not island
- * rects): the margin around the pill reads as a soft halo rather than a
- * masked capsule, which is the documented trade-off of this API.
+ * macOS side of the backdrop blur: resolves the NSWindow once, then drives
+ * the helper blur window (created, island-sized, torn down inside the
+ * bridge). The frosted shape tracks the animated island, so it expands and
+ * collapses exactly with the notch.
  */
 internal class MacContentBlur(window: Window?) {
 
@@ -135,13 +141,22 @@ internal class MacContentBlur(window: Window?) {
     val available: Boolean
         get() = HostPlatform.isMac && ptr != 0L && MacAppKit.windowResponds(ptr)
 
-    fun apply(enabled: Boolean) {
+    fun apply(enabled: Boolean, island: DpSize, intensity: Int) {
         if (!HostPlatform.isMac || ptr == 0L) return
-        MacAppKit.setWindowBlurRadius(ptr, if (enabled) WINDOW_BLUR_RADIUS else 0L)
-    }
-
-    companion object {
-        /** Moderate frost; lower values stay closer to plain translucency. */
-        const val WINDOW_BLUR_RADIUS = 30L
+        if (!enabled) {
+            MacAppKit.setContentBlur(ptr, false, 0.0, 0.0, 0L)
+            return
+        }
+        MacAppKit.setContentBlur(
+            ptr,
+            true,
+            island.width.value.toDouble(),
+            island.height.value.toDouble(),
+            intensity.coerceIn(BlurRadiusMin, BlurRadiusMax).toLong()
+        )
     }
 }
+
+/** Blur intensity slider bounds, shared by the settings tab and both bridges. */
+internal const val BlurRadiusMin = 0
+internal const val BlurRadiusMax = 40
