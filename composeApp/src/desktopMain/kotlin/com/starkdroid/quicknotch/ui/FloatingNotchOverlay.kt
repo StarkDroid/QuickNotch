@@ -443,21 +443,15 @@ internal fun FloatingNotchOverlay(
     val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
 
-    // Real backdrop blur behind the island (NSVisualEffectView on macOS, DWM
-    // acrylic on Windows) with the dark scrim above for legibility. macOS
-    // re-asserts the effect rect on every size frame because the island
-    // animates; Windows applies once per toggle (its region clip already
-    // follows the island). Both fail soft to the painted surfaces.
+    // Real backdrop blur behind the island (compositor blur radius on macOS,
+    // DWM acrylic on Windows) with the dark scrim above for legibility. Both
+    // apply on toggle only — no per-frame work — and fail soft to the painted
+    // surfaces.
     val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
     val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
-    LaunchedEffect(config.blurBackground, animatedWidth, animatedHeight, islandExpanded) {
+    LaunchedEffect(config.blurBackground) {
         windowsBlur?.setEnabled(config.blurBackground)
-        macBlur.apply(
-            config.blurBackground,
-            DpSize(animatedWidth, animatedHeight),
-            metrics.expanded,
-            islandExpanded
-        )
+        macBlur.apply(config.blurBackground)
     }
 
     // Open: hold the dock hidden until the size spring has actually settled,

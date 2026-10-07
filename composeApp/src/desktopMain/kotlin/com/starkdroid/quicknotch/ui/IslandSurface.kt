@@ -66,12 +66,12 @@ internal object IslandSurface {
     )
 
     /**
-     * Dark scrim drawn over the natively blurred backdrop when background blur
-     * is on: the OS supplies the frosted texture, this supplies the contrast.
+     * Light dark scrim drawn over the natively blurred backdrop when blur is
+     * on: the OS supplies the frosted texture, this supplies the contrast.
      * One flat fill, shared by every surface choice while blurred.
      */
     private val blurScrim = Style(
-        fill = SolidColor(Color.Black.copy(alpha = 0.55f)),
+        fill = SolidColor(Color.Black.copy(alpha = 0.18f)),
         sheen = glassSheen,
         border = Color.White.copy(alpha = 0.30f),
         borderWidth = 0.75f

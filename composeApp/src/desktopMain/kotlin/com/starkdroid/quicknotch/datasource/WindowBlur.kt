@@ -1,6 +1,5 @@
 package com.starkdroid.quicknotch.datasource
 
-import androidx.compose.ui.unit.DpSize
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
@@ -11,17 +10,16 @@ import java.awt.Window
 /**
  * Real backdrop blur behind the notch island, per platform.
  *
- * macOS parks an NSVisualEffectView under the Skiko canvas (see the
- * `quicknotch_set_content_blur` export in `passthrough_bridge.m`), sized to
- * the island rect on every size frame because the island animates. Windows
- * flips the window's DWM accent policy to acrylic once per toggle — no rect
- * is needed there because the existing `SetWindowRgn` clip already follows
- * the island. Either way the Compose side draws only the dark scrim
- * ([IslandSurface] blur style) for legibility; with the toggle off (or when
+ * macOS sets a WindowServer blur radius on the whole window (see the
+ * `quicknotch_set_window_blur_radius` export in `passthrough_bridge.m`).
+ * Windows flips the window's DWM accent policy to acrylic once per toggle —
+ * no rect is needed there because the existing `SetWindowRgn` clip already
+ * follows the island. Compose draws a translucent dark scrim ([IslandSurface]
+ * blur style) over the effect for legibility; with the toggle off (or when
  * any handle/bridge is missing) the island renders exactly as before.
  *
- * Driven from the overlay, which owns the animated island size: one
- * `LaunchedEffect` on the toggle + size + expand state covers both platforms.
+ * Driven from the overlay with one `LaunchedEffect` on the toggle; both
+ * platforms apply on toggle only, with no per-frame work.
  */
 internal class WindowsBackdropBlur private constructor(private val hwnd: WinDef.HWND) {
 
@@ -45,8 +43,8 @@ internal class WindowsBackdropBlur private constructor(private val hwnd: WinDef.
         if (enabled) {
             policy.accentState = ACCENT_ENABLE_ACRYLICBLURBEHIND
             policy.accentFlags = 0
-            // 60% black tint (0xAABBGGRR): frosted, not milky.
-            policy.gradientColor = 0x99000000.toInt()
+            // 40% black tint (0xAABBGGRR) leaves the background visible.
+            policy.gradientColor = 0x66000000
             policy.animationId = 0
         }
         policy.write()
@@ -122,46 +120,24 @@ private interface User32Ex : Library {
     fun SetWindowCompositionAttribute(hwnd: WinDef.HWND, data: WinCompAttrData): Boolean
 }
 
-/** Island rect for the macOS effect view, AppKit points (bottom-left origin). */
-internal data class BlurFrame(
-    val x: Double,
-    val y: Double,
-    val w: Double,
-    val h: Double,
-    val radius: Double
-)
-
 /**
- * macOS side of the backdrop blur: resolves the NSWindow once, then positions
- * the effect view on every apply. The island hugs the window's top edge, so
- * the AppKit rect (bottom-left origin) is the island size centred horizontally
- * at `windowHeight - islandHeight`. Corner radius mirrors the pill shape
- * (expanded/collapsed capsule values); the drawn scrim covers any mismatch on
- * square-cornered styles.
+ * macOS side of the backdrop blur: resolves the NSWindow once, then sets the
+ * compositor blur radius for the whole window. Window-level (not island
+ * rects): the margin around the pill reads as a soft halo rather than a
+ * masked capsule, which is the documented trade-off of this API.
  */
 internal class MacContentBlur(window: Window?) {
 
     private val ptr: Long =
         if (HostPlatform.isMac && window != null) resolveMacWindowPtr(window) ?: 0L else 0L
 
-    fun apply(enabled: Boolean, island: DpSize, windowSize: DpSize, expanded: Boolean) {
+    fun apply(enabled: Boolean) {
         if (!HostPlatform.isMac || ptr == 0L) return
-        if (!enabled) {
-            MacAppKit.setContentBlur(ptr, false, BlurFrame(0.0, 0.0, 0.0, 0.0, 0.0))
-            return
-        }
-        // The island hugs the window's top edge; AppKit's origin is
-        // bottom-left, so the rect sits at windowHeight - islandHeight.
-        MacAppKit.setContentBlur(
-            ptr,
-            true,
-            BlurFrame(
-                x = (windowSize.width.value - island.width.value) / 2.0,
-                y = (windowSize.height.value - island.height.value).toDouble(),
-                w = island.width.value.toDouble(),
-                h = island.height.value.toDouble(),
-                radius = if (expanded) 18.0 else 14.0
-            )
-        )
+        MacAppKit.setWindowBlurRadius(ptr, if (enabled) WINDOW_BLUR_RADIUS else 0L)
+    }
+
+    companion object {
+        /** Moderate frost; lower values stay closer to plain translucency. */
+        const val WINDOW_BLUR_RADIUS = 30L
     }
 }
