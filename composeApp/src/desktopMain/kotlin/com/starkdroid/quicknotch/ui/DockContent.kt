@@ -249,7 +249,7 @@ private fun MusicContent(
         modifier = Modifier
             .fillMaxSize()
             .clipToBounds()
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {

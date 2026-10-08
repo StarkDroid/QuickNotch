@@ -1869,6 +1869,12 @@ composeApp/
   still sitting exactly on the old default migrate to 136 on load (a moved
   slider is never touched).
 
+- (this session → HEAD): music-mode edge spacing — the live-media collapsed
+  row got 6dp horizontal edge air (was 2dp, where the disc and the right-hand
+  rings sat visually welded to the pill's outline) and the expanded music
+  page's content row 16dp (was 14dp). Purely visual padding; no sizer/morph
+  keys touched.
+
 ---
 
 ## 15. Quick constants reference
