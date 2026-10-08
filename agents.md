@@ -1319,6 +1319,40 @@ composeApp/
     interior equals the measured rim). The frost's own edge already delimits
     the island — `blurScrim.border` stays `Color.Transparent`.
 
+48. **Never read the island's animated size in the overlay root's
+    composition.** The `animateDpAsState` values that size the island
+    (`animatedWidth`/`animatedHeight`) were read at the root three ways —
+    `.width(animatedWidth)` on the island Box, `.size(animatedWidth + glow …)`
+    on the hover box, and as `LaunchedEffect` keys driving the blur bridge —
+    so every spring frame during open/close recomposed the *whole* overlay
+    scope (pill + dock + pages) at ~60 fps. Measured before the fix: **98 of
+    235** render-thread JFR samples inside recompose (80 in measure/layout)
+    and **130 hard frame gaps (≥67 ms) per 10-cycle hover open/close window**
+    with music live (82 music-off); cycling burned ~20–28% of a core. Music
+    only amplified it — the root recompose ran either way. The fix: keep both
+    values as bare `State<Dp>` (no `by`), read them **only in the layout
+    phase** through the private `Modifier.animatedIslandSize { }` helper (a
+    `layout { }` that measures the child from `width.value`/`height.value`, so
+    a spring tick re-measures the island and nothing above it), and relay
+    geometry to the blur bridge with an in-effect `snapshotFlow` whose keys
+    stay state-stable (`blurActive, blurIntensity, islandExpanded,
+    config.style` — **include `config.style`**: the collect body closes over
+    it, and without it in the keys a surface switch while blurred would apply
+    a stale shape until the next key change). After: **6 recompose samples of
+    357**, **22 hard gaps** music-on / 30 music-off in the same window, cycling
+    ~10–20% of a core; steady-state collapsed cost is unchanged (~8–9%) — this
+    fix is about the animation, not the idle pill. Repro protocol (worth
+    keeping): a temporary `withFrameNanos` loop logging gaps >34 ms via
+    `AppLog.line` — **remove it afterwards**, the frame-clock subscription
+    itself is not free (pitfall 29) — then 10× `mousemove 704 12` /
+    `712 420` cycles at 1.3 s each against a truncated `quicknotch.log`,
+    counting entries ≥67 ms; JFR via
+    `jcmd $PID JFR.start name=qf settings=profile duration=30s filename=…`
+    + `jfr print --events jdk.ExecutionSample`. Count only the ≥67 ms bucket:
+    the steady 30 fps pill tick produces 34–56 ms gaps routinely, so the
+    total count is polluted (and keeps growing while music plays). The same
+    logger run while music plays is also how "music amplifies it" was proven.
+
 46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
     while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
     for small lines, but a base64 cover (hundreds of KB) fills the 64KB pipe
@@ -1874,6 +1908,17 @@ composeApp/
   rings sat visually welded to the pill's outline) and the expanded music
   page's content row 16dp (was 14dp). Purely visual padding; no sizer/morph
   keys touched.
+
+- (this session → HEAD): open/close jank fixed — the overlay root read the
+  island's animated size in composition (Box `width`/`height`, hover `size`,
+  and as the blur bridge's `LaunchedEffect` keys), recomposing the entire
+  pill + dock + pages tree every spring frame; music amplified it through the
+  bigger subtree. Values are now bare `State<Dp>` read only in the layout
+  phase (`Modifier.animatedIslandSize`) and via an in-effect `snapshotFlow`
+  (pitfall 48 for the numbers and the measurement protocol): 130 → 22 hard
+  frame gaps per 10-cycle window with music live, recompose samples 98/235 →
+  6/357, cycling CPU ~20–28% → ~10–20%; steady collapsed cost unchanged.
+
 
 ---
 

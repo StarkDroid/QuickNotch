@@ -16,11 +16,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -39,6 +38,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -449,8 +449,14 @@ internal fun FloatingNotchOverlay(
     )
     val targetSize = if (islandExpanded) metrics.islandFor(true)
     else formulaCollapsed.copy(width = collapsedWidth)
-    val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
-    val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
+    // Kept as State (not `by`): every composition-phase read of these values
+    // recomposes this whole overlay scope on each spring frame, and the
+    // measured cost of that during open/close was the app's dominant jank
+    // source. The animated values are read only in layout/snapshot phases
+    // (`animatedSize` modifier, snapshotFlow below), so a spring tick now
+    // re-measures the island instead of re-running this body.
+    val animatedWidth = animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
+    val animatedHeight = animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
 
     // The native blur follows the surface, not a toggle: picking Blurred
@@ -458,15 +464,21 @@ internal fun FloatingNotchOverlay(
     // while it animates; Windows applies once per surface or intensity change.
     // Both fail soft to the painted surfaces.
     val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
-    LaunchedEffect(blurActive, animatedWidth, animatedHeight, blurIntensity, islandExpanded) {
+    LaunchedEffect(blurActive, blurIntensity, islandExpanded, config.style) {
         windowsBlur?.setBlur(blurActive, blurIntensity)
-        macBlur.apply(
-            blurActive,
-            DpSize(animatedWidth, animatedHeight),
-            islandExpanded,
-            config.style,
-            blurIntensity
-        )
+        if (blurActive) {
+            // Per-frame geometry without per-frame composition: the effect's
+            // keys stay state-stable, and a snapshotFlow inside relays each
+            // spring tick to the helper. Keying the effect on the animated
+            // sizes (the old shape) restarted the coroutine — and recomposed
+            // the whole overlay — sixty times a second mid-animation.
+            snapshotFlow { DpSize(animatedWidth.value, animatedHeight.value) }
+                .collect { size ->
+                    macBlur.apply(true, size, islandExpanded, config.style, blurIntensity)
+                }
+        } else {
+            macBlur.apply(false, DpSize.Zero, islandExpanded, config.style, blurIntensity)
+        }
     }
 
     // Open: hold the dock hidden until the size spring has actually settled,
@@ -482,7 +494,8 @@ internal fun FloatingNotchOverlay(
             val island = metrics.islandFor(true)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
-                    animatedWidth >= island.width - 1.dp && animatedHeight >= island.height - 1.dp
+                    animatedWidth.value >= island.width - 1.dp &&
+                        animatedHeight.value >= island.height - 1.dp
                 }.first { settled -> settled }
             }
             if (isExpanded) showDock = true
@@ -496,8 +509,8 @@ internal fun FloatingNotchOverlay(
             showDock = false
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
-                    animatedWidth <= collapsedWidth + 1.dp &&
-                        animatedHeight <= formulaCollapsed.height + 1.dp
+                    animatedWidth.value <= collapsedWidth + 1.dp &&
+                        animatedHeight.value <= formulaCollapsed.height + 1.dp
                 }.first { settled -> settled }
             }
         }
@@ -517,8 +530,7 @@ internal fun FloatingNotchOverlay(
             // stable.
             Box(
                 modifier = Modifier
-                    .width(animatedWidth)
-                    .height(animatedHeight)
+                    .animatedIslandSize(animatedWidth, animatedHeight)
                     .onGloballyPositioned { coords ->
                         islandCoordinates = coords
                         publishTouchTarget(coords)
@@ -715,12 +727,38 @@ internal fun FloatingNotchOverlay(
             val glow = HoverGlow
             Box(
                 modifier = Modifier
-                    .size(animatedWidth + glow * 2, animatedHeight + glow)
+                    .animatedIslandSize(animatedWidth, animatedHeight) { w, h ->
+                        DpSize(w + glow * 2, h + glow)
+                    }
                     .onGloballyPositioned { hoverCoordinates = it }
                     .sharingHover { setHovered(it) }
             ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
         }
     }
+}
+
+/**
+ * Sizes the node from the given animated states, reading them in the LAYOUT
+ * phase rather than in composition. The island's springs update every frame
+ * while the notch opens or closes, and a composition-phase read at the
+ * overlay root (`.width(animatedWidth)` or as effect keys) recomposed the
+ * entire island + dock tree sixty times a second — measured as the dominant
+ * cost of open/close (98 of 235 render-thread samples landed in recompose).
+ * A State read inside the layout lambda invalidates only this node's
+ * measure/place, so a spring tick re-measures the island and nothing above.
+ */
+private fun Modifier.animatedIslandSize(
+    width: State<Dp>,
+    height: State<Dp>,
+    transform: (Dp, Dp) -> DpSize = { w, h -> DpSize(w, h) }
+): Modifier = layout { measurables, constraints ->
+    val target = transform(width.value, height.value)
+    val w = target.width.roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
+    val h = target.height.roundToPx().coerceIn(constraints.minHeight, constraints.maxHeight)
+    val child = measurables.measure(
+        constraints.copy(minWidth = w, maxWidth = w, minHeight = h, maxHeight = h)
+    )
+    layout(w, h) { child.place(0, 0) }
 }
 
 // How often the System Accent surface re-reads the OS accent so a desktop
