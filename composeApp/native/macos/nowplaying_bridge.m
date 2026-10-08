@@ -31,6 +31,26 @@
 //
 
 #import <Foundation/Foundation.h>
+#include <unistd.h>
+
+// ── Orphan watchdog ─────────────────────────────────────────────────────────
+// The JVM that spawned us can die without running its cleanup — SIGTERM to
+// the JVM never disposes the composition, kill -9 never does — and a bridge
+// left behind keeps its 2s heartbeat alive forever. Each leaked instance then
+// spawns an osascript poll into MediaRemote every couple of seconds: a dev
+// machine accumulated ~90 of them over one uptime (~19 live JXA polls at
+// ~10% CPU each), which dragged mediaremoted/coreaudiod up with it and
+// starved the whole system — every window (including this app's own overlay)
+// went into multi-second frame stalls. launchd reparents orphans to pid 1, so
+// getppid() == 1 is the reliable "our supervisor is gone" signal; exit within
+// a second of seeing it. Any in-flight osascript is a one-shot that finishes
+// (or hits its own deadline) on its own.
+static void ArmOrphanWatchdog(void) {
+    NSTimer *timer = [NSTimer timerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *__unused t) {
+        if (getppid() == 1) exit(0);
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+}
 
 // ── The JXA payload that runs inside the entitled osascript process ────────
 // argv[0]: "get" → print one JSON snapshot line; or "cmd <id>" → MRController
@@ -146,6 +166,8 @@ static void Poll(void);
 static volatile BOOL artFetchInFlight;
 static NSString *artContentId;
 static NSString *artCacheB64;
+/** Content id whose art bytes have already travelled on stdout (see EmitArtOnce). */
+static NSString *emittedArtId;
 
 /** The `"id":"…"` value of a snapshot line (so art caches per track). */
 static NSString *ContentIdFromLine(NSString *line) {
@@ -199,7 +221,10 @@ static void AttachMusicArt(NSString **line) {
     NSString *idKey = ContentIdFromLine(*line);
     if (!idKey.length) return;
     if ([idKey isEqualToString:artContentId]) {
-        if (artCacheB64) {
+        // Same track: only the first line that will actually ship the bytes
+        // gets the substitute — later ones would just build a 1.9MB string for
+        // EmitArtOnce to strip again.
+        if (artCacheB64 && ![idKey isEqualToString:emittedArtId]) {
             *line = [*line stringByReplacingOccurrencesOfString:@"\"art\":null"
                                                      withString:[NSString stringWithFormat:@"\"art\":\"%@\"", artCacheB64]];
         }
@@ -218,6 +243,7 @@ static void AttachMusicArt(NSString **line) {
     // ArtFetched() re-emits the moment the art lands.
     artContentId = idKey;
     artCacheB64 = nil;
+    emittedArtId = nil; // art lifecycle restarts with the new id (see EmitArtOnce)
     artFetchInFlight = YES;
     NSString *requestedId = idKey;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -240,6 +266,35 @@ static void ArtFetched(void) {
     // Always poll: if the track changed while this fetch was running, the new id
     // is waiting for its own fetch and should not wait a whole poll cycle for it.
     Poll();
+}
+
+// ── Emit the artwork bytes once per track ───────────────────────────────────
+// The cover for a Music.app track is ~1.9MB of base64, and every heartbeat
+// line used to carry it again — ~1.5MB/s straight into the JVM's JSON parser,
+// which showed up as one "G1 Humongous Allocation" GC per poll and strings
+// filling the young gen while music played. Kotlin caches artwork by content
+// id and explicitly tolerates `art:null` on an unchanged track ("Bridges may
+// omit artwork for an unchanged track id; the cache carries it"), so the
+// first line for a content id ships the bytes and every later line ships
+// null. Pattern is safe: base64 contains no quotes, so the value runs from
+// `"art":"` to the next `"` verbatim.
+static void EmitArtOnce(NSString **line) {
+    if (![*line containsString:@"\"art\":\""]) return; // already null
+    NSString *idKey = ContentIdFromLine(*line);
+    if (!idKey.length) return; // unparseable id → never strip
+    if (![idKey isEqualToString:emittedArtId]) {
+        emittedArtId = idKey; // first line carrying art for this id — keep it
+        return;
+    }
+    NSRange key = [*line rangeOfString:@"\"art\":\""];
+    NSUInteger start = key.location + key.length;
+    NSRange closeQuote = [*line rangeOfString:@"\""
+                                      options:0
+                                        range:NSMakeRange(start, (*line).length - start)];
+    if (closeQuote.location == NSNotFound) return;
+    *line = [*line stringByReplacingCharactersInRange:
+             NSMakeRange(key.location, closeQuote.location + 1 - key.location)
+                                           withString:@"\"art\":null"];
 }
 
 // Runs `osascript -l JavaScript <jxa> <args…>`, captures stdout, and calls
@@ -308,6 +363,7 @@ static void Poll(void) {
         }
         if (!line) return;
         AttachMusicArt(&line);
+        EmitArtOnce(&line);
         // De-dup: re-emit only when the snapshot actually changed (position is
         // interpolated client-side, so purely temporal moves are skipped).
         if ([line isEqualToString:lastEmittedKey]) return;
@@ -353,6 +409,7 @@ int main(int argc, const char *argv[]) {
 
         signal(SIGPIPE, SIG_IGN);
         JxaPath(); // materialise the script before the runloop starts
+        ArmOrphanWatchdog();
         Poll();
         HeartbeatTimer();
         [[NSRunLoop mainRunLoop] run];

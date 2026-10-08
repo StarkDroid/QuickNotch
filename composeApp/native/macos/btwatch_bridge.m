@@ -32,6 +32,19 @@
 #import <Foundation/Foundation.h>
 #import <CoreAudio/CoreAudio.h>
 #import <notify.h>
+#include <unistd.h>
+
+// ── Orphan watchdog (see nowplaying_bridge.m) ───────────────────────────────
+// The JVM supervisor can die without cleanup (SIGTERM/kill -9 never dispose
+// the composition); launchd then reparents us to pid 1 and a leaked watcher
+// would sit on its CoreAudio/Darwin listeners forever. Exit within a second
+// of seeing ppid == 1.
+static void ArmOrphanWatchdog(void) {
+    NSTimer *timer = [NSTimer timerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *__unused t) {
+        if (getppid() == 1) exit(0);
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+}
 
 static volatile BOOL changeInFlight;
 
@@ -91,6 +104,7 @@ int main(int argc, const char *argv[]) {
     (void)argc; (void)argv;
     @autoreleasepool {
         signal(SIGPIPE, SIG_IGN);
+        ArmOrphanWatchdog();
 
         AudioObjectPropertyAddress outAddr = {
             kAudioHardwarePropertyDefaultOutputDevice,

@@ -352,6 +352,13 @@ reorder target. `resetToDefaults()` seeds platform defaults.
 - `NativeResources.extract(resourcePath, suffix)` unpacks a helper to a temp file for
   execution. Missing resource (e.g. no macOS bridge on a Windows-built jar) = controller
   stays silent — by design.
+- **Orphan hygiene (pitfalls 49/50):** both long-running macOS bridges arm a
+  `getppid() == 1` watchdog — the JVM can die without ever running `media.stop()`,
+  and a leaked bridge then polls MediaRemote forever (machine-wide frame stalls) —
+  and `NativeResources.sweepOrphanedBridges()` retro-kills ppid==1 `/quicknotch-`
+  processes left by already-shipped builds on every macOS startup. The now-playing
+  bridge also ships artwork bytes **once per track** (`EmitArtOnce`, then
+  `"art":null`) instead of re-attaching the ~1.9 MB base64 to every heartbeat line.
 - Windows PS1 scripts are the single source of truth in `composeApp/native/windows/`;
   `syncWindowsBridge` copies them into resources before jar/processResources.
 - macOS bridge: `native/macos/nowplaying_bridge.m` → `cc` → `resources/macos/nowplaying-bridge`
@@ -1411,6 +1418,47 @@ composeApp/
     screenshotted without starting a real sign-in, and the desktop never sends
     it.
 
+49. **A native bridge whose JVM dies becomes an immortal poller — every
+    long-lived helper must detect its own orphaning.** The JVM can exit
+    without ever running `media.stop()`: SIGTERM and `kill -9` alike skip
+    composition disposal, so `Process.destroy()` never fires and the bridge
+    is reparented to launchd. A leaked `nowplaying-bridge` keeps its 2 s
+    heartbeat forever, spawning an `osascript` MediaRemote poll per tick —
+    and saturation makes each poll take 1–2 s instead of its healthy ~48 ms,
+    so the leaks compound into a storm. One dev machine accumulated **~150
+    orphaned bridges / ~33 concurrent JXA polls**, load average **243**, and
+    every window on the machine went into multi-second frame stalls. It was
+    reported as "blur + music performance tanks", but blur was innocent: the
+    10-cycle open/close bench read **112 (blur) / 89 (solid) hard gaps**
+    under the storm and **1 / 0** after cleanup, at load ~4. Two-layer fix:
+    (a) each long-running bridge arms an orphan watchdog — `if (getppid() ==
+    1) exit(0)` on a 1 s timer (`nowplaying_bridge.m`, `btwatch_bridge.m`) —
+    which catches even `kill -9` of the JVM, where no signal reaches the
+    bridge; (b) `NativeResources.sweepOrphanedBridges()` at startup
+    retro-kills ppid==1 processes carrying the `/quicknotch-` path fragment,
+    so already-shipped versions clean up their accumulated leaks too (it
+    cannot touch anything else: only ppid==1 and that exact fragment, which
+    matches the extracted temp binaries and `quicknotch-bridge/nowplaying.jxa`
+    but never this process's own children). Verification trap worth
+    remembering: a healthy JXA poll lives only ~48 ms every 2 s (2.4 % duty
+    cycle), so sparse `pgrep` sampling reads zero and looks like a dead feed
+    — count catches in a tight loop before concluding the poller stopped.
+
+50. **Never ship the artwork bytes on every poll line.** A Music.app cover is
+    ~1.9 MB of base64, and the bridge attached it to *every* heartbeat line —
+    ~1.5 MB/s straight into the JVM's JSON parser. Measured: 25 GC events per
+    30 s almost all `G1 Humongous Allocation`, one G1Full, and (under load) a
+    646 ms G1Old pause — the churn half of the "music stutters" reports, with
+    the orphan storm of pitfall 49 supplying the rest. Kotlin already
+    tolerates omission (`MediaController.publish`: "Bridges may omit artwork
+    for an unchanged track id; the cache carries it"), so the bridge now ships
+    the bytes exactly once per content id (`EmitArtOnce` → `"art":null` on
+    every later line; `emittedArtId` resets when the id moves) and
+    `AttachMusicArt` only builds the substitute for the line that will carry
+    it. After: 5 GC events per 30 s, no pause over 1.2 ms, steady 8.2 % CPU
+    blur+music. Rule for any new bridge: bytes once, id-keyed cache after —
+    the wire format carries identity, not payload repetition.
+
 ## 11. Git workflow
 
 - Branch: `cursor/macos-compose-adaptation`; work here, commit, `git push`.
@@ -1919,6 +1967,29 @@ composeApp/
   frame gaps per 10-cycle window with music live, recompose samples 98/235 →
   6/357, cycling CPU ~20–28% → ~10–20%; steady collapsed cost unchanged.
 
+- (this session → HEAD): **"blur + music performance tanks" was a leaked-
+  bridge storm, not blur.** SIGTERM/kill -9 of the JVM skip composition
+  disposal, so `media.stop()` never ran and every app exit orphaned the
+  nowplaying/btwatch bridges; over the machine's 8-day uptime ~150 accumulated
+  (`quicknotch-*` temp binaries, ppid 1), each nowplaying instance still
+  spawning a MediaRemote JXA poll every 2 s — up to ~33 concurrent, load
+  average 243, and window-server-wide frame stalls that hit every style
+  equally (10-cycle hard gaps: 112 blur / 89 solid). Fixed at the source:
+  `getppid() == 1` watchdogs in `nowplaying_bridge.m` + `btwatch_bridge.m`
+  (catch even `kill -9`; verified: JVM kill leaves 0 orphans), and
+  `NativeResources.sweepOrphanedBridges()` at startup retro-kills ppid==1
+  `/quicknotch-` processes so already-shipped versions clean up their
+  backlog too (first run: **swept 150**, load 243 → ~4). Same pass removed
+  the other half of the churn: the bridge re-attached the ~1.9 MB artwork
+  base64 to **every** heartbeat line (~1.5 MB/s → one `G1 Humongous
+  Allocation` GC per poll, a 646 ms pause in the worst sample); it now ships
+  the bytes once per track (`EmitArtOnce` → `"art":null`, Kotlin's id-keyed
+  cache already carried it — MediaController.kt's contract line), cutting GC
+  25 → 5 events per 30 s with no pause over 1.2 ms. After both fixes the
+  open/close bench reads **1 (blur) / 0 (solid)** hard gaps, steady blur+music
+  CPU 8.2% of a core, load ~4. The temporary frame-gap logger used for the
+  A/B is removed again (pitfall 49/50 for the full detail and the 48 ms
+  duty-cycle verification trap).
 
 ---
 
