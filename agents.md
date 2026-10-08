@@ -453,7 +453,10 @@ window's interactive area to exactly the drawn island each tick:
   `--add-opens java.desktop/java.awt=ALL-UNNAMED`,
   `--add-opens java.desktop/sun.lwawt.macosx=ALL-UNNAMED` and
   `--add-opens java.desktop/sun.awt.windows=ALL-UNNAMED` (added to
-  `compose.desktop.application` so they apply to `run` and the packaged app).
+  `compose.desktop.application` so they apply to `run` and the packaged app;
+  each host-only open is added only on the platform whose `java.desktop`
+  actually contains the package, or the JVM prints
+  `WARNING: package ... not in java.desktop` on every launch).
 - **Fail-soft by design**: `install()` never throws; if the native handle can't be
   resolved, the bridge is missing, or the pointer fails the `respondsToSelector:` probe,
   the window simply stays fully interactive — the old fixed-footprint margin behaviour,
@@ -1484,6 +1487,27 @@ composeApp/
     make room for the two new members. Windows was never stuck (`smtc.ps1`
     prints a fresh none line every poll, re-evaluating its grace at 1 Hz) but
     rides the same timer now.
+
+52. **The compose plugin's `run` task is registered after the build script
+    evaluates, and its `args` are rewritten at configuration time — application
+    arguments must be appended in `doFirst`.** `tasks.named("run")` throws
+    `Task with name 'run' not found` (the plugin creates it in its own
+    after-evaluate pass), so the hook has to be
+    `tasks.matching { it.name == "run" }.configureEach` — but an `args(...)`
+    append made *there* is silently overwritten by the plugin's own
+    configuration before execution, which looks exactly like "the flag never
+    shipped" when you go looking for it in `ps`. `doFirst { args(...) }` runs
+    after all configuration and cannot be clobbered. What the flag is for: the
+    `ApplePersistenceIgnoreState: ...` line in every run's console is AppKit
+    writing its session saved-state file, and AppKit reads `-Key value` pairs
+    straight from the process argv — including *after* the main class — so
+    `-ApplePersistenceIgnoreStateQuietly YES` as a macOS-only application
+    argument silences it (verified: flag absent → message printed, flag in
+    argv → silent). The packaged `.app` has no console, so only `run` carries
+    the argument. Same commit platform-gated the `--add-opens` sets
+    (`sun.awt.windows` / `sun.lwawt(.macosx)` exist on one OS only) and added
+    `slf4j-nop` (every Ktor module brings `slf4j-api` with no provider, which
+    printed `No SLF4J providers were found` ×3 per launch).
 
 ## 11. Git workflow
 
