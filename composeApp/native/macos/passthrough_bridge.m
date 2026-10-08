@@ -349,9 +349,7 @@ static void applyHelperBlurRadius(long long radius) {
     // Same (window, radius) twice is a no-op for the daemon; skipping it
     // keeps per-frame size updates free of redundant compositor traffic.
     if (windowId == sBlurAppliedWid && radius == sBlurAppliedRadius) return;
-    int result = sCGSSetWindowBackgroundBlurRadius(sCGSMainConnectionID(), windowId, radius);
-    fprintf(stderr, "QuickNotch helper blur: wid=%ld radius=%lld result=%d\n",
-            windowId, radius, result);
+    sCGSSetWindowBackgroundBlurRadius(sCGSMainConnectionID(), windowId, radius);
     sBlurAppliedWid = windowId;
     sBlurAppliedRadius = radius;
 }

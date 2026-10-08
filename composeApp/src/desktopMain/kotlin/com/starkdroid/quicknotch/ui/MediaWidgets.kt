@@ -356,7 +356,7 @@ internal fun TrackTimeLabel(ms: Long, frameHeight: Dp = 28.dp) {
 }
 
 /**
- * A playhead strip: a hairline track, an accent-cyan gradient fill, and —
+ * A playhead strip: a slim rounded track, an accent-cyan gradient fill, and —
  * when seeking is available — a round head ringed in the live accent that
  * rides the tip of the fill. Dragging or tapping (when the backend supports
  * seeking) retargets the OS player; on macOS the strip is display-only,
@@ -372,8 +372,8 @@ internal fun TrackProgress(
     modifier: Modifier = Modifier
 ) {
     val canSeek = seekable && enabled
-    val barHeight = 3.dp
-    val headSize = 8.dp
+    val barHeight = 4.dp
+    val headSize = 10.dp
     val laneInset = headSize / 2
     val clamped = fraction.coerceIn(0f, 1f)
     Box(
@@ -471,12 +471,12 @@ internal fun TransportControls(
     }
     val showPlaying = pendingPlay ?: (state == PlaybackState.PLAYING)
     // Material3 inflates every IconButton to a 48dp touch target — on this
-    // tightly packed 30/34dp row (2dp apart) those targets overlapped each
+    // tightly packed 30/36dp row (4dp apart) those targets overlapped each
     // other and the neighbouring buttons, so clicks near an edge landed on the
     // wrong control. Pin the targets to the visible buttons.
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         // Plain sized-Box clickables instead of IconButton: Material3's
         // IconButton inflates its touch target to 48dp (overflowing its slot
@@ -503,7 +503,7 @@ internal fun TransportControls(
         )
         Box(
             modifier = Modifier
-                .size(34.dp)
+                .size(36.dp)
                 .graphicsLayer {
                     scaleX = playScale
                     scaleY = playScale

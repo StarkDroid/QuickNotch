@@ -7,7 +7,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,6 +18,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -218,12 +222,12 @@ private fun MusicPage(
 }
 
 /**
- * Art pinned to the left end of the strip, the metadata held in the middle,
- * the progress/timestamps strip hugging the bottom edge, and the level rings
- * stacked above the transport buttons on the right — the two clusters drift
- * slightly toward the bottom so the controls read as a settled base under the
- * text. Every transport control stays visible here; collapsing the play/pause
- * only affects the slim quickview.
+ * Vinyl left in an album-tinted halo with a live-status dot, the metadata
+ * held in the middle over a thicker playhead strip, and the level rings
+ * stacked above a roomier transport cluster on the right. The title block
+ * crossfades on every track change so back-to-back songs glide instead of
+ * cutting. Every transport control stays visible here; collapsing the
+ * play/pause only affects the slim quickview.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -244,6 +248,14 @@ private fun MusicContent(
     val duration = session.durationMs.coerceAtLeast(0L)
     val elapsed = session.displayedPositionMs(nowMs).coerceAtLeast(0L)
         .coerceAtMost(if (duration > 0L) duration else Long.MAX_VALUE)
+    // "Artist — Album" second line; either half alone still reads fine, and a
+    // track with neither keeps its single-line title layout.
+    val subtitle = remember(session.artist, session.album) {
+        listOf(session.artist, session.album)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(" — ")
+    }
 
     Row(
         modifier = Modifier
@@ -251,7 +263,7 @@ private fun MusicContent(
             .clipToBounds()
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // The vinyl slot morphs between pill and page (discModifier on the
         // slot), and swaps records on a track change: the old cover slides out
@@ -261,9 +273,19 @@ private fun MusicContent(
         // when the next cover has decoded — a cover that lands a poll late
         // gets its own entrance instead of popping in.
         Box(
-            modifier = discModifier.size(56.dp),
+            modifier = discModifier.size(62.dp),
             contentAlignment = Alignment.Center
         ) {
+            // Ambient halo tinted by the cover's dominant colour (accent cyan
+            // with no cover), so the player picks up the album's mood without
+            // repainting the island itself.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background((session.artTint ?: LiveAccent).copy(alpha = 0.18f))
+                    .border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
+            )
             AnimatedContent(
                 targetState = session.artwork,
                 transitionSpec = {
@@ -313,9 +335,23 @@ private fun MusicContent(
                     }
                 )
             }
+            // Live-status dot riding the disc's lower edge: accent while the
+            // record turns, dimmed white on pause. Zero layout cost — it
+            // overlaps the halo instead of claiming a row of its own.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (playing) LiveAccent
+                        else Color.White.copy(alpha = 0.30f)
+                    )
+                    .border(2.dp, Color(0xFF0B0D12).copy(alpha = 0.9f), CircleShape)
+            )
         }
 
-        // Title/artist float in the space above the progress strip, and the
+        // Title block floats in the space above the progress strip, and the
         // strip hugs the bottom edge — mirroring the transport cluster's own
         // bottom bias so both flanks settle at the same baseline.
         Column(
@@ -330,32 +366,43 @@ private fun MusicContent(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    MarqueeText(
-                        text = session.title,
-                        color = Color.White.copy(alpha = 0.95f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = titleModifier
-                    )
-                    if (session.artist.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = session.artist,
-                            color = Color.White.copy(alpha = 0.55f),
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                // Keyed on the track identity (not the bitmap): the words glide
+                // on every song change even when the cover arrives a poll late.
+                AnimatedContent(
+                    targetState = session.contentId,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 6 }) togetherWith
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 8 })
+                    },
+                    label = "trackTextSwap"
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        MarqueeText(
+                            text = session.title,
+                            color = Color.White.copy(alpha = 0.96f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = titleModifier
                         )
+                        if (subtitle.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = subtitle,
+                                color = Color.White.copy(alpha = 0.60f),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                TrackTimeLabel(elapsed)
+                TrackTimeLabel(elapsed, frameHeight = 22.dp)
                 TrackProgress(
                     fraction = session.progressFraction(nowMs),
                     durationMs = duration,
@@ -364,16 +411,17 @@ private fun MusicContent(
                     onSeek = media::seekTo,
                     modifier = Modifier.weight(1f)
                 )
-                TrackTimeLabel(duration)
+                TrackTimeLabel(duration, frameHeight = 22.dp)
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
         }
 
         // Level indicators sit on top of the media controls, with the whole
         // cluster riding near the bottom edge. Both rings use the exact same
         // shapes as the quickview's, so volume and battery read
         // identically everywhere — the collapsed-only toggles govern just the
-        // pill.
+        // pill. Fixed stack is 30 + 4 + 36 + 4 = 74dp, matching the previous
+        // budget so the minimum island depth still fits.
         Column(
             modifier = Modifier.fillMaxHeight(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -381,21 +429,21 @@ private fun MusicContent(
             Spacer(modifier = Modifier.weight(1f))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (volumePercent != null) {
                     // The expanded volume ring doubles as the mute toggle: one
                     // click flips the OS device mute, and the ring empties to
                     // level 0 (with a dimmed glyph) while muted so the state
                     // reads at a glance. The sharedElement modifier rides the
-                    // wrapping Box, so the morph bounds stay the ring's 28dp.
+                    // wrapping Box, so the morph bounds stay the ring's 30dp.
                     val mutedNow = volumeMuted == true
                     val muteLabel = stringResource(
                         if (mutedNow) Res.string.music_unmute else Res.string.music_mute
                     )
                     Box(
                         modifier = volumeRingModifier
-                            .size(28.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                             .then(
                                 if (interactive) {
@@ -410,7 +458,7 @@ private fun MusicContent(
                             level = if (mutedNow) 0 else volumePercent,
                             icon = volumePainter(),
                             contentDescription = muteLabel,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(30.dp),
                             tint = if (mutedNow) LevelRingGlyph.copy(alpha = 0.4f) else LevelRingGlyph,
                             ringColor = if (mutedNow) LevelRingGlyph.copy(alpha = 0.3f) else LevelRingGlyph
                         )
@@ -426,7 +474,7 @@ private fun MusicContent(
                             battery.name?.takeIf { it.isNotBlank() }
                                 ?: stringResource(Res.string.music_audio_device)
                         ),
-                        modifier = batteryRingModifier.size(28.dp),
+                        modifier = batteryRingModifier.size(30.dp),
                         lowTint = BatteryLowTint,
                         lowThreshold = BatteryLowThreshold
                     )
@@ -438,7 +486,7 @@ private fun MusicContent(
                 enabled = interactive,
                 media = media
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
