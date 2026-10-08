@@ -1456,8 +1456,34 @@ composeApp/
     every later line; `emittedArtId` resets when the id moves) and
     `AttachMusicArt` only builds the substitute for the line that will carry
     it. After: 5 GC events per 30 s, no pause over 1.2 ms, steady 8.2 % CPU
-    blur+music. Rule for any new bridge: bytes once, id-keyed cache after —
-    the wire format carries identity, not payload repetition.
+     blur+music. Rule for any new bridge: bytes once, id-keyed cache after —
+     the wire format carries identity, not payload repetition.
+
+51. **The empty-grace hold must end on a clock, not on the next bridge line.**
+    `MediaControllerBase` holds the last playable session for `EMPTY_GRACE_MS`
+    (4 s) so the no-item beat between songs cannot unmount the music page —
+    but the grace used to be re-evaluated only when the *next* line arrived.
+    The macOS bridge de-dups identical lines (`nowplaying_bridge.m`: a line
+    equal to `lastEmittedKey` is dropped), so force-quitting the player
+    delivered exactly one `{"state":"none"}` line *inside* the grace and then
+    permanent silence: nothing ever re-ran the expiry check and the collapsed
+    pill hung on the dead track forever (report: the pill stuck on
+    "Orquestra 2.0 (U..." with Music dead, `player state` stopped, JXA still
+    answering `{"state":"none"}`). The hold now arms a one-shot timer —
+    `armHoldExpiry` launches on `ioScope` at `lastPlayableAtMs +
+    EMPTY_GRACE_MS`, re-checks the deadline under `publishLock` after the
+    delay, and reaps through the single `reapHeldSnapshot()`; a playable line
+    cancels the job, and paused/pinned sessions never arm one (their silence
+    is legitimate, so they still persist). Supporting rules: every session
+    write — publish, reap, late artwork merge — goes through `publishLock`
+    (poller vs. timer vs. fetcher; lock order publishLock → artLock, never
+    reversed), or a racing publish can resurrect a just-cleared session; and
+    `MediaControllerBase` sits on detekt's function-count knife edge
+    (`TooManyFunctions` reports at ≥11 members, it had 10), so `stateOf`
+    moved to file scope and `cacheHit` folded into `decodeArtworkBytes` to
+    make room for the two new members. Windows was never stuck (`smtc.ps1`
+    prints a fresh none line every poll, re-evaluating its grace at 1 Hz) but
+    rides the same timer now.
 
 ## 11. Git workflow
 
@@ -1986,10 +2012,28 @@ composeApp/
   the bytes once per track (`EmitArtOnce` → `"art":null`, Kotlin's id-keyed
   cache already carried it — MediaController.kt's contract line), cutting GC
   25 → 5 events per 30 s with no pause over 1.2 ms. After both fixes the
-  open/close bench reads **1 (blur) / 0 (solid)** hard gaps, steady blur+music
-  CPU 8.2% of a core, load ~4. The temporary frame-gap logger used for the
-  A/B is removed again (pitfall 49/50 for the full detail and the 48 ms
-  duty-cycle verification trap).
+   open/close bench reads **1 (blur) / 0 (solid)** hard gaps, steady blur+music
+   CPU 8.2% of a core, load ~4. The temporary frame-gap logger used for the
+   A/B is removed again (pitfall 49/50 for the full detail and the 48 ms
+   duty-cycle verification trap).
+
+- (this session → HEAD): **the collapsed pill stuck on a dead track after the
+  media player was force-quit** — the empty-grace hold could never expire.
+  The hold re-evaluated `EMPTY_GRACE_MS` only when the next bridge line
+  arrived, but the macOS bridge de-dups identical lines, so the dead player
+  produced exactly one `{"state":"none"}` inside the grace and then silence:
+  the expiry check never ran again and the last song stayed on the pill
+  forever. The hold now ends on a clock (`MediaControllerBase.armHoldExpiry`,
+  a one-shot `ioScope` timer that re-checks the deadline and reaps through
+  the single `reapHeldSnapshot()`); playable lines cancel it, so paused and
+  pinned-browser sessions still persist through their legitimate silence, and
+  every session write (publish / reap / late artwork merge) now serialises
+  through `publishLock` so a reap can't be resurrected by a racing write.
+  Two file-local moves made room under detekt's function-count gate
+  (`stateOf` to file scope, `cacheHit` folded into `decodeArtworkBytes`;
+  pitfall 51). Verified on the live build with screenshots: playing → media
+  pill; `killall -9 Music` → idle quickview within 8 s (was stuck
+  indefinitely); pause → pill still shows the paused track after 8 s.
 
 ---
 
@@ -2013,6 +2057,7 @@ composeApp/
 | Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope, pause ramp 250ms to a 12% flat line | `MediaWidgets` |
 | Pill animation tick | `PillAnimationFps` 30 via `delay` + nanoTime deltas (never `withFrameNanos`) | `NotchMotion` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
+| `EMPTY_GRACE_MS` | 4000ms empty-player hold, ends on a one-shot timer (pitfall 51) | `MediaController.kt` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s, weather 30min | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |
 | Page step | 30 dp of wheel travel | `OverlayPager` |

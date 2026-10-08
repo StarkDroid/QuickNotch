@@ -6,11 +6,14 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
@@ -63,7 +66,11 @@ internal object MediaJson {
 /**
  * How long an empty player holds the last session before clearing it. Covers
  * the no-item beat between songs (the bridge polls at 1–2s) without turning a
- * genuine stop into a lingering pill.
+ * genuine stop into a lingering pill. The hold ends on a *clock* driven by
+ * [MediaControllerBase.armHoldExpiry], never only on the next bridge line:
+ * the macOS bridge de-dups identical lines, so a force-quit delivers exactly
+ * one empty sample inside the grace and then silence — a hold that only the
+ * next line could end would never end at all (pitfall 51).
  */
 private const val EMPTY_GRACE_MS = 4_000L
 
@@ -97,17 +104,34 @@ internal abstract class MediaControllerBase : MediaController {
      * player holds onto these for [EMPTY_GRACE_MS] instead of clearing the
      * session at once — the bridge reports no item for a beat between songs,
      * and without the hold the whole music page would unmount and remount on
-     * every track change.
+     * every track change. The hold is armed as a one-shot timer (see
+     * [armHoldExpiry]) because the bridge's line de-dup can swallow every
+     * later sample, leaving no line on which a re-check could ever run.
      */
     private var lastSnapshot: MediaSnapshot? = null
     private var lastPlayableAtMs: Long = 0L
 
     /**
+     * Serialises every session write. The poller and the hold-expiry timer run
+     * on different IO coroutines: a reap interleaved with a publish could
+     * re-write a session that was just cleared, and a late artwork merge could
+     * graft a cover onto a session the timer had already dropped. Lock order is
+     * always publishLock → artLock, never the reverse.
+     */
+    private val publishLock = Any()
+
+    /** Pending one-shot reap for the current hold; see [armHoldExpiry]. */
+    private var holdExpiryJob: Job? = null
+
+    /**
      * Parses one bridge line into a playable snapshot. A playable line refreshes
-     * the hold; anything else serves the held snapshot while the grace is open
-     * and clears the session only once it expires — so a track switch (or a
-     * corrupt sample) never blanks the pill, while a real stop still lands a
-     * few seconds later.
+     * the hold and cancels any pending reap; anything else serves the held
+     * snapshot while the grace is open (arming the one-shot reap so the hold
+     * still ends when the bridge falls silent) and clears the session once it
+     * expires — so a track switch (or a corrupt sample) never blanks the pill,
+     * while a real stop lands a few seconds later.
+     *
+     * Called only while holding [publishLock].
      */
     private fun playableSnapshot(jsonLine: String): MediaSnapshot? {
         val snapshot = runCatching {
@@ -115,39 +139,74 @@ internal abstract class MediaControllerBase : MediaController {
         }.getOrNull()
         val playable = snapshot != null &&
             stateOf(snapshot) != PlaybackState.NONE && snapshot.title.isNotBlank()
-        val result: MediaSnapshot? = if (playable) {
+        val nowMs = System.nanoTime() / 1_000_000
+        return if (playable) {
+            holdExpiryJob?.cancel()
+            holdExpiryJob = null
             lastSnapshot = snapshot
-            lastPlayableAtMs = System.nanoTime() / 1_000_000
+            lastPlayableAtMs = nowMs
             snapshot
-        } else if (lastSnapshot != null &&
-            System.nanoTime() / 1_000_000 - lastPlayableAtMs < EMPTY_GRACE_MS
-        ) {
+        } else if (lastSnapshot != null && nowMs - lastPlayableAtMs < EMPTY_GRACE_MS) {
+            armHoldExpiry()
             lastSnapshot
         } else {
-            previousPlayingRawPosition = null
-            previousPlayingRawId = null
-            _session.value = null
-            lastSnapshot = null
+            holdExpiryJob?.cancel()
+            holdExpiryJob = null
+            reapHeldSnapshot()
             null
         }
-        return result
     }
 
-    private fun stateOf(snapshot: MediaSnapshot): PlaybackState =
-        when (snapshot.state.lowercase()) {
-            "playing" -> PlaybackState.PLAYING
-            "paused" -> PlaybackState.PAUSED
-            "stopped" -> PlaybackState.STOPPED
-            else -> PlaybackState.NONE
+    /**
+     * Starts the one-shot reap for the current hold: [EMPTY_GRACE_MS] after
+     * the last playable sample. A hold used to be re-evaluated only when the
+     * *next* bridge line arrived, but the macOS bridge de-dups identical lines
+     * — a force-quit delivers one empty sample inside the grace and then
+     * silence, so nothing ever re-ran the expiry check and the pill hung on
+     * the dead track forever. The deadline is therefore clock-driven: the hold
+     * still lasts exactly [EMPTY_GRACE_MS], but it *ends* even when no further
+     * line ever comes. The wait re-checks under [publishLock], so a playable
+     * line landing in the meantime (fresh grace, this job cancelled) wins the
+     * race instead of being reaped.
+     */
+    private fun armHoldExpiry() {
+        if (holdExpiryJob?.isActive == true) return
+        val deadlineMs = lastPlayableAtMs + EMPTY_GRACE_MS
+        holdExpiryJob = ioScope.launch {
+            val waitMs = deadlineMs - (System.nanoTime() / 1_000_000)
+            if (waitMs > 0) delay(waitMs)
+            synchronized(publishLock) {
+                val nowMs = System.nanoTime() / 1_000_000
+                if (lastSnapshot != null && nowMs - lastPlayableAtMs >= EMPTY_GRACE_MS) {
+                    reapHeldSnapshot()
+                }
+            }
         }
+    }
+
+    /**
+     * Drops the held session and the pinned-position pins — the single place
+     * the "nothing is playing" state is written, so the reap timer and an
+     * expired line can never drift apart. Caller must hold [publishLock];
+     * idempotent (a second empty line after the reap just rewrites the null
+     * the flow already holds).
+     */
+    private fun reapHeldSnapshot() {
+        previousPlayingRawPosition = null
+        previousPlayingRawId = null
+        _session.value = null
+        lastSnapshot = null
+    }
 
     /**
      * Decodes one bridge snapshot into the session flow. Returns the snapshot
      * when it produced (or refreshed) a session, null when the line carried
      * nothing playable — macOS uses the returned snapshot to decide whether
-     * the track still needs cover art from the entitled helper.
+     * the track still needs cover art from the entitled helper. The whole
+     * read-modify-write runs under [publishLock] so the hold-expiry timer can
+     * never reap between the hold check and the session write.
      */
-    protected fun publish(jsonLine: String): MediaSnapshot? {
+    protected fun publish(jsonLine: String): MediaSnapshot? = synchronized(publishLock) {
         val snapshot = playableSnapshot(jsonLine)
         if (snapshot == null) return null
         val state = stateOf(snapshot)
@@ -182,7 +241,7 @@ internal abstract class MediaControllerBase : MediaController {
             contentId = snapshot.contentId,
             canSeek = supportsSeek
         )
-        return snapshot
+        snapshot
     }
 
     /**
@@ -224,9 +283,12 @@ internal abstract class MediaControllerBase : MediaController {
     protected fun publishArtwork(contentId: String, base64: String) {
         if (base64.isBlank() || contentId.isBlank()) return
         val art = decodeArtworkBytes(base64, contentId)
-        val current = _session.value
-        if (art.bitmap != null && current != null) {
-            if (current.contentId == contentId && current.artwork == null) {
+        if (art.bitmap == null) return
+        // Read-check-write under the publish lock: a late cover that raced the
+        // hold-expiry reap must not graft art onto a session that just cleared.
+        synchronized(publishLock) {
+            val current = _session.value
+            if (current != null && current.contentId == contentId && current.artwork == null) {
                 _session.value = current.copy(artwork = art.bitmap, artTint = art.tint)
             }
         }
@@ -239,22 +301,16 @@ internal abstract class MediaControllerBase : MediaController {
      * keeps the placeholder vinyl.
      */
     private fun decodeArtworkBytes(base64: String?, contentId: String): DecodedArtwork {
-        val result = if (base64.isNullOrBlank()) {
-            cachedArtwork(contentId)
-        } else {
-            cacheHit(contentId) ?: decodeAndStore(base64, contentId) ?: cachedArtwork(contentId)
-        }
-        return result
-    }
-
-    /** Cache read fast-path, shared by the poller and the artwork fetcher. */
-    private fun cacheHit(contentId: String): DecodedArtwork? {
-        synchronized(artLock) {
+        if (base64.isNullOrBlank()) return cachedArtwork(contentId)
+        // Cache read fast-path, shared by the poller and the artwork fetcher.
+        val cached = synchronized(artLock) {
             if (artworkKey == contentId && artworkCache != null) {
-                return DecodedArtwork(artworkCache, artworkTintCache)
+                DecodedArtwork(artworkCache, artworkTintCache)
+            } else {
+                null
             }
-            return null
         }
+        return cached ?: decodeAndStore(base64, contentId) ?: cachedArtwork(contentId)
     }
 
     /** Full decode plus one cache write; null when the bytes do not rasterize. */
@@ -289,6 +345,15 @@ internal abstract class MediaControllerBase : MediaController {
         ioScope.cancel()
     }
 }
+
+/** Wire `state` string → [PlaybackState]; anything unknown reads as NONE. */
+private fun stateOf(snapshot: MediaSnapshot): PlaybackState =
+    when (snapshot.state.lowercase()) {
+        "playing" -> PlaybackState.PLAYING
+        "paused" -> PlaybackState.PAUSED
+        "stopped" -> PlaybackState.STOPPED
+        else -> PlaybackState.NONE
+    }
 
 /**
  * Dominant colour of a cover, for the waveform tint.
