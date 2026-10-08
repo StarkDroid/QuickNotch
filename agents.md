@@ -96,6 +96,8 @@ command line matches `MainKt|quicknotch`.
 - `compileMacNowPlayingBridge` — builds `native/macos/nowplaying_bridge.m` with `cc` (macOS hosts only).
 - `compileMacBtWatchBridge` — builds `native/macos/btwatch_bridge.m` with Foundation + CoreAudio (macOS hosts only).
 - `compileMacPassthroughBridge` — builds `native/macos/passthrough_bridge.m` into a dylib with Foundation + AppKit (macOS hosts only; loaded by `MacAppKit` and used by `WindowPassthrough`, the overlay window policy and the Dock-presence toggle).
+- `compileMacArtworkBridge` — builds `native/macos/artwork_bridge.m` into `artwork-bridge.dylib` with Foundation (macOS hosts only; the entitled-context cover fetcher, see 5.6).
+- `syncMacArtworkDriver` — copies `native/macos/artwork-driver.pl` → `src/desktopMain/resources/macos/` (source of truth is `native/macos`, like the Windows `.ps1` files).
 
 If a Windows `.ps1` script is edited in `native/windows`, the copy into
 `resources/windows` is refreshed automatically at jar time — but **during a plain
@@ -270,11 +272,23 @@ pure copying per track, 131ms cold); the same decode pass also derives `MediaSes
 **once per track on the poller's worker thread** and cached with the bitmap, so the
 waveform can take the album's colour without sampling pixels in composition.
 - Windows: `WindowsSmtcController` reads SMTC through `smtc.ps1` (PowerShell 5.1
-  projection — this was a hard-won fix). Supports seek.
+  projection — this was a hard-won fix). Supports seek. The status poll carries
+  the current track id + whether its art already decoded (`status <id> <haveArt>`
+  as separate argv elements), so the thumbnail COM fetch + base64 transfer runs
+  once per track instead of on every 1s poll; the per-id art cache covers the
+  omission. (Windows side compiles but is unverified — no Windows machine here.)
 - macOS: `MacNowPlayingController` runs the compiled `nowplaying-bridge` binary, which
   in turn supervises an `osascript -l JavaScript` subprocess (only *its* context —
   i.e. a `com.apple.*` bundle — can talk to MediaRemote since macOS 15.4). macOS does
   **not** support seek (`supportsSeek=false`, progress display-only).
+- macOS artwork arrives on three layers: the JXA snapshot's `art` (almost never
+  present — scripted contexts only see metadata), the universal
+  `MacArtworkFetcher` (one entitled-helper run per artless track: `artwork-driver.pl`
+  loads the `artwork-bridge` dylib into `/usr/bin/perl`, whose `com.apple.perl*`
+  identity the daemon honours, for a single full-access `MRMediaRemoteGetNowPlayingInfo`
+  query; late art merges via `publishArtwork`, which drops stale replies), and the
+  Music.app AppleScript fallback inside the bridge (gated to `srcId com.apple.Music`
+  only — running it for other clients pasted Music's cover onto browser tracks).
 - The UI keeps a local `nowMs` clock ticking every 250ms while PLAYING so the vinyl and
   progress advance at frame time between 1s polls.
 
@@ -338,6 +352,13 @@ reorder target. `resetToDefaults()` seeds platform defaults.
 - `NativeResources.extract(resourcePath, suffix)` unpacks a helper to a temp file for
   execution. Missing resource (e.g. no macOS bridge on a Windows-built jar) = controller
   stays silent — by design.
+- **Orphan hygiene (pitfalls 49/50):** both long-running macOS bridges arm a
+  `getppid() == 1` watchdog — the JVM can die without ever running `media.stop()`,
+  and a leaked bridge then polls MediaRemote forever (machine-wide frame stalls) —
+  and `NativeResources.sweepOrphanedBridges()` retro-kills ppid==1 `/quicknotch-`
+  processes left by already-shipped builds on every macOS startup. The now-playing
+  bridge also ships artwork bytes **once per track** (`EmitArtOnce`, then
+  `"art":null`) instead of re-attaching the ~1.9 MB base64 to every heartbeat line.
 - Windows PS1 scripts are the single source of truth in `composeApp/native/windows/`;
   `syncWindowsBridge` copies them into resources before jar/processResources.
 - macOS bridge: `native/macos/nowplaying_bridge.m` → `cc` → `resources/macos/nowplaying-bridge`
@@ -347,6 +368,36 @@ reorder target. `resetToDefaults()` seeds platform defaults.
   (+ bluetoothd connect notifications) and prints `AUDIO`/`BT` markers on stdout; the
   audio-battery poller re-probes instantly on each marker. Same build gating as the
   now-playing bridge (`compileMacBtWatchBridge`).
+- macOS artwork: `native/macos/artwork_bridge.m` → `cc -dynamiclib` (Foundation) →
+  `resources/macos/artwork-bridge.dylib`, driven by `native/macos/artwork-driver.pl`
+  (synced by `syncMacArtworkDriver`) which loads it into `/usr/bin/perl` for one
+  entitled `MRMediaRemoteGetNowPlayingInfo` query per artless track. Original code
+  (not vendored): the perl-entitlement trick follows the mechanism documented by
+  `ungive/mediaremote-adapter` (BSD-3), but every line here is ours.
+- Backdrop blur (Surface Theme → Blurred; the old Translucent entry is gone):
+  `NotchSurface.TRANSLUCENT` (still serialised as "BLUR") now means native
+  backdrop blur with a dark scrim — macOS shows a dedicated **standalone**
+  helper panel holding one effect view (`quicknotch_set_content_blur`:
+  borderless nonactivating level-25 panel ordered directly below the overlay,
+  sized to the island itself so the frosted shape tracks expand/collapse with
+  no halo; it must NOT be an `addChildWindow:` of the overlay — the overlay is
+  an AWT window and the CGS radius silently never blurs on an AWT child, see
+  pitfall 47 — so a 250 ms sync timer re-asserts frame, level, z-order-below
+  and parent visibility instead; `config.blurRadius`, 0–40, drives **both**
+  the compositor radius and effect opacity while Blurred is picked). Disable
+  closes the panel outright — re-showing an ordered-out panel left the frozen
+  slab behind. The effect
+  view never sampled the backdrop behind this JVM/Metal canvas when grafted
+  onto the overlay window itself, and the compositor blur radius on the
+  overlay window itself froze a full-window slab that ignored
+  expand/collapse. Windows uses DWM acrylic via
+  JNA (`datasource/WindowBlur.kt`, no C build); its `SetWindowRgn` clip already
+  follows the island. Compose draws an 18% black scrim over either backdrop.
+  Both driven from the overlay's `LaunchedEffect`; where the bridge is missing,
+  Blurred falls back to painted glass. A `takeInstanceLock` file guard in
+  `main()` keeps exactly one notch alive — a second process used to stack an
+  identical overlay that read as one frozen, misbehaving notch (e.g. a blurred
+  box ignoring expand/collapse).
 
 ### 5.10 Window passthrough (`WindowPassthrough.kt`)
 
@@ -1198,6 +1249,126 @@ composeApp/
     correct exit is back through the app, since the app is what mints the
     loopback port.
 
+45. **A scripted MediaRemote caller never sees artwork, no matter how you ask.**
+    `osascript -l JavaScript` answers title/artist/album/position perfectly and
+    returns nothing for `kMRMediaRemoteNowPlayingInfoArtworkData` — not absent
+    keys, not an error, just never any bytes — because the daemon only includes
+    artwork for callers whose bundle identity starts with `com.apple.`. Reading
+    the key harder (different accessors, `allKeys` dumps) cannot fix an
+    entitlement denial. The working shape is the perl trick: `DynaLoader`
+    a small dylib into `/usr/bin/perl` (`com.apple.perl*`) and call the real
+    C API (`MRMediaRemoteGetNowPlayingInfo` via `CFBundleGetFunctionPointer`)
+    from inside it — that is `artwork_bridge.m` + `artwork-driver.pl`, all
+    original code following the mechanism `ungive/mediaremote-adapter`
+    documents. Same rule as pitfall 6 (the JXA subprocess): never "simplify"
+    the artwork fetch back into the scripted context.
+
+47. **Backdrop blur has seven sharp edges.** (a) An `NSVisualEffectView` never
+    sampled the backdrop behind this JVM/Metal canvas in any placement — inside
+    `AWTView` it covers the controls, as a sibling under `NSNextStepFrame` it
+    renders fill or nothing, and stripping the fill leaves plain transparency.
+    Size the blur to the *island*, never the window: a full-window effect (or
+    radius) turns the click-through margin into a blurred slab instead of clear
+    desktop (Windows is exempt — its `SetWindowRgn` clip already follows the
+    island). The working macOS shape is an island-sized helper panel holding
+    the effect view (the popover pattern: it demonstrably draws there). (b)
+    **`CGSSetWindowBackgroundBlurRadius` on a child of an AWT window returns
+    success (`result=0`) and never blurs.** An isolated test matrix proved
+    every other factor innocent — the identical helper blurs as a plain
+    standalone panel, as a child of a plain Cocoa panel, with the effect view
+    stacked over it (blur reads through the tint), with the production corner
+    mask, and it *survives* parent moves, child `setFrame`s and level/order
+    re-asserts applied after the radius — only the AWT parent silences it.
+    So the helper must be **standalone**: created at the parent's level,
+    stacked directly below it with `orderWindow:NSWindowBelow`, and kept in
+    sync by a 250 ms timer (island rect from the parent's frame + last w/h,
+    level, z-order). The timer also mirrors **parent visibility** — the tray's
+    "hide notch" hides the AWT window without unmounting composition, which
+    `addChildWindow:` used to handle implicitly, and an orphan frost slab
+    would otherwise float at the top of the screen; the hidden→visible edge
+    re-applies the radius because the window server may drop it across an
+    `orderOut`. Steady-state measurement showed the overlay never moves
+    (25/25 identical bounds over 5 s), so 250 ms sync latency is invisible.
+    Verify with a same-content A/B (collapsed capture = ground truth, expanded
+    capture behind the island): correlation of the behind-island pixels
+    against their sharp original must collapse to ≈0 while never-occluded
+    regions stay at 1.0 — dimming alone cannot fake this because the metric is
+    brightness-invariant. (c) The intensity slider drives **both** the
+    compositor radius and the effect's alpha; at alpha 1.0 the effect view
+    hides everything beneath it, so read blur-vs-tint tests at the shipped
+    0.775 or lower. (d) Disabling must close the helper outright; re-showing an
+    ordered-out panel left the frozen slab behind. (e) JNA
+    struct packing must be forced to `ALIGN_MSVC` or the trailing ULONG
+    misaligns, and a JNA method name must match the Win32 export exactly
+    (`SetWindowCompositionAttribute` keeps its capital, with a targeted
+    `@Suppress("FunctionNaming")`). macOS needs no overlay-window resize
+    for blur: the helper panel tracks the island rect, so the overlay's fixed
+    footprint (pitfall 17) is untouched. (f) **`cornerRadius` + `maskedCorners`
+    on the effect view's layer never reshape the frost** — the backdrop pass
+    draws the effect view's full square frame regardless of its layer mask, so
+    the helper frosted a square lip past `notchShape()`'s rounded bottom
+    corners (the "sharp blurred edges at the bottom" report). Shape it with an
+    explicit `CAShapeLayer` mask on **both** the effect view and the window's
+    content view (`applyHelperShapeMask`), one path per view built corner-by-
+    corner (`createIslandPath`: bottom pair rounded on the flush style, all
+    four on capsule — `CGPathCreateWithRoundedRect` rounds everything it is
+    given, so it cannot express the notch shape). Two traps: the helper's
+    coordinate space is unflipped (`isFlipped=NO`, y-up), so a path authored
+    y-down rounds the *wrong* pair — the first attempt came out top-rounded/
+    bottom-square, exactly inverted; choose each edge's radius from that view's
+    `isFlipped`. And verify with `screencapture -o -l<WID>` of the helper's own
+    window id (from `CGWindowList`, printed by the `listwin` tool in the
+    scratch dir): corner alpha must die to 0 over a ramp ≈ the radius. The dylib
+    needs `-framework QuartzCore` for `CAShapeLayer`. (g) **Don't draw a rim
+    over the frost**: `IslandSurface.blurScrim` shipped with
+    `border = White @ 30%` at 0.75dp, a white hairline around the blur that
+    reads as a border drawn around the frost (pixel-exact: white 0.30 over the
+    interior equals the measured rim). The frost's own edge already delimits
+    the island — `blurScrim.border` stays `Color.Transparent`.
+
+48. **Never read the island's animated size in the overlay root's
+    composition.** The `animateDpAsState` values that size the island
+    (`animatedWidth`/`animatedHeight`) were read at the root three ways —
+    `.width(animatedWidth)` on the island Box, `.size(animatedWidth + glow …)`
+    on the hover box, and as `LaunchedEffect` keys driving the blur bridge —
+    so every spring frame during open/close recomposed the *whole* overlay
+    scope (pill + dock + pages) at ~60 fps. Measured before the fix: **98 of
+    235** render-thread JFR samples inside recompose (80 in measure/layout)
+    and **130 hard frame gaps (≥67 ms) per 10-cycle hover open/close window**
+    with music live (82 music-off); cycling burned ~20–28% of a core. Music
+    only amplified it — the root recompose ran either way. The fix: keep both
+    values as bare `State<Dp>` (no `by`), read them **only in the layout
+    phase** through the private `Modifier.animatedIslandSize { }` helper (a
+    `layout { }` that measures the child from `width.value`/`height.value`, so
+    a spring tick re-measures the island and nothing above it), and relay
+    geometry to the blur bridge with an in-effect `snapshotFlow` whose keys
+    stay state-stable (`blurActive, blurIntensity, islandExpanded,
+    config.style` — **include `config.style`**: the collect body closes over
+    it, and without it in the keys a surface switch while blurred would apply
+    a stale shape until the next key change). After: **6 recompose samples of
+    357**, **22 hard gaps** music-on / 30 music-off in the same window, cycling
+    ~10–20% of a core; steady-state collapsed cost is unchanged (~8–9%) — this
+    fix is about the animation, not the idle pill. Repro protocol (worth
+    keeping): a temporary `withFrameNanos` loop logging gaps >34 ms via
+    `AppLog.line` — **remove it afterwards**, the frame-clock subscription
+    itself is not free (pitfall 29) — then 10× `mousemove 704 12` /
+    `712 420` cycles at 1.3 s each against a truncated `quicknotch.log`,
+    counting entries ≥67 ms; JFR via
+    `jcmd $PID JFR.start name=qf settings=profile duration=30s filename=…`
+    + `jfr print --events jdk.ExecutionSample`. Count only the ≥67 ms bucket:
+    the steady 30 fps pill tick produces 34–56 ms gaps routinely, so the
+    total count is polluted (and keeps growing while music plays). The same
+    logger run while music plays is also how "music amplifies it" was proven.
+
+46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
+    while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
+    for small lines, but a base64 cover (hundreds of KB) fills the 64KB pipe
+    mid-write: the helper blocks forever, the wait times out, the kill discards
+    the bytes, and every fetch "fails". `MacArtworkFetcher` drains stdout on a
+    daemon thread concurrent with `waitFor`, then joins the drainer — the one
+    place in the codebase where read-during-wait is mandatory rather than
+    forbidden.
+
 42. **The calendar's OAuth consent UI lives on the website now; the token
     exchange cannot, and must not, move with it.** The site's `web/` is a fully
     static SvelteKit build (`adapter-static`, `prerender = true`, no server
@@ -1246,6 +1417,73 @@ composeApp/
     the trigger instead of a timer; it exists so the flow can be reviewed and
     screenshotted without starting a real sign-in, and the desktop never sends
     it.
+
+49. **A native bridge whose JVM dies becomes an immortal poller — every
+    long-lived helper must detect its own orphaning.** The JVM can exit
+    without ever running `media.stop()`: SIGTERM and `kill -9` alike skip
+    composition disposal, so `Process.destroy()` never fires and the bridge
+    is reparented to launchd. A leaked `nowplaying-bridge` keeps its 2 s
+    heartbeat forever, spawning an `osascript` MediaRemote poll per tick —
+    and saturation makes each poll take 1–2 s instead of its healthy ~48 ms,
+    so the leaks compound into a storm. One dev machine accumulated **~150
+    orphaned bridges / ~33 concurrent JXA polls**, load average **243**, and
+    every window on the machine went into multi-second frame stalls. It was
+    reported as "blur + music performance tanks", but blur was innocent: the
+    10-cycle open/close bench read **112 (blur) / 89 (solid) hard gaps**
+    under the storm and **1 / 0** after cleanup, at load ~4. Two-layer fix:
+    (a) each long-running bridge arms an orphan watchdog — `if (getppid() ==
+    1) exit(0)` on a 1 s timer (`nowplaying_bridge.m`, `btwatch_bridge.m`) —
+    which catches even `kill -9` of the JVM, where no signal reaches the
+    bridge; (b) `NativeResources.sweepOrphanedBridges()` at startup
+    retro-kills ppid==1 processes carrying the `/quicknotch-` path fragment,
+    so already-shipped versions clean up their accumulated leaks too (it
+    cannot touch anything else: only ppid==1 and that exact fragment, which
+    matches the extracted temp binaries and `quicknotch-bridge/nowplaying.jxa`
+    but never this process's own children). Verification trap worth
+    remembering: a healthy JXA poll lives only ~48 ms every 2 s (2.4 % duty
+    cycle), so sparse `pgrep` sampling reads zero and looks like a dead feed
+    — count catches in a tight loop before concluding the poller stopped.
+
+50. **Never ship the artwork bytes on every poll line.** A Music.app cover is
+    ~1.9 MB of base64, and the bridge attached it to *every* heartbeat line —
+    ~1.5 MB/s straight into the JVM's JSON parser. Measured: 25 GC events per
+    30 s almost all `G1 Humongous Allocation`, one G1Full, and (under load) a
+    646 ms G1Old pause — the churn half of the "music stutters" reports, with
+    the orphan storm of pitfall 49 supplying the rest. Kotlin already
+    tolerates omission (`MediaController.publish`: "Bridges may omit artwork
+    for an unchanged track id; the cache carries it"), so the bridge now ships
+    the bytes exactly once per content id (`EmitArtOnce` → `"art":null` on
+    every later line; `emittedArtId` resets when the id moves) and
+    `AttachMusicArt` only builds the substitute for the line that will carry
+    it. After: 5 GC events per 30 s, no pause over 1.2 ms, steady 8.2 % CPU
+     blur+music. Rule for any new bridge: bytes once, id-keyed cache after —
+     the wire format carries identity, not payload repetition.
+
+51. **The empty-grace hold must end on a clock, not on the next bridge line.**
+    `MediaControllerBase` holds the last playable session for `EMPTY_GRACE_MS`
+    (4 s) so the no-item beat between songs cannot unmount the music page —
+    but the grace used to be re-evaluated only when the *next* line arrived.
+    The macOS bridge de-dups identical lines (`nowplaying_bridge.m`: a line
+    equal to `lastEmittedKey` is dropped), so force-quitting the player
+    delivered exactly one `{"state":"none"}` line *inside* the grace and then
+    permanent silence: nothing ever re-ran the expiry check and the collapsed
+    pill hung on the dead track forever (report: the pill stuck on
+    "Orquestra 2.0 (U..." with Music dead, `player state` stopped, JXA still
+    answering `{"state":"none"}`). The hold now arms a one-shot timer —
+    `armHoldExpiry` launches on `ioScope` at `lastPlayableAtMs +
+    EMPTY_GRACE_MS`, re-checks the deadline under `publishLock` after the
+    delay, and reaps through the single `reapHeldSnapshot()`; a playable line
+    cancels the job, and paused/pinned sessions never arm one (their silence
+    is legitimate, so they still persist). Supporting rules: every session
+    write — publish, reap, late artwork merge — goes through `publishLock`
+    (poller vs. timer vs. fetcher; lock order publishLock → artLock, never
+    reversed), or a racing publish can resurrect a just-cleared session; and
+    `MediaControllerBase` sits on detekt's function-count knife edge
+    (`TooManyFunctions` reports at ≥11 members, it had 10), so `stateOf`
+    moved to file scope and `cacheHit` folded into `decodeArtworkBytes` to
+    make room for the two new members. Windows was never stuck (`smtc.ps1`
+    prints a fresh none line every poll, re-evaluating its grace at 1 Hz) but
+    rides the same timer now.
 
 ## 11. Git workflow
 
@@ -1666,8 +1904,138 @@ composeApp/
   quiet gap. Final shape, after isolated flicks still moved several pages:
   mid-stream re-arming is impossible to get right (every "fresh intent"
   signal also occurs inside one long hard flick), so re-arm happens ONLY on
-  a 100ms quiet gap — no shove/rising/reversal exceptions — which momentum
+  a 100ms   quiet gap — no shove/rising/reversal exceptions — which momentum
   (single-digit-ms gaps) can never fake but every human pause satisfies.
+
+- (this session → HEAD): browser/Spotify covers on macOS via an entitled helper
+  (`feature/browser-artwork`) — the JXA poll context never sees artwork bytes
+  (pitfall 45), so `MacArtworkFetcher` runs one `artwork-driver.pl` +
+  `artwork-bridge.dylib` query per artless track inside `/usr/bin/perl` and
+  merges late art via `publishArtwork` (stale replies dropped, ± outcomes
+  settled per content id, stdout drained during the wait per pitfall 46). Same
+  pass gated the old Music AppleScript fallback to `srcId com.apple.Music` —
+  it used to paste Music's cover onto browser tracks. **Verified live** against
+  Chrome/YouTube Music: the daemon ships ~10KB JPEGs once entitled, and the
+  vinyl fills a few seconds after a switch with no restart. Three follow-up
+  fixes from that session, all live-proven: (1) a 4s empty-player grace in
+  `MediaControllerBase` (`EMPTY_GRACE_MS`) so the music page no longer unmounts
+  in the no-item beat between songs; (2) identity-gated merges — the helper
+  reports `title|artist|album` with the bytes and Kotlin merges only on a match,
+  with mismatch/timeout backoffs (3s/15s) instead of poisoned settles; (3) the
+  helper lingers up to ~7s in-process for late covers (browsers publish art
+  seconds after metadata) plus a bounded empty-retry budget, cutting the
+  switch-to-cover wait from ~9s to ~3-4s. Windows mirrors the efficiency half:
+  `smtc.ps1 status <id> <haveArt>` skips the thumbnail transfer once the app
+  holds art for the track (unverified — no Windows machine here).
+
+- (this session → HEAD): real backdrop blur (`feature/notch-blur-background`) —
+  Surface Theme → Blurred (Translucent removed): macOS shows a dedicated helper
+  window carrying a small compositor blur radius, sized to the island itself so
+  the frosted shape tracks expand/collapse with no halo. The effect view never
+  sampled the backdrop behind this JVM/Metal canvas when grafted onto the overlay
+  window itself, and the compositor blur radius froze a full-window slab that
+  ignored expand/collapse; DWM acrylic with a lighter dark tint on Windows,
+  Compose drawing an 18% black scrim over it. Follow-up, per the "frozen
+  expanded-size blurred box" report: the toggle is gone (blur follows the surface
+  entry), and a file-lock single-instance guard stops stacked duplicate overlays.
+  Follow-up (this session): the intensity slider now drives **both** the
+  compositor radius and the effect opacity, and the radius works at last — it
+  used to return success while rendering nothing because the helper was an
+  `addChildWindow:` of the AWT overlay, which silences the CGS radius (pitfall
+  47): the helper is standalone now, ordered below the overlay and re-synced
+  (frame/level/order/visibility) on a 250 ms timer, verified by a
+  same-content A/B correlation (behind-island ρ≈0 vs never-occluded ρ=1.0).
+  Follow-up (this session): the frost's corners and rim are cleaned up —
+  `cornerRadius`/`maskedCorners` never reshaped the rendered output, so the
+  helper frosted square lips past the rounded bottom corners; both the effect
+  view and the content view now carry an explicit per-corner `CAShapeLayer`
+  mask oriented by `isFlipped` (the first y-down path inverted the rounding),
+  verified by `screencapture -l` corner-alpha ramps in both collapsed and
+  expanded states, and the white hairline the scrim's 30% white border drew
+  over the frost is gone (`blurScrim.border` transparent). The intensity
+  path was not touched. The look still needs human eyes, and Windows
+  requires a whole machine.
+- (this session → HEAD): content-hugging collapsed pill
+  (`fix/weather-units-quickview-padding`) — the wrapping quickview branches
+  (idle clock, idle dots) report their measured width and the drawn island
+  shrinks to exactly that, so a clock-only pill carries ~2dp per side instead
+  of the slider's dead air. Fill branches (live media, ticker) keep the
+  configured width; the native window never moves, so hugging is pure drawn
+  growth with no resize flash, and passthrough/hover follow the drawn island
+  automatically. Consequence: the width slider no longer widens the clock/dots
+  pill — it sizes the fill branches. `QuickView.onWrapWidthChange` grew a
+  parameter for this (baseline re-cut, signatures only).
+
+- (this session → HEAD): weather-unit + quickview-inset fixes
+  (`fix/weather-units-quickview-padding`) — CMP's `stringResource` templating is
+  a bare `%N$s`/`%N$d` substitution (NOT `String.format`, so `%%` renders
+  doubled): `weather_precip` and both `device_battery` strings dropped to a
+  single `%`, and the current-conditions temperature stopped printing the degree
+  twice (`weatherTemp` already carries `°`, so the unit letter is now `"F"`/`"C"`
+  via `weatherTempUnitLetter`). Swept every `%`/`°` in strings + code — those
+  were the only three. Collapsed-pill side insets trimmed 4dp → 2dp on both
+  quickview rows. Follow-up: the width slider floor dropped 140 → 110
+  (`DockLayout.QuickViewWidthMinDp/MaxDp`), the default 150 → 136, and files
+  still sitting exactly on the old default migrate to 136 on load (a moved
+  slider is never touched).
+
+- (this session → HEAD): music-mode edge spacing — the live-media collapsed
+  row got 6dp horizontal edge air (was 2dp, where the disc and the right-hand
+  rings sat visually welded to the pill's outline) and the expanded music
+  page's content row 16dp (was 14dp). Purely visual padding; no sizer/morph
+  keys touched.
+
+- (this session → HEAD): open/close jank fixed — the overlay root read the
+  island's animated size in composition (Box `width`/`height`, hover `size`,
+  and as the blur bridge's `LaunchedEffect` keys), recomposing the entire
+  pill + dock + pages tree every spring frame; music amplified it through the
+  bigger subtree. Values are now bare `State<Dp>` read only in the layout
+  phase (`Modifier.animatedIslandSize`) and via an in-effect `snapshotFlow`
+  (pitfall 48 for the numbers and the measurement protocol): 130 → 22 hard
+  frame gaps per 10-cycle window with music live, recompose samples 98/235 →
+  6/357, cycling CPU ~20–28% → ~10–20%; steady collapsed cost unchanged.
+
+- (this session → HEAD): **"blur + music performance tanks" was a leaked-
+  bridge storm, not blur.** SIGTERM/kill -9 of the JVM skip composition
+  disposal, so `media.stop()` never ran and every app exit orphaned the
+  nowplaying/btwatch bridges; over the machine's 8-day uptime ~150 accumulated
+  (`quicknotch-*` temp binaries, ppid 1), each nowplaying instance still
+  spawning a MediaRemote JXA poll every 2 s — up to ~33 concurrent, load
+  average 243, and window-server-wide frame stalls that hit every style
+  equally (10-cycle hard gaps: 112 blur / 89 solid). Fixed at the source:
+  `getppid() == 1` watchdogs in `nowplaying_bridge.m` + `btwatch_bridge.m`
+  (catch even `kill -9`; verified: JVM kill leaves 0 orphans), and
+  `NativeResources.sweepOrphanedBridges()` at startup retro-kills ppid==1
+  `/quicknotch-` processes so already-shipped versions clean up their
+  backlog too (first run: **swept 150**, load 243 → ~4). Same pass removed
+  the other half of the churn: the bridge re-attached the ~1.9 MB artwork
+  base64 to **every** heartbeat line (~1.5 MB/s → one `G1 Humongous
+  Allocation` GC per poll, a 646 ms pause in the worst sample); it now ships
+  the bytes once per track (`EmitArtOnce` → `"art":null`, Kotlin's id-keyed
+  cache already carried it — MediaController.kt's contract line), cutting GC
+  25 → 5 events per 30 s with no pause over 1.2 ms. After both fixes the
+   open/close bench reads **1 (blur) / 0 (solid)** hard gaps, steady blur+music
+   CPU 8.2% of a core, load ~4. The temporary frame-gap logger used for the
+   A/B is removed again (pitfall 49/50 for the full detail and the 48 ms
+   duty-cycle verification trap).
+
+- (this session → HEAD): **the collapsed pill stuck on a dead track after the
+  media player was force-quit** — the empty-grace hold could never expire.
+  The hold re-evaluated `EMPTY_GRACE_MS` only when the next bridge line
+  arrived, but the macOS bridge de-dups identical lines, so the dead player
+  produced exactly one `{"state":"none"}` inside the grace and then silence:
+  the expiry check never ran again and the last song stayed on the pill
+  forever. The hold now ends on a clock (`MediaControllerBase.armHoldExpiry`,
+  a one-shot `ioScope` timer that re-checks the deadline and reaps through
+  the single `reapHeldSnapshot()`); playable lines cancel it, so paused and
+  pinned-browser sessions still persist through their legitimate silence, and
+  every session write (publish / reap / late artwork merge) now serialises
+  through `publishLock` so a reap can't be resurrected by a racing write.
+  Two file-local moves made room under detekt's function-count gate
+  (`stateOf` to file scope, `cacheHit` folded into `decodeArtworkBytes`;
+  pitfall 51). Verified on the live build with screenshots: playing → media
+  pill; `killall -9 Music` → idle quickview within 8 s (was stuck
+  indefinitely); pause → pill still shows the paused track after 8 s.
 
 - (2026-10 → HEAD): expanded music player modernization (`feature/modern-music-player`) —
   the vinyl keeps its treatment but now sits in an album-tinted halo
@@ -1688,7 +2056,9 @@ composeApp/
 
 | Constant | Value | Where |
 | --- | --- | --- |
-| `quickViewWidthDp` / `quickViewHeightDp` | 150 / 30 (default; serialised as `collapsedPillWidthDp`/`collapsedPillHeightDp`) | `NotchConfig` |
+| `quickViewWidthDp` / `quickViewHeightDp` | 136 / 30 (default; slider 110–190; serialised as `collapsedPillWidthDp`/`collapsedPillHeightDp`; exact-150 files migrate to 136) | `NotchConfig` |
+| `HugMinWidth` | 32dp floor for the content-hugging clock/dots pill | `DockLayout` |
+| `HugPadding` | 16dp breathing room around the hugged content (both ends) | `DockLayout` |
 | `expandedNotchHeightDp` | 78 (slider 70–86) | `NotchConfig`, `DockSizingTab` |
 | island depth | height + 6dp | `OverlayGeometry` |
 | `NowPlayingWidth` / `LiveCollapsedWidth` | 356dp / 236dp | `DockLayout` |
@@ -1702,6 +2072,7 @@ composeApp/
 | Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope, pause ramp 250ms to a 12% flat line | `MediaWidgets` |
 | Pill animation tick | `PillAnimationFps` 30 via `delay` + nanoTime deltas (never `withFrameNanos`) | `NotchMotion` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
+| `EMPTY_GRACE_MS` | 4000ms empty-player hold, ends on a one-shot timer (pitfall 51) | `MediaController.kt` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s, weather 30min | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |
 | Page step | 30 dp of wheel travel | `OverlayPager` |

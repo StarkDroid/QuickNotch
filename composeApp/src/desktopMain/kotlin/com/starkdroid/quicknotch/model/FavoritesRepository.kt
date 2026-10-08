@@ -94,7 +94,17 @@ class FavoritesRepository(
         return try {
             if (configFile.exists()) {
                 val content = configFile.readText()
-                json.decodeFromString<NotchConfig>(content)
+                val loaded = json.decodeFromString<NotchConfig>(content)
+                // One-way migration: the old 150dp default stranded dead air
+                // on both ends of a clock-only pill. A file sitting exactly on
+                // it never moved the width slider, so pull it to the tighter
+                // default; any deliberately chosen width is left alone.
+                if (loaded.quickViewWidthDp == 150) {
+                    System.err.println("QuickNotch: migrating collapsed pill width 150 → 136")
+                    loaded.copy(quickViewWidthDp = 136)
+                } else {
+                    loaded
+                }
             } else {
                 val defaultCfg = NotchConfig()
                 saveConfigDirect(defaultCfg)

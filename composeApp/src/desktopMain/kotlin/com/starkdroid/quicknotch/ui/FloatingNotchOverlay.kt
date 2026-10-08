@@ -16,11 +16,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -39,22 +38,30 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppLauncher
+import com.starkdroid.quicknotch.datasource.BlurRadiusMax
+import com.starkdroid.quicknotch.datasource.BlurRadiusMin
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
+import com.starkdroid.quicknotch.datasource.MacContentBlur
 import com.starkdroid.quicknotch.datasource.SystemAccent
+import com.starkdroid.quicknotch.datasource.WindowsBackdropBlur
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
+import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.weather.Weather
@@ -83,6 +90,24 @@ import kotlin.math.roundToInt
  * (see `NotchOverlayWindow` in main.kt), so opening/collapsing never resizes a
  * transparent window — expanding is purely drawn growth inside it (pitfall 17).
  */
+/**
+ * Collapsed island width: hug the measured wrapping content when a hugging
+ * branch is showing (falling back to the configured width until the first
+ * measure lands), the configured width everywhere else. Bounded below against
+ * degenerate measures and above by the native window, so the island can never
+ * outgrow its window or collapse into a sliver.
+ */
+private fun hugCollapsedWidth(
+    hugVisible: Boolean,
+    hugWidth: Dp?,
+    formula: DpSize,
+    window: DpSize
+): Dp {
+    if (!hugVisible) return formula.width
+    return hugWidth?.let { (it + DockLayout.HugPadding).coerceIn(DockLayout.HugMinWidth, window.width) }
+        ?: formula.width
+}
+
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun FloatingNotchOverlay(
@@ -380,8 +405,16 @@ internal fun FloatingNotchOverlay(
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
-    val surface = remember(config.surface, accent) {
-        IslandSurface.styleFor(config.surface, accent)
+    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
+    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
+    // The Blurred surface means native backdrop blur wherever the bridge
+    // answers (compositor radius on macOS, DWM acrylic on Windows), falling
+    // back to painted glass where it does not. Only the scrim differs between
+    // the two, so it rides the same remember key as the surface.
+    val blurNative = windowsBlur != null || macBlur.available
+    val blurActive = config.surface == NotchSurface.TRANSLUCENT && blurNative
+    val surface = remember(config.surface, accent, blurActive) {
+        IslandSurface.styleFor(config.surface, accent, blurActive)
     }
 
     // The dock reveal is a layer animation (fade + scale) over the always
@@ -398,10 +431,55 @@ internal fun FloatingNotchOverlay(
     // fixed (expanded) native window, so the collapsed pill nests into the
     // window's top edge and needs no gutter.
     val islandExpanded = isExpanded || dockState.currentState || dockState.targetState
-    val targetSize = metrics.islandFor(islandExpanded)
-    val animatedWidth by animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
-    val animatedHeight by animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
+    // Content-hugging collapsed pill: the wrapping branches (idle clock, idle
+    // dots) report their measured width, and the island shrinks to exactly
+    // that — the row already carries its own 2dp side insets, so the pill ends
+    // up with ~4px of black on each end and no slider dead air. Fill branches
+    // (live media, ticker) keep the configured width; the native window never
+    // moves either way, so hugging is pure drawn growth like every expansion.
+    var hugWidth by remember { mutableStateOf<Dp?>(null) }
+    val hugVisible = !musicLive && calendarTicker?.summary == null &&
+        config.style != NotchStyle.DRAG_HANDLE
+    val formulaCollapsed = metrics.islandFor(false)
+    val collapsedWidth = hugCollapsedWidth(
+        hugVisible = hugVisible,
+        hugWidth = hugWidth,
+        formula = formulaCollapsed,
+        window = metrics.expanded
+    )
+    val targetSize = if (islandExpanded) metrics.islandFor(true)
+    else formulaCollapsed.copy(width = collapsedWidth)
+    // Kept as State (not `by`): every composition-phase read of these values
+    // recomposes this whole overlay scope on each spring frame, and the
+    // measured cost of that during open/close was the app's dominant jank
+    // source. The animated values are read only in layout/snapshot phases
+    // (`animatedSize` modifier, snapshotFlow below), so a spring tick now
+    // re-measures the island instead of re-running this body.
+    val animatedWidth = animateDpAsState(targetSize.width, notchSizeSpring(), label = "notchWidth")
+    val animatedHeight = animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
+
+    // The native blur follows the surface, not a toggle: picking Blurred
+    // enables it, any other surface clears it. The mac panel tracks the island
+    // while it animates; Windows applies once per surface or intensity change.
+    // Both fail soft to the painted surfaces.
+    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    LaunchedEffect(blurActive, blurIntensity, islandExpanded, config.style) {
+        windowsBlur?.setBlur(blurActive, blurIntensity)
+        if (blurActive) {
+            // Per-frame geometry without per-frame composition: the effect's
+            // keys stay state-stable, and a snapshotFlow inside relays each
+            // spring tick to the helper. Keying the effect on the animated
+            // sizes (the old shape) restarted the coroutine — and recomposed
+            // the whole overlay — sixty times a second mid-animation.
+            snapshotFlow { DpSize(animatedWidth.value, animatedHeight.value) }
+                .collect { size ->
+                    macBlur.apply(true, size, islandExpanded, config.style, blurIntensity)
+                }
+        } else {
+            macBlur.apply(false, DpSize.Zero, islandExpanded, config.style, blurIntensity)
+        }
+    }
 
     // Open: hold the dock hidden until the size spring has actually settled,
     // then fade it in. Close: fade the dock out and let the island spring back.
@@ -416,7 +494,8 @@ internal fun FloatingNotchOverlay(
             val island = metrics.islandFor(true)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
-                    animatedWidth >= island.width - 1.dp && animatedHeight >= island.height - 1.dp
+                    animatedWidth.value >= island.width - 1.dp &&
+                        animatedHeight.value >= island.height - 1.dp
                 }.first { settled -> settled }
             }
             if (isExpanded) showDock = true
@@ -428,10 +507,10 @@ internal fun FloatingNotchOverlay(
             // now-playing page's real bounds as the pill returns.
             pager.pageIndex.value = 0
             showDock = false
-            val collapsed = metrics.islandFor(false)
             withTimeoutOrNull(IslandSettleTimeoutMs) {
                 snapshotFlow {
-                    animatedWidth <= collapsed.width + 1.dp && animatedHeight <= collapsed.height + 1.dp
+                    animatedWidth.value <= collapsedWidth + 1.dp &&
+                        animatedHeight.value <= formulaCollapsed.height + 1.dp
                 }.first { settled -> settled }
             }
         }
@@ -451,14 +530,13 @@ internal fun FloatingNotchOverlay(
             // stable.
             Box(
                 modifier = Modifier
-                    .width(animatedWidth)
-                    .height(animatedHeight)
+                    .animatedIslandSize(animatedWidth, animatedHeight)
                     .onGloballyPositioned { coords ->
                         islandCoordinates = coords
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface, accent)
+                    .islandSurface(config.surface, accent, blurActive)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {
@@ -530,7 +608,8 @@ internal fun FloatingNotchOverlay(
                                 clock24Hour = config.clock24Hour,
                                 dateFormat = config.clockDateFormat
                             )
-                        }
+                        },
+                        onWrapWidthChange = { hugWidth = it }
                     )
                 }
                 // Live progress hugs the pill's inner border (the edge facing
@@ -648,12 +727,38 @@ internal fun FloatingNotchOverlay(
             val glow = HoverGlow
             Box(
                 modifier = Modifier
-                    .size(animatedWidth + glow * 2, animatedHeight + glow)
+                    .animatedIslandSize(animatedWidth, animatedHeight) { w, h ->
+                        DpSize(w + glow * 2, h + glow)
+                    }
                     .onGloballyPositioned { hoverCoordinates = it }
                     .sharingHover { setHovered(it) }
             ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
         }
     }
+}
+
+/**
+ * Sizes the node from the given animated states, reading them in the LAYOUT
+ * phase rather than in composition. The island's springs update every frame
+ * while the notch opens or closes, and a composition-phase read at the
+ * overlay root (`.width(animatedWidth)` or as effect keys) recomposed the
+ * entire island + dock tree sixty times a second — measured as the dominant
+ * cost of open/close (98 of 235 render-thread samples landed in recompose).
+ * A State read inside the layout lambda invalidates only this node's
+ * measure/place, so a spring tick re-measures the island and nothing above.
+ */
+private fun Modifier.animatedIslandSize(
+    width: State<Dp>,
+    height: State<Dp>,
+    transform: (Dp, Dp) -> DpSize = { w, h -> DpSize(w, h) }
+): Modifier = layout { measurables, constraints ->
+    val target = transform(width.value, height.value)
+    val w = target.width.roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
+    val h = target.height.roundToPx().coerceIn(constraints.minHeight, constraints.maxHeight)
+    val child = measurables.measure(
+        constraints.copy(minWidth = w, maxWidth = w, minHeight = h, maxHeight = h)
+    )
+    layout(w, h) { child.place(0, 0) }
 }
 
 // How often the System Accent surface re-reads the OS accent so a desktop

@@ -153,16 +153,52 @@ val compileMacPassthroughBridge by tasks.registering(Exec::class) {
         "-dynamiclib",
         "-framework", "Foundation",
         "-framework", "AppKit",
+        "-framework", "QuartzCore",
         "passthrough_bridge.m",
         "-o", project.file("src/desktopMain/resources/macos/passthrough-bridge.dylib")
     )
 }
 
+// macOS entitled-context artwork fetcher: `artwork_bridge.m` is a tiny dylib
+// exposing one C entry point (`qn_artwork_get`) that runs a single full-access
+// `MRMediaRemoteGetNowPlayingInfo` query — the only context that sees artwork
+// bytes is an entitled host, so `artwork-driver.pl` loads this dylib into
+// `/usr/bin/perl` via DynaLoader. The driver script is the source of truth in
+// `native/macos` (like the Windows .ps1 files) and is copied into resources;
+// the dylib is compiled here. Only built on macOS hosts; without it the
+// artwork fetcher stays silent and the Music.app AppleScript path remains.
+val compileMacArtworkBridge by tasks.registering(Exec::class) {
+    onlyIf {
+        val os = System.getProperty("os.name").lowercase()
+        os.contains("mac") || os.contentEquals("darwin")
+    }
+    doFirst {
+        project.file("src/desktopMain/resources/macos").mkdirs()
+    }
+    workingDir = project.file("native/macos")
+    commandLine(
+        "cc",
+        "-O2",
+        "-mmacosx-version-min=12.0",
+        "-fobjc-arc",
+        "-dynamiclib",
+        "-framework", "Foundation",
+        "artwork_bridge.m",
+        "-o", project.file("src/desktopMain/resources/macos/artwork-bridge.dylib")
+    )
+}
+val syncMacArtworkDriver by tasks.registering(Copy::class) {
+    from("native/macos") {
+        include("artwork-driver.pl")
+    }
+    into("src/desktopMain/resources/macos")
+}
+
 tasks.named("desktopJar") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, syncMacArtworkDriver)
 }
 tasks.named("desktopProcessResources") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, syncMacArtworkDriver)
 }
 
 compose.resources {

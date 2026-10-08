@@ -46,6 +46,7 @@ import com.starkdroid.quicknotch.generated.resources.settings_window_title
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
+import com.starkdroid.quicknotch.media.NativeResources
 import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.weather.Weather
 import com.starkdroid.quicknotch.weather.WeatherState
@@ -65,6 +66,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.awt.Toolkit
 import java.awt.event.MouseWheelListener
+import java.io.FileOutputStream
+import java.nio.channels.FileChannel
 import java.awt.event.WindowEvent
 import java.awt.event.WindowFocusListener
 import java.awt.image.BufferedImage
@@ -72,7 +75,36 @@ import javax.imageio.ImageIO
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
+/** File lock held for the whole process lifetime; released on exit. */
+private var instanceLockChannel: FileChannel? = null
+
+/**
+ * Lets exactly one notch exist. A second process would stack a second
+ * identical overlay (same position, same level) that reads as one frozen,
+ * misbehaving notch — e.g. a blurred box that ignores expand/collapse while
+ * the live instance underneath keeps working. Fails open: a lock hiccup must
+ * never prevent launch.
+ */
+private fun takeInstanceLock(): Boolean = try {
+    val lockFile = AppPaths.configDir.resolve("instance.lock")
+    lockFile.parentFile?.mkdirs()
+    val channel = FileOutputStream(lockFile, true).channel
+    if (channel.tryLock() == null) {
+        channel.close()
+        false
+    } else {
+        instanceLockChannel = channel
+        true
+    }
+} catch (_: Exception) {
+    true
+}
+
 fun main(args: Array<String>) {
+    if (!takeInstanceLock()) {
+        System.err.println("QuickNotch: another instance is already running, exiting")
+        return
+    }
     System.setProperty("apple.awt.application.name", "QuickNotch")
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
@@ -96,6 +128,10 @@ fun main(args: Array<String>) {
             ?: (if (marker.exists()) "SOFTWARE" else "METAL")
         System.setProperty("skiko.renderApi", backend)
         println("QuickNotch: skiko render backend = $backend${if (marker.exists()) " (marker file)" else ""}")
+        // Retro-clean bridges leaked by earlier runs (JVM death skips
+        // media.stop(); the bridges now watchdog themselves, but versions
+        // already in the wild do not — see NativeResources.sweepOrphanedBridges).
+        NativeResources.sweepOrphanedBridges()
     }
     // A fresh manual launch (Spotlight/Dock/Finder/Launchpad) opens the Settings
     // window alongside the notch so the app's presence is obvious and the user

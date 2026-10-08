@@ -151,7 +151,11 @@ internal fun weatherTemp(celsius: Double, fahrenheit: Boolean): String {
     return "${value.roundToInt()}°"
 }
 
-internal fun weatherTempUnit(fahrenheit: Boolean): String = if (fahrenheit) "°F" else "°C"
+/**
+ * Scale letter appended after [weatherTemp] (which already carries the degree
+ * mark): "21°" + "F", never "°F", or the mark prints twice.
+ */
+internal fun weatherTempUnitLetter(fahrenheit: Boolean): String = if (fahrenheit) "F" else "C"
 
 /**
  * The quickview weather chip: condition glyph + temperature, drawn first in
@@ -323,7 +327,7 @@ private fun WeatherErrorPage(interactive: Boolean, onRefresh: () -> Unit) {
 @Composable
 private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean) {
     val condition = WeatherCondition.of(data.now.code)
-    val unit = weatherTempUnit(fahrenheit)
+    val unit = weatherTempUnitLetter(fahrenheit)
     Column(modifier = Modifier.width(132.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
