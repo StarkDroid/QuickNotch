@@ -18,6 +18,12 @@ kotlinx-coroutines = "1.10.1"
 kotlinx-serialization = "1.7.3"
 ktor = "3.1.3"
 jna = "5.16.0"
+# Every Ktor module brings slf4j-api in transitively with no provider, so
+# every run printed "No SLF4J providers were found" ×3. The
+# NOP binding is the provider that warning asks for: same 2.0.16 line the api
+# resolves to, no behaviour change (nothing in the app logs through slf4j),
+# just the three warning lines gone from the console.
+slf4j = "2.0.16"
 
 [libraries]
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
@@ -25,6 +31,7 @@ kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-co
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
+slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktor" }

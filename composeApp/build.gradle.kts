@@ -29,6 +29,12 @@ detekt {
 
 version = "3.0.0"
 
+// Host platform, used to gate platform-only JVM opens and launch flags (the
+// bridge tasks below derive their own copies inside onlyIf for the same check).
+val hostOsName = System.getProperty("os.name").lowercase()
+val hostIsMac = hostOsName.contains("mac") || hostOsName.contentEquals("darwin")
+val hostIsWindows = hostOsName.contains("windows")
+
 kotlin {
     jvm("desktop")
 
@@ -64,6 +70,11 @@ kotlin {
             implementation(libs.kotlinx.coroutines.swing)
             implementation(libs.jna)
             implementation(libs.jna.platform)
+            // slf4j-api rides in transitively (every Ktor module) with no
+            // provider, which printed "No SLF4J providers were found" on
+            // every launch. The NOP binding satisfies the lookup with a
+            // no-op logger — no behaviour change, three warning lines gone.
+            runtimeOnly(libs.slf4j.nop)
         }
     }
 }
@@ -201,6 +212,24 @@ tasks.named("desktopProcessResources") {
     dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, syncMacArtworkDriver)
 }
 
+// AppKit writes a session saved-state file at launch and prints one
+// "ApplePersistenceIgnoreState: ..." notice to stderr while doing it — JVM
+// platform noise, not ours. AppKit reads -Key value pairs straight from the
+// process argv (NSArgumentDomain), so passing its suppressor as an
+// application argument quiets it for `run`, where the console is visible.
+// The packaged .app has no console, so it doesn't need the flag. The compose
+// plugin registers `run` after this script evaluates, so match it live.
+if (hostIsMac) {
+    tasks.matching { it.name == "run" }.configureEach {
+        // doFirst, not configuration time: the compose plugin rewrites this
+        // task's args after the script evaluates, so an append made here would
+        // be overwritten before execution.
+        (this as JavaExec).doFirst {
+            args("-ApplePersistenceIgnoreStateQuietly", "YES")
+        }
+    }
+}
+
 compose.resources {
     packageOfResClass = "com.starkdroid.quicknotch.generated.resources"
 }
@@ -211,23 +240,29 @@ compose.desktop {
 
         // Open the AWT implementation packages so WindowPassthrough can reach
         // the native window handle and clip its hit target to the island:
-        // java.awt for the private Component.peer field, sun.lwawt.macosx for
-        // CPlatformWindow.ptr (the NSWindow), and sun.awt.windows for
-        // WComponentPeer.getHWnd. Both apply to `run` and the packaged app.
-        jvmArgs += listOf(
-            "--add-opens", "java.desktop/java.awt=ALL-UNNAMED",
-            "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",
-            "--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
-            "--add-opens", "java.desktop/sun.awt.windows=ALL-UNNAMED"
-        )
+        // java.awt for the private Component.peer field, sun.lwawt(.macosx) for
+        // CPlatformWindow.ptr (the NSWindow), sun.awt.windows for
+        // WComponentPeer.getHWnd. Each open is added only where the package
+        // actually exists — a Windows-only open on a macOS host (or vice
+        // versa) prints "WARNING: package ... not in java.desktop" on every
+        // launch. The opens apply to `run` and the packaged app alike.
+        jvmArgs += listOf("--add-opens", "java.desktop/java.awt=ALL-UNNAMED")
+        if (hostIsMac) {
+            jvmArgs += listOf(
+                "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",
+                "--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED"
+            )
+        }
+        if (hostIsWindows) {
+            jvmArgs += listOf("--add-opens", "java.desktop/sun.awt.windows=ALL-UNNAMED")
+        }
 
-        // Renderer selection is platform-specific and handled in `main()`:
-        // macOS forces SOFTWARE at runtime because Skiko's Metal backend can
-        // crash on transparent overlay windows. Everywhere else we keep Skiko's
-        // default GPU renderer (DIRECT3D on Windows). A global SOFTWARE override
-        // here made the full-size Settings window rasterize on the CPU every
-        // frame — that is what made settings interactions laggy while the small
-        // notch overlay stayed smooth.
+        // Renderer selection is handled in `main()`: an explicit
+        // -Dskiko.renderApi or SKIKO_RENDER_API wins, then the
+        // `software-render` marker file, then METAL — the ~20x-faster default
+        // (agents.md pitfall 28). Never set skiko.renderApi here: an
+        // unconditional assignment shadows both the env var and the marker
+        // and silently parks the settings window on the CPU rasterizer.
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
