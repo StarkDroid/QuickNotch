@@ -134,7 +134,9 @@ internal fun QuickView(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 2.dp, vertical = 4.dp)
+                    // 6dp of edge air: at 2dp the disc and the right-hand
+                    // rings sat visually welded to the pill's outline.
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 // Same vinyl treatment as the expanded page's disc — art on a
                 // grooved disc with a spindle hub, gently rotating while

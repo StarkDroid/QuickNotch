@@ -46,6 +46,7 @@ import com.starkdroid.quicknotch.generated.resources.settings_window_title
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.media.MediaControllerFactory
+import com.starkdroid.quicknotch.media.NativeResources
 import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.weather.Weather
 import com.starkdroid.quicknotch.weather.WeatherState
@@ -127,6 +128,10 @@ fun main(args: Array<String>) {
             ?: (if (marker.exists()) "SOFTWARE" else "METAL")
         System.setProperty("skiko.renderApi", backend)
         println("QuickNotch: skiko render backend = $backend${if (marker.exists()) " (marker file)" else ""}")
+        // Retro-clean bridges leaked by earlier runs (JVM death skips
+        // media.stop(); the bridges now watchdog themselves, but versions
+        // already in the wild do not — see NativeResources.sweepOrphanedBridges).
+        NativeResources.sweepOrphanedBridges()
     }
     // A fresh manual launch (Spotlight/Dock/Finder/Launchpad) opens the Settings
     // window alongside the notch so the app's presence is obvious and the user

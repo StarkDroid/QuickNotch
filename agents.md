@@ -352,6 +352,13 @@ reorder target. `resetToDefaults()` seeds platform defaults.
 - `NativeResources.extract(resourcePath, suffix)` unpacks a helper to a temp file for
   execution. Missing resource (e.g. no macOS bridge on a Windows-built jar) = controller
   stays silent — by design.
+- **Orphan hygiene (pitfalls 49/50):** both long-running macOS bridges arm a
+  `getppid() == 1` watchdog — the JVM can die without ever running `media.stop()`,
+  and a leaked bridge then polls MediaRemote forever (machine-wide frame stalls) —
+  and `NativeResources.sweepOrphanedBridges()` retro-kills ppid==1 `/quicknotch-`
+  processes left by already-shipped builds on every macOS startup. The now-playing
+  bridge also ships artwork bytes **once per track** (`EmitArtOnce`, then
+  `"art":null`) instead of re-attaching the ~1.9 MB base64 to every heartbeat line.
 - Windows PS1 scripts are the single source of truth in `composeApp/native/windows/`;
   `syncWindowsBridge` copies them into resources before jar/processResources.
 - macOS bridge: `native/macos/nowplaying_bridge.m` → `cc` → `resources/macos/nowplaying-bridge`
@@ -1319,6 +1326,40 @@ composeApp/
     interior equals the measured rim). The frost's own edge already delimits
     the island — `blurScrim.border` stays `Color.Transparent`.
 
+48. **Never read the island's animated size in the overlay root's
+    composition.** The `animateDpAsState` values that size the island
+    (`animatedWidth`/`animatedHeight`) were read at the root three ways —
+    `.width(animatedWidth)` on the island Box, `.size(animatedWidth + glow …)`
+    on the hover box, and as `LaunchedEffect` keys driving the blur bridge —
+    so every spring frame during open/close recomposed the *whole* overlay
+    scope (pill + dock + pages) at ~60 fps. Measured before the fix: **98 of
+    235** render-thread JFR samples inside recompose (80 in measure/layout)
+    and **130 hard frame gaps (≥67 ms) per 10-cycle hover open/close window**
+    with music live (82 music-off); cycling burned ~20–28% of a core. Music
+    only amplified it — the root recompose ran either way. The fix: keep both
+    values as bare `State<Dp>` (no `by`), read them **only in the layout
+    phase** through the private `Modifier.animatedIslandSize { }` helper (a
+    `layout { }` that measures the child from `width.value`/`height.value`, so
+    a spring tick re-measures the island and nothing above it), and relay
+    geometry to the blur bridge with an in-effect `snapshotFlow` whose keys
+    stay state-stable (`blurActive, blurIntensity, islandExpanded,
+    config.style` — **include `config.style`**: the collect body closes over
+    it, and without it in the keys a surface switch while blurred would apply
+    a stale shape until the next key change). After: **6 recompose samples of
+    357**, **22 hard gaps** music-on / 30 music-off in the same window, cycling
+    ~10–20% of a core; steady-state collapsed cost is unchanged (~8–9%) — this
+    fix is about the animation, not the idle pill. Repro protocol (worth
+    keeping): a temporary `withFrameNanos` loop logging gaps >34 ms via
+    `AppLog.line` — **remove it afterwards**, the frame-clock subscription
+    itself is not free (pitfall 29) — then 10× `mousemove 704 12` /
+    `712 420` cycles at 1.3 s each against a truncated `quicknotch.log`,
+    counting entries ≥67 ms; JFR via
+    `jcmd $PID JFR.start name=qf settings=profile duration=30s filename=…`
+    + `jfr print --events jdk.ExecutionSample`. Count only the ≥67 ms bucket:
+    the steady 30 fps pill tick produces 34–56 ms gaps routinely, so the
+    total count is polluted (and keeps growing while music plays). The same
+    logger run while music plays is also how "music amplifies it" was proven.
+
 46. **A subprocess whose stdout exceeds the OS pipe buffer must be drained
     while the deadline runs.** `waitFor(timeout)` + read-afterwards is correct
     for small lines, but a base64 cover (hundreds of KB) fills the 64KB pipe
@@ -1376,6 +1417,73 @@ composeApp/
     the trigger instead of a timer; it exists so the flow can be reviewed and
     screenshotted without starting a real sign-in, and the desktop never sends
     it.
+
+49. **A native bridge whose JVM dies becomes an immortal poller — every
+    long-lived helper must detect its own orphaning.** The JVM can exit
+    without ever running `media.stop()`: SIGTERM and `kill -9` alike skip
+    composition disposal, so `Process.destroy()` never fires and the bridge
+    is reparented to launchd. A leaked `nowplaying-bridge` keeps its 2 s
+    heartbeat forever, spawning an `osascript` MediaRemote poll per tick —
+    and saturation makes each poll take 1–2 s instead of its healthy ~48 ms,
+    so the leaks compound into a storm. One dev machine accumulated **~150
+    orphaned bridges / ~33 concurrent JXA polls**, load average **243**, and
+    every window on the machine went into multi-second frame stalls. It was
+    reported as "blur + music performance tanks", but blur was innocent: the
+    10-cycle open/close bench read **112 (blur) / 89 (solid) hard gaps**
+    under the storm and **1 / 0** after cleanup, at load ~4. Two-layer fix:
+    (a) each long-running bridge arms an orphan watchdog — `if (getppid() ==
+    1) exit(0)` on a 1 s timer (`nowplaying_bridge.m`, `btwatch_bridge.m`) —
+    which catches even `kill -9` of the JVM, where no signal reaches the
+    bridge; (b) `NativeResources.sweepOrphanedBridges()` at startup
+    retro-kills ppid==1 processes carrying the `/quicknotch-` path fragment,
+    so already-shipped versions clean up their accumulated leaks too (it
+    cannot touch anything else: only ppid==1 and that exact fragment, which
+    matches the extracted temp binaries and `quicknotch-bridge/nowplaying.jxa`
+    but never this process's own children). Verification trap worth
+    remembering: a healthy JXA poll lives only ~48 ms every 2 s (2.4 % duty
+    cycle), so sparse `pgrep` sampling reads zero and looks like a dead feed
+    — count catches in a tight loop before concluding the poller stopped.
+
+50. **Never ship the artwork bytes on every poll line.** A Music.app cover is
+    ~1.9 MB of base64, and the bridge attached it to *every* heartbeat line —
+    ~1.5 MB/s straight into the JVM's JSON parser. Measured: 25 GC events per
+    30 s almost all `G1 Humongous Allocation`, one G1Full, and (under load) a
+    646 ms G1Old pause — the churn half of the "music stutters" reports, with
+    the orphan storm of pitfall 49 supplying the rest. Kotlin already
+    tolerates omission (`MediaController.publish`: "Bridges may omit artwork
+    for an unchanged track id; the cache carries it"), so the bridge now ships
+    the bytes exactly once per content id (`EmitArtOnce` → `"art":null` on
+    every later line; `emittedArtId` resets when the id moves) and
+    `AttachMusicArt` only builds the substitute for the line that will carry
+    it. After: 5 GC events per 30 s, no pause over 1.2 ms, steady 8.2 % CPU
+     blur+music. Rule for any new bridge: bytes once, id-keyed cache after —
+     the wire format carries identity, not payload repetition.
+
+51. **The empty-grace hold must end on a clock, not on the next bridge line.**
+    `MediaControllerBase` holds the last playable session for `EMPTY_GRACE_MS`
+    (4 s) so the no-item beat between songs cannot unmount the music page —
+    but the grace used to be re-evaluated only when the *next* line arrived.
+    The macOS bridge de-dups identical lines (`nowplaying_bridge.m`: a line
+    equal to `lastEmittedKey` is dropped), so force-quitting the player
+    delivered exactly one `{"state":"none"}` line *inside* the grace and then
+    permanent silence: nothing ever re-ran the expiry check and the collapsed
+    pill hung on the dead track forever (report: the pill stuck on
+    "Orquestra 2.0 (U..." with Music dead, `player state` stopped, JXA still
+    answering `{"state":"none"}`). The hold now arms a one-shot timer —
+    `armHoldExpiry` launches on `ioScope` at `lastPlayableAtMs +
+    EMPTY_GRACE_MS`, re-checks the deadline under `publishLock` after the
+    delay, and reaps through the single `reapHeldSnapshot()`; a playable line
+    cancels the job, and paused/pinned sessions never arm one (their silence
+    is legitimate, so they still persist). Supporting rules: every session
+    write — publish, reap, late artwork merge — goes through `publishLock`
+    (poller vs. timer vs. fetcher; lock order publishLock → artLock, never
+    reversed), or a racing publish can resurrect a just-cleared session; and
+    `MediaControllerBase` sits on detekt's function-count knife edge
+    (`TooManyFunctions` reports at ≥11 members, it had 10), so `stateOf`
+    moved to file scope and `cacheHit` folded into `decodeArtworkBytes` to
+    make room for the two new members. Windows was never stuck (`smtc.ps1`
+    prints a fresh none line every poll, re-evaluating its grace at 1 Hz) but
+    rides the same timer now.
 
 ## 11. Git workflow
 
@@ -1869,6 +1977,64 @@ composeApp/
   still sitting exactly on the old default migrate to 136 on load (a moved
   slider is never touched).
 
+- (this session → HEAD): music-mode edge spacing — the live-media collapsed
+  row got 6dp horizontal edge air (was 2dp, where the disc and the right-hand
+  rings sat visually welded to the pill's outline) and the expanded music
+  page's content row 16dp (was 14dp). Purely visual padding; no sizer/morph
+  keys touched.
+
+- (this session → HEAD): open/close jank fixed — the overlay root read the
+  island's animated size in composition (Box `width`/`height`, hover `size`,
+  and as the blur bridge's `LaunchedEffect` keys), recomposing the entire
+  pill + dock + pages tree every spring frame; music amplified it through the
+  bigger subtree. Values are now bare `State<Dp>` read only in the layout
+  phase (`Modifier.animatedIslandSize`) and via an in-effect `snapshotFlow`
+  (pitfall 48 for the numbers and the measurement protocol): 130 → 22 hard
+  frame gaps per 10-cycle window with music live, recompose samples 98/235 →
+  6/357, cycling CPU ~20–28% → ~10–20%; steady collapsed cost unchanged.
+
+- (this session → HEAD): **"blur + music performance tanks" was a leaked-
+  bridge storm, not blur.** SIGTERM/kill -9 of the JVM skip composition
+  disposal, so `media.stop()` never ran and every app exit orphaned the
+  nowplaying/btwatch bridges; over the machine's 8-day uptime ~150 accumulated
+  (`quicknotch-*` temp binaries, ppid 1), each nowplaying instance still
+  spawning a MediaRemote JXA poll every 2 s — up to ~33 concurrent, load
+  average 243, and window-server-wide frame stalls that hit every style
+  equally (10-cycle hard gaps: 112 blur / 89 solid). Fixed at the source:
+  `getppid() == 1` watchdogs in `nowplaying_bridge.m` + `btwatch_bridge.m`
+  (catch even `kill -9`; verified: JVM kill leaves 0 orphans), and
+  `NativeResources.sweepOrphanedBridges()` at startup retro-kills ppid==1
+  `/quicknotch-` processes so already-shipped versions clean up their
+  backlog too (first run: **swept 150**, load 243 → ~4). Same pass removed
+  the other half of the churn: the bridge re-attached the ~1.9 MB artwork
+  base64 to **every** heartbeat line (~1.5 MB/s → one `G1 Humongous
+  Allocation` GC per poll, a 646 ms pause in the worst sample); it now ships
+  the bytes once per track (`EmitArtOnce` → `"art":null`, Kotlin's id-keyed
+  cache already carried it — MediaController.kt's contract line), cutting GC
+  25 → 5 events per 30 s with no pause over 1.2 ms. After both fixes the
+   open/close bench reads **1 (blur) / 0 (solid)** hard gaps, steady blur+music
+   CPU 8.2% of a core, load ~4. The temporary frame-gap logger used for the
+   A/B is removed again (pitfall 49/50 for the full detail and the 48 ms
+   duty-cycle verification trap).
+
+- (this session → HEAD): **the collapsed pill stuck on a dead track after the
+  media player was force-quit** — the empty-grace hold could never expire.
+  The hold re-evaluated `EMPTY_GRACE_MS` only when the next bridge line
+  arrived, but the macOS bridge de-dups identical lines, so the dead player
+  produced exactly one `{"state":"none"}` inside the grace and then silence:
+  the expiry check never ran again and the last song stayed on the pill
+  forever. The hold now ends on a clock (`MediaControllerBase.armHoldExpiry`,
+  a one-shot `ioScope` timer that re-checks the deadline and reaps through
+  the single `reapHeldSnapshot()`); playable lines cancel it, so paused and
+  pinned-browser sessions still persist through their legitimate silence, and
+  every session write (publish / reap / late artwork merge) now serialises
+  through `publishLock` so a reap can't be resurrected by a racing write.
+  Two file-local moves made room under detekt's function-count gate
+  (`stateOf` to file scope, `cacheHit` folded into `decodeArtworkBytes`;
+  pitfall 51). Verified on the live build with screenshots: playing → media
+  pill; `killall -9 Music` → idle quickview within 8 s (was stuck
+  indefinitely); pause → pill still shows the paused track after 8 s.
+
 ---
 
 ## 15. Quick constants reference
@@ -1891,6 +2057,7 @@ composeApp/
 | Waveform | 30 updates/s tick, `barPitch` 6dp (8..40 bars), 7dp band under an 11sp title (18dp when the title is hidden), 2 sines/band + shared envelope, pause ramp 250ms to a 12% flat line | `MediaWidgets` |
 | Pill animation tick | `PillAnimationFps` 30 via `delay` + nanoTime deltas (never `withFrameNanos`) | `NotchMotion` |
 | `ArtworkMaxPx` | 256 | `MediaController` |
+| `EMPTY_GRACE_MS` | 4000ms empty-player hold, ends on a one-shot timer (pitfall 51) | `MediaController.kt` |
 | Poll cadence | volume 2s, audio-battery 1s presence (+8s live probe), system-battery 5s, weather 30min | media pollers |
 | nowMs tick | 250ms while PLAYING | overlay |
 | Page step | 30 dp of wheel travel | `OverlayPager` |
