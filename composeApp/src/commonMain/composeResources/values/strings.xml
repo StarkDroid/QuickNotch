@@ -72,8 +72,11 @@
     <string name="indicator_bluetooth_battery">Bluetooth Battery</string>
     <string name="indicator_laptop_battery">Laptop Battery</string>
     <string name="indicator_notifications">Notifications</string>
-    <string name="indicator_waveform">Waveform</string>
-    <string name="waveform_tint_title">Waveform Color</string>
+    <string name="visualiser_section_title">Visualiser</string>
+    <string name="waveform_tint_title">Visualiser Color</string>
+    <string name="visualiser_style_title">Visualiser Style</string>
+    <string name="visualiser_style_waveform">Waveform</string>
+    <string name="visualiser_style_bars">Bars</string>
     <string name="waveform_tint_album_art">Album Art</string>
     <string name="waveform_tint_white">White</string>
     <string name="waveform_hide_title">Hide Song Title</string>

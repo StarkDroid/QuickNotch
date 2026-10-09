@@ -1,21 +1,24 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,11 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.Res
@@ -41,6 +46,7 @@ import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.model.NotchSurface
@@ -68,12 +74,14 @@ internal fun QuickView(
     showDeviceBattery: Boolean,
     /**
      * Equalizer bars under the title (live media only, collapsed only). The
-     * caller also hides the edge progress strip while this is on, so the bars
-     * get that band to themselves.
+     * caller also hides the outside progress border while this is on, so the
+     * bars get the pill's full attention.
      */
     showWaveform: Boolean = false,
     /** Album-art-derived or white; see [WaveformTint]. */
     waveformColor: Color = WaveformWhite,
+    /** Which bar geometry the collapsed visualiser draws; see [VisualiserStyle]. */
+    visualiserStyle: VisualiserStyle = VisualiserStyle.WAVEFORM,
     /**
      * Waveform-only layout: the song name is dropped and the analyser takes the
      * whole title frame, so the live pill reads as disc + bars + level rings.
@@ -168,6 +176,7 @@ internal fun QuickView(
                         MusicWaveform(
                             playing = media.state == PlaybackState.PLAYING,
                             color = waveformColor,
+                            style = visualiserStyle,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(18.dp)
@@ -186,6 +195,7 @@ internal fun QuickView(
                             MusicWaveform(
                                 playing = media.state == PlaybackState.PLAYING,
                                 color = waveformColor,
+                                style = visualiserStyle,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(7.dp)
@@ -342,31 +352,107 @@ internal fun rememberMediaNowMs(playing: Boolean): Long {
     return nowMs
 }
 
-/** Collapsed-pill live progress strip, owning its own 250 ms interpolation clock. */
+/** Collapsed-pill playback progress, owning its own 250 ms interpolation clock. */
 @Composable
-internal fun BoxScope.LiveProgressStripForSession(session: MediaSession) {
+internal fun IslandProgressBorderForSession(
+    session: MediaSession,
+    islandWidth: State<Dp>,
+    islandHeight: State<Dp>,
+    modifier: Modifier = Modifier
+) {
     val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
-    LiveProgressStrip(fraction = session.progressFraction(nowMs))
+    val fraction = session.progressFraction(nowMs).coerceIn(0f, 1f)
+    // Gradual sweep: the 250 ms clock steps discretely, so ease each step into
+    // the next instead of jumping — one tiny leaf recomposing, never the overlay.
+    val eased by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = tween(300),
+        label = "progressBorder"
+    )
+    IslandProgressBorder(
+        fraction = eased,
+        islandWidth = islandWidth,
+        islandHeight = islandHeight,
+        modifier = modifier
+    )
 }
 
 /**
- * Progress bar drawn against the pill's "inner" border — for a top-centred
- * notch that is the bottom edge (nearest the screen centre) — growing toward
- * the playhead as the track advances. Hidden behind the expanding island once
- * the dock opens (the expanded page shows its own progress control).
+ * Progress as an outside bottom border: a thin rounded bar riding just below
+ * the island's bottom edge, growing left-to-right with the playhead, with a
+ * soft glow hanging strictly beneath it.
+ *
+ * A sibling of the island (never a child): the island clips everything inside
+ * it to the notch shape, so anything drawn there could never sit outside —
+ * and the glow must never wash over the notch itself. Out here nothing
+ * overlaps the island, and the fixed window's transparent margin below the
+ * collapsed pill has room for the bar + glow with no resize.
+ *
+ * Jank discipline: the island's animated size arrives as [State] and is read
+ * only inside this leaf (composition) plus a captured value in the offset
+ * lambda — a spring tick recomposes this one node and re-places it, never the
+ * overlay. The progress clock ticks at 4 Hz into the same leaf.
  */
 @Composable
-internal fun BoxScope.LiveProgressStrip(
-    fraction: Float
+private fun IslandProgressBorder(
+    fraction: Float,
+    islandWidth: State<Dp>,
+    islandHeight: State<Dp>,
+    modifier: Modifier = Modifier
 ) {
-    val settlePadding = 2.dp
+    val width by islandWidth
+    val height by islandHeight
     Box(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(vertical = settlePadding)
-            .fillMaxWidth(fraction.coerceIn(0f, 1f))
-            .height(2.5.dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(LiveAccent.copy(alpha = 0.95f))
-    )
+        modifier = modifier
+            .width(width)
+            .offset { IntOffset(0, height.roundToPx()) },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Tuck the ends in from the island's rounded bottom corners so
+                // the bar reads corner-to-corner without overhanging the curve.
+                .padding(horizontal = 8.dp)
+        ) {
+            // Breathing room between the island edge and the bar: the bar never
+            // touches the pill's content the way the old inner strip did.
+            Spacer(modifier = Modifier.height(3.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.5.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (fraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .height(1.5.dp)
+                            .clip(CircleShape)
+                            .background(LiveAccent.copy(alpha = 0.95f))
+                    )
+                }
+            }
+            // Outer glow only: strictly below the bar, fading down into the
+            // transparent margin — never up over the notch.
+            if (fraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .height(5.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    LiveAccent.copy(alpha = 0.30f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
+        }
+    }
 }

@@ -595,6 +595,7 @@ internal fun FloatingNotchOverlay(
                         fahrenheit = config.widgets.weatherFahrenheit,
                         showWaveform = config.widgets.showCollapsedWaveform,
                         waveformColor = waveformColor,
+                        visualiserStyle = config.widgets.visualiserStyle,
                         waveformHidesTitle =
                             config.widgets.showCollapsedWaveform && config.widgets.waveformHidesTitle,
                         discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, collapsedScope),
@@ -612,14 +613,22 @@ internal fun FloatingNotchOverlay(
                         onWrapWidthChange = { hugWidth = it }
                     )
                 }
-                // Live progress hugs the pill's inner border (the edge facing
-                // the nearest screen centre), thinning while the pill itself is
-                // thin. The waveform takes this band over when it is enabled —
-                // one or the other, never both fighting for the same pixels.
-                val liveNow = if (musicLive) liveSession else null
-                if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
-                    LiveProgressStripForSession(session = liveNow)
-                }
+            }
+            // Playback progress rides OUTSIDE the island as a bottom border —
+            // never inside crowding the pill's content the way the old inner
+            // strip did. Shown only while the visualiser is off (the bars get
+            // the pill's full attention when on) and while collapsed (the
+            // expanded page carries its own seekable progress). A sibling of
+            // the island, so its glow hangs into the transparent margin below
+            // and never washes over the notch; it tracks the island's animated
+            // size inside its own leaf, so expand/collapse never disturbs it.
+            val liveNow = if (musicLive) liveSession else null
+            if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
+                IslandProgressBorderForSession(
+                    session = liveNow,
+                    islandWidth = animatedWidth,
+                    islandHeight = animatedHeight
+                )
             }
 
             // The dock is revealed with a fade + scale layer; its visibility

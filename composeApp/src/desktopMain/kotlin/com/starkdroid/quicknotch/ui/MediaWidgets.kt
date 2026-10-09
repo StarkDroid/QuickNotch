@@ -77,6 +77,7 @@ import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
+import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.theme.TextPrimary
 import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.delay
@@ -660,10 +661,14 @@ private const val WaveformRampSec = 0.25f
  *   jumps). Nothing freezes while the settings window merely has focus — a
  *   top-centred notch stays visible above it, so a still pill reads as broken.
  *
- * Heights come from two slow sines per band plus a shared loudness envelope,
+ * Heights come from two fast sines per band plus a shared loudness envelope,
  * all parameters hashed deterministically from the band index: the pattern is
  * stable across frames (it reads as one coherent wave, not per-bar noise),
  * bass-weighted like a real spectrum, and allocates nothing per frame.
+ *
+ * [style] picks the bar geometry without touching the motion: [VisualiserStyle.WAVEFORM]
+ * draws centred capsules, [VisualiserStyle.BARS] anchors sharp rectangles of
+ * the same pitch to the bottom edge.
  */
 @Composable
 internal fun MusicWaveform(
@@ -674,7 +679,8 @@ internal fun MusicWaveform(
     /** 0 derives the count from the available width, so the lane reads as an
      *  analyser at any slot size; pass a fixed number for a compact preview. */
     bars: Int = 0,
-    barPitch: Dp = 6.dp
+    barPitch: Dp = 6.dp,
+    style: VisualiserStyle = VisualiserStyle.WAVEFORM
 ) {
     // The bar count is resolved in composition (not in the draw scope, and not
     // from an onSizeChanged write): the band table and the draw loop must be
@@ -695,6 +701,7 @@ internal fun MusicWaveform(
             playing = playing,
             animate = animate,
             color = color,
+            style = style,
             modifier = Modifier.matchParentSize()
         )
     }
@@ -707,6 +714,7 @@ private fun WaveformCanvas(
     playing: Boolean,
     animate: Boolean,
     color: Color,
+    style: VisualiserStyle,
     modifier: Modifier = Modifier
 ) {
     var phase by remember { mutableFloatStateOf(0f) }
@@ -750,20 +758,36 @@ private fun WaveformCanvas(
         val radius = CornerRadius(barWidth / 2f, barWidth / 2f)
         val loud = presence
         for (index in 0 until count) {
-            val dynamic = (shape.level(index, t) * envelope).coerceIn(0.14f, 1f)
+            val dynamic = (shape.level(index, t) * envelope).coerceIn(0.08f, 1f)
             // At loud = 0 every bar collapses onto the same height, which is
             // what draws the flat line; at 1 it is the untouched analyser shape.
+            // The bottom-anchored style settles onto a thin strip at the floor
+            // instead of a centred line — same pause contract, honest to its
+            // own anchor.
             val level = WaveformFlatFraction + (dynamic - WaveformFlatFraction) * loud
             val barHeight = level * size.height
-            drawRoundRect(
-                color = color.copy(alpha = color.alpha * (0.58f + 0.42f * level)),
-                topLeft = Offset(
-                    x = index * pitch + (pitch - barWidth) / 2f,
-                    y = (size.height - barHeight) / 2f
-                ),
-                size = Size(barWidth, barHeight),
-                cornerRadius = radius
-            )
+            val x = index * pitch + (pitch - barWidth) / 2f
+            when (style) {
+                // Capsules keep a level-softened alpha so the row breathes;
+                // solid bars draw fully opaque — every bar at full strength.
+                VisualiserStyle.WAVEFORM -> drawRoundRect(
+                    color = color.copy(alpha = color.alpha * (0.58f + 0.42f * level)),
+                    topLeft = Offset(
+                        x = x,
+                        y = (size.height - barHeight) / 2f
+                    ),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = radius
+                )
+                VisualiserStyle.BARS -> drawRect(
+                    color = color,
+                    topLeft = Offset(
+                        x = x,
+                        y = size.height - barHeight
+                    ),
+                    size = Size(barWidth, barHeight)
+                )
+            }
         }
     }
 }
@@ -783,12 +807,15 @@ private class WaveformBands(private val count: Int) {
     init {
         for (index in 0 until count) {
             val position = (index + 1) / count.toFloat()
-            freqA[index] = TAU * (0.42f + 0.85f * hash(index, 1))
-            freqB[index] = TAU * (1.25f + 1.7f * hash(index, 2))
+            // Fast per-band partials so the row visibly dances instead of
+            // swaying: ~0.9–2.5 Hz + ~2.2–5.2 Hz per bar, hashed per index.
+            freqA[index] = TAU * (0.9f + 1.6f * hash(index, 1))
+            freqB[index] = TAU * (2.2f + 3.0f * hash(index, 2))
             phaseA[index] = TAU * hash(index, 3)
             phaseB[index] = TAU * hash(index, 4)
             // Left bands (bass) sit taller, jittered so it is a slope, not a ramp.
-            weight[index] = (1.04f - 0.44f * position) * (0.78f + 0.44f * hash(index, 5))
+            // Wider spread than before so quiet and loud bars separate clearly.
+            weight[index] = (1.12f - 0.60f * position) * (0.70f + 0.60f * hash(index, 5))
         }
     }
 
@@ -796,12 +823,13 @@ private class WaveformBands(private val count: Int) {
     fun level(index: Int, t: Float): Float {
         val sum = sin(freqA[index] * t + phaseA[index]) * 0.62f +
             sin(freqB[index] * t + phaseB[index]) * 0.38f
-        return (abs(sum) * 0.86f + 0.14f) * weight[index]
+        // Deep valleys + near-full peaks: the row punches rather than breathes.
+        return (abs(sum) * 0.94f + 0.06f) * weight[index]
     }
 
-    /** Shared slow wander: the whole row rises and falls like loudness does. */
+    /** Shared fast wander: the whole row rises and falls like loudness does. */
     fun envelope(t: Float): Float =
-        0.7f + 0.3f * sin(TAU * 0.19f * t + 0.9f) * sin(TAU * 0.055f * t + 0.3f)
+        0.62f + 0.38f * sin(TAU * 0.42f * t + 0.9f) * sin(TAU * 0.13f * t + 0.3f)
 
     private fun hash(index: Int, salt: Int): Float {
         val x = sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453

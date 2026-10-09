@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,8 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -38,6 +41,10 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.visualiser_section_title
+import com.starkdroid.quicknotch.generated.resources.visualiser_style_title
+import com.starkdroid.quicknotch.generated.resources.waveform_hide_title
+import com.starkdroid.quicknotch.generated.resources.waveform_tint_title
 import com.starkdroid.quicknotch.generated.resources.weather_hint
 import com.starkdroid.quicknotch.generated.resources.weather_section_title
 import com.starkdroid.quicknotch.generated.resources.show_labels_title
@@ -52,8 +59,12 @@ import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
+import com.starkdroid.quicknotch.model.VisualiserStyle
+import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.theme.AccentGreen
 import com.starkdroid.quicknotch.theme.AppTypography
+import com.starkdroid.quicknotch.theme.NotchBorder
+import com.starkdroid.quicknotch.theme.NotchDeepBlack
 import com.starkdroid.quicknotch.theme.SettingsBorder
 import com.starkdroid.quicknotch.theme.SettingsCard
 import com.starkdroid.quicknotch.theme.SettingsElevated
@@ -161,6 +172,95 @@ internal fun WidgetsTab(
                             color = TextSecondary,
                             fontSize = 11.5.sp,
                             lineHeight = 16.sp
+                        )
+
+                        HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+                        // Visualiser lives inside Now Playing: it is the
+                        // collapsed face of this widget, not a widget of its
+                        // own — the toggle, shape, colour, preview and title
+                        // switch all sit together here.
+                        BehaviorSwitchRow(
+                            icon = Icons.Default.BarChart,
+                            title = stringResource(Res.string.visualiser_section_title),
+                            checked = config.widgets.showCollapsedWaveform,
+                            onCheckedChange = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedWaveform = checked)) }
+                            }
+                        )
+
+                        // Mini-pill preview: the real bars component at a frozen
+                        // phase, sitting in a dark stadium the size of the
+                        // collapsed live pill (~220×34dp vs the real 236×34dp)
+                        // and parked left — a notch sample, not a full-width
+                        // banner, so the picker never drifts from what the pill
+                        // draws.
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .width(220.dp)
+                                    .height(34.dp)
+                                    .clip(RoundedCornerShape(17.dp))
+                                    .background(NotchDeepBlack)
+                                    .border(1.dp, NotchBorder, RoundedCornerShape(17.dp))
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                VinylDisc(
+                                    art = null,
+                                    playing = true,
+                                    animate = false,
+                                    size = 20.dp
+                                )
+                                MusicWaveform(
+                                    playing = true,
+                                    animate = false,
+                                    color = if (config.widgets.showCollapsedWaveform) WaveformWhite
+                                    else WaveformWhite.copy(alpha = 0.42f),
+                                    style = config.widgets.visualiserStyle,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(18.dp)
+                                )
+                            }
+                        }
+
+                        AppearanceDropdown(
+                            label = stringResource(Res.string.visualiser_style_title),
+                            options = VisualiserStyle.entries.toList(),
+                            selected = config.widgets.visualiserStyle,
+                            optionLabel = { it.label() },
+                            onSelect = { style ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(visualiserStyle = style)) }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        AppearanceDropdown(
+                            label = stringResource(Res.string.waveform_tint_title),
+                            options = WaveformTint.entries.toList(),
+                            selected = config.widgets.waveformTint,
+                            optionLabel = { it.label() },
+                            onSelect = { tint ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(waveformTint = tint)) }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Hiding the title only means something while the bars
+                        // are on screen, so it lives with them rather than as a
+                        // dead switch elsewhere.
+                        BehaviorSwitchRow(
+                            icon = Icons.Default.VisibilityOff,
+                            title = stringResource(Res.string.waveform_hide_title),
+                            checked = config.widgets.waveformHidesTitle,
+                            onCheckedChange = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(waveformHidesTitle = checked)) }
+                            }
                         )
 
                         HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
