@@ -247,6 +247,15 @@ internal fun FloatingNotchOverlay(
     // a transparent window on macOS flashes), and the margin must stay
     // click-through right up to the pill's edge so it never blocks the UI
     // underneath (taskbar/menu-bar items sitting next to the notch).
+    //
+    // Published straight from `onGloballyPositioned` on the island itself —
+    // NOT from an effect keyed on the state: the coordinates object is a
+    // stable instance across layout passes, so a keyed effect would run
+    // exactly once and freeze the touch target at whatever the island's first
+    // size was (the collapsed pill) — leaving everything outside it
+    // click-through once the notch expanded. The callback itself fires on
+    // every position/size change, which is precisely when the target (and the
+    // Windows blur helper's geometry below) must be republished.
     var islandCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     // Installed before the touch-target publish below so that one
@@ -256,40 +265,6 @@ internal fun FloatingNotchOverlay(
     val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
     DisposableEffect(awtWindow) {
         onDispose { windowsBlur?.close() }
-    }
-
-    // Publishes the island's bounds in window-client pixels for the native
-    // click-through (see WindowPassthrough); null (not measured yet) means
-    // "whole window interactive", the fail-soft default.
-    //
-    // Called straight from `onGloballyPositioned` — NOT from an effect keyed on
-    // the state: the coordinates object is a stable instance across layout
-    // passes, so a keyed effect would run exactly once and freeze the touch
-    // target at whatever the island's first size was (the collapsed pill) —
-    // leaving everything outside it click-through once the notch expanded.
-    // The callback itself fires on every position/size change, which is
-    // precisely when the target must be republished.
-    //
-    // `localToWindow` already returns PHYSICAL pixels (Compose px = dp ×
-    // density), so no further scaling happens here — multiplying again used to
-    // double-scale the touch target on every display above 100%, turning the
-    // transparent margin into an invisible click-swallowing band.
-    fun publishTouchTarget(coords: LayoutCoordinates?) {
-        if (coords == null || !coords.isAttached) {
-            onTouchTargetChange(null)
-            windowsBlur?.updateIsland(null)
-            return
-        }
-        val windowOffset = coords.localToWindow(Offset.Zero)
-        val sizePx = coords.size
-        val rect = java.awt.Rectangle(
-            windowOffset.x.roundToInt(),
-            windowOffset.y.roundToInt(),
-            sizePx.width,
-            sizePx.height
-        )
-        onTouchTargetChange(rect)
-        windowsBlur?.updateIsland(rect)
     }
     val calendarConnected = calendarState is CalendarState.Connected
     // The page rides the wheel only while the widget is switched on *and* a
@@ -476,6 +451,59 @@ internal fun FloatingNotchOverlay(
     val animatedHeight = animateDpAsState(targetSize.height, notchSizeSpring(), label = "notchHeight")
     val shape = notchShape(islandExpanded, config.style)
 
+    // Publishes the island's bounds in window-client pixels for the native
+    // click-through (see WindowPassthrough); null (not measured yet) means
+    // "whole window interactive", the fail-soft default. Lives here — below
+    // the shape inputs — because the same feed also carries the island's
+    // corner radius to the Windows blur helper, so its rounded region tracks
+    // the pill's stadium and the dock's rounded box (same rule as
+    // notchShape()/MacContentBlur, converted to the physical px the helper
+    // works in).
+    //
+    // `localToWindow` already returns PHYSICAL pixels (Compose px = dp ×
+    // density), so no further scaling happens here — multiplying again used to
+    // double-scale the touch target on every display above 100%, turning the
+    // transparent margin into an invisible click-swallowing band.
+    fun publishTouchTarget(coords: LayoutCoordinates?) {
+        if (coords == null || !coords.isAttached) {
+            onTouchTargetChange(null)
+            windowsBlur?.updateIsland(null)
+            return
+        }
+        val windowOffset = coords.localToWindow(Offset.Zero)
+        val sizePx = coords.size
+        val rect = java.awt.Rectangle(
+            windowOffset.x.roundToInt(),
+            windowOffset.y.roundToInt(),
+            sizePx.width,
+            sizePx.height
+        )
+        onTouchTargetChange(rect)
+        val cornerDp = notchCornerRadius(islandExpanded, config.style)
+        windowsBlur?.updateIsland(
+            rect,
+            with(density) { cornerDp.toPx() }.roundToInt(),
+            config.style.capsule
+        )
+    }
+
+    // Playback progress straddles the island's own outline — half over the
+    // island, half over the transparent margin — filling the notch's border
+    // with the playhead instead of reading as a bar. Shown only while the
+    // visualiser is off and while collapsed (the expanded page carries its
+    // own seekable progress). Hoisted here because the outline's outer half
+    // needs a transparent margin around the island (see the padded wrapper
+    // below), and that margin must exist before the island is laid out.
+    val liveNow = if (musicLive) liveSession else null
+    // Outline progress needs a live track, a collapsed pill, the bars out of
+    // the way and its own toggle on.
+    val showOutline = !isExpanded && liveNow != null &&
+        !config.widgets.showCollapsedWaveform && config.widgets.showProgressBorder
+    val outlinePad = if (showOutline) OutlinePad else 0.dp
+    // Mirrors notchShape(): capsule rounds every corner, the flush style only
+    // the two facing the screen.
+    val outlineRadius = notchCornerRadius(islandExpanded, config.style)
+
     // The native blur follows the surface, not a toggle: picking Blurred
     // enables it, any other surface clears it. The mac panel tracks the island
     // while it animates; Windows applies the accent once per surface or
@@ -546,6 +574,21 @@ internal fun FloatingNotchOverlay(
             // Island background + quickview: the only thing that actually
             // resizes. The dock is a sibling, not a child, so its layout is
             // stable.
+            //
+            // The outer wrapper exists for the progress outline below: the
+            // ring straddles the island's edge (half over the island, half
+            // over the desktop, like the macOS border), and its outer half
+            // needs a transparent margin to paint into — the island itself is
+            // clipped to its shape, so anything outside would be cut. The pad
+            // is zero whenever the outline is off, so every other mode lays
+            // out exactly as before; the touch target still feeds from the
+            // inner island's coordinates, never the margin.
+            Box(
+                modifier = Modifier.animatedIslandSize(animatedWidth, animatedHeight) { w, h ->
+                    DpSize(w + outlinePad * 2, h + outlinePad)
+                },
+                contentAlignment = Alignment.TopCenter
+            ) {
             Box(
                 modifier = Modifier
                     .animatedIslandSize(animatedWidth, animatedHeight)
@@ -631,33 +674,30 @@ internal fun FloatingNotchOverlay(
                         onWrapWidthChange = { hugWidth = it }
                     )
                 }
-                // Playback progress traces the island's own outline — top-left
-                // corner, around the bottom, to the top-right — filling the
-                // notch's border with the playhead instead of reading as a bar.
-                // Shown only while the visualiser is off and while collapsed
-                // (the expanded page carries its own seekable progress). The
-                // ink is the cover's dominant colour (accent cyan with no
-                // cover), matching the expanded player's new tinting.
-                val liveNow = if (musicLive) liveSession else null
-                // Outline progress needs a live track, a collapsed pill, the
-                // bars out of the way and its own toggle on.
-                val showOutline = !isExpanded && liveNow != null &&
-                    !config.widgets.showCollapsedWaveform && config.widgets.showProgressBorder
-                if (showOutline) {
-                    NotchProgressOutlineForSession(
-                        session = liveNow,
-                        accent = liveSession?.artTint ?: LiveAccent,
-                        // Mirrors notchShape(): capsule rounds every corner,
-                        // the flush style only the two facing the screen.
-                        radius = if (config.style.capsule) {
-                            if (islandExpanded) 18.dp else 14.dp
-                        } else {
-                            if (islandExpanded) 18.dp else 13.dp
-                        },
+            }
+            // Playback progress straddles the island's own outline — half
+            // over the island, half over the transparent margin the wrapper
+            // reserves — filling the notch's border with the playhead instead
+            // of reading as a bar. A sibling of the clipped island (not a
+            // child), so the outer half is never cut. The ink is the cover's
+            // dominant colour (accent cyan with no cover), matching the
+            // expanded player's tinting. The expanded page carries its own
+            // seekable progress, so the ring only shows while collapsed with
+            // the visualiser off. Plain overlay, no pointer modifiers.
+            if (showOutline && liveNow != null) {
+                NotchProgressOutlineForSession(
+                    session = liveNow,
+                    accent = liveSession?.artTint ?: LiveAccent,
+                    // Mirrors notchShape(): capsule rounds every corner,
+                    // the flush style only the two facing the screen.
+                    spec = NotchOutlineSpec(
+                        radius = outlineRadius,
                         roundTop = config.style.capsule,
-                        modifier = Modifier.matchParentSize()
-                    )
-                }
+                        outerPad = outlinePad
+                    ),
+                    modifier = Modifier.matchParentSize()
+                )
+            }
             }
 
             // The dock is revealed with a fade + scale layer; its visibility
@@ -802,3 +842,10 @@ private fun Modifier.animatedIslandSize(
 // How often the System Accent surface re-reads the OS accent so a desktop
 // accent change recolours the notch without a restart.
 private const val SystemAccentPollMs = 3000L
+
+/**
+ * Transparent margin the island wrapper reserves around the island while the
+ * progress outline shows, so the ring's outer half has something to paint
+ * into. One stroke width each side: the ring straddles the edge exactly.
+ */
+private val OutlinePad = 2.dp

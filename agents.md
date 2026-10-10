@@ -194,7 +194,12 @@ from the AWT wheel listener and composition on the same thread — no locks.
   overlay carries the accent (`WindowBlur.kt`); z-order + geometry are
   **native-only** (`SetWindowPos` with the overlay as `hWndInsertAfter`, plus a
   700 ms reconcile daemon — AWT `isAlwaysOnTop` re-asserts its own registry and
-  re-raises the slab above the island). Missing
+  re-raises the slab above the island). The helper is clipped to the island's
+  rounded shape (rounded GDI region rebuilt per move, `DWMWCP_ROUND` frame
+  preference as backstop); its visibility flips through one tracked AWT call —
+  a per-frame re-show fronts the window above the overlay and reads as morph
+  flicker. Intensity drives the acrylic tint alpha (~8% clear glass to ~70%
+  frost), never a painted imitation. Missing
   bridge → painted glass. Single-instance file lock in `main()`.
 
 ### 4.4 UI modules (`ui/`)
@@ -255,7 +260,10 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
   and `Invoke` it: the CLR cast QIs and succeeds.
 - Windows blur: the acrylic backdrop covers the **whole window** and ignores
   `SetWindowRgn` — never put it on the overlay; only on the helper, z-managed
-  natively (AWT `isAlwaysOnTop` re-raises it above the island).
+  natively (AWT `isAlwaysOnTop` re-raises it above the island). Round the
+  helper with a GDI region + `DWMWCP_ROUND`, and never AWT re-show per frame.
+- Progress outline straddles the island edge from a padded wrapper sibling
+  (the island clip would cut its outer half); pad is 0 when the ring is off.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
 - Calendar: RFC3339 times; 403 body names a disabled API; Testing clients need test users;
   loopback port must be `--strictPort`-stable and the URI identical in app + page + console.

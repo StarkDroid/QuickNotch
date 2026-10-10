@@ -353,16 +353,28 @@ internal fun rememberMediaNowMs(playing: Boolean): Long {
     return nowMs
 }
 
+/** Island corner rule plus the wrapper margin the progress ring straddles. */
+internal data class NotchOutlineSpec(
+    /** Bottom-corner radius of the island shape; mirrors [notchShape]. */
+    val radius: Dp,
+    /** Capsule styles round the top corners too; the flush style keeps them square. */
+    val roundTop: Boolean,
+    /**
+     * Transparent margin around the island the ring's canvas sits in: the ring
+     * straddles the island's edge — half over the island, half over the margin
+     * — instead of insetting inside the clip.
+     */
+    val outerPad: Dp = 0.dp
+)
+
 /** Playback progress tracing the island's own outline, owning its 250 ms clock. */
 @Composable
 internal fun NotchProgressOutlineForSession(
     session: MediaSession,
     /** Album-art color (or the live accent with no cover); the border's ink. */
     accent: Color,
-    /** Bottom-corner radius of the island shape; mirrors [notchShape]. */
-    radius: Dp,
-    /** Capsule styles round the top corners too; the flush style keeps them square. */
-    roundTop: Boolean,
+    /** Island corner rule + the wrapper margin the ring straddles. */
+    spec: NotchOutlineSpec,
     modifier: Modifier = Modifier
 ) {
     val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
@@ -382,16 +394,21 @@ internal fun NotchProgressOutlineForSession(
         Canvas(modifier = Modifier.matchParentSize()) {
             val f = eased
             if (f <= 0f) return@Canvas
-            // Stroke sits half-in/half-out of the path by default, and the
-            // island clips everything outside its shape — so inset the path by
-            // half the stroke and the whole border stays visible, hugging the
-            // static hairline from the inside.
+            // The stroke rides CENTRED on the island's edge: the island's own
+            // clip would cut the outer half, so this canvas lives in the
+            // padded wrapper as the island's sibling, with the island's
+            // top-left at (pad, 0) — pad each side, flush at the top where the
+            // island hugs the screen edge.
             val strokePx = 2.dp.toPx()
-            val inset = strokePx / 2f
-            val r = radius.toPx().coerceAtLeast(0f)
-            val w = size.width
-            val h = size.height
-            val top = if (roundTop) r else 0f
+            val padPx = spec.outerPad.toPx()
+            val r = spec.radius.toPx().coerceAtLeast(0f)
+            val w = size.width - padPx * 2f
+            val h = size.height - padPx
+            if (w <= 0f || h <= 0f) return@Canvas
+            val ox = padPx
+            // Top edge of the island in canvas coords (flush, no top margin).
+            val oy = 0f
+            val top = if (spec.roundTop) r else 0f
             // Perimeter from the top-left corner, clockwise down the left side,
             // around the bottom and up to the top-right: the notch's visible
             // outline, so playback fills the island's own border. Angle
@@ -400,26 +417,26 @@ internal fun NotchProgressOutlineForSession(
             // a NEGATIVE sweep. A +90 here bulges the arcs to the wrong side
             // and the following lineTo cuts diagonally through the middle.
             val path = Path().apply {
-                moveTo(inset, top)
-                lineTo(inset, h - inset - r)
+                moveTo(ox, oy + top)
+                lineTo(ox, oy + h - r)
                 arcTo(
-                    rect = Rect(inset, h - inset - 2f * r, inset + 2f * r, h - inset),
+                    rect = Rect(ox, oy + h - 2f * r, ox + 2f * r, oy + h),
                     startAngleDegrees = 180f,
                     sweepAngleDegrees = -90f,
                     forceMoveTo = false
                 )
-                lineTo(w - inset - r, h - inset)
+                lineTo(ox + w - r, oy + h)
                 arcTo(
-                    rect = Rect(w - inset - 2f * r, h - inset - 2f * r, w - inset, h - inset),
+                    rect = Rect(ox + w - 2f * r, oy + h - 2f * r, ox + w, oy + h),
                     startAngleDegrees = 90f,
                     sweepAngleDegrees = -90f,
                     forceMoveTo = false
                 )
-                lineTo(w - inset, top)
+                lineTo(ox + w, oy + top)
             }
             // Analytic length (straights + two quarter arcs): dashing needs the
             // real perimeter, and there is no public path measurer to ask.
-            val straights = 2f * (h - inset - r - top) + (w - 2f * inset - 2f * r)
+            val straights = 2f * (h - r - top) + (w - 2f * r)
             val total = (straights + Math.PI.toFloat() * r).coerceAtLeast(1f)
             drawPath(
                 path = path,

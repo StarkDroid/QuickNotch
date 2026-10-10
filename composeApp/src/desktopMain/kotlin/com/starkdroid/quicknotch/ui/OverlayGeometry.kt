@@ -257,3 +257,13 @@ internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape 
     val corner = if (expanded) 18.dp else 13.dp
     return RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
 }
+
+/**
+ * The island's bottom-corner radius as a value, for everything that must agree
+ * with [notchShape] without being a shape: the outline progress ring, the mac
+ * blur panel and the Windows blur helper's rounded region.
+ */
+internal fun notchCornerRadius(expanded: Boolean, style: NotchStyle): Dp {
+    if (style.capsule) return if (expanded) 18.dp else 14.dp
+    return if (expanded) 18.dp else 13.dp
+}

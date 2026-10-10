@@ -8,6 +8,7 @@ import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
+import com.sun.jna.ptr.IntByReference
 import java.awt.Color
 import java.awt.Rectangle
 import java.awt.Window
@@ -30,7 +31,10 @@ import java.awt.Window
  * parked directly below the overlay — carries the accent; the overlay draws
  * only its translucent dark scrim ([IslandSurface] blur style) over the
  * effect for legibility. The helper tracks the animated island through
- * [updateIsland], exactly like the macOS panel. With any other surface (or
+ * [updateIsland], exactly like the macOS panel, and is clipped to the
+ * island's rounded shape (rounded GDI region rebuilt per move, plus the
+ * OS-level `DWMWCP_ROUND` frame preference as a backstop) so the frost edge
+ * matches the drawn island corner for corner. With any other surface (or
  * when the HWND cannot be resolved) the island renders exactly as before.
  */
 internal class WindowsBackdropBlur private constructor(
@@ -55,6 +59,23 @@ internal class WindowsBackdropBlur private constructor(
     @Volatile
     private var lastRect: Rectangle? = null
 
+    /** Corner radius (physical px) and top-rounding of the island shape at the
+     *  last feed — the helper's rounded region is rebuilt from these, so the
+     *  frost follows the pill's stadium as well as the dock's rounded box. */
+    @Volatile
+    private var lastRadiusPx: Int = 0
+
+    @Volatile
+    private var lastRoundTop: Boolean = true
+
+    /** Whether the helper is currently shown through AWT. Writes go through
+     *  [setHelperVisible] only, so a per-frame [placeFor] during the morph
+     *  never re-shows an already-visible window (an AWT show re-raises the
+     *  native window to the front — above the overlay — until the next
+     *  SetWindowPos parks it back, which read exactly as content flicker). */
+    @Volatile
+    private var helperVisible = true
+
     /** Last mirrored WS_EX_TOPMOST state, so per-tick places don't re-toggle.
      *  Written from the EDT and the reconcile thread; both write the same
      *  value, so a stale read costs one redundant SetWindowPos at worst. */
@@ -76,18 +97,18 @@ internal class WindowsBackdropBlur private constructor(
             appliedLevel = -1
             runCatching {
                 applyAccent(helperHwnd, false, level)
-                helper.isVisible = false
+                setHelperVisible(false)
             }
             return
         }
-        if (level == appliedLevel && helper.isVisible) return
+        if (level == appliedLevel && helperVisible) return
         val ok = runCatching { applyAccent(helperHwnd, true, level) }.getOrElse { false }
         if (ok) {
             appliedLevel = level
             reported = false
             // Place as far as known geometry allows; a not-yet-measured island
             // just leaves the helper hidden until the first updateIsland feed.
-            placeFor(lastRect)
+            placeFor(lastRect, lastRadiusPx, lastRoundTop)
         } else if (!reported) {
             reported = true
             System.err.println("QuickNotch: Windows backdrop blur failed to apply (helper window)")
@@ -96,15 +117,19 @@ internal class WindowsBackdropBlur private constructor(
 
     /**
      * Tracks the drawn island's rect (window-client physical px — the same
-     * feed the click-through region uses) so the helper blur expands and
-     * collapses exactly with the notch. Rect changes arrive on every layout
-     * pass during the spring, which is precisely when the helper must move.
+     * feed the click-through region uses) plus the island shape's corner
+     * radius, so the helper blur expands, collapses and re-rounds exactly with
+     * the notch. Rect changes arrive on every layout pass during the spring,
+     * which is precisely when the helper must move.
      */
-    fun updateIsland(rect: Rectangle?) {
-        if (rect == lastRect) return
+    fun updateIsland(rect: Rectangle?, radiusPx: Int = 0, roundTop: Boolean = true) {
+        val changed = rect != lastRect || radiusPx != lastRadiusPx || roundTop != lastRoundTop
+        if (!changed) return
         lastRect = rect?.clone() as Rectangle?
+        lastRadiusPx = radiusPx
+        lastRoundTop = roundTop
         if (!enabled) return
-        placeFor(lastRect)
+        placeFor(lastRect, lastRadiusPx, lastRoundTop)
     }
 
     fun close() {
@@ -113,42 +138,96 @@ internal class WindowsBackdropBlur private constructor(
     }
 
     /**
+     * One AWT visibility transition, at most, per actual state change — never
+     * a re-show per animation frame (see [helperVisible]).
+     */
+    private fun setHelperVisible(visible: Boolean) {
+        if (visible == helperVisible) return
+        helperVisible = visible
+        runCatching { helper.isVisible = visible }
+    }
+
+    /**
      * Moves/resizes the helper onto [rect] translated to screen space via the
      * overlay's own native rect (physical px end to end — no AWT unit
-     * conversion anywhere), keeps the helper under the overlay in the Z order,
-     * and mirrors the overlay's topmost state so "always on top" off keeps the
-     * blur band from floating over the overlay. False when the rect is not
-     * known yet: the helper then stays hidden until the island is measured.
+     * conversion anywhere), rounds it to the island's corners, keeps it under
+     * the overlay in the Z order, and mirrors the overlay's topmost state so
+     * "always on top" off keeps the blur band from floating over the overlay.
+     * False when the rect is not known yet: the helper then stays hidden until
+     * the island is measured.
+     *
+     * Ordering matters: the AWT show comes first because showing can front
+     * the window, and the native park below the overlay always runs after it.
      */
-    private fun placeFor(rect: Rectangle?): Boolean {
+    private fun placeFor(rect: Rectangle?, radiusPx: Int, roundTop: Boolean): Boolean {
         if (rect == null || rect.width <= 0 || rect.height <= 0) {
-            runCatching { helper.isVisible = false }
+            setHelperVisible(false)
             return false
         }
+        setHelperVisible(true)
         mirrorTopmost()
-        val placed = placeNative(rect)
-        helper.isVisible = true
+        val placed = placeNative(rect, radiusPx, roundTop)
         return placed
     }
 
     /**
-     * Z-order + geometry, natively only (no AWT calls — safe from the reconcile
-     * thread). One SetWindowPos does it all: passing the overlay as
-     * `hWndInsertAfter` parks the helper *directly below* the overlay, so no
-     * separate "raise the overlay" pass exists to be undone later.
+     * Z-order + geometry + shape, natively only (no AWT calls — safe from the
+     * reconcile thread). One SetWindowPos does the move: passing the overlay
+     * as `hWndInsertAfter` parks the helper *directly below* the overlay, so
+     * no separate "raise the overlay" pass exists to be undone later.
+     * NOCOPYBITS skips the bit-blit of the old surface on resize — the window
+     * is contentless acrylic, there is nothing worth smearing one frame over.
      */
-    private fun placeNative(rect: Rectangle): Boolean {
+    private fun placeNative(rect: Rectangle, radiusPx: Int, roundTop: Boolean): Boolean {
         val origin = WinDef.RECT()
         if (!User32.INSTANCE.GetWindowRect(overlayHwnd, origin)) return false
-        return User32.INSTANCE.SetWindowPos(
+        val moved = User32.INSTANCE.SetWindowPos(
             helperHwnd,
             overlayHwnd,
             origin.left + rect.x,
             origin.top + rect.y,
             rect.width,
             rect.height,
-            SwpNoActivate
+            SwpNoActivate or SwpNoCopyBits
         )
+        applyRegion(rect.width, rect.height, radiusPx, roundTop)
+        return moved
+    }
+
+    /**
+     * Clips the helper to the island's rounded shape (helper-local coords).
+     * The acrylic backdrop fills the whole window bounds, so without this the
+     * frost reads as a sharp-cornered slab exactly island-sized; with it the
+     * blur edge matches the Compose-drawn island corner for corner. Square-top
+     * (flush) styles keep square top corners: a plain round-rect would nip
+     * them, so the region is a top rect unioned with a rounded bottom band.
+     */
+    private fun applyRegion(width: Int, height: Int, radiusPx: Int, roundTop: Boolean) {
+        val gdi = gdi32
+        val radius = radiusPx.coerceIn(0, minOf(width, height) / 2)
+        if (radius <= 0) {
+            User32.INSTANCE.SetWindowRgn(helperHwnd, null, true)
+            return
+        }
+        val region = if (roundTop) {
+            gdi.CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2)
+        } else {
+            val top = gdi.CreateRectRgn(0, 0, width + 1, (height - radius).coerceAtLeast(0))
+            val bottom = gdi.CreateRoundRectRgn(
+                0, height - radius * 2, width + 1, height + 1, radius * 2, radius * 2
+            )
+            val combined = gdi.CreateRectRgn(0, 0, 0, 0)
+            gdi.CombineRgn(combined, top, bottom, RgnOr)
+            gdi.DeleteObject(top)
+            gdi.DeleteObject(bottom)
+            combined
+        }
+        // The system owns the region after a successful call — deleting it
+        // would pull the shape out from under the window. A failed call owns
+        // nothing, so the handle is released to avoid a GDI leak per frame.
+        if (User32.INSTANCE.SetWindowRgn(helperHwnd, region, true) == 0) {
+            runCatching { gdi.DeleteObject(region) }
+        }
     }
 
     /**
@@ -194,7 +273,7 @@ internal class WindowsBackdropBlur private constructor(
                 runCatching { Thread.sleep(ReconcileIntervalMs) }
                 val rect = lastRect
                 if (enabled && rect != null) {
-                    runCatching { mirrorTopmost(); placeNative(rect) }
+                    runCatching { mirrorTopmost(); placeNative(rect, lastRadiusPx, lastRoundTop) }
                 }
             }
         }, "quicknotch-blur-z")
@@ -210,6 +289,7 @@ internal class WindowsBackdropBlur private constructor(
         private const val SwpNoSize = 0x0001
         private const val SwpNoMove = 0x0002
         private const val SwpNoActivate = 0x0010
+        private const val SwpNoCopyBits = 0x0100
 
         /** SetWindowPos `hWndInsertAfter` magic values for the topmost band. */
         private val HwndTopmost = WinDef.HWND(Pointer(-1L))
@@ -255,6 +335,17 @@ internal class WindowsBackdropBlur private constructor(
                     )
                 } catch (_: Throwable) {
                     // Cosmetic only: a taskbar blip must not take the blur down.
+                }
+                // OS-level rounded frame corners (Windows 11): belt to the
+                // rounded-region braces below — even where the region lands a
+                // pixel off, the frame itself never reads sharp.
+                runCatching {
+                    dwmapi.DwmSetWindowAttribute(
+                        WinDef.HWND(Pointer(helper.handle)),
+                        DwmwaWindowCornerPreference,
+                        IntByReference(DwmwcpRound),
+                        Int.SIZE_BYTES
+                    )
                 }
                 WindowsBackdropBlur(
                     WinDef.HWND(Pointer(handle)),
@@ -337,6 +428,60 @@ private interface User32Ex : Library {
     fun SetWindowCompositionAttribute(hwnd: WinDef.HWND, data: WinCompAttrData): Boolean
 }
 
+private interface Gdi32Ex : Library {
+    // Same exact-spelling rule as above: these map straight onto gdi32. The
+    // region constructors keep their native six-parameter shape.
+    @Suppress("FunctionNaming", "LongParameterList")
+    fun CreateRoundRectRgn(
+        nLeftRect: Int,
+        nTopRect: Int,
+        nRightRect: Int,
+        nBottomRect: Int,
+        nWidthEllipse: Int,
+        nHeightEllipse: Int
+    ): WinDef.HRGN
+
+    @Suppress("FunctionNaming")
+    fun CreateRectRgn(nLeftRect: Int, nTopRect: Int, nRightRect: Int, nBottomRect: Int): WinDef.HRGN
+
+    @Suppress("FunctionNaming")
+    fun CombineRgn(
+        hrgnDest: WinDef.HRGN?,
+        hrgnSrc1: WinDef.HRGN?,
+        hrgnSrc2: WinDef.HRGN?,
+        fnCombineMode: Int
+    ): Int
+
+    @Suppress("FunctionNaming")
+    fun DeleteObject(hObject: WinDef.HRGN?): Boolean
+}
+
+private interface DwmapiEx : Library {
+    // Exact Win32 spelling, same rule as above.
+    @Suppress("FunctionNaming")
+    fun DwmSetWindowAttribute(
+        hwnd: WinDef.HWND,
+        dwAttribute: Int,
+        pvAttribute: IntByReference,
+        cbAttribute: Int
+    ): Int
+}
+
+private val gdi32: Gdi32Ex by lazy {
+    Native.load("gdi32", Gdi32Ex::class.java)
+}
+
+private val dwmapi: DwmapiEx by lazy {
+    Native.load("dwmapi", DwmapiEx::class.java)
+}
+
+/** CombineRgn mode: union of both sources. */
+private const val RgnOr = 2
+
+/** DWMWA_WINDOW_CORNER_PREFERENCE + DWMWCP_ROUND: OS-rounded frame corners. */
+private const val DwmwaWindowCornerPreference = 33
+private const val DwmwcpRound = 2
+
 private val accentUser32: User32Ex by lazy {
     Native.load("user32", User32Ex::class.java)
 }
@@ -350,9 +495,11 @@ private fun applyAccent(hwnd: WinDef.HWND, enabled: Boolean, intensity: Int): Bo
     if (enabled) {
         policy.accentState = AccentEnableAcrylicBlurBehind
         policy.accentFlags = 0
-        // DWM has no radius knob, so intensity scales the tint instead:
-        // 0xAABBGGRR with alpha from ~20% (clear) to ~50% (frosted).
-        policy.gradientColor = (0x33 + intensity * 2).coerceIn(0x33, 0xCC) shl 24
+        // DWM has no blur-radius knob, so the intensity slider drives what it
+        // does expose: the acrylic tint alpha, from near-clear glass (~8%) to
+        // deep frost (~70%). This is the OS acrylic either way — the slider
+        // never swaps in a painted imitation, it only tints the real thing.
+        policy.gradientColor = (0x14 + intensity * 4).coerceIn(0x14, 0xE6) shl 24
         policy.animationId = 0
     }
     policy.write()
