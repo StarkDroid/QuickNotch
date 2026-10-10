@@ -261,9 +261,10 @@ internal fun WidgetsTab(
                             }
                         )
 
-                        // The outline progress border only draws while the
-                        // visualiser is off, so its toggle sits with the bars
-                        // rather than as a dead switch elsewhere.
+                        // The outline progress ring rides the island's edge
+                        // beside the bars (or without them), so its toggle
+                        // sits with the bars rather than as a dead switch
+                        // elsewhere.
                         BehaviorSwitchRow(
                             icon = Icons.Default.Timeline,
                             title = stringResource(Res.string.progress_border_title),

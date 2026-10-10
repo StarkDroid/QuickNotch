@@ -32,9 +32,11 @@ import java.awt.Window
  * only its translucent dark scrim ([IslandSurface] blur style) over the
  * effect for legibility. The helper tracks the animated island through
  * [updateIsland], exactly like the macOS panel, and is clipped to the
- * island's rounded shape (rounded GDI region rebuilt per move, plus the
- * OS-level `DWMWCP_ROUND` frame preference as a backstop) so the frost edge
- * matches the drawn island corner for corner. With any other surface (or
+ * island's rounded shape (rounded GDI region rebuilt per move, with the OS
+ * frame rounding explicitly OFF — DWM's ~8px rounding would otherwise
+ * intersect the region, nipping the island's own corners and rounding the
+ * flush style's square top) so the frost edge matches the drawn island
+ * corner for corner. With any other surface (or
  * when the HWND cannot be resolved) the island renders exactly as before.
  */
 internal class WindowsBackdropBlur private constructor(
@@ -210,11 +212,11 @@ internal class WindowsBackdropBlur private constructor(
             return
         }
         val region = if (roundTop) {
-            gdi.CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2)
+            gdi.CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2)
         } else {
-            val top = gdi.CreateRectRgn(0, 0, width + 1, (height - radius).coerceAtLeast(0))
+            val top = gdi.CreateRectRgn(0, 0, width, (height - radius).coerceAtLeast(0))
             val bottom = gdi.CreateRoundRectRgn(
-                0, height - radius * 2, width + 1, height + 1, radius * 2, radius * 2
+                0, height - radius * 2, width, height, radius * 2, radius * 2
             )
             val combined = gdi.CreateRectRgn(0, 0, 0, 0)
             gdi.CombineRgn(combined, top, bottom, RgnOr)
@@ -336,14 +338,17 @@ internal class WindowsBackdropBlur private constructor(
                 } catch (_: Throwable) {
                     // Cosmetic only: a taskbar blip must not take the blur down.
                 }
-                // OS-level rounded frame corners (Windows 11): belt to the
-                // rounded-region braces below — even where the region lands a
-                // pixel off, the frame itself never reads sharp.
+                // The OS frame must stay square (DONOTROUND): DWM's own
+                // rounding (~8px on every corner) intersects the custom
+                // region below, so ROUND would nip the island's 13–18dp
+                // corners down to 8px AND round the flush style's square top
+                // — the exact "two layers disagree" mismatch. The region
+                // alone carries the shape, corner for corner with the island.
                 runCatching {
                     dwmapi.DwmSetWindowAttribute(
                         WinDef.HWND(Pointer(helper.handle)),
                         DwmwaWindowCornerPreference,
-                        IntByReference(DwmwcpRound),
+                        IntByReference(DwmwcpDonotround),
                         Int.SIZE_BYTES
                     )
                 }
@@ -478,9 +483,9 @@ private val dwmapi: DwmapiEx by lazy {
 /** CombineRgn mode: union of both sources. */
 private const val RgnOr = 2
 
-/** DWMWA_WINDOW_CORNER_PREFERENCE + DWMWCP_ROUND: OS-rounded frame corners. */
+/** DWMWA_WINDOW_CORNER_PREFERENCE values: the OS frame must NOT round. */
 private const val DwmwaWindowCornerPreference = 33
-private const val DwmwcpRound = 2
+private const val DwmwcpDonotround = 1
 
 private val accentUser32: User32Ex by lazy {
     Native.load("user32", User32Ex::class.java)

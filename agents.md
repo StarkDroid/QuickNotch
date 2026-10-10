@@ -195,8 +195,10 @@ from the AWT wheel listener and composition on the same thread — no locks.
   **native-only** (`SetWindowPos` with the overlay as `hWndInsertAfter`, plus a
   700 ms reconcile daemon — AWT `isAlwaysOnTop` re-asserts its own registry and
   re-raises the slab above the island). The helper is clipped to the island's
-  rounded shape (rounded GDI region rebuilt per move, `DWMWCP_ROUND` frame
-  preference as backstop); its visibility flips through one tracked AWT call —
+  rounded shape (rounded GDI region rebuilt per move, OS frame rounding
+  explicitly OFF — DWM's ~8px rounding would intersect the region, nipping
+  the island's own 13–18dp corners and rounding the flush style's square
+  top); its visibility flips through one tracked AWT call —
   a per-frame re-show fronts the window above the overlay and reads as morph
   flicker. Intensity drives the acrylic tint alpha (~8% clear glass to ~70%
   frost), never a painted imitation. Missing

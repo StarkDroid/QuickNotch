@@ -489,16 +489,17 @@ internal fun FloatingNotchOverlay(
 
     // Playback progress straddles the island's own outline — half over the
     // island, half over the transparent margin — filling the notch's border
-    // with the playhead instead of reading as a bar. Shown only while the
-    // visualiser is off and while collapsed (the expanded page carries its
-    // own seekable progress). Hoisted here because the outline's outer half
+    // with the playhead instead of reading as a bar. Shown while collapsed
+    // (the expanded page carries its own seekable progress), beside the
+    // visualiser or without it. Hoisted here because the outline's outer half
     // needs a transparent margin around the island (see the padded wrapper
     // below), and that margin must exist before the island is laid out.
     val liveNow = if (musicLive) liveSession else null
-    // Outline progress needs a live track, a collapsed pill, the bars out of
-    // the way and its own toggle on.
-    val showOutline = !isExpanded && liveNow != null &&
-        !config.widgets.showCollapsedWaveform && config.widgets.showProgressBorder
+    // Outline progress needs a live track, a collapsed pill and its own
+    // toggle on. It rides the island's edge, so it coexists with the
+    // visualiser (bars inside, ring outside) — the two toggles are
+    // independent.
+    val showOutline = !isExpanded && liveNow != null && config.widgets.showProgressBorder
     val outlinePad = if (showOutline) OutlinePad else 0.dp
     // Mirrors notchShape(): capsule rounds every corner, the flush style only
     // the two facing the screen.
@@ -682,8 +683,8 @@ internal fun FloatingNotchOverlay(
             // child), so the outer half is never cut. The ink is the cover's
             // dominant colour (accent cyan with no cover), matching the
             // expanded player's tinting. The expanded page carries its own
-            // seekable progress, so the ring only shows while collapsed with
-            // the visualiser off. Plain overlay, no pointer modifiers.
+            // seekable progress, so the ring only shows while collapsed.
+            // Plain overlay, no pointer modifiers.
             if (showOutline && liveNow != null) {
                 NotchProgressOutlineForSession(
                     session = liveNow,
