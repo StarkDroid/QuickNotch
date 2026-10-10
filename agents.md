@@ -143,7 +143,10 @@ from the AWT wheel listener and composition on the same thread — no locks.
   (`sourceSubsampling`) + derives `artTint` once on the worker. 4 s empty-grace hold
   ends on a **timer** (`armHoldExpiry`), not the next line (bridge de-dups); all writes
   via `publishLock`. Local 250 ms `nowMs` clock lives in the progress composable only.
-  Windows `smtc.ps1` (seek OK; `status <id> <haveArt>` skips re-transfer). macOS
+  Windows `smtc.ps1` (seek OK; `status <id> <haveArt>` skips re-transfer —
+  three-valued gate '0' wanted / '1' held / '2' tried-empty so artless sources are
+  asked once; stderr merged so one stream drains; 4 s deadline then
+  `destroyForcibly` so a winRT wedge frees the reader). macOS
   `nowplaying-bridge` → `osascript -l JavaScript` (only `com.apple.*` contexts reach
   MediaRemote ≥15.4; no seek). Art bytes **once per track** (`EmitArtOnce`, else null);
   drain large stdout **during** `waitFor` (pipe buffer), small lines after. Late art via
@@ -185,7 +188,13 @@ from the AWT wheel listener and composition on the same thread — no locks.
   macOS = standalone island-sized helper panel below the overlay (never an AWT child —
   CGS radius silently no-ops there), 250 ms frame/level/order/visibility sync;
   `CAShapeLayer` masks (not `cornerRadius`), no rim (`blurScrim.border` transparent);
-  intensity drives radius + opacity. Windows = DWM acrylic, region-clipped. Missing
+  intensity drives radius + opacity. Windows = the same shape for the same reason:
+  the DWM acrylic backdrop is composed for the whole window and ignores
+  `SetWindowRgn`, so a small invisible island-sized helper window below the
+  overlay carries the accent (`WindowBlur.kt`); z-order + geometry are
+  **native-only** (`SetWindowPos` with the overlay as `hWndInsertAfter`, plus a
+  700 ms reconcile daemon — AWT `isAlwaysOnTop` re-asserts its own registry and
+  re-raises the slab above the island). Missing
   bridge → painted glass. Single-instance file lock in `main()`.
 
 ### 4.4 UI modules (`ui/`)
@@ -228,7 +237,8 @@ overlay per open/close; re-place from live window dims; derive placement/math fr
 `locationOnScreen`/`localToScreen` without the CG-origin delta; `activateIgnoringOtherApps`
 in a loop; native side effects in composable bodies; `dispatch_sync` to AppKit from EDT;
 `sharedBounds` for same-content morphs; `enabled=false` for page input gating; second wheel
-path on Windows; per-tick persistence (repo coalesces); new strings/colors/glyphs inline;
+path on Windows; static WinRT stream-extension calls in `smtc.ps1` (pre-bind the
+MethodInfo — see §7); per-tick persistence (repo coalesces); new strings/colors/glyphs inline;
 `String.format` assumptions on `stringResource` (`%1$s` bare substitution — `%%` doubles);
 scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
 
@@ -238,6 +248,14 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
   match; events from CoreAudio watcher, not bluetoothd; 10 s poll + `poke()`.
 - Glyphs must be solid silhouettes (`fill-rule="evenodd"` for holes); strokes tint to ~1/3.
 - Art: ≤256px subsample; bridge sends bytes once per id; Music fallback only for Music.
+- SMTC art on Windows: the thumbnail stream is a raw `System.__ComObject`, and
+  PowerShell 5.1 cannot bind it to a static `WindowsRuntimeStreamExtensions`
+  method's `IInputStream` parameter ("Cannot find an overload" — its conversion
+  reads `GetInterfaces()`, which is empty on a COM RCW). Pre-bind the MethodInfo
+  and `Invoke` it: the CLR cast QIs and succeeds.
+- Windows blur: the acrylic backdrop covers the **whole window** and ignores
+  `SetWindowRgn` — never put it on the overlay; only on the helper, z-managed
+  natively (AWT `isAlwaysOnTop` re-raises it above the island).
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
 - Calendar: RFC3339 times; 403 body names a disabled API; Testing clients need test users;
   loopback port must be `--strictPort`-stable and the URI identical in app + page + console.

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
@@ -248,6 +249,15 @@ internal fun FloatingNotchOverlay(
     // underneath (taskbar/menu-bar items sitting next to the notch).
     var islandCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
+    // Installed before the touch-target publish below so that one
+    // `onGloballyPositioned` feed can drive both the native click-through
+    // region and (on Windows) the island-sized backdrop-blur helper window.
+    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
+    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
+    DisposableEffect(awtWindow) {
+        onDispose { windowsBlur?.close() }
+    }
+
     // Publishes the island's bounds in window-client pixels for the native
     // click-through (see WindowPassthrough); null (not measured yet) means
     // "whole window interactive", the fail-soft default.
@@ -267,28 +277,34 @@ internal fun FloatingNotchOverlay(
     fun publishTouchTarget(coords: LayoutCoordinates?) {
         if (coords == null || !coords.isAttached) {
             onTouchTargetChange(null)
+            windowsBlur?.updateIsland(null)
             return
         }
         val windowOffset = coords.localToWindow(Offset.Zero)
         val sizePx = coords.size
-        onTouchTargetChange(
-            java.awt.Rectangle(
-                windowOffset.x.roundToInt(),
-                windowOffset.y.roundToInt(),
-                sizePx.width,
-                sizePx.height
-            )
+        val rect = java.awt.Rectangle(
+            windowOffset.x.roundToInt(),
+            windowOffset.y.roundToInt(),
+            sizePx.width,
+            sizePx.height
         )
+        onTouchTargetChange(rect)
+        windowsBlur?.updateIsland(rect)
     }
     val calendarConnected = calendarState is CalendarState.Connected
-    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarConnected, weatherReady) {
+    // The page rides the wheel only while the widget is switched on *and* a
+    // connection backs it — the same rule the pill's calendar indicator and
+    // the native sizer follow (a toggled-off calendar must neither draw nor
+    // reserve a page).
+    val calendarReady = config.widgets.showCalendar && calendarConnected
+    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarReady, weatherReady) {
         buildList {
             if (musicLive) add(WidgetPage.Music)
             if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
             if (weatherReady) add(WidgetPage.Weather)
             // Last so the wheel reaches it after the dock, and only when there
             // is a connection behind it -- an empty page would be a dead stop.
-            if (calendarConnected) add(WidgetPage.Calendar)
+            if (calendarReady) add(WidgetPage.Calendar)
         }
     }
 
@@ -399,14 +415,15 @@ internal fun FloatingNotchOverlay(
         weatherVisible = weatherData != null
     )
 
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady)
+    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarReady, weatherReady) {
+        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarReady, weatherReady)
     }
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
-    val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
-    val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
+    // (windowsBlur / macBlur are installed near the touch-target publish
+    // above — the Windows helper tracks the island rect from the same feed.)
+    //
     // The Blurred surface means native backdrop blur wherever the bridge
     // answers (compositor radius on macOS, DWM acrylic on Windows), falling
     // back to painted glass where it does not. Only the scrim differs between
@@ -461,8 +478,9 @@ internal fun FloatingNotchOverlay(
 
     // The native blur follows the surface, not a toggle: picking Blurred
     // enables it, any other surface clears it. The mac panel tracks the island
-    // while it animates; Windows applies once per surface or intensity change.
-    // Both fail soft to the painted surfaces.
+    // while it animates; Windows applies the accent once per surface or
+    // intensity change and follows the island through the touch-target feed
+    // above. Both fail soft to the painted surfaces.
     val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
     LaunchedEffect(blurActive, blurIntensity, islandExpanded, config.style) {
         windowsBlur?.setBlur(blurActive, blurIntensity)

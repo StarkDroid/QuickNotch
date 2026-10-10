@@ -22,7 +22,8 @@
 #      raw WinRT metadata:
 #          GetMediaProperties()      -> TryGetMediaPropertiesAsync()
 #          GetPlaybackStatus()       -> GetPlaybackInfo().PlaybackStatus
-#          TryGetThumbnailAsync()    -> mediaProperties.Thumbnail
+#          (there is NO session-level thumbnail call at all — artwork is
+#          carried only by mediaProperties.Thumbnail)
 #      The script probes which names exist and uses those, so it keeps
 #      working across minor projection differences.
 #
@@ -37,16 +38,23 @@
 #
 #  The `status` poll accepts what the app already holds: <lastId> is the track
 #  id of its current session and <haveArt> is '1' when it already decoded art
-#  for that id. The thumbnail (a COM fetch plus a few hundred KB of base64
-#  through stdout) is then skipped for the steady state and only re-sent on a
-#  track change or while the app is still artless — the Kotlin side caches per
-#  id, so omitting it loses nothing. Both args arrive as separate argv elements
+#  for that id and '2' when a fetch for that id already came back empty. The
+#  thumbnail (a COM fetch plus a few hundred KB of base64 through stdout) is
+#  then skipped for the steady state and only re-sent on a track change or
+#  while the app still wants to try — the Kotlin side caches per id, so
+#  omitting it loses nothing. Both args arrive as separate argv elements
 #  (ProcessBuilder), so ids containing spaces survive intact.
 #
 #  Output contract (identical to the macOS nowplaying-bridge):
-#    {"state":"playing|paused|stopped|none","src":"","title":"…",
-#     "artist":"…","album":"…","pos":12345,"dur":234567,
+#    {"state":"playing|paused|stopped|none","src":"","srcId":"<aumid>",
+#     "title":"…","artist":"…","album":"…","pos":12345,"dur":234567,
 #     "art":"<base64>","id":"<global track id>"}
+#
+#  Track identity: most browsers publish no GlobalId at all. An empty id
+#  would collapse every track into one cache key on the Kotlin side (the
+#  first cover would stick forever) and defeat the art gate here, so when
+#  GlobalId is blank a stable id is derived from the source app + track
+#  fields (SHA-1, stable across spawns).
 #
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +70,20 @@ $asTaskGeneric = (
     Where-Object {
         $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
         $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+    }
+)[0]
+
+# Pre-bound AsStreamForRead (the single-stream overload). Calling it as a
+# static method never resolves its IInputStream parameter under
+# PowerShell 5.1: the async result is a System.__ComObject whose
+# GetInterfaces() is empty, so PowerShell's structural conversion reports
+# "Cannot find an overload" even though the RCW answers the QI (IsInstance
+# is true). MethodInfo.Invoke performs a real CLR cast instead, which is
+# the QI that succeeds — verified byte-for-byte round-trip.
+$asStreamForRead = (
+    [System.IO.WindowsRuntimeStreamExtensions].GetMethods() |
+    Where-Object {
+        $_.Name -eq 'AsStreamForRead' -and $_.GetParameters().Count -eq 1
     }
 )[0]
 
@@ -82,13 +104,19 @@ function Get-Base64 {
     try {
         $stream = Await-Async ($Reference.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
         if ($null -eq $stream) { return $null }
-        $size = [uint32]$stream.Size
-        if ($size -eq 0) { return $null }
-        $reader = New-Object -TypeName Windows.Storage.Streams.DataReader -ArgumentList $stream
-        $null = Await-Async ($reader.LoadAsync($size)) ([UInt32])
-        $buffer = $reader.ReadBuffer($size)
-        $bytes = New-Object byte[] $buffer.Length
-        [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions]::CopyTo($buffer, $bytes, 0, $buffer.Length)
+        # Several sources (e.g. some browsers) also publish degenerate 0–1
+        # byte stub streams — those read as "no art", not as undecodable
+        # blobs the app would then retry every second.
+        $netStream = $asStreamForRead.Invoke($null, @($stream))
+        $buffer = New-Object System.IO.MemoryStream
+        try {
+            $netStream.CopyTo($buffer)
+        } finally {
+            $netStream.Dispose()
+        }
+        $bytes = $buffer.ToArray()
+        $buffer.Dispose()
+        if ($bytes.Length -lt 4) { return $null }
         return [Convert]::ToBase64String($bytes)
     } catch {
         return $null
@@ -167,6 +195,9 @@ if ($null -eq $status) {
     try { $status = $session.GetPlaybackStatus().ToString() } catch { }
 }
 
+$aumid = ''
+try { $aumid = [string]$session.SourceAppUserModelId } catch { }
+
 $title = ''
 $artist = ''
 $album = ''
@@ -178,19 +209,32 @@ if ($null -ne $properties) {
     $id = [string]$properties.GlobalId
 }
 
+# Browsers (Chrome/Edge/YouTube Music and other Chromium media sites) publish
+# no GlobalId. Without a stable per-track id the app would cache art under ""
+# and keep the very first cover forever, and the gate below could never tell
+# one track from the next — derive one from the source app + track fields.
+if ([string]::IsNullOrWhiteSpace($id) -and -not [string]::IsNullOrWhiteSpace($title)) {
+    $raw = $aumid + '|' + $title + '|' + $artist + '|' + $album
+    $sha1 = [System.Security.Cryptography.SHA1]::Create()
+    try {
+        $hash = $sha1.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($raw))
+        $id = ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant().Substring(0, 24)
+    } finally {
+        $sha1.Dispose()
+    }
+}
+
 # Album art is carried by the media properties in this projection — but only
 # fetched while the app still needs it (new track, or a decode that has not
-# landed yet). Steady-state polls for an already-illustrated track skip the
-# COM round-trip and the base64 transfer entirely.
+# landed yet). Steady-state polls for an already-illustrated track — and for
+# a track whose fetch already came back empty ('2') — skip the COM round-trip
+# and the base64 transfer entirely.
 $needArt = $true
-if (-not [string]::IsNullOrWhiteSpace($id) -and $id -ceq $lastId -and $lastHaveArt -ceq '1') {
+if (-not [string]::IsNullOrWhiteSpace($id) -and $id -ceq $lastId -and $lastHaveArt -ne '0') {
     $needArt = $false
 }
 if ($needArt -and $null -ne $properties) {
     try { $art = Get-Base64 $properties.Thumbnail } catch { $art = $null }
-}
-if ($needArt -and [string]::IsNullOrWhiteSpace($art)) {
-    try { $art = Get-Base64 ($session.TryGetThumbnailAsync()) } catch { $art = $null }
 }
 
 $positionMs = 0
@@ -214,6 +258,7 @@ switch ([string]$status) {
 $payload = [ordered]@{
     state  = $state
     src    = ''
+    srcId  = $aumid
     title  = $title
     artist = $artist
     album  = $album

@@ -349,7 +349,11 @@ private fun NotchOverlayWindow(
     val favorites by repository.favorites.collectAsState()
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarTick by GoogleCalendar.minuteTick.collectAsState()
-    val calendarConnected = calendarState is CalendarState.Connected
+    // The calendar page width is only reserved while the widget is switched
+    // on *and* connected — the same rule the overlay's pager follows, so a
+    // toggled-off calendar neither pages nor widens the window.
+    val calendarConnected =
+        config.widgets.showCalendar && calendarState is CalendarState.Connected
     // The native window and the overlay content must size the quickview
     // identically, or the indicator slots (device + laptop battery + the
     // notification bell, the calendar mail badge) clip off the far edge. Both
