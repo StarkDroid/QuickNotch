@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +42,7 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.progress_border_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_section_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_style_title
 import com.starkdroid.quicknotch.generated.resources.waveform_hide_title
@@ -260,6 +262,18 @@ internal fun WidgetsTab(
                             checked = config.widgets.waveformHidesTitle,
                             onCheckedChange = { checked ->
                                 onUpdate { it.copy(widgets = it.widgets.copy(waveformHidesTitle = checked)) }
+                            }
+                        )
+
+                        // The outline progress border only draws while the
+                        // visualiser is off, so its toggle sits with the bars
+                        // rather than as a dead switch elsewhere.
+                        BehaviorSwitchRow(
+                            icon = Icons.Default.Timeline,
+                            title = stringResource(Res.string.progress_border_title),
+                            checked = config.widgets.showProgressBorder,
+                            onCheckedChange = { checked ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(showProgressBorder = checked)) }
                             }
                         )
 

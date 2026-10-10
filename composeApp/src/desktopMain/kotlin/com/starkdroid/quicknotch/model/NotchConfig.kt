@@ -136,6 +136,12 @@ data class WidgetsConfig(
      */
     val visualiserStyle: VisualiserStyle = VisualiserStyle.WAVEFORM,
     /**
+     * Trace the island's own outline with playback progress (top-left corner,
+     * around the bottom, to the top-right) while collapsed. Shown only while
+     * the visualiser is off; the expanded page carries its own progress.
+     */
+    val showProgressBorder: Boolean = true,
+    /**
      * While the waveform is on, drop the song name from the collapsed pill: the
      * live view then reads as disc + analyser + level rings only, and the bars
      * get the whole title frame (18dp instead of a 7dp band). Meaningless with

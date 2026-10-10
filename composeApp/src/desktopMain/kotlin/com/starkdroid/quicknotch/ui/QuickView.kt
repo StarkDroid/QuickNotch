@@ -2,6 +2,7 @@ package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,15 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,13 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.generated.resources.Res
@@ -352,107 +353,86 @@ internal fun rememberMediaNowMs(playing: Boolean): Long {
     return nowMs
 }
 
-/** Collapsed-pill playback progress, owning its own 250 ms interpolation clock. */
+/** Playback progress tracing the island's own outline, owning its 250 ms clock. */
 @Composable
-internal fun IslandProgressBorderForSession(
+internal fun NotchProgressOutlineForSession(
     session: MediaSession,
-    islandWidth: State<Dp>,
-    islandHeight: State<Dp>,
+    /** Album-art color (or the live accent with no cover); the border's ink. */
+    accent: Color,
+    /** Bottom-corner radius of the island shape; mirrors [notchShape]. */
+    radius: Dp,
+    /** Capsule styles round the top corners too; the flush style keeps them square. */
+    roundTop: Boolean,
     modifier: Modifier = Modifier
 ) {
     val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
-    val fraction = session.progressFraction(nowMs).coerceIn(0f, 1f)
+    val target = session.progressFraction(nowMs).coerceIn(0f, 1f)
     // Gradual sweep: the 250 ms clock steps discretely, so ease each step into
-    // the next instead of jumping — one tiny leaf recomposing, never the overlay.
+    // the next. Read ONLY inside the draw lambda below, so the animation
+    // schedules redraws of this one Canvas and never recomposes anything —
+    // not even this leaf.
     val eased by animateFloatAsState(
-        targetValue = fraction,
+        targetValue = target,
         animationSpec = tween(300),
-        label = "progressBorder"
+        label = "progressOutline"
     )
-    IslandProgressBorder(
-        fraction = eased,
-        islandWidth = islandWidth,
-        islandHeight = islandHeight,
-        modifier = modifier
-    )
-}
-
-/**
- * Progress as an outside bottom border: a thin rounded bar riding just below
- * the island's bottom edge, growing left-to-right with the playhead, with a
- * soft glow hanging strictly beneath it.
- *
- * A sibling of the island (never a child): the island clips everything inside
- * it to the notch shape, so anything drawn there could never sit outside —
- * and the glow must never wash over the notch itself. Out here nothing
- * overlaps the island, and the fixed window's transparent margin below the
- * collapsed pill has room for the bar + glow with no resize.
- *
- * Jank discipline: the island's animated size arrives as [State] and is read
- * only inside this leaf (composition) plus a captured value in the offset
- * lambda — a spring tick recomposes this one node and re-places it, never the
- * overlay. The progress clock ticks at 4 Hz into the same leaf.
- */
-@Composable
-private fun IslandProgressBorder(
-    fraction: Float,
-    islandWidth: State<Dp>,
-    islandHeight: State<Dp>,
-    modifier: Modifier = Modifier
-) {
-    val width by islandWidth
-    val height by islandHeight
-    Box(
-        modifier = modifier
-            .width(width)
-            .offset { IntOffset(0, height.roundToPx()) },
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                // Tuck the ends in from the island's rounded bottom corners so
-                // the bar reads corner-to-corner without overhanging the curve.
-                .padding(horizontal = 8.dp)
-        ) {
-            // Breathing room between the island edge and the bar: the bar never
-            // touches the pill's content the way the old inner strip did.
-            Spacer(modifier = Modifier.height(3.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.5.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.10f)),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (fraction > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(fraction)
-                            .height(1.5.dp)
-                            .clip(CircleShape)
-                            .background(LiveAccent.copy(alpha = 0.95f))
-                    )
-                }
-            }
-            // Outer glow only: strictly below the bar, fading down into the
-            // transparent margin — never up over the notch.
-            if (fraction > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .height(5.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    LiveAccent.copy(alpha = 0.30f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
+    // Plain overlay, no pointer modifiers: contributes no hit node (pitfall 24),
+    // and draws nothing of its own besides the outline stroke.
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val f = eased
+            if (f <= 0f) return@Canvas
+            // Stroke sits half-in/half-out of the path by default, and the
+            // island clips everything outside its shape — so inset the path by
+            // half the stroke and the whole border stays visible, hugging the
+            // static hairline from the inside.
+            val strokePx = 2.dp.toPx()
+            val inset = strokePx / 2f
+            val r = radius.toPx().coerceAtLeast(0f)
+            val w = size.width
+            val h = size.height
+            val top = if (roundTop) r else 0f
+            // Perimeter from the top-left corner, clockwise down the left side,
+            // around the bottom and up to the top-right: the notch's visible
+            // outline, so playback fills the island's own border. Angle
+            // convention is Android's: 0° at 3 o'clock, increasing CLOCKWISE
+            // (y-down) — so both bottom quarters run 9→6 and 6→3 o'clock with
+            // a NEGATIVE sweep. A +90 here bulges the arcs to the wrong side
+            // and the following lineTo cuts diagonally through the middle.
+            val path = Path().apply {
+                moveTo(inset, top)
+                lineTo(inset, h - inset - r)
+                arcTo(
+                    rect = Rect(inset, h - inset - 2f * r, inset + 2f * r, h - inset),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = -90f,
+                    forceMoveTo = false
                 )
+                lineTo(w - inset - r, h - inset)
+                arcTo(
+                    rect = Rect(w - inset - 2f * r, h - inset - 2f * r, w - inset, h - inset),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = -90f,
+                    forceMoveTo = false
+                )
+                lineTo(w - inset, top)
             }
+            // Analytic length (straights + two quarter arcs): dashing needs the
+            // real perimeter, and there is no public path measurer to ask.
+            val straights = 2f * (h - inset - r - top) + (w - 2f * inset - 2f * r)
+            val total = (straights + Math.PI.toFloat() * r).coerceAtLeast(1f)
+            drawPath(
+                path = path,
+                color = accent,
+                style = Stroke(
+                    width = strokePx,
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(
+                        floatArrayOf(total * f, total),
+                        0f
+                    )
+                )
+            )
         }
     }
 }

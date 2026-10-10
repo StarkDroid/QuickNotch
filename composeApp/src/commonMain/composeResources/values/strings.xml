@@ -80,6 +80,7 @@
     <string name="waveform_tint_album_art">Album Art</string>
     <string name="waveform_tint_white">White</string>
     <string name="waveform_hide_title">Hide Song Title</string>
+    <string name="progress_border_title">Progress Border</string>
     <string name="notification_indicator">Unread notifications</string>
     <string name="calendar_section_title">Calendar</string>
     <string name="calendar_hint">Show today&#39;s Google Calendar events in the notch.</string>

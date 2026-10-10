@@ -613,22 +613,33 @@ internal fun FloatingNotchOverlay(
                         onWrapWidthChange = { hugWidth = it }
                     )
                 }
-            }
-            // Playback progress rides OUTSIDE the island as a bottom border —
-            // never inside crowding the pill's content the way the old inner
-            // strip did. Shown only while the visualiser is off (the bars get
-            // the pill's full attention when on) and while collapsed (the
-            // expanded page carries its own seekable progress). A sibling of
-            // the island, so its glow hangs into the transparent margin below
-            // and never washes over the notch; it tracks the island's animated
-            // size inside its own leaf, so expand/collapse never disturbs it.
-            val liveNow = if (musicLive) liveSession else null
-            if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
-                IslandProgressBorderForSession(
-                    session = liveNow,
-                    islandWidth = animatedWidth,
-                    islandHeight = animatedHeight
-                )
+                // Playback progress traces the island's own outline — top-left
+                // corner, around the bottom, to the top-right — filling the
+                // notch's border with the playhead instead of reading as a bar.
+                // Shown only while the visualiser is off and while collapsed
+                // (the expanded page carries its own seekable progress). The
+                // ink is the cover's dominant colour (accent cyan with no
+                // cover), matching the expanded player's new tinting.
+                val liveNow = if (musicLive) liveSession else null
+                // Outline progress needs a live track, a collapsed pill, the
+                // bars out of the way and its own toggle on.
+                val showOutline = !isExpanded && liveNow != null &&
+                    !config.widgets.showCollapsedWaveform && config.widgets.showProgressBorder
+                if (showOutline) {
+                    NotchProgressOutlineForSession(
+                        session = liveNow,
+                        accent = liveSession?.artTint ?: LiveAccent,
+                        // Mirrors notchShape(): capsule rounds every corner,
+                        // the flush style only the two facing the screen.
+                        radius = if (config.style.capsule) {
+                            if (islandExpanded) 18.dp else 14.dp
+                        } else {
+                            if (islandExpanded) 18.dp else 13.dp
+                        },
+                        roundTop = config.style.capsule,
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
             }
 
             // The dock is revealed with a fade + scale layer; its visibility

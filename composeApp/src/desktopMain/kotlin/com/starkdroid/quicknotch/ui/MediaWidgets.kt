@@ -47,7 +47,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -92,10 +91,6 @@ internal val LiveAccent = Color(0xFF38BDF8)
 internal val VinylDiscFill = Color(0xFF14161C)
 internal val VinylRing = Color(0xFF343A45)
 
-/** The playhead fill sweeps accent cyan into a pale sky tip at the head. */
-private val ProgressGradientStart = Color(0xFF0EA5E9)
-private val ProgressGradientEnd = Color(0xFF7DD3FC)
-
 // ── Media state helpers ──────────────────────────────────────────────────────
 
 /**
@@ -106,11 +101,6 @@ private val ProgressGradientEnd = Color(0xFF7DD3FC)
  */
 internal fun isStyleEligibleForLiveActivity(config: NotchConfig): Boolean =
     config.style != NotchStyle.DRAG_HANDLE
-
-private
- val progressBrush = Brush.horizontalGradient(
-    colors = listOf(ProgressGradientStart, LiveAccent, ProgressGradientEnd)
-)
 
 internal fun isMusicLive(config: NotchConfig, session: MediaSession?): Boolean =
     config.widgets.nowPlayingEnabled &&
@@ -357,11 +347,15 @@ internal fun TrackTimeLabel(ms: Long, frameHeight: Dp = 28.dp) {
 }
 
 /**
- * A playhead strip: a slim rounded track, an accent-cyan gradient fill, and —
- * when seeking is available — a round head ringed in the live accent that
- * rides the tip of the fill. Dragging or tapping (when the backend supports
- * seeking) retargets the OS player; on macOS the strip is display-only,
- * matching MediaRemote's limitations.
+ * A playhead strip: a slim rounded track, a solid fill in the album's colour,
+ * and — when seeking is available — a round head ringed in the same colour
+ * that rides the tip of the fill. Dragging or tapping (when the backend
+ * supports seeking) retargets the OS player; on macOS the strip is
+ * display-only, matching MediaRemote's limitations.
+ *
+ * [accent] is the cover's dominant colour (or the live accent with no cover):
+ * a plain Color background, so no brush is built per frame while the playhead
+ * advances.
  */
 @Composable
 internal fun TrackProgress(
@@ -370,7 +364,8 @@ internal fun TrackProgress(
     seekable: Boolean,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    accent: Color = LiveAccent
 ) {
     val canSeek = seekable && enabled
     val barHeight = 4.dp
@@ -418,9 +413,7 @@ internal fun TrackProgress(
                         .fillMaxWidth(clamped)
                         .height(barHeight)
                         .clip(CircleShape)
-                        .background(
-                            progressBrush
-                        )
+                        .background(accent)
                 )
             }
         }
@@ -439,7 +432,7 @@ internal fun TrackProgress(
                             .size(headSize)
                             .clip(CircleShape)
                             .background(Color.White)
-                            .border(2.dp, LiveAccent, CircleShape)
+                            .border(2.dp, accent, CircleShape)
                     )
                 }
             }
@@ -454,7 +447,14 @@ internal fun TrackProgress(
 internal fun TransportControls(
     state: PlaybackState,
     enabled: Boolean,
-    media: MediaController
+    media: MediaController,
+    /**
+     * Cover's dominant colour (or the live accent with no cover) behind the
+     * play circle. A plain Color background read straight from the session —
+     * it changes per track, never per frame, so nothing is rebuilt while the
+     * playhead advances.
+     */
+    accent: Color = LiveAccent
 ) {
     val tint = TextPrimary.copy(alpha = if (enabled) 0.9f else 0.3f)
     // Optimistic play/pause: the OS player reacts through the media bridge's
@@ -514,7 +514,7 @@ internal fun TransportControls(
                 // plus its background is one clickable surface.
                 .clip(CircleShape)
                 .background(
-                    LiveAccent.copy(
+                    accent.copy(
                         alpha = if (enabled) (if (playHovered) 1f else 0.92f) else 0.35f
                     )
                 )
