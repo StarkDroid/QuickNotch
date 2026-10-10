@@ -1,9 +1,11 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,7 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +47,7 @@ import com.starkdroid.quicknotch.media.MediaSession
 import com.starkdroid.quicknotch.media.PlaybackState
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.NotchStyle
+import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.model.NotchSurface
@@ -68,12 +75,14 @@ internal fun QuickView(
     showDeviceBattery: Boolean,
     /**
      * Equalizer bars under the title (live media only, collapsed only). The
-     * caller also hides the edge progress strip while this is on, so the bars
-     * get that band to themselves.
+     * caller also hides the outside progress border while this is on, so the
+     * bars get the pill's full attention.
      */
     showWaveform: Boolean = false,
     /** Album-art-derived or white; see [WaveformTint]. */
     waveformColor: Color = WaveformWhite,
+    /** Which bar geometry the collapsed visualiser draws; see [VisualiserStyle]. */
+    visualiserStyle: VisualiserStyle = VisualiserStyle.WAVEFORM,
     /**
      * Waveform-only layout: the song name is dropped and the analyser takes the
      * whole title frame, so the live pill reads as disc + bars + level rings.
@@ -168,6 +177,7 @@ internal fun QuickView(
                         MusicWaveform(
                             playing = media.state == PlaybackState.PLAYING,
                             color = waveformColor,
+                            style = visualiserStyle,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(18.dp)
@@ -186,6 +196,7 @@ internal fun QuickView(
                             MusicWaveform(
                                 playing = media.state == PlaybackState.PLAYING,
                                 color = waveformColor,
+                                style = visualiserStyle,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(7.dp)
@@ -342,31 +353,86 @@ internal fun rememberMediaNowMs(playing: Boolean): Long {
     return nowMs
 }
 
-/** Collapsed-pill live progress strip, owning its own 250 ms interpolation clock. */
+/** Playback progress tracing the island's own outline, owning its 250 ms clock. */
 @Composable
-internal fun BoxScope.LiveProgressStripForSession(session: MediaSession) {
-    val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
-    LiveProgressStrip(fraction = session.progressFraction(nowMs))
-}
-
-/**
- * Progress bar drawn against the pill's "inner" border — for a top-centred
- * notch that is the bottom edge (nearest the screen centre) — growing toward
- * the playhead as the track advances. Hidden behind the expanding island once
- * the dock opens (the expanded page shows its own progress control).
- */
-@Composable
-internal fun BoxScope.LiveProgressStrip(
-    fraction: Float
+internal fun NotchProgressOutlineForSession(
+    session: MediaSession,
+    /** Album-art color (or the live accent with no cover); the border's ink. */
+    accent: Color,
+    /** Bottom-corner radius of the island shape; mirrors [notchShape]. */
+    radius: Dp,
+    /** Capsule styles round the top corners too; the flush style keeps them square. */
+    roundTop: Boolean,
+    modifier: Modifier = Modifier
 ) {
-    val settlePadding = 2.dp
-    Box(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(vertical = settlePadding)
-            .fillMaxWidth(fraction.coerceIn(0f, 1f))
-            .height(2.5.dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(LiveAccent.copy(alpha = 0.95f))
+    val nowMs = rememberMediaNowMs(session.state == PlaybackState.PLAYING)
+    val target = session.progressFraction(nowMs).coerceIn(0f, 1f)
+    // Gradual sweep: the 250 ms clock steps discretely, so ease each step into
+    // the next. Read ONLY inside the draw lambda below, so the animation
+    // schedules redraws of this one Canvas and never recomposes anything —
+    // not even this leaf.
+    val eased by animateFloatAsState(
+        targetValue = target,
+        animationSpec = tween(300),
+        label = "progressOutline"
     )
+    // Plain overlay, no pointer modifiers: contributes no hit node (pitfall 24),
+    // and draws nothing of its own besides the outline stroke.
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val f = eased
+            if (f <= 0f) return@Canvas
+            // Stroke sits half-in/half-out of the path by default, and the
+            // island clips everything outside its shape — so inset the path by
+            // half the stroke and the whole border stays visible, hugging the
+            // static hairline from the inside.
+            val strokePx = 2.dp.toPx()
+            val inset = strokePx / 2f
+            val r = radius.toPx().coerceAtLeast(0f)
+            val w = size.width
+            val h = size.height
+            val top = if (roundTop) r else 0f
+            // Perimeter from the top-left corner, clockwise down the left side,
+            // around the bottom and up to the top-right: the notch's visible
+            // outline, so playback fills the island's own border. Angle
+            // convention is Android's: 0° at 3 o'clock, increasing CLOCKWISE
+            // (y-down) — so both bottom quarters run 9→6 and 6→3 o'clock with
+            // a NEGATIVE sweep. A +90 here bulges the arcs to the wrong side
+            // and the following lineTo cuts diagonally through the middle.
+            val path = Path().apply {
+                moveTo(inset, top)
+                lineTo(inset, h - inset - r)
+                arcTo(
+                    rect = Rect(inset, h - inset - 2f * r, inset + 2f * r, h - inset),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = -90f,
+                    forceMoveTo = false
+                )
+                lineTo(w - inset - r, h - inset)
+                arcTo(
+                    rect = Rect(w - inset - 2f * r, h - inset - 2f * r, w - inset, h - inset),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = -90f,
+                    forceMoveTo = false
+                )
+                lineTo(w - inset, top)
+            }
+            // Analytic length (straights + two quarter arcs): dashing needs the
+            // real perimeter, and there is no public path measurer to ask.
+            val straights = 2f * (h - inset - r - top) + (w - 2f * inset - 2f * r)
+            val total = (straights + Math.PI.toFloat() * r).coerceAtLeast(1f)
+            drawPath(
+                path = path,
+                color = accent,
+                style = Stroke(
+                    width = strokePx,
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(
+                        floatArrayOf(total * f, total),
+                        0f
+                    )
+                )
+            )
+        }
+    }
 }

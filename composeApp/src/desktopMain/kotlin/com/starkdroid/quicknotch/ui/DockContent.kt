@@ -409,7 +409,8 @@ private fun MusicContent(
                     seekable = media.supportsSeek,
                     enabled = interactive,
                     onSeek = media::seekTo,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    accent = session.artTint ?: LiveAccent
                 )
                 TrackTimeLabel(duration, frameHeight = 22.dp)
             }
@@ -484,7 +485,8 @@ private fun MusicContent(
             TransportControls(
                 state = session.state,
                 enabled = interactive,
-                media = media
+                media = media,
+                accent = session.artTint ?: LiveAccent
             )
             Spacer(modifier = Modifier.height(4.dp))
         }

@@ -595,6 +595,7 @@ internal fun FloatingNotchOverlay(
                         fahrenheit = config.widgets.weatherFahrenheit,
                         showWaveform = config.widgets.showCollapsedWaveform,
                         waveformColor = waveformColor,
+                        visualiserStyle = config.widgets.visualiserStyle,
                         waveformHidesTitle =
                             config.widgets.showCollapsedWaveform && config.widgets.waveformHidesTitle,
                         discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, collapsedScope),
@@ -612,13 +613,32 @@ internal fun FloatingNotchOverlay(
                         onWrapWidthChange = { hugWidth = it }
                     )
                 }
-                // Live progress hugs the pill's inner border (the edge facing
-                // the nearest screen centre), thinning while the pill itself is
-                // thin. The waveform takes this band over when it is enabled —
-                // one or the other, never both fighting for the same pixels.
+                // Playback progress traces the island's own outline — top-left
+                // corner, around the bottom, to the top-right — filling the
+                // notch's border with the playhead instead of reading as a bar.
+                // Shown only while the visualiser is off and while collapsed
+                // (the expanded page carries its own seekable progress). The
+                // ink is the cover's dominant colour (accent cyan with no
+                // cover), matching the expanded player's new tinting.
                 val liveNow = if (musicLive) liveSession else null
-                if (!isExpanded && liveNow != null && !config.widgets.showCollapsedWaveform) {
-                    LiveProgressStripForSession(session = liveNow)
+                // Outline progress needs a live track, a collapsed pill, the
+                // bars out of the way and its own toggle on.
+                val showOutline = !isExpanded && liveNow != null &&
+                    !config.widgets.showCollapsedWaveform && config.widgets.showProgressBorder
+                if (showOutline) {
+                    NotchProgressOutlineForSession(
+                        session = liveNow,
+                        accent = liveSession?.artTint ?: LiveAccent,
+                        // Mirrors notchShape(): capsule rounds every corner,
+                        // the flush style only the two facing the screen.
+                        radius = if (config.style.capsule) {
+                            if (islandExpanded) 18.dp else 14.dp
+                        } else {
+                            if (islandExpanded) 18.dp else 13.dp
+                        },
+                        roundTop = config.style.capsule,
+                        modifier = Modifier.matchParentSize()
+                    )
                 }
             }
 

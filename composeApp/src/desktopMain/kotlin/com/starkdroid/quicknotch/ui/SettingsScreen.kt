@@ -82,6 +82,8 @@ import com.starkdroid.quicknotch.generated.resources.style_floating_pill
 import com.starkdroid.quicknotch.generated.resources.surface_solid
 import com.starkdroid.quicknotch.generated.resources.surface_system_accent
 import com.starkdroid.quicknotch.generated.resources.surface_blurred
+import com.starkdroid.quicknotch.generated.resources.visualiser_style_bars
+import com.starkdroid.quicknotch.generated.resources.visualiser_style_waveform
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_album_art
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_white
 import com.starkdroid.quicknotch.generated.resources.tab_behavior
@@ -93,6 +95,7 @@ import com.starkdroid.quicknotch.model.ClockDateFormat
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
+import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.theme.AccentRed
 import com.starkdroid.quicknotch.theme.AccentSolid
@@ -422,6 +425,14 @@ internal fun WaveformTint.label(): String = stringResource(
     when (this) {
         WaveformTint.ALBUM_ART -> Res.string.waveform_tint_album_art
         WaveformTint.WHITE -> Res.string.waveform_tint_white
+    }
+)
+
+@Composable
+internal fun VisualiserStyle.label(): String = stringResource(
+    when (this) {
+        VisualiserStyle.WAVEFORM -> Res.string.visualiser_style_waveform
+        VisualiserStyle.BARS -> Res.string.visualiser_style_bars
     }
 )
 

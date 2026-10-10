@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Straighten
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -38,7 +37,6 @@ import com.starkdroid.quicknotch.generated.resources.indicator_bluetooth_battery
 import com.starkdroid.quicknotch.generated.resources.indicator_laptop_battery
 import com.starkdroid.quicknotch.generated.resources.indicator_notifications
 import com.starkdroid.quicknotch.generated.resources.indicator_volume
-import com.starkdroid.quicknotch.generated.resources.indicator_waveform
 import com.starkdroid.quicknotch.generated.resources.notch_style
 import com.starkdroid.quicknotch.generated.resources.notification_grant_button
 import com.starkdroid.quicknotch.generated.resources.notification_grant_hint
@@ -49,8 +47,6 @@ import com.starkdroid.quicknotch.generated.resources.settings_appearance_desc
 import com.starkdroid.quicknotch.generated.resources.surface_theme
 import com.starkdroid.quicknotch.generated.resources.value_dp
 import com.starkdroid.quicknotch.generated.resources.value_scale
-import com.starkdroid.quicknotch.generated.resources.waveform_hide_title
-import com.starkdroid.quicknotch.generated.resources.waveform_tint_title
 import com.starkdroid.quicknotch.media.NotificationCount
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.ClockDateFormat
@@ -58,7 +54,6 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
-import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.theme.SettingsBorder
 import java.util.Locale
 import org.jetbrains.compose.resources.stringResource
@@ -258,51 +253,12 @@ internal fun DockSizingTab(
                                 }
                             )
                         }
-                        WaveformToggleBox(
-                            title = stringResource(Res.string.indicator_waveform),
-                            checked = config.widgets.showCollapsedWaveform,
-                            modifier = Modifier.weight(1f),
-                            onClick = { checked ->
-                                onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedWaveform = checked)) }
-                            }
-                        )
                         NotificationToggleBox(
                             title = stringResource(Res.string.indicator_notifications),
                             checked = config.widgets.showCollapsedNotifications,
                             modifier = Modifier.weight(1f),
                             onClick = { checked ->
                                 onUpdate { it.copy(widgets = it.widgets.copy(showCollapsedNotifications = checked)) }
-                            }
-                        )
-                    }
-
-                    // The waveform's colour choice belongs right beside its
-                    // toggle and only matters while the toggle is on.
-                    if (config.widgets.showCollapsedWaveform) {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        AppearanceDropdown(
-                            label = stringResource(Res.string.waveform_tint_title),
-                            options = WaveformTint.entries.toList(),
-                            selected = config.widgets.waveformTint,
-                            optionLabel = { it.label() },
-                            onSelect = { tint ->
-                                onUpdate { it.copy(widgets = it.widgets.copy(waveformTint = tint)) }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        // Hiding the title only means something while the bars
-                        // are on screen, so it lives with them rather than as a
-                        // dead switch elsewhere in the grid.
-                        Spacer(modifier = Modifier.height(14.dp))
-                        BehaviorSwitchRow(
-                            icon = Icons.Default.VisibilityOff,
-                            title = stringResource(Res.string.waveform_hide_title),
-                            checked = config.widgets.waveformHidesTitle,
-                            onCheckedChange = { checked ->
-                                onUpdate { it.copy(widgets = it.widgets.copy(waveformHidesTitle = checked)) }
                             }
                         )
                     }

@@ -68,6 +68,20 @@ enum class WaveformTint {
 }
 
 /**
+ * Which shape the collapsed pill's media visualiser takes. [WAVEFORM] is the
+ * original centred capsules; [BARS] is sharp solid rectangles at the same
+ * pitch, anchored to the bottom edge.
+ */
+@Serializable
+enum class VisualiserStyle {
+    /** Rounded capsules growing from their vertical centre. */
+    WAVEFORM,
+
+    /** Sharp solid bars rising from the bottom edge. */
+    BARS
+}
+
+/**
  * Per-widget enable flags, edited from the Widgets tab. Defaults keep the
  * historical behaviour (pinned apps always present); a media page additionally
  * requires a live session and a capsule-friendly [NotchStyle].
@@ -116,6 +130,17 @@ data class WidgetsConfig(
      */
     /** Album-art-derived or constant white; see [WaveformTint]. */
     val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
+    /**
+     * Which visualiser shape the collapsed bars take. Defaults to the
+     * original waveform, so existing configs render unchanged.
+     */
+    val visualiserStyle: VisualiserStyle = VisualiserStyle.WAVEFORM,
+    /**
+     * Trace the island's own outline with playback progress (top-left corner,
+     * around the bottom, to the top-right) while collapsed. Shown only while
+     * the visualiser is off; the expanded page carries its own progress.
+     */
+    val showProgressBorder: Boolean = true,
     /**
      * While the waveform is on, drop the song name from the collapsed pill: the
      * live view then reads as disc + analyser + level rings only, and the bars
