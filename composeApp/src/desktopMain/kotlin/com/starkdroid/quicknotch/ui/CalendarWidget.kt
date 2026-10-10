@@ -3,7 +3,6 @@ package com.starkdroid.quicknotch.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +45,6 @@ import com.starkdroid.quicknotch.calendar.CalendarDateGroup
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.todayDate
 import com.starkdroid.quicknotch.calendar.upcomingDateGroups
-import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.generated.resources.Res
@@ -75,7 +73,6 @@ import com.starkdroid.quicknotch.generated.resources.calendar
 import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.NotchBorder
-import com.starkdroid.quicknotch.theme.SettingsBorder
 import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
@@ -116,80 +113,27 @@ internal fun CalendarDayIndicator(
 
 /**
  * The Widgets-tab calendar widget: connect Google Calendar, see the account and
- * sync age, refresh on demand, and choose whether the notch shows the day at
- * all. Deliberately one place for all of it — the connection is the only way to
- * get events, so splitting "connect" from "show it" would just be two chores for
- * one result.
+ * sync age, and refresh on demand. Whether the notch shows the day at all lives
+ * on the accordion header (like every other widget) — the connection is the
+ * only thing configured in here.
  */
 @Composable
 internal fun CalendarWidget(
     state: CalendarState,
     refreshing: Boolean,
-    tick: Long,
-    showInQuickView: Boolean,
-    onShowInQuickViewChange: (Boolean) -> Unit,
     onConnect: () -> Unit,
     onCancel: () -> Unit,
     onDisconnect: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    val connected = state as? CalendarState.Connected
-    Column(modifier = Modifier.fillMaxWidth()) {
-        CalendarConnectRow(
-            state = state,
-            refreshing = refreshing,
-            onConnect = onConnect,
-            onCancel = onCancel,
-            onDisconnect = onDisconnect,
-            onRefresh = onRefresh
-        )
-
-        // The notch toggle only exists once there is something to show. Offering
-        // it before the OAuth handshake has finished is a switch that controls
-        // nothing: the user flips it, sees no calendar, and concludes the
-        // feature is broken rather than not connected yet.
-        if (connected != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // A small switch row rather than an indicator cell: the calendar is
-            // not a level ring, so there is nothing meaningful to preview.
-                Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SettingsElevated)
-                    .border(1.dp, SettingsBorder, RoundedCornerShape(12.dp))
-                    .clickable { onShowInQuickViewChange(!showInQuickView) }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(
-                            Res.string.calendar_upcoming_count,
-                            calendarUpcomingCount(state, tick).toString()
-                        ),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = stringResource(Res.string.calendar_hint),
-                        style = AppTypography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                // Reuse the flat switch the rest of settings uses, so the notch
-                // and the settings window agree on what "on" looks like.
-                MinimalistRectSwitch(
-                    checked = showInQuickView,
-                    onCheckedChange = { onShowInQuickViewChange(it) }
-                )
-            }
-        }
-    }
+    CalendarConnectRow(
+        state = state,
+        refreshing = refreshing,
+        onConnect = onConnect,
+        onCancel = onCancel,
+        onDisconnect = onDisconnect,
+        onRefresh = onRefresh
+    )
 }
 
 /** Status line + the one action that applies to the current state. */

@@ -108,12 +108,15 @@
 
     <!-- Weather widget -->
     <string name="weather_section_title">Weather</string>
-    <string name="weather_hint">Show the current conditions in the notch, with a 7-day outlook a scroll away.</string>
-    <string name="weather_show_title">Show weather in the notch</string>
     <string name="weather_units_title">Temperature unit</string>
     <string name="weather_unit_celsius">Celsius (°C)</string>
     <string name="weather_unit_fahrenheit">Fahrenheit (°F)</string>
     <string name="weather_refresh">Refresh</string>
+    <string name="weather_location_title">Location</string>
+    <string name="weather_location_auto">Automatic location</string>
+    <string name="weather_location_search_hint">Search city or state…</string>
+    <string name="weather_location_no_results">No places found</string>
+    <string name="weather_location_use_auto">Use automatic location</string>
     <string name="weather_locating">Finding your location…</string>
     <string name="weather_unavailable">Weather unavailable</string>
     <string name="weather_failed_hint">Couldn\'t reach the forecast. Check your connection and try again.</string>

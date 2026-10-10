@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.math.abs
 
 /**
  * The app-wide weather feed: one IP-geolocated position plus its Open-Meteo
@@ -51,17 +52,34 @@ object Weather {
 
     private var pollJob: Job? = null
     private var position: GeoPosition? = null
+    // Last manual place applied (dedupes config re-emits). Null = automatic.
+    private var lastManualPlace: WeatherPlace? = null
 
     private val cacheFile: File get() = File(AppPaths.configDir, "weather.json")
 
-    /** Start the poller. Idempotent; called once from the app. */
-    fun start() {
+    /**
+     * Start the poller. Idempotent; called once from the app. A manual place
+     * seeds the position up front so the first fetch never detours through the
+     * IP lookup; without one the cached fix (if any) wins as before.
+     */
+    fun start(manualPlace: WeatherPlace? = null) {
         if (pollJob != null) return
+        lastManualPlace = manualPlace
+        if (manualPlace != null) {
+            position = GeoPosition(manualPlace.latitude, manualPlace.longitude, manualPlace.name)
+        }
         // Show the cached day immediately so a cold start paints weather on
-        // the first frame, then refresh in the background.
+        // the first frame, then refresh in the background — but only when the
+        // cache belongs to the active position. A stale fix from another city
+        // (e.g. after picking a new place) must never paint under the new one.
         readCache()?.let { cached ->
-            position = GeoPosition(cached.lat, cached.lon, cached.city)
-            _state.value = WeatherState.Ready(cached.toData())
+            val sameFix = position?.let {
+                abs(it.latitude - cached.lat) < 0.005 && abs(it.longitude - cached.lon) < 0.005
+            } ?: true
+            if (sameFix) {
+                position = position ?: GeoPosition(cached.lat, cached.lon, cached.city)
+                _state.value = WeatherState.Ready(cached.toData())
+            }
         }
         pollJob = scope.launch {
             refreshBlocking()
@@ -87,6 +105,36 @@ object Weather {
             refreshMutex.withLock { refreshBlocking() }
         }
     }
+
+    /**
+     * Apply a config-side place change at runtime. A pick replaces the
+     * position outright; clearing it (null) drops the fix so the next fetch
+     * re-locates over IP. Either way one immediate fetch follows, under the
+     * same mutex as the settings refresh. Re-emits of the same place are
+     * ignored — config flows re-emit on every unrelated write.
+     */
+    fun setManualPlace(place: WeatherPlace?) {
+        if (place == lastManualPlace) return
+        lastManualPlace = place
+        position = place?.let { GeoPosition(it.latitude, it.longitude, it.name) }
+        scope.launch {
+            refreshMutex.withLock { refreshBlocking() }
+        }
+    }
+
+    /**
+     * City/state search for the settings picker. Empty query or any failure
+     * answers with no places rather than an error — the picker just shows
+     * "no places found".
+     */
+    suspend fun searchPlaces(query: String): List<WeatherPlace> =
+        when (val found = api.searchPlaces(query.trim())) {
+            is GeocodeResult.Ok -> found.places
+            else -> {
+                AppLog.line("QuickNotch weather place search failed: $found")
+                emptyList()
+            }
+        }
 
     /**
      * Resolve the position (cached fix wins, IP lookup only when there is

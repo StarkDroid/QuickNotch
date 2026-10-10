@@ -4,8 +4,10 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import kotlinx.datetime.Clock
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
@@ -121,11 +123,53 @@ class WeatherApi(
         )
     }
 
+    // ── place search ─────────────────────────────────────────────────────────
+
+    /**
+     * City/state search for the manual-location picker. Same keyless provider
+     * as the forecast (Open-Meteo geocoding), so picking another state needs
+     * no key either. `parameter()` does the URL-encoding; results carry a
+     * display label ("Austin, Texas, United States") plus coordinates.
+     */
+    suspend fun searchPlaces(query: String): GeocodeResult {
+        if (query.isBlank()) return GeocodeResult.Ok(emptyList())
+        val body = fetchGeocodeBody(query) ?: return GeocodeResult.Unreachable
+        return parsePlaces(body)
+    }
+
+    private suspend fun fetchGeocodeBody(query: String): String? = runCatching {
+        client.get(GEOCODE_ENDPOINT) {
+            parameter("name", query)
+            parameter("count", 6)
+            parameter("language", "en")
+            parameter("format", "json")
+        }.bodyAsText()
+    }.getOrNull()
+
+    /** No match is `{}` with no `results` key — an empty list, not a failure. */
+    private fun parsePlaces(body: String): GeocodeResult {
+        val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+            ?: return GeocodeResult.Malformed
+        val places = root["results"]?.jsonArray.orEmpty().mapNotNull { entry ->
+            val obj = runCatching { entry.jsonObject }.getOrNull() ?: return@mapNotNull null
+            val name = obj["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val lat = obj["latitude"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+            val lon = obj["longitude"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+            val admin = obj["admin1"]?.jsonPrimitive?.content.orEmpty()
+            val country = obj["country"]?.jsonPrimitive?.content.orEmpty()
+            val label = listOf(name, admin, country)
+                .filter { it.isNotBlank() }.distinct().joinToString(", ")
+            WeatherPlace(name = label, latitude = lat, longitude = lon)
+        }
+        return GeocodeResult.Ok(places)
+    }
+
     override fun close() = client.close()
 
     companion object {
         const val FORECAST_ENDPOINT = "https://api.open-meteo.com/v1/forecast"
         const val GEO_ENDPOINT = "http://ip-api.com/json/"
+        const val GEOCODE_ENDPOINT = "https://geocoding-api.open-meteo.com/v1/search"
 
         /**
          * Timeouts live here rather than being set per call, and are generous:
@@ -148,6 +192,18 @@ data class GeoPosition(
     val latitude: Double,
     val longitude: Double,
     val city: String = ""
+)
+
+/**
+ * A user-picked weather place: display label plus coordinates. Stored in the
+ * config when set (null there means the automatic IP position), so it must
+ * stay `@Serializable` with defaults — old files simply load null.
+ */
+@Serializable
+data class WeatherPlace(
+    val name: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 )
 
 /** Conditions right now. Temperatures are in the requested unit. */
@@ -187,6 +243,13 @@ sealed interface LocationResult {
     data object Refused : LocationResult
     data object Unreachable : LocationResult
     data object Malformed : LocationResult
+}
+
+/** The outcomes of a place search. */
+sealed interface GeocodeResult {
+    data class Ok(val places: List<WeatherPlace>) : GeocodeResult
+    data object Unreachable : GeocodeResult
+    data object Malformed : GeocodeResult
 }
 
 /** The outcomes of a forecast fetch. */

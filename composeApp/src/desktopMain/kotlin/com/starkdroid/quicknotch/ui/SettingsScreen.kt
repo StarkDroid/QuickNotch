@@ -145,7 +145,6 @@ fun SettingsScreen(
     // the same flow, and only the actions are handed down.
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
-    val calendarTick by GoogleCalendar.minuteTick.collectAsState()
 
     // Restore the appearance/sizing/clock defaults. This is the same set the tab
     // used to own; it now lives here because the button sits in the content
@@ -349,7 +348,6 @@ fun SettingsScreen(
                             onSearchQueryChange = { searchQuery = it },
                             calendarState = calendarState,
                             calendarRefreshing = calendarRefreshing,
-                            calendarTick = calendarTick,
                             onConnectCalendar = GoogleCalendar::connect,
                             onCancelCalendar = GoogleCalendar::cancelConnect,
                             onDisconnectCalendar = GoogleCalendar::disconnect,

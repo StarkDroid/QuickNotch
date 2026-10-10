@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,10 +19,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,7 +38,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -58,6 +69,11 @@ import com.starkdroid.quicknotch.generated.resources.weather_failed_hint
 import com.starkdroid.quicknotch.generated.resources.weather_fog
 import com.starkdroid.quicknotch.generated.resources.weather_high_low
 import com.starkdroid.quicknotch.generated.resources.weather_locating
+import com.starkdroid.quicknotch.generated.resources.weather_location_auto
+import com.starkdroid.quicknotch.generated.resources.weather_location_no_results
+import com.starkdroid.quicknotch.generated.resources.weather_location_search_hint
+import com.starkdroid.quicknotch.generated.resources.weather_location_title
+import com.starkdroid.quicknotch.generated.resources.weather_location_use_auto
 import com.starkdroid.quicknotch.generated.resources.weather_never_synced
 import com.starkdroid.quicknotch.generated.resources.weather_night
 import com.starkdroid.quicknotch.generated.resources.weather_partly
@@ -65,7 +81,6 @@ import com.starkdroid.quicknotch.generated.resources.weather_partly_night
 import com.starkdroid.quicknotch.generated.resources.weather_precip
 import com.starkdroid.quicknotch.generated.resources.weather_rain
 import com.starkdroid.quicknotch.generated.resources.weather_refresh
-import com.starkdroid.quicknotch.generated.resources.weather_show_title
 import com.starkdroid.quicknotch.generated.resources.weather_snow
 import com.starkdroid.quicknotch.generated.resources.weather_storm
 import com.starkdroid.quicknotch.generated.resources.weather_today
@@ -83,13 +98,16 @@ import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
+import com.starkdroid.quicknotch.weather.Weather
 import com.starkdroid.quicknotch.weather.WeatherData
 import com.starkdroid.quicknotch.weather.WeatherDay
+import com.starkdroid.quicknotch.weather.WeatherPlace
 import com.starkdroid.quicknotch.weather.WeatherState
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -453,73 +471,34 @@ private fun weatherDow(dateIso: String): String = runCatching {
 
 /**
  * The Widgets-tab weather card: live status (place + sync age), manual
- * refresh, the notch toggle, the temperature unit, and the icon style
- * No connection flow —
- * the feed locates itself, so there is nothing to connect.
+ * refresh, the location picker, and the temperature unit. Whether the notch
+ * shows it at all lives on the accordion header (like every other widget).
+ * No connection flow — the feed locates itself, so there is nothing to connect.
  */
 @Composable
 internal fun WeatherSettings(
     state: WeatherState,
     fetching: Boolean,
-    showWeather: Boolean,
-    onShowWeatherChange: (Boolean) -> Unit,
+    manualPlace: WeatherPlace?,
+    onSelectPlace: (WeatherPlace?) -> Unit,
     fahrenheit: Boolean,
     onFahrenheitChange: (Boolean) -> Unit,
     onRefresh: () -> Unit
 ) {
     val data = (state as? WeatherState.Ready)?.data
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = when {
-                        data != null && data.place.isNotBlank() -> data.place
-                        state is WeatherState.Failed ->
-                            stringResource(Res.string.weather_unavailable)
-                        else -> stringResource(Res.string.weather_locating)
-                    },
-                    style = AppTypography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = if (data != null && data.fetchedAtMillis > 0L) {
-                        stringResource(Res.string.weather_updated, weatherAgo(data.fetchedAtMillis))
-                    } else {
-                        stringResource(Res.string.weather_never_synced)
-                    },
-                    style = AppTypography.bodySmall,
-                    color = TextSecondary
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            if (fetching) {
-                Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(15.dp),
-                        color = AccentSolid,
-                        strokeWidth = 2.dp
-                    )
-                }
-            } else {
-                CalendarActionChipShim(
-                    text = stringResource(Res.string.weather_refresh),
-                    onClick = onRefresh
-                )
-            }
-        }
+        WeatherStatusRow(
+            state = state,
+            data = data,
+            fetching = fetching,
+            onRefresh = onRefresh
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
-        BehaviorSwitchRow(
-            title = stringResource(Res.string.weather_show_title),
-            checked = showWeather,
-            onCheckedChange = onShowWeatherChange
+        WeatherLocationSection(
+            manualPlace = manualPlace,
+            autoCity = if (manualPlace == null) data?.place.orEmpty() else "",
+            onSelectPlace = onSelectPlace
         )
         Spacer(modifier = Modifier.height(12.dp))
         AppearanceDropdown(
@@ -536,6 +515,357 @@ internal fun WeatherSettings(
             modifier = Modifier.fillMaxWidth()
         )
 
+    }
+}
+
+/**
+ * Live status (place + sync age) with the manual refresh at its side. The chip
+ * becomes the spinner for exactly as long as the fetch runs, so pressing
+ * refresh is never a silent no-op.
+ */
+@Composable
+private fun WeatherStatusRow(
+    state: WeatherState,
+    data: WeatherData?,
+    fetching: Boolean,
+    onRefresh: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = when {
+                    data != null && data.place.isNotBlank() -> data.place
+                    state is WeatherState.Failed ->
+                        stringResource(Res.string.weather_unavailable)
+                    else -> stringResource(Res.string.weather_locating)
+                },
+                style = AppTypography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (data != null && data.fetchedAtMillis > 0L) {
+                    stringResource(Res.string.weather_updated, weatherAgo(data.fetchedAtMillis))
+                } else {
+                    stringResource(Res.string.weather_never_synced)
+                },
+                style = AppTypography.bodySmall,
+                color = TextSecondary
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        if (fetching) {
+            Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(15.dp),
+                    color = AccentSolid,
+                    strokeWidth = 2.dp
+                )
+            }
+        } else {
+            CalendarActionChipShim(
+                text = stringResource(Res.string.weather_refresh),
+                onClick = onRefresh
+            )
+        }
+    }
+}
+
+/**
+ * Manual-location picker: the active place over a city/state search backed by
+ * Open-Meteo geocoding. Picking a result pins the pill + page to it; the reset
+ * chip drops back to the automatic IP position. Search is debounced so typing
+ * never fires a request per keystroke.
+ */
+@Composable
+private fun WeatherLocationSection(
+    manualPlace: WeatherPlace?,
+    autoCity: String,
+    onSelectPlace: (WeatherPlace?) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<WeatherPlace>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    var searched by remember { mutableStateOf(false) }
+    // Restarting on every keystroke cancels the in-flight wait, so only a
+    // pause actually queries.
+    LaunchedEffect(query) {
+        val trimmed = query.trim()
+        if (trimmed.length < 2) {
+            results = emptyList()
+            searching = false
+            searched = false
+            return@LaunchedEffect
+        }
+        delay(450)
+        searching = true
+        results = Weather.searchPlaces(trimmed)
+        searching = false
+        searched = true
+    }
+    fun pick(place: WeatherPlace?) {
+        onSelectPlace(place)
+        query = ""
+        results = emptyList()
+        searched = false
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        WeatherLocationHeader(
+            manualPlace = manualPlace,
+            autoCity = autoCity,
+            onReset = { pick(null) }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        WeatherLocationField(
+            query = query,
+            onQueryChange = { query = it },
+            searching = searching
+        )
+        if (query.trim().length >= 2) {
+            Spacer(modifier = Modifier.height(8.dp))
+            WeatherLocationResults(
+                searching = searching,
+                searched = searched,
+                results = results,
+                manualPlace = manualPlace,
+                onPick = ::pick
+            )
+        }
+    }
+}
+
+/**
+ * Title over the active place (the manual pick, else the auto city), with the
+ * reset chip while a manual place is pinned.
+ */
+@Composable
+private fun WeatherLocationHeader(
+    manualPlace: WeatherPlace?,
+    autoCity: String,
+    onReset: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(Res.string.weather_location_title),
+                style = AppTypography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = manualPlace?.name ?: autoCity.ifBlank {
+                    stringResource(Res.string.weather_location_auto)
+                },
+                style = AppTypography.bodySmall,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (manualPlace != null) {
+            Spacer(modifier = Modifier.width(10.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SettingsElevated)
+                    .border(1.dp, SettingsBorder, RoundedCornerShape(8.dp))
+                    .plainClickable(onClick = onReset)
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = stringResource(Res.string.weather_location_use_auto),
+                    style = AppTypography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextSecondary
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact search box in the pinned-apps style (Material's text field enforces
+ * a 56dp floor, so this is a hand-rolled 40dp BasicTextField instead). The
+ * whole box focuses the field; a spinner replaces the clear button mid-search.
+ */
+@Composable
+private fun WeatherLocationField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searching: Boolean
+) {
+    val focus = remember { FocusRequester() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(SettingsElevated)
+            .border(1.dp, SettingsBorder, RoundedCornerShape(10.dp))
+            .plainClickable(onClick = { focus.requestFocus() })
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = LocalTextStyle.current.copy(color = TextPrimary, fontSize = 13.sp),
+            cursorBrush = SolidColor(AccentSolid),
+            modifier = Modifier.fillMaxHeight().focusRequester(focus),
+            decorationBox = { inner ->
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(Res.string.weather_location_search_hint),
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        inner()
+                    }
+                    if (searching || query.isNotEmpty()) {
+                        WeatherLocationFieldTrailing(
+                            searching = searching,
+                            onClear = { onQueryChange("") }
+                        )
+                    }
+                }
+            }
+        )
+    }
+}
+
+/** Spinner mid-search, clear button when there is text, else nothing. */
+@Composable
+private fun WeatherLocationFieldTrailing(
+    searching: Boolean,
+    onClear: () -> Unit
+) {
+    Spacer(modifier = Modifier.width(4.dp))
+    if (searching) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(12.dp),
+            color = AccentSolid,
+            strokeWidth = 2.dp
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .plainClickable(onClick = onClear),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+/** Search outcomes: spinner, empty note, or the place rows. */
+@Composable
+private fun WeatherLocationResults(
+    searching: Boolean,
+    searched: Boolean,
+    results: List<WeatherPlace>,
+    manualPlace: WeatherPlace?,
+    onPick: (WeatherPlace) -> Unit
+) {
+    when {
+        searching && results.isEmpty() -> Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(15.dp),
+                color = AccentSolid,
+                strokeWidth = 2.dp
+            )
+        }
+        results.isEmpty() -> {
+            if (searched) {
+                Text(
+                    text = stringResource(Res.string.weather_location_no_results),
+                    style = AppTypography.bodySmall,
+                    color = TextMuted,
+                    fontSize = 11.5.sp
+                )
+            }
+        }
+        else -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            results.forEach { place ->
+                WeatherLocationResultRow(
+                    place = place,
+                    selected = place == manualPlace,
+                    onClick = { onPick(place) }
+                )
+            }
+        }
+    }
+}
+
+/** One geocoded place: label row with a check on the active pick. */
+@Composable
+private fun WeatherLocationResultRow(
+    place: WeatherPlace,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) AccentSolid.copy(alpha = 0.12f) else SettingsElevated)
+            .border(1.dp, if (selected) AccentSolid else SettingsBorder, RoundedCornerShape(10.dp))
+            .plainClickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = place.name,
+            style = AppTypography.bodySmall,
+            color = TextPrimary,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (selected) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = AccentSolid,
+                modifier = Modifier.size(14.dp)
+            )
+        }
     }
 }
 

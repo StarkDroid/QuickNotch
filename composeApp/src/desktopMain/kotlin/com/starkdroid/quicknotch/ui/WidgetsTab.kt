@@ -40,14 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.generated.resources.Res
-import com.starkdroid.quicknotch.generated.resources.calendar_hint
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
 import com.starkdroid.quicknotch.generated.resources.progress_border_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_section_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_style_title
 import com.starkdroid.quicknotch.generated.resources.waveform_hide_title
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_title
-import com.starkdroid.quicknotch.generated.resources.weather_hint
 import com.starkdroid.quicknotch.generated.resources.weather_section_title
 import com.starkdroid.quicknotch.generated.resources.show_labels_title
 import com.starkdroid.quicknotch.generated.resources.widget_apps_title
@@ -68,7 +66,6 @@ import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.NotchBorder
 import com.starkdroid.quicknotch.theme.NotchDeepBlack
 import com.starkdroid.quicknotch.theme.SettingsBorder
-import com.starkdroid.quicknotch.theme.SettingsCard
 import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
@@ -87,7 +84,6 @@ internal fun WidgetsTab(
     onSearchQueryChange: (String) -> Unit,
     calendarState: CalendarState,
     calendarRefreshing: Boolean,
-    calendarTick: Long,
     onConnectCalendar: () -> Unit,
     onCancelCalendar: () -> Unit,
     onDisconnectCalendar: () -> Unit,
@@ -294,26 +290,29 @@ internal fun WidgetsTab(
         }
         item(key = "calendar") {
             TabEntrance(index = 2) {
-                SettingsCard {
-                    SectionHeader(
-                        Icons.Default.CalendarMonth,
-                        stringResource(Res.string.calendar_section_title),
-                        stringResource(Res.string.calendar_hint)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    CalendarWidget(
-                        state = calendarState,
-                        refreshing = calendarRefreshing,
-                        tick = calendarTick,
-                        showInQuickView = config.widgets.showCalendar,
-                        onShowInQuickViewChange = { enabled ->
-                            onUpdate { it.copy(widgets = it.widgets.copy(showCalendar = enabled)) }
-                        },
-                        onConnect = onConnectCalendar,
-                        onCancel = onCancelCalendar,
-                        onDisconnect = onDisconnectCalendar,
-                        onRefresh = onRefreshCalendar
-                    )
+                WidgetAccordion(
+                    icon = Icons.Default.CalendarMonth,
+                    title = stringResource(Res.string.calendar_section_title),
+                    enabled = config.widgets.showCalendar,
+                    onToggleEnabled = { enabled ->
+                        onUpdate { it.copy(widgets = it.widgets.copy(showCalendar = enabled)) }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
+                            .padding(bottom = 14.dp)
+                    ) {
+                        CalendarWidget(
+                            state = calendarState,
+                            refreshing = calendarRefreshing,
+                            onConnect = onConnectCalendar,
+                            onCancel = onCancelCalendar,
+                            onDisconnect = onDisconnectCalendar,
+                            onRefresh = onRefreshCalendar
+                        )
+                    }
                 }
             }
         }
@@ -323,26 +322,34 @@ internal fun WidgetsTab(
             val weatherState by Weather.state.collectAsState()
             val weatherFetching by Weather.fetching.collectAsState()
             TabEntrance(index = 3) {
-                SettingsCard {
-                    SectionHeader(
-                        Icons.Default.WbSunny,
-                        stringResource(Res.string.weather_section_title),
-                        stringResource(Res.string.weather_hint)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    WeatherSettings(
-                        state = weatherState,
-                        fetching = weatherFetching,
-                        showWeather = config.widgets.showWeather,
-                        onShowWeatherChange = { enabled ->
-                            onUpdate { it.copy(widgets = it.widgets.copy(showWeather = enabled)) }
-                        },
-                        fahrenheit = config.widgets.weatherFahrenheit,
-                        onFahrenheitChange = { enabled ->
-                            onUpdate { it.copy(widgets = it.widgets.copy(weatherFahrenheit = enabled)) }
-                        },
-                        onRefresh = Weather::refresh
-                    )
+                WidgetAccordion(
+                    icon = Icons.Default.WbSunny,
+                    title = stringResource(Res.string.weather_section_title),
+                    enabled = config.widgets.showWeather,
+                    onToggleEnabled = { enabled ->
+                        onUpdate { it.copy(widgets = it.widgets.copy(showWeather = enabled)) }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
+                            .padding(bottom = 14.dp)
+                    ) {
+                        WeatherSettings(
+                            state = weatherState,
+                            fetching = weatherFetching,
+                            manualPlace = config.widgets.weatherPlace,
+                            onSelectPlace = { place ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(weatherPlace = place)) }
+                            },
+                            fahrenheit = config.widgets.weatherFahrenheit,
+                            onFahrenheitChange = { enabled ->
+                                onUpdate { it.copy(widgets = it.widgets.copy(weatherFahrenheit = enabled)) }
+                            },
+                            onRefresh = Weather::refresh
+                        )
+                    }
                 }
             }
         }

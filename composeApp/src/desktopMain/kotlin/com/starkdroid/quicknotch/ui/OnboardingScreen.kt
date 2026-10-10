@@ -134,7 +134,6 @@ internal fun OnboardingScreen(
     val favorites by repository.favorites.collectAsState()
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
-    val calendarTick by GoogleCalendar.minuteTick.collectAsState()
 
     var step by remember { mutableStateOf(OnboardingStep.Welcome) }
 
@@ -339,13 +338,6 @@ internal fun OnboardingScreen(
                             CalendarWidget(
                                 state = calendarState,
                                 refreshing = calendarRefreshing,
-                                tick = calendarTick,
-                                showInQuickView = config.widgets.showCalendar,
-                                onShowInQuickViewChange = { enabled ->
-                                    repository.updateConfig {
-                                        it.copy(widgets = it.widgets.copy(showCalendar = enabled))
-                                    }
-                                },
                                 onConnect = GoogleCalendar::connect,
                                 onCancel = GoogleCalendar::cancelConnect,
                                 onDisconnect = GoogleCalendar::disconnect,

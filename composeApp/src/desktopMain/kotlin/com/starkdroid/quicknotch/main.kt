@@ -159,7 +159,8 @@ fun main(args: Array<String>) {
             GoogleCalendar.start()
             // Weather locates itself over IP and caches the day to disk, so a
             // cold start paints the last known forecast on the first frame.
-            Weather.start()
+            // A manual place from settings seeds the position instead.
+            Weather.start(repository.config.value.widgets.weatherPlace)
             onDispose {
                 media.stop()
                 SystemVolume.stop()
@@ -188,6 +189,14 @@ fun main(args: Array<String>) {
         // configuring, so the Dock presence and activation apply while it runs.
         LaunchedEffect(showSettings, onboardingDone) {
             MacDockPresence.setSettingsVisible(showSettings || !onboardingDone)
+        }
+
+        // Manual weather place picked in settings replaces the IP position for
+        // the poller (cleared back to null = re-locate automatically). Keyed on
+        // the place itself, and the controller dedupes re-emits, so unrelated
+        // config writes never cost a refetch.
+        LaunchedEffect(config.widgets.weatherPlace) {
+            Weather.setManualPlace(config.widgets.weatherPlace)
         }
 
         // Dock presence is a function of the Settings window, never of the

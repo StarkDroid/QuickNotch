@@ -1,6 +1,7 @@
 package com.starkdroid.quicknotch.model
 
 import androidx.compose.runtime.Immutable
+import com.starkdroid.quicknotch.weather.WeatherPlace
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -121,6 +122,13 @@ data class WidgetsConfig(
      * IP-geolocated, so no account or setup is needed.
      */
     val showWeather: Boolean = true,
+    /**
+     * Manual weather place picked from Open-Meteo geocoding (label +
+     * coordinates). Null means the automatic IP-geolocated position; a manual
+     * pick replaces it for the pill, the page, and the poll. Old configs load
+     * null, so existing installs keep their current behaviour.
+     */
+    val weatherPlace: WeatherPlace? = null,
     /** Display temperatures in Fahrenheit instead of Celsius. */
     val weatherFahrenheit: Boolean = false,
     /**

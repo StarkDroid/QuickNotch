@@ -171,6 +171,9 @@ from the AWT wheel listener and composition on the same thread — no locks.
 - **Weather** (`weather/`, `WeatherApi` commonMain): IP-geolocate + Open-Meteo, keyless,
   metric feed, °F as render conversion. Half-hourly poll + `weather.json` cache;
   Ready/Loading/Failed; page gated like calendar (no cache + failed = no page).
+  Optional manual place (`WidgetsConfig.weatherPlace`, null = automatic) picked from
+  Open-Meteo geocoding search in the Widgets tab; `Weather.setManualPlace` applies it
+  live, `start(place)` seeds it at boot.
 - **Notifications (macOS):** `count(*)` on usernoted `record` (WAL-aware: fingerprint
   db/-wal/-shm at 250 ms + 3 s backstop). Needs Full Disk Access (settings deep-links
   the pane, re-pokes on focus); unreadable → hidden. Windows has no store → hidden.
