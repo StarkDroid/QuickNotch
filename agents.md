@@ -189,19 +189,20 @@ from the AWT wheel listener and composition on the same thread — no locks.
   CGS radius silently no-ops there), 250 ms frame/level/order/visibility sync;
   `CAShapeLayer` masks (not `cornerRadius`), no rim (`blurScrim.border` transparent);
   intensity drives radius + opacity. Windows = the same shape for the same reason:
-  the DWM acrylic backdrop is composed for the whole window and ignores
-  `SetWindowRgn`, so a small invisible island-sized helper window below the
-  overlay carries the accent (`WindowBlur.kt`); z-order + geometry are
-  **native-only** (`SetWindowPos` with the overlay as `hWndInsertAfter`, plus a
-  700 ms reconcile daemon — AWT `isAlwaysOnTop` re-asserts its own registry and
-  re-raises the slab above the island). The helper is clipped to the island's
-  rounded shape (rounded GDI region rebuilt per move, OS frame rounding
-  explicitly OFF — DWM's ~8px rounding would intersect the region, nipping
-  the island's own 13–18dp corners and rounding the flush style's square
-  top); its visibility flips through one tracked AWT call —
-  a per-frame re-show fronts the window above the overlay and reads as morph
-  flicker. Intensity drives the acrylic tint alpha (~8% clear glass to ~70%
-  frost), never a painted imitation. Missing
+  `SetWindowCompositionAttribute` acrylic is composed for the whole window and
+  ignores `SetWindowRgn` (verified live: a circle region left the frost
+  untouched), so a small invisible island-sized helper window below the
+  overlay carries classic DWM blur-behind (`DwmEnableBlurBehindWindow`), the
+  one DWM blur that honours a region — the island's rounded GDI region rebuilt
+  per move frosts corner-for-corner while everything outside stays sharp.
+  Z-order + geometry are **native-only** (`SetWindowPos` with the overlay as
+  `hWndInsertAfter`, plus a 700 ms reconcile daemon — AWT `isAlwaysOnTop`
+  re-asserts its own registry and re-raises the helper above the island). OS
+  frame rounding is explicitly OFF (DWM's ~8px would nip the 13–18dp corners
+  and round the flush style's square top); helper visibility flips through one
+  tracked AWT call (a per-frame re-show fronts it above the overlay and reads
+  as morph flicker). Intensity is the scrim alpha over the untinted frost
+  (~10% clear glass to ~50% deep frost), never a painted imitation. Missing
   bridge → painted glass. Single-instance file lock in `main()`.
 
 ### 4.4 UI modules (`ui/`)
@@ -261,9 +262,12 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
   reads `GetInterfaces()`, which is empty on a COM RCW). Pre-bind the MethodInfo
   and `Invoke` it: the CLR cast QIs and succeeds.
 - Windows blur: the acrylic backdrop covers the **whole window** and ignores
-  `SetWindowRgn` — never put it on the overlay; only on the helper, z-managed
-  natively (AWT `isAlwaysOnTop` re-raises it above the island). Round the
-  helper with a GDI region + `DWMWCP_ROUND`, and never AWT re-show per frame.
+  `SetWindowRgn` — never use it for shaped frost; classic blur-behind honours
+  the region, so one GDI build feeds both `DwmEnableBlurBehindWindow` (DWM
+  copies it) and `SetWindowRgn` (window takes it; delete only on failure).
+  Z-manage natively (AWT `isAlwaysOnTop` re-raises the helper above the
+  island). Round the helper with the region + `DWMWCP_DONOTROUND`, never AWT
+  re-show per frame.
 - Progress outline straddles the island edge from a padded wrapper sibling
   (the island clip would cut its outer half); pad is 0 when the ring is off.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.

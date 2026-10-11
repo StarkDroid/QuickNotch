@@ -405,8 +405,9 @@ internal fun FloatingNotchOverlay(
     // the two, so it rides the same remember key as the surface.
     val blurNative = windowsBlur != null || macBlur.available
     val blurActive = config.surface == NotchSurface.TRANSLUCENT && blurNative
-    val surface = remember(config.surface, accent, blurActive) {
-        IslandSurface.styleFor(config.surface, accent, blurActive)
+    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    val surface = remember(config.surface, accent, blurActive, blurIntensity) {
+        IslandSurface.styleFor(config.surface, accent, blurActive, blurIntensity)
     }
 
     // The dock reveal is a layer animation (fade + scale) over the always
@@ -507,10 +508,9 @@ internal fun FloatingNotchOverlay(
 
     // The native blur follows the surface, not a toggle: picking Blurred
     // enables it, any other surface clears it. The mac panel tracks the island
-    // while it animates; Windows applies the accent once per surface or
-    // intensity change and follows the island through the touch-target feed
-    // above. Both fail soft to the painted surfaces.
-    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    // while it animates; Windows pushes classic blur-behind for the rounded
+    // island region on every move and follows the island through the
+    // touch-target feed above. Both fail soft to the painted surfaces.
     LaunchedEffect(blurActive, blurIntensity, islandExpanded, config.style) {
         windowsBlur?.setBlur(blurActive, blurIntensity)
         if (blurActive) {
@@ -598,7 +598,7 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface, accent, blurActive)
+                    .islandSurface(config.surface, accent, blurActive, blurIntensity)
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {

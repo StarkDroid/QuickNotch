@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
+import com.starkdroid.quicknotch.datasource.BlurRadiusMax
+import com.starkdroid.quicknotch.datasource.BlurRadiusMin
 import com.starkdroid.quicknotch.model.NotchSurface
 
 /**
@@ -68,17 +70,29 @@ internal object IslandSurface {
     /**
      * Light dark scrim drawn over the natively blurred backdrop when the
      * Blurred surface is active and the native bridge answered: the OS
-     * supplies the frosted texture, this supplies the contrast.
+     * supplies the frosted texture, this supplies the contrast. Classic DWM
+     * blur (and the macOS panel) blur without darkening, so the scrim carries
+     * the whole intensity ramp: near-clear glass at 0, deep frost at the max.
      */
-    private val blurScrim = Style(
-        fill = SolidColor(Color.Black.copy(alpha = 0.18f)),
-        sheen = glassSheen,
-        // No rim in blurred mode: the frost's own edge already delimits the
-        // island against the desktop, and a white hairline drawn over it
-        // reads as a bright border around the blur.
-        border = Color.Transparent,
-        borderWidth = 0f
-    )
+    private fun blurScrimFor(level: Int): Style {
+        val clamped = level.coerceIn(BlurRadiusMin, BlurRadiusMax)
+        val alpha = (ScrimBaseAlpha + clamped * ScrimAlphaPerStep).coerceIn(0f, 0.6f)
+        return Style(
+            fill = SolidColor(Color.Black.copy(alpha = alpha)),
+            sheen = glassSheen,
+            // No rim in blurred mode: the frost's own edge already delimits the
+            // island against the desktop, and a white hairline drawn over it
+            // reads as a bright border around the blur.
+            border = Color.Transparent,
+            borderWidth = 0f
+        )
+    }
+
+    // Scrim ramp for the blurred surface: the native frost blurs without
+    // darkening, so the scrim alpha carries the intensity slider end to end
+    // (near-clear glass at 0, deep frost at the max).
+    private const val ScrimBaseAlpha = 0.10f
+    private const val ScrimAlphaPerStep = 0.01f
 
     // The accent style is a function of the OS accent, so it can't live in the
     // static map above; it is rebuilt only when the accent value changes (a
@@ -90,10 +104,11 @@ internal object IslandSurface {
     fun styleFor(
         surface: NotchSurface,
         accent: Color?,
-        blurred: Boolean = false
+        blurred: Boolean = false,
+        blurLevel: Int = BlurRadiusMax
     ): Style =
         if (blurred) {
-            blurScrim
+            blurScrimFor(blurLevel)
         } else if (surface == NotchSurface.SYSTEM_ACCENT) {
             styleForAccent(accent)
         } else {
@@ -144,9 +159,10 @@ internal object IslandSurface {
 internal fun Modifier.islandSurface(
     surface: NotchSurface,
     accent: Color? = null,
-    blurred: Boolean = false
+    blurred: Boolean = false,
+    blurLevel: Int = BlurRadiusMax
 ): Modifier {
-    val style = IslandSurface.styleFor(surface, accent, blurred)
+    val style = IslandSurface.styleFor(surface, accent, blurred, blurLevel)
     var m = this.background(style.fill)
     if (style.sheen != null) m = m.background(style.sheen)
     return m

@@ -6,6 +6,7 @@ import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
+import com.sun.jna.platform.win32.GDI32
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.ptr.IntByReference
@@ -22,21 +23,21 @@ import java.awt.Window
  * compositor blur radius and its effect view's opacity.
  *
  * Windows uses the same shape of solution, and for the same native reason:
- * the DWM accent backdrop (`SetWindowCompositionAttribute` acrylic) is
+ * DWM blur must stay off the overlay's own window: the acrylic accent is
  * composed for the **whole window bounds** and ignores any `SetWindowRgn`
- * clip (verified on Windows 11 24H2 — the backdrop painted straight over a
- * region-clipped window), so applying it to the overlay itself would smear a
- * blur slab across the fixed-footprint window's transparent margin around the
- * island. Instead a small helper window — invisible-content, island-sized,
- * parked directly below the overlay — carries the accent; the overlay draws
- * only its translucent dark scrim ([IslandSurface] blur style) over the
- * effect for legibility. The helper tracks the animated island through
- * [updateIsland], exactly like the macOS panel, and is clipped to the
- * island's rounded shape (rounded GDI region rebuilt per move, with the OS
- * frame rounding explicitly OFF — DWM's ~8px rounding would otherwise
- * intersect the region, nipping the island's own corners and rounding the
- * flush style's square top) so the frost edge matches the drawn island
- * corner for corner. With any other surface (or
+ * clip (verified live — the backdrop painted straight over a region-clipped
+ * window, and a later circle-region probe left the frost untouched), so
+ * applying it to the overlay would smear a blur slab across the
+ * fixed-footprint window's transparent margin around the island. Instead a
+ * small helper window — invisible-content, island-sized, parked directly
+ * below the overlay — carries classic DWM blur-behind (`DwmEnableBlurBehind
+ * Window`), the one DWM blur that honours a region: the island's rounded
+ * shape (rounded GDI region rebuilt per move, OS frame rounding explicitly
+ * OFF) frosts corner-for-corner with the drawn island while everything
+ * outside stays sharp. The overlay draws only a dark scrim whose alpha
+ * carries the intensity slider ([IslandSurface] blur style) over the frost
+ * for legibility. The helper tracks the animated island through
+ * [updateIsland], exactly like the macOS panel. With any other surface (or
  * when the HWND cannot be resolved) the island renders exactly as before.
  */
 internal class WindowsBackdropBlur private constructor(
@@ -98,23 +99,23 @@ internal class WindowsBackdropBlur private constructor(
         if (!enabled) {
             appliedLevel = -1
             runCatching {
-                applyAccent(helperHwnd, false, level)
+                enableGlassBlur(helperHwnd, null)
                 setHelperVisible(false)
             }
             return
         }
         if (level == appliedLevel && helperVisible) return
-        val ok = runCatching { applyAccent(helperHwnd, true, level) }.getOrElse { false }
-        if (ok) {
-            appliedLevel = level
-            reported = false
-            // Place as far as known geometry allows; a not-yet-measured island
-            // just leaves the helper hidden until the first updateIsland feed.
-            placeFor(lastRect, lastRadiusPx, lastRoundTop)
-        } else if (!reported) {
-            reported = true
-            System.err.println("QuickNotch: Windows backdrop blur failed to apply (helper window)")
-        }
+        // Any acrylic tint is cleared: the frost below is classic DWM blur,
+        // which honours the rounded region — the acrylic backdrop does not.
+        runCatching { applyAccent(helperHwnd, false, level) }
+        appliedLevel = level
+        reported = false
+        // Place as far as known geometry allows; a not-yet-measured island
+        // just leaves the helper hidden until the first updateIsland feed.
+        // Unlike the old acrylic path there is no HRESULT to gate on here:
+        // the per-move glass push reports through [reported] instead, and a
+        // failed push simply leaves the previous frame's frost up.
+        placeFor(lastRect, lastRadiusPx, lastRoundTop)
     }
 
     /**
@@ -173,12 +174,18 @@ internal class WindowsBackdropBlur private constructor(
     }
 
     /**
-     * Z-order + geometry + shape, natively only (no AWT calls — safe from the
+     * Z-order + geometry + frost, natively only (no AWT calls — safe from the
      * reconcile thread). One SetWindowPos does the move: passing the overlay
      * as `hWndInsertAfter` parks the helper *directly below* the overlay, so
      * no separate "raise the overlay" pass exists to be undone later.
      * NOCOPYBITS skips the bit-blit of the old surface on resize — the window
-     * is contentless acrylic, there is nothing worth smearing one frame over.
+     * is contentless glass, there is nothing worth smearing one frame over.
+     *
+     * The frost is classic DWM blur-behind, NOT the acrylic accent: only the
+     * blur-behind call honours a region, so only it can frost the rounded
+     * island without also frosting a sharp rectangle around it. The same
+     * region doubles as the window region (click-through outside the island,
+     * region-shaped shadow), so one build serves both calls.
      */
     private fun placeNative(rect: Rectangle, radiusPx: Int, roundTop: Boolean): Boolean {
         val origin = WinDef.RECT()
@@ -192,26 +199,58 @@ internal class WindowsBackdropBlur private constructor(
             rect.height,
             SwpNoActivate or SwpNoCopyBits
         )
-        applyRegion(rect.width, rect.height, radiusPx, roundTop)
+        applyGlassRegion(rect.width, rect.height, radiusPx, roundTop)
         return moved
     }
 
     /**
-     * Clips the helper to the island's rounded shape (helper-local coords).
-     * The acrylic backdrop fills the whole window bounds, so without this the
-     * frost reads as a sharp-cornered slab exactly island-sized; with it the
-     * blur edge matches the Compose-drawn island corner for corner. Square-top
-     * (flush) styles keep square top corners: a plain round-rect would nip
-     * them, so the region is a top rect unioned with a rounded bottom band.
+     * Frosts the helper exactly inside the island's rounded shape
+     * (helper-local coords). DWM copies the region at the blur call, while
+     * SetWindowRgn takes ownership on success — so the one built region feeds
+     * the blur first and the window second, and is only released when the
+     * window call fails to take it. Square-top (flush) styles keep square top
+     * corners: a plain round-rect would nip them, so the region is a top rect
+     * unioned with a rounded bottom band.
      */
-    private fun applyRegion(width: Int, height: Int, radiusPx: Int, roundTop: Boolean) {
+    private fun applyGlassRegion(width: Int, height: Int, radiusPx: Int, roundTop: Boolean) {
+        val region = buildIslandRegion(width, height, radiusPx, roundTop)
+        if (region == null) {
+            // Degenerate shape: frost off rather than a sharp full-window
+            // slab, and the window region already cleared by the builder.
+            runCatching { enableGlassBlur(helperHwnd, null) }
+            return
+        }
+        val glassOk = runCatching { enableGlassBlur(helperHwnd, region) }.getOrElse { false }
+        if (!glassOk && !reported) {
+            reported = true
+            System.err.println("QuickNotch: Windows backdrop blur failed to apply (DWM blur behind)")
+        }
+        // The window owns the region after a successful call — deleting it
+        // would pull the shape out from under the window. A failed call owns
+        // nothing, so the handle is released to avoid a GDI leak per frame.
+        if (User32.INSTANCE.SetWindowRgn(helperHwnd, region, true) == 0) {
+            runCatching { gdi32.DeleteObject(region) }
+        }
+    }
+
+    /**
+     * Builds the island's rounded shape in helper-local coords, or null when
+     * GDI fails — the caller then keeps the previous frame's frost instead of
+     * pushing a half-built shape.
+     */
+    private fun buildIslandRegion(
+        width: Int,
+        height: Int,
+        radiusPx: Int,
+        roundTop: Boolean
+    ): WinDef.HRGN? {
         val gdi = gdi32
         val radius = radiusPx.coerceIn(0, minOf(width, height) / 2)
         if (radius <= 0) {
             User32.INSTANCE.SetWindowRgn(helperHwnd, null, true)
-            return
+            return null
         }
-        val region = if (roundTop) {
+        return if (roundTop) {
             gdi.CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2)
         } else {
             val top = gdi.CreateRectRgn(0, 0, width, (height - radius).coerceAtLeast(0))
@@ -223,12 +262,6 @@ internal class WindowsBackdropBlur private constructor(
             gdi.DeleteObject(top)
             gdi.DeleteObject(bottom)
             combined
-        }
-        // The system owns the region after a successful call — deleting it
-        // would pull the shape out from under the window. A failed call owns
-        // nothing, so the handle is released to avoid a GDI leak per frame.
-        if (User32.INSTANCE.SetWindowRgn(helperHwnd, region, true) == 0) {
-            runCatching { gdi.DeleteObject(region) }
         }
     }
 
@@ -309,11 +342,12 @@ internal class WindowsBackdropBlur private constructor(
             } else {
                 null
             }
-            if (handle == null || handle == 0L) {
-                // Silent off-Windows (the mac side owns this host); a failed
-                // HWND resolve on Windows itself is worth one line.
+            if (handle == null || handle == 0L || !isCompositionEnabled()) {
+                // Silent off-Windows (the mac side owns this host); on Windows
+                // either cause (unresolvable HWND or DWM composition off)
+                // means no blur of any kind, worth one line.
                 if (HostPlatform.isWindows) {
-                    System.err.println("QuickNotch: Windows backdrop blur off (HWND resolve failed)")
+                    System.err.println("QuickNotch: Windows backdrop blur off (no HWND or DWM composition)")
                 }
                 return null
             }
@@ -433,33 +467,7 @@ private interface User32Ex : Library {
     fun SetWindowCompositionAttribute(hwnd: WinDef.HWND, data: WinCompAttrData): Boolean
 }
 
-private interface Gdi32Ex : Library {
-    // Same exact-spelling rule as above: these map straight onto gdi32. The
-    // region constructors keep their native six-parameter shape.
-    @Suppress("FunctionNaming", "LongParameterList")
-    fun CreateRoundRectRgn(
-        nLeftRect: Int,
-        nTopRect: Int,
-        nRightRect: Int,
-        nBottomRect: Int,
-        nWidthEllipse: Int,
-        nHeightEllipse: Int
-    ): WinDef.HRGN
-
-    @Suppress("FunctionNaming")
-    fun CreateRectRgn(nLeftRect: Int, nTopRect: Int, nRightRect: Int, nBottomRect: Int): WinDef.HRGN
-
-    @Suppress("FunctionNaming")
-    fun CombineRgn(
-        hrgnDest: WinDef.HRGN?,
-        hrgnSrc1: WinDef.HRGN?,
-        hrgnSrc2: WinDef.HRGN?,
-        fnCombineMode: Int
-    ): Int
-
-    @Suppress("FunctionNaming")
-    fun DeleteObject(hObject: WinDef.HRGN?): Boolean
-}
+private val gdi32 = GDI32.INSTANCE
 
 private interface DwmapiEx : Library {
     // Exact Win32 spelling, same rule as above.
@@ -470,10 +478,12 @@ private interface DwmapiEx : Library {
         pvAttribute: IntByReference,
         cbAttribute: Int
     ): Int
-}
 
-private val gdi32: Gdi32Ex by lazy {
-    Native.load("gdi32", Gdi32Ex::class.java)
+    @Suppress("FunctionNaming")
+    fun DwmEnableBlurBehindWindow(hwnd: WinDef.HWND, blurBehind: DwmBlurBehind): Int
+
+    @Suppress("FunctionNaming")
+    fun DwmIsCompositionEnabled(enabled: IntByReference): Int
 }
 
 private val dwmapi: DwmapiEx by lazy {
@@ -486,6 +496,53 @@ private const val RgnOr = 2
 /** DWMWA_WINDOW_CORNER_PREFERENCE values: the OS frame must NOT round. */
 private const val DwmwaWindowCornerPreference = 33
 private const val DwmwcpDonotround = 1
+
+/** DWM_BLURBEHIND dwFlags: enable + honour the blur region. */
+private const val DwmBbEnable = 0x00000001
+private const val DwmBbBlurRegion = 0x00000002
+
+/**
+ * DWM_BLURBEHIND payload for `DwmEnableBlurBehindWindow` — classic blur
+ * behind a region, the one DWM blur that honours a shape.
+ *
+ * Public, same JNA rule as the structs above: the layout is derived by
+ * reflecting on the fields from `com.sun.jna.Structure` itself.
+ */
+class DwmBlurBehind : Structure() {
+    @JvmField var dwFlags: Int = 0
+    @JvmField var fEnable: Int = 0
+    @JvmField var hRgnBlur: WinDef.HRGN? = null
+    @JvmField var fTransitionOnMaximized: Int = 0
+
+    init {
+        setAlignType(ALIGN_MSVC)
+    }
+
+    override fun getFieldOrder(): List<String> =
+        listOf("dwFlags", "fEnable", "hRgnBlur", "fTransitionOnMaximized")
+}
+
+/**
+ * Pushes classic blur-behind onto [hwnd]: enabled with [region], or fully off
+ * with null. DWM copies the region at the call, so the caller keeps
+ * ownership (unlike SetWindowRgn, which takes it). True on S_OK.
+ */
+private fun enableGlassBlur(hwnd: WinDef.HWND, region: WinDef.HRGN?): Boolean {
+    val behind = DwmBlurBehind()
+    behind.dwFlags = DwmBbEnable or DwmBbBlurRegion
+    behind.fEnable = if (region != null) 1 else 0
+    behind.hRgnBlur = region
+    behind.fTransitionOnMaximized = 0
+    behind.write()
+    return dwmapi.DwmEnableBlurBehindWindow(hwnd, behind) == 0
+}
+
+/** False when DWM composition is off — no blur of any kind can apply. */
+private fun isCompositionEnabled(): Boolean {
+    val enabled = IntByReference()
+    return runCatching { dwmapi.DwmIsCompositionEnabled(enabled) == 0 && enabled.value != 0 }
+        .getOrDefault(false)
+}
 
 private val accentUser32: User32Ex by lazy {
     Native.load("user32", User32Ex::class.java)
