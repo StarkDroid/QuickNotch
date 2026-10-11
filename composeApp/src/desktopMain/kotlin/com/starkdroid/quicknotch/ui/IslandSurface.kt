@@ -90,9 +90,12 @@ internal object IslandSurface {
 
     // Scrim ramp for the blurred surface: the native frost blurs without
     // darkening, so the scrim alpha carries the intensity slider end to end
-    // (near-clear glass at 0, deep frost at the max).
-    private const val ScrimBaseAlpha = 0.10f
-    private const val ScrimAlphaPerStep = 0.01f
+    // (near-clear glass at 0, deep frost at the max). Kept deliberately
+    // lighter than the old acrylic-era total: the untinted frost already
+    // reads dark over most desktops, and the slider must bottom out at
+    // almost-clear glass.
+    private const val ScrimBaseAlpha = 0.06f
+    private const val ScrimAlphaPerStep = 0.008f
 
     // The accent style is a function of the OS accent, so it can't live in the
     // static map above; it is rebuilt only when the accent value changes (a

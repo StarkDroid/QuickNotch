@@ -195,6 +195,11 @@ from the AWT wheel listener and composition on the same thread — no locks.
   overlay carries classic DWM blur-behind (`DwmEnableBlurBehindWindow`), the
   one DWM blur that honours a region — the island's rounded GDI region rebuilt
   per move frosts corner-for-corner while everything outside stays sharp.
+  The helper is OPAQUE BLACK, not transparent: blur-behind does not combine
+  with layered (`UpdateLayeredWindow`) windows — on an alpha-0 helper the call
+  succeeds and blurs nothing — so the black is the glass key (filled natively,
+  since AWT still believes the helper is 1×1) and the region clips shape,
+  shadow and click-through alike.
   Z-order + geometry are **native-only** (`SetWindowPos` with the overlay as
   `hWndInsertAfter`, plus a 700 ms reconcile daemon — AWT `isAlwaysOnTop`
   re-asserts its own registry and re-raises the helper above the island). OS
@@ -202,7 +207,7 @@ from the AWT wheel listener and composition on the same thread — no locks.
   and round the flush style's square top); helper visibility flips through one
   tracked AWT call (a per-frame re-show fronts it above the overlay and reads
   as morph flicker). Intensity is the scrim alpha over the untinted frost
-  (~10% clear glass to ~50% deep frost), never a painted imitation. Missing
+  (~6% clear glass to ~38% deep frost), never a painted imitation. Missing
   bridge → painted glass. Single-instance file lock in `main()`.
 
 ### 4.4 UI modules (`ui/`)

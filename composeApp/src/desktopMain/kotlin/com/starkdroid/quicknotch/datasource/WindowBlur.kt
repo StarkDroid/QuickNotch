@@ -199,6 +199,11 @@ internal class WindowsBackdropBlur private constructor(
             rect.height,
             SwpNoActivate or SwpNoCopyBits
         )
+        // AWT still believes the helper is 1×1, so it never repaints the
+        // grown area itself — and the glass key must be black everywhere the
+        // region frosts. Fill natively (no AWT: no raise side effects, safe
+        // from any thread) right after the move.
+        runCatching { paintBlackKey(helperHwnd, rect.width, rect.height) }
         applyGlassRegion(rect.width, rect.height, radiusPx, roundTop)
         return moved
     }
@@ -321,6 +326,7 @@ internal class WindowsBackdropBlur private constructor(
         private const val WsExToolWindow = 0x00000080
         private const val WsExNoActivate = 0x08000000
         private const val WsExTopmost = 0x00000008
+        private const val WsExTransparent = 0x00000020
         private const val SwpNoSize = 0x0001
         private const val SwpNoMove = 0x0002
         private const val SwpNoActivate = 0x0010
@@ -360,14 +366,16 @@ internal class WindowsBackdropBlur private constructor(
             return createHelperWindow()?.let { helper ->
                 try {
                     // WS_EX_TOOLWINDOW keeps the helper out of the taskbar and
-                    // Alt+Tab; WS_EX_NOACTIVATE keeps it from stealing focus. It
-                    // never receives input anyway — the overlay sits above it and
-                    // owns the island as its touch target.
+                    // Alt+Tab; WS_EX_NOACTIVATE keeps it from stealing focus;
+                    // WS_EX_TRANSPARENT makes it mouse-transparent so it never
+                    // takes a click even inside the island (the overlay above
+                    // owns the whole touch target). It never receives input
+                    // anyway — but the style makes that structural.
                     val style = User32.INSTANCE.GetWindowLong(WinDef.HWND(Pointer(helper.handle)), GwlExStyle)
                     User32.INSTANCE.SetWindowLong(
                         WinDef.HWND(Pointer(helper.handle)),
                         GwlExStyle,
-                        style or WsExToolWindow or WsExNoActivate
+                        style or WsExToolWindow or WsExNoActivate or WsExTransparent
                     )
                 } catch (_: Throwable) {
                     // Cosmetic only: a taskbar blip must not take the blur down.
@@ -401,11 +409,18 @@ internal class WindowsBackdropBlur private constructor(
          * Shows the contentless helper and resolves its HWND. Null (with the
          * half-made window disposed) when either step fails, so the caller has
          * one early-out instead of two.
+         *
+         * The helper is OPAQUE BLACK, not transparent: classic DWM blur-behind
+         * does not combine with layered (`UpdateLayeredWindow`) windows — on
+         * an alpha-0 helper the `DwmEnableBlurBehindWindow` call succeeds and
+         * blurs nothing. On an opaque window the black is the glass key: DWM
+         * frosts it, and the rounded window region clips everything outside
+         * the island (shape, shadow and click-through alike).
          */
         private fun createHelperWindow(): HelperWindow? {
             val helper = runCatching {
                 Window(null).apply {
-                    background = Color(0, 0, 0, 0)
+                    background = Color(0, 0, 0)
                     setFocusableWindowState(false)
                     setSize(1, 1)
                     isVisible = true
@@ -465,9 +480,47 @@ private interface User32Ex : Library {
     // the native export, so the Kotlin naming rule is suppressed just here.
     @Suppress("FunctionNaming")
     fun SetWindowCompositionAttribute(hwnd: WinDef.HWND, data: WinCompAttrData): Boolean
+
+    @Suppress("FunctionNaming")
+    fun FillRect(hdc: WinDef.HDC, rect: WinDef.RECT, brush: WinDef.HBRUSH): Int
+}
+
+private interface GdiBrushEx : Library {
+    // Exact Win32 spelling, same rule as above.
+    @Suppress("FunctionNaming")
+    fun GetStockObject(brush: Int): WinDef.HBRUSH
 }
 
 private val gdi32 = GDI32.INSTANCE
+
+private val gdiBrush: GdiBrushEx by lazy {
+    Native.load("gdi32", GdiBrushEx::class.java)
+}
+
+/** GetStockObject id for the solid black brush (no create/delete needed). */
+private const val BlackBrush = 4
+
+/**
+ * Fills [hwnd]'s client area with the opaque black glass key. Native only:
+ * AWT's peer still records the 1×1 creation size, so an AWT repaint would
+ * paint one pixel and leave the rest to chance.
+ */
+private fun paintBlackKey(hwnd: WinDef.HWND, width: Int, height: Int) {
+    if (width <= 0 || height <= 0) return
+    val hdc = User32.INSTANCE.GetDC(hwnd) ?: return
+    try {
+        val brush = gdiBrush.GetStockObject(BlackBrush)
+        val rect = WinDef.RECT()
+        rect.left = 0
+        rect.top = 0
+        rect.right = width
+        rect.bottom = height
+        rect.write()
+        accentUser32.FillRect(hdc, rect, brush)
+    } finally {
+        User32.INSTANCE.ReleaseDC(hwnd, hdc)
+    }
+}
 
 private interface DwmapiEx : Library {
     // Exact Win32 spelling, same rule as above.
