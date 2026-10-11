@@ -207,7 +207,7 @@ from the AWT wheel listener and composition on the same thread — no locks.
   and round the flush style's square top); helper visibility flips through one
   tracked AWT call (a per-frame re-show fronts it above the overlay and reads
   as morph flicker). Intensity is the scrim alpha over the untinted frost
-  (~6% clear glass to ~38% deep frost), never a painted imitation. Missing
+  (~4% clear glass to ~28% deep frost), never a painted imitation. Missing
   bridge → painted glass. Single-instance file lock in `main()`.
 
 ### 4.4 UI modules (`ui/`)

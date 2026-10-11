@@ -71,15 +71,18 @@ internal object IslandSurface {
      * Light dark scrim drawn over the natively blurred backdrop when the
      * Blurred surface is active and the native bridge answered: the OS
      * supplies the frosted texture, this supplies the contrast. Classic DWM
-     * blur (and the macOS panel) blur without darkening, so the scrim carries
-     * the whole intensity ramp: near-clear glass at 0, deep frost at the max.
+     * blur (and the macOS panel) blur without adding light, so over a dark
+     * desktop the frost alone would read as flat black — the scrim stays
+     * deliberately light and a brighter-than-glass sheen lays the diagonal
+     * light play that sells the frost. The slider still drives depth:
+     * near-clear glass at 0, deep frost at the max.
      */
     private fun blurScrimFor(level: Int): Style {
         val clamped = level.coerceIn(BlurRadiusMin, BlurRadiusMax)
         val alpha = (ScrimBaseAlpha + clamped * ScrimAlphaPerStep).coerceIn(0f, 0.6f)
         return Style(
             fill = SolidColor(Color.Black.copy(alpha = alpha)),
-            sheen = glassSheen,
+            sheen = blurSheen,
             // No rim in blurred mode: the frost's own edge already delimits the
             // island against the desktop, and a white hairline drawn over it
             // reads as a bright border around the blur.
@@ -89,13 +92,25 @@ internal object IslandSurface {
     }
 
     // Scrim ramp for the blurred surface: the native frost blurs without
-    // darkening, so the scrim alpha carries the intensity slider end to end
-    // (near-clear glass at 0, deep frost at the max). Kept deliberately
-    // lighter than the old acrylic-era total: the untinted frost already
-    // reads dark over most desktops, and the slider must bottom out at
-    // almost-clear glass.
-    private const val ScrimBaseAlpha = 0.06f
-    private const val ScrimAlphaPerStep = 0.008f
+    // adding light, so the scrim alpha carries the intensity slider end to
+    // end (near-clear glass at 0, deep frost at the max) while staying light
+    // enough that the frost texture survives it.
+    private const val ScrimBaseAlpha = 0.04f
+    private const val ScrimAlphaPerStep = 0.006f
+
+    /**
+     * Brighter diagonal light play reserved for the blurred surface: over a
+     * dark desktop the frost alone has no luminosity to read by, and this is
+     * what keeps it glass instead of flat black. Stronger than [glassSheen]
+     * on purpose — the painted-glass styles carry their own bright body, the
+     * live frost does not.
+     */
+    private val blurSheen = Brush.linearGradient(
+        0f to Color.White.copy(alpha = 0.16f),
+        0.35f to Color.White.copy(alpha = 0.05f),
+        0.7f to Color.Transparent,
+        1f to Color.White.copy(alpha = 0.07f)
+    )
 
     // The accent style is a function of the OS accent, so it can't live in the
     // static map above; it is rebuilt only when the accent value changes (a
