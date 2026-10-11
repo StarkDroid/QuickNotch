@@ -260,8 +260,9 @@ internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape 
 
 /**
  * The island's bottom-corner radius as a value, for everything that must agree
- * with [notchShape] without being a shape: the outline progress ring, the mac
- * blur panel and the Windows blur helper's rounded region.
+ * with [notchShape] without being a shape: the outline progress ring and the
+ * mac blur panel. (The Windows capture doesn't need it — its frame is cropped
+ * to the island rect and clipped by the shape itself.)
  */
 internal fun notchCornerRadius(expanded: Boolean, style: NotchStyle): Dp {
     if (style.capsule) return if (expanded) 18.dp else 14.dp

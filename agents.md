@@ -188,27 +188,28 @@ from the AWT wheel listener and composition on the same thread — no locks.
   macOS = standalone island-sized helper panel below the overlay (never an AWT child —
   CGS radius silently no-ops there), 250 ms frame/level/order/visibility sync;
   `CAShapeLayer` masks (not `cornerRadius`), no rim (`blurScrim.border` transparent);
-  intensity drives radius + opacity. Windows = the same shape for the same reason:
-  `SetWindowCompositionAttribute` acrylic is composed for the whole window and
-  ignores `SetWindowRgn` (verified live: a circle region left the frost
-  untouched), so a small invisible island-sized helper window below the
-  overlay carries classic DWM blur-behind (`DwmEnableBlurBehindWindow`), the
-  one DWM blur that honours a region — the island's rounded GDI region rebuilt
-  per move frosts corner-for-corner while everything outside stays sharp.
-  The helper is OPAQUE BLACK, not transparent: blur-behind does not combine
-  with layered (`UpdateLayeredWindow`) windows — on an alpha-0 helper the call
-  succeeds and blurs nothing — so the black is the glass key (filled natively,
-  since AWT still believes the helper is 1×1) and the region clips shape,
-  shadow and click-through alike.
-  Z-order + geometry are **native-only** (`SetWindowPos` with the overlay as
-  `hWndInsertAfter`, plus a 700 ms reconcile daemon — AWT `isAlwaysOnTop`
-  re-asserts its own registry and re-raises the helper above the island). OS
-  frame rounding is explicitly OFF (DWM's ~8px would nip the 13–18dp corners
-  and round the flush style's square top); helper visibility flips through one
-  tracked AWT call (a per-frame re-show fronts it above the overlay and reads
-  as morph flicker). Intensity is the scrim alpha over the untinted frost
-  (~4% clear glass to ~28% deep frost), never a painted imitation. Missing
-  bridge → painted glass. Single-instance file lock in `main()`.
+  intensity drives radius + opacity. Windows has no usable compositor route — all
+  four were probed live against a striped backdrop: DWM blur-behind composites
+  behind the window (or is ignored on a layered one), `DWMWA_SYSTEMBACKDROP_TYPE`
+  acrylic draws a solid rect ignoring region + transparency,
+  `SetWindowCompositionAttribute` acrylic ignores `SetWindowRgn`, and
+  `WDA_EXCLUDEFROMCAPTURE` blacks a layered window's whole rect in every GDI
+  capture. So the frost IS a screen capture: a ~30 fps daemon (`BitBlt`
+  SRCCOPY|CAPTUREBLT → `GetDIBits` top-down 32bpp, clamped to the virtual screen,
+  inflated 3σ past the island) **inpaints the self-drawn hole** (island rect +
+  5dp ring pad, replaced by the average of a horizontal lerp between the flanking
+  bands and a vertical blend between the rows above/below — no self-baking
+  ghost), runs a **CPU Gaussian** (3-pass box cascade, clamp-to-edge; sigma =
+  `(4 + 0.5×intensity)dp` — the slider drives an exact radius), crops to the
+  island rect and publishes an `ImageBitmap` to a `StateFlow`. The `WindowsFrost`
+  leaf inside the island Box draws it 1:1 under the legibility scrim, its own
+  recompose scope (a frame tick touches nothing else); the painted body skips
+  via `frostActive`. Capture is inflated 3σ so the rim's whole sample window is
+  real backdrop; the flush screen-top edge has nothing above to sample and gets
+  the reconstruction (invisible under the Gaussian). No exclusion flag — the
+  notch stays in screenshots/screen sharing. Intensity is still also the scrim
+  alpha. Missing bridge / any native failure → last frame or painted glass.
+  Single-instance file lock in `main()`.
 
 ### 4.4 UI modules (`ui/`)
 
@@ -266,13 +267,15 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
   method's `IInputStream` parameter ("Cannot find an overload" — its conversion
   reads `GetInterfaces()`, which is empty on a COM RCW). Pre-bind the MethodInfo
   and `Invoke` it: the CLR cast QIs and succeeds.
-- Windows blur: the acrylic backdrop covers the **whole window** and ignores
-  `SetWindowRgn` — never use it for shaped frost; classic blur-behind honours
-  the region, so one GDI build feeds both `DwmEnableBlurBehindWindow` (DWM
-  copies it) and `SetWindowRgn` (window takes it; delete only on failure).
-  Z-manage natively (AWT `isAlwaysOnTop` re-raises the helper above the
-  island). Round the helper with the region + `DWMWCP_DONOTROUND`, never AWT
-  re-show per frame.
+- Windows blur: no DWM route shapes frost on a layered window (blur-behind
+  composites behind / is ignored; both acrylics ignore region + transparency;
+  `WDA_EXCLUDEFROMCAPTURE` blacks a layered window out in every GDI capture) —
+  capture + CPU-Gaussian + inpaint the self-drawn hole instead, or the island
+  ghosts into its own backdrop. Inflate the capture 3σ (the rim's whole sample
+  window must be real backdrop) and clamp the BitBlt to the virtual screen
+  (the flush-top island always pokes above y=0; an unclamped blit fails
+  silently, every frame). `GetDIBits` needs the bitmap deselected first, and
+  32bpp BI_RGB alpha is undefined — force opaque.
 - Progress outline straddles the island edge from a padded wrapper sibling
   (the island clip would cut its outer half); pad is 0 when the ring is off.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
@@ -290,5 +293,6 @@ Branch `main` (older work: `cursor/macos-compose-adaptation`). One logical chang
 commit, imperative summary, GPG-sign (`git commit -S`), author stays the user, never push.
 Before commit: compile + jar + smoke run + detekt green + resource sweep (unused
 `Res.*`, zero `Brush.*Gradient` in settings/onboarding). End with clean `git status`;
-note unverifiable paths honestly (no Windows machine here: SMTC seek, WinRT, DWM,
-`WS_EX_TOOLWINDOW`; needs live eyes: morph smoothness, waveform feel, blur look).
+note unverifiable paths honestly (macOS-only paths have no machine here: CGS/panel
+blur, passthrough bridge, menu-bar presence; needs live eyes: morph smoothness,
+waveform feel, blur look).

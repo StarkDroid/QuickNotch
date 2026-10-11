@@ -13,6 +13,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -255,12 +257,12 @@ internal fun FloatingNotchOverlay(
     // size was (the collapsed pill) — leaving everything outside it
     // click-through once the notch expanded. The callback itself fires on
     // every position/size change, which is precisely when the target (and the
-    // Windows blur helper's geometry below) must be republished.
+    // Windows blur capture's island rect below) must be republished.
     var islandCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     // Installed before the touch-target publish below so that one
     // `onGloballyPositioned` feed can drive both the native click-through
-    // region and (on Windows) the island-sized backdrop-blur helper window.
+    // region and (on Windows) the backdrop-blur capture daemon.
     val windowsBlur = remember(awtWindow) { WindowsBackdropBlur.install(awtWindow) }
     val macBlur = remember(awtWindow) { MacContentBlur(awtWindow) }
     DisposableEffect(awtWindow) {
@@ -397,15 +399,21 @@ internal fun FloatingNotchOverlay(
     // once and the accented style is rebuilt only when the OS accent changes,
     // so nothing here allocates while the island animates.
     // (windowsBlur / macBlur are installed near the touch-target publish
-    // above — the Windows helper tracks the island rect from the same feed.)
+    // above — the Windows capture daemon tracks the island rect from the same
+    // feed.)
     //
-    // The Blurred surface means native backdrop blur wherever the bridge
-    // answers (compositor radius on macOS, DWM acrylic on Windows), falling
-    // back to painted glass where it does not. Only the scrim differs between
-    // the two, so it rides the same remember key as the surface.
+    // The Blurred surface means real backdrop blur wherever the bridge
+    // answers — a compositor panel below the window on macOS, a captured +
+    // GPU/CPU-blurred strip drawn inside the window on Windows — falling back
+    // to painted glass where it does not. Only the scrim differs between the
+    // two, so it rides the same remember key as the surface.
     val blurNative = windowsBlur != null || macBlur.available
     val blurActive = config.surface == NotchSurface.TRANSLUCENT && blurNative
     val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    // Windows paints its frost INSIDE the window (the capture leaf below), so
+    // the painted body must get out of the way while frost is live; macOS
+    // keeps the painted scrim over the native panel. Same rule, two carriers.
+    val frostActive = blurActive && windowsBlur != null
     val surface = remember(config.surface, accent, blurActive, blurIntensity) {
         IslandSurface.styleFor(config.surface, accent, blurActive, blurIntensity)
     }
@@ -455,11 +463,10 @@ internal fun FloatingNotchOverlay(
     // Publishes the island's bounds in window-client pixels for the native
     // click-through (see WindowPassthrough); null (not measured yet) means
     // "whole window interactive", the fail-soft default. Lives here — below
-    // the shape inputs — because the same feed also carries the island's
-    // corner radius to the Windows blur helper, so its rounded region tracks
-    // the pill's stadium and the dock's rounded box (same rule as
-    // notchShape()/MacContentBlur, converted to the physical px the helper
-    // works in).
+    // the shape inputs — because the same feed also drives the Windows
+    // backdrop-blur capture: the daemon strips the screen behind exactly this
+    // rect every frame, so the frost tracks the pill's stadium and the dock's
+    // rounded box through the same animated layout.
     //
     // `localToWindow` already returns PHYSICAL pixels (Compose px = dp ×
     // density), so no further scaling happens here — multiplying again used to
@@ -480,12 +487,7 @@ internal fun FloatingNotchOverlay(
             sizePx.height
         )
         onTouchTargetChange(rect)
-        val cornerDp = notchCornerRadius(islandExpanded, config.style)
-        windowsBlur?.updateIsland(
-            rect,
-            with(density) { cornerDp.toPx() }.roundToInt(),
-            config.style.capsule
-        )
+        windowsBlur?.updateIsland(rect)
     }
 
     // Playback progress straddles the island's own outline — half over the
@@ -508,9 +510,9 @@ internal fun FloatingNotchOverlay(
 
     // The native blur follows the surface, not a toggle: picking Blurred
     // enables it, any other surface clears it. The mac panel tracks the island
-    // while it animates; Windows pushes classic blur-behind for the rounded
-    // island region on every move and follows the island through the
-    // touch-target feed above. Both fail soft to the painted surfaces.
+    // while it animates; Windows runs its capture daemon against the same
+    // island feed (the frost leaf below draws what it strips). Both fail soft
+    // to the painted surfaces.
     LaunchedEffect(blurActive, blurIntensity, islandExpanded, config.style) {
         windowsBlur?.setBlur(blurActive, blurIntensity)
         if (blurActive) {
@@ -598,10 +600,34 @@ internal fun FloatingNotchOverlay(
                         publishTouchTarget(coords)
                     }
                     .clip(shape)
-                    .islandSurface(config.surface, accent, blurActive, blurIntensity)
+                    // Windows frost replaces the painted body: the captured
+                    // backdrop is drawn by the leaf below and the scrim rides
+                    // above it inside the same leaf, so the modifier-chain
+                    // background would only double-tint. macOS and painted
+                    // fallbacks keep the chain background exactly as before.
+                    .then(
+                        if (frostActive) {
+                            Modifier
+                        } else {
+                            Modifier.islandSurface(config.surface, accent, blurActive, blurIntensity)
+                        }
+                    )
                     .border(surface.borderWidth.dp, surface.border, shape),
                 contentAlignment = Alignment.Center
             ) {
+                // Windows only (frostActive ⇒ windowsBlur != null): the
+                // captured backdrop, already inpainted + Gaussian-blurred on
+                // the daemon thread and cropped to this island's rect, drawn
+                // 1:1 under the legibility scrim. Its own restart scope, so a
+                // 30 fps capture tick re-draws this leaf and nothing else.
+                val frostBlur = if (frostActive) windowsBlur else null
+                if (frostBlur != null) {
+                    WindowsFrost(
+                        blur = frostBlur,
+                        intensity = blurIntensity,
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
                 // Keep the quickview on screen until the dock is actually
                 // visible, so the two surfaces cross at the same instant. Live
                 // music does this so Compose can morph the shared disc/title
@@ -813,6 +839,48 @@ internal fun FloatingNotchOverlay(
                     .sharingHover { setHovered(it) }
             ) { /* Transparent hover area; draws nothing but stays on top for hit testing. */ }
         }
+    }
+}
+
+/**
+ * Windows backdrop frost: the captured strip behind the island, already
+ * inpainted (our own scrim/content replaced from the real band flanking it)
+ * and Gaussian-blurred on the capture daemon, cropped to this island's rect.
+ * Drawn 1:1 as the island's bottom layer, then the legibility scrim — the
+ * same legibility rule as macOS, where the native panel shows through and
+ * only the scrim is painted.
+ *
+ * The frame lives in a [StateFlow] read inside this leaf only: a 30 fps
+ * capture tick re-draws the island and never recomposes the overlay body.
+ * Frame null (daemon warming up, surface just flipped, native failure) draws
+ * nothing, so the island falls through to whatever background the caller left
+ * in the chain — painted glass on failure, a bare clipped shape for the
+ * frame-or-two before the first capture lands.
+ */
+@Composable
+private fun WindowsFrost(
+    blur: WindowsBackdropBlur,
+    intensity: Int,
+    modifier: Modifier = Modifier
+) {
+    val frame by blur.frame.collectAsState()
+    Box(modifier = modifier) {
+        frame?.let {
+            Image(
+                bitmap = it,
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        // Scrim above the frost: bright wallpapers would otherwise wash the
+        // white quickview out. Deliberately light and intensity-driven —
+        // the frost supplies the texture, this only buys contrast.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .islandSurface(NotchSurface.TRANSLUCENT, null, true, intensity)
+        )
     }
 }
 
