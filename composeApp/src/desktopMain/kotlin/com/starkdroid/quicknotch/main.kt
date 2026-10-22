@@ -53,6 +53,7 @@ import com.starkdroid.quicknotch.weather.WeatherState
 import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
+import com.starkdroid.quicknotch.system.SystemMetrics
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
 import com.starkdroid.quicknotch.ui.OverlayPager
@@ -153,6 +154,7 @@ fun main(args: Array<String>) {
             SystemVolume.start()
             AudioBattery.start()
             SystemBattery.start()
+            SystemMetrics.start()
             NotificationCount.start()
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
@@ -166,6 +168,7 @@ fun main(args: Array<String>) {
                 SystemVolume.stop()
                 AudioBattery.stop()
                 SystemBattery.stop()
+                SystemMetrics.stop()
                 NotificationCount.stop()
                 Weather.stop()
             }
@@ -197,6 +200,13 @@ fun main(args: Array<String>) {
         // config writes never cost a refetch.
         LaunchedEffect(config.widgets.weatherPlace) {
             Weather.setManualPlace(config.widgets.weatherPlace)
+        }
+
+        // The system monitor only polls while its widget is switched on: a user
+        // who turns the page off pays no process spawns at all, rather than a
+        // poller idling in the background forever.
+        LaunchedEffect(config.widgets.showSystem) {
+            SystemMetrics.setEnabled(config.widgets.showSystem)
         }
 
         // Dock presence is a function of the Settings window, never of the
@@ -368,12 +378,32 @@ private fun NotchOverlayWindow(
     val weatherData = (weatherState as? WeatherState.Ready)?.data
     val weatherReady = config.widgets.showWeather &&
         (weatherData != null || weatherFetching || weatherState is WeatherState.Loading)
+    // Same gating rule as the overlay: the System page (and its width) only
+    // exists once there is a reading behind it.
+    val systemState by SystemMetrics.state.collectAsState()
+    val systemReady = config.widgets.showSystem && systemState != null
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
         weatherVisible = weatherData != null
     )
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarConnected, weatherReady)
+    val metrics = remember(
+        config,
+        favorites.size,
+        musicLive,
+        indicatorSlots,
+        calendarConnected,
+        weatherReady,
+        systemReady
+    ) {
+        computeNotchMetrics(
+            config,
+            favorites.size,
+            musicLive,
+            indicatorSlots,
+            calendarConnected,
+            weatherReady,
+            systemReady
+        )
     }
     // The native window keeps the expanded footprint at all times (see class
     // doc): opening/collapsing never resizes the transparent window, which is

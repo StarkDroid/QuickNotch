@@ -86,6 +86,7 @@ import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.model.AppItem
 
 import com.starkdroid.quicknotch.model.NotchConfig
+import com.starkdroid.quicknotch.system.SystemSnapshot
 import com.starkdroid.quicknotch.weather.WeatherState
 import com.starkdroid.quicknotch.theme.TextPrimary
 import kotlinx.coroutines.launch
@@ -94,7 +95,7 @@ import kotlin.math.abs
 
 // ── Widget pages ─────────────────────────────────────────────────────────────
 
-internal enum class WidgetPage { Apps, Music, Calendar, Weather }
+internal enum class WidgetPage { Apps, Music, Calendar, Weather, System }
 
 /**
  * Renders every active widget page as an always-composed sibling so the pager
@@ -126,6 +127,8 @@ internal fun WidgetPages(
     weatherState: WeatherState?,
     weatherFetching: Boolean,
     fahrenheit: Boolean,
+    /** Latest CPU/GPU/memory/storage/network reading for the System page. */
+    system: SystemSnapshot?,
     onRefreshWeather: () -> Unit,
     onLaunch: (AppItem) -> Unit
 ) {
@@ -169,6 +172,9 @@ internal fun WidgetPages(
                         interactive = interactive && isActive,
                         onRefresh = onRefreshWeather
                     )
+                    // Read-only page: rings and values, nothing to click, so it
+                    // never installs a pointer modifier of its own.
+                    WidgetPage.System -> SystemNotchPage(snapshot = system)
                     WidgetPage.Music -> if (session != null) {
                         MusicPage(
                             session = session,

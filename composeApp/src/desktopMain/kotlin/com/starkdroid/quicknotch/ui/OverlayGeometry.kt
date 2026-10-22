@@ -74,6 +74,12 @@ internal object DockLayout {
      * the same room as the music page, so the window never clips the outlook.
      */
     val WeatherPageWidth: Dp = 356.dp
+    /**
+     * Six ring tiles (CPU, GPU, memory, storage, download, upload) each with a
+     * value and a caption — the same room the music and weather pages claim, so
+     * adding the System page never widens the window beyond its usual maximum.
+     */
+    val SystemPageWidth: Dp = 356.dp
 
     /**
      * Collapsed pill length once a live session is showing, wide enough for
@@ -136,7 +142,8 @@ fun computeNotchMetrics(
     musicActive: Boolean = false,
     indicatorSlots: Int = 0,
     calendarActive: Boolean = false,
-    weatherActive: Boolean = false
+    weatherActive: Boolean = false,
+    systemActive: Boolean = false
 ): NotchMetrics {
     val calendarActiveWidth = if (calendarActive) DockLayout.CalendarPageWidth else 0.dp
     val base = config.baseIconSizeDp.dp
@@ -150,7 +157,8 @@ fun computeNotchMetrics(
         } else 0.dp
     val musicAlong = if (musicActive) DockLayout.NowPlayingWidth else 0.dp
     val weatherAlong = if (weatherActive) DockLayout.WeatherPageWidth else 0.dp
-    val alongExpanded = maxOf(appsAlong, musicAlong, calendarActiveWidth, weatherAlong)
+    val systemAlong = if (systemActive) DockLayout.SystemPageWidth else 0.dp
+    val alongExpanded = maxOf(appsAlong, musicAlong, calendarActiveWidth, weatherAlong, systemAlong)
     val alongCollapsed = maxOf(
         config.quickViewWidthDp.dp + DockLayout.CollapsedMargin +
             DockLayout.QuickViewIndicatorSlot * indicatorSlots.coerceAtLeast(0),

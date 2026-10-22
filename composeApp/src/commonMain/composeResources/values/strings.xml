@@ -40,7 +40,7 @@
     <string name="tab_widgets">Widgets</string>
     <string name="tab_behavior">Behavior</string>
     <string name="settings_appearance_desc">Notch silhouette, surface finish, icon magnification and the idle clock.</string>
-    <string name="settings_widgets_desc">Pinned apps, Now Playing and Calendar — flip the notch open and scroll to move between them.</string>
+    <string name="settings_widgets_desc">Pinned apps, Now Playing, System, Weather and Calendar — flip the notch open and scroll to move between them.</string>
     <string name="settings_behavior_desc">How QuickNotch starts, layers and gets out of your way.</string>
 
     <!-- Enum labels: notch style -->
@@ -136,6 +136,22 @@
     <string name="weather_cond_rain">Rain</string>
     <string name="weather_cond_snow">Snow</string>
     <string name="weather_cond_storm">Thunderstorm</string>
+
+    <!-- System monitor widget -->
+    <string name="system_section_title">System</string>
+    <string name="system_hint">CPU, memory, GPU, storage and network rings with the live value under each. The GPU ring appears only where the OS reports a graphics engine.</string>
+    <string name="system_metric_cpu">CPU</string>
+    <string name="system_metric_gpu">GPU</string>
+    <string name="system_metric_ram">Memory</string>
+    <string name="system_metric_storage">Storage</string>
+    <string name="system_metric_down">Download</string>
+    <string name="system_metric_up">Upload</string>
+    <string name="system_reading">%1$s: %2$s</string>
+    <string name="system_reading_unknown">%1$s: unavailable</string>
+    <string name="system_unknown">—</string>
+    <string name="system_waiting">Collecting the first sample…</string>
+    <string name="system_disabled">Switched off — the page stays hidden and nothing is polled.</string>
+    <string name="system_preview">CPU %1$s · Memory %2$s · %3$s down</string>
 
     <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>

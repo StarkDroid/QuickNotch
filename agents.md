@@ -15,9 +15,11 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
   (date/time + weather chip + laptop-battery ring + notification bell), idle dots,
   drag-handle style. Content-hugging: clock/dots shrink to measured width;
   live media fills the configured width.
-- **Expanded pages (wheel order):** Music (when live) → Apps → Weather → Calendar.
-  Music page: vinyl + title/artist—album + progress + transport + rings.
-  Calendar page: schedule view + ticker. Weather page: today + 7-day.
+- **Expanded pages (wheel order):** Music (when live) → Apps → System (when on) →
+  Weather → Calendar. Music page: vinyl + title/artist—album + progress + transport
+  + rings. Calendar page: schedule view + ticker. Weather page: today + 7-day.
+  System page: one `LevelRing` per metric (glyph inside, live value under it) —
+  CPU, GPU (only where the OS reports an engine), memory, storage, download, upload.
 - **macOS placement:** island sits flush at the true top of the screen, above the
   menu bar (`NSStatusWindowLevel` 25, joins all Spaces, over full-screen apps).
   Unreachable via AWT — an ObjC dylib parks it there.
@@ -48,7 +50,8 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
   **no `java.net.http`, no `jdk.httpserver`**. Anything needing those crashes only
   in the installed app (`NoClassDefFoundError`, an `Error` — catch `Error` too).
 - `desktopMain` = everything platform: `main.kt`, `datasource/`, `media/`,
-  `calendar/GoogleCalendar`, `weather/Weather`, `ui/`, `model/`.
+  `calendar/GoogleCalendar`, `weather/Weather`, `system/` (SystemMetrics +
+  per-platform probes), `ui/`, `model/`.
 - OAuth loopback is a hand-rolled `ServerSocket` (single GET), never `HttpServer`.
 - Resources: strings in `commonMain/composeResources/values/strings.xml` → `Res.string.x`;
   glyphs in `drawable/*.svg` (solid `fill="currentColor"` silhouettes, tinted SrcIn).
@@ -111,8 +114,10 @@ from the AWT wheel listener and composition on the same thread — no locks.
 ### 4.2 Overlay: geometry, hover, pager, morph
 
 - `OverlayGeometry.kt`: `computeNotchMetrics` + `DockLayout` own footprints.
-  Island depth = `expandedNotchHeightDp`(70–86, default 78) + 6. Widths: music/weather
-  pages 356dp, live-collapsed 236dp, clock/dots hugged (floor 32dp + 16dp pad).
+  Island depth = `expandedNotchHeightDp`(70–86, default 78) + 6. Widths: music/weather/
+  system pages 356dp, live-collapsed 236dp, clock/dots hugged (floor 32dp + 16dp pad).
+  `calendarConnected`/`weatherReady`/`systemReady` gate those pages and the width, so a
+  page with nothing behind it never becomes a dead stop on the wheel.
   Indicator slots (+28dp each: device + laptop battery, notification bell, weather = 2)
   come from `quickViewIndicatorSlots(...)` — **both** the window sizer and content must
   use it or the right icon clips.
@@ -180,6 +185,23 @@ from the AWT wheel listener and composition on the same thread — no locks.
 - **Notifications (macOS):** `count(*)` on usernoted `record` (WAL-aware: fingerprint
   db/-wal/-shm at 250 ms + 3 s backstop). Needs Full Disk Access (settings deep-links
   the pane, re-pokes on focus); unreadable → hidden. Windows has no store → hidden.
+- **System monitor** (`system/`, `WidgetsConfig.showSystem`, default on): one
+  `StateFlow<SystemSnapshot?>`, poll **gated on the toggle** (`SystemMetrics.setEnabled`
+  → a switched-off widget spawns nothing and clears the snapshot). macOS runs exactly
+  one `/bin/sh` per 2 s tick (`sysctl hw.ncpu hw.memsize`, `ps -A -o %cpu=`, `vm_stat`,
+  `netstat -ibn`, `df -k /System/Volumes/Data`, `ioreg -c IOAccelerator`) ≈ 40 ms;
+  Windows runs one `system-metrics.ps1` per 4 s tick (`Get-Counter` PDH over a 1 s
+  sample for CPU/memory/GPU-engine/network, `DriveInfo` for the disk). Static facts
+  (total RAM, GPU name via `system_profiler` ≈ 300 ms) are read **once per run**, never
+  per tick. Readings: CPU = Σ`ps %cpu` ÷ cores; memory = active + wired + compressor;
+  storage = the **data** volume (the read-only system volume reads ~14% falsely);
+  GPU = highest `Device Utilization %` (macOS) / summed 3D-engine utilization clamped
+  to 100 (Windows) — no counter means no GPU tile (`gpuAvailable`). Throughput comes
+  from cumulative counters, so **both directions must share one delta** and the first
+  sample is always null. `emit()` refuses a sample that lands after the switch-off, or
+  the settings row shows a frozen reading forever. Load metrics warm to `LoadHighTint`
+  ≥ 85; network rings use a log sweep (1 KB/s → 0 … 1 GB/s → 100) and the label carries
+  the exact rate.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`
@@ -218,7 +240,8 @@ pages + fisheye dock `DockContent`; vinyl/marquee/progress/transport/waveform
 `MediaWidgets`; morph keys `NowPlayingMorph`; hover `OverlayHover`; springs/timings
 `NotchMotion`; metrics `OverlayGeometry`; pager `OverlayPager`; rings `LevelRing`;
 clock/bell `QuickViewClock`; surfaces `IslandSurface`; skeleton `Shimmer`;
-`CalendarWidget`, `WeatherWidget`, `OnboardingScreen` (gates overlay on
+`CalendarWidget`, `WeatherWidget`, `SystemWidget` (System page: six ring tiles,
+`systemRate`/`systemRateLevel`), `OnboardingScreen` (gates overlay on
 `onboardingDone`), `PinnedAppsPanel`, settings `SettingsScreen`/`WidgetsTab`/
 `DockSizingTab`/`BehaviorTab`/`SettingsComponents` (shared chrome + `plainClickable` /
 `trackHoverPress` helpers; tabs collect their own state — screen collects none).
@@ -227,7 +250,9 @@ clock/bell `QuickViewClock`; surfaces `IslandSurface`; skeleton `Shimmer`;
 
 Palette in `theme/Color.kt` (+ overlay-local `LiveAccent` etc. in `MediaWidgets.kt`).
 Settings/onboarding are gradient-free solids. Glyphs = tinted SVGs only.
-Reusable `LevelRing` / `VinylDisc` (spins 12 s/turn while playing, frozen angle on pause;
+Reusable `LevelRing` (one ring, several alert rules: `lowTint`/`lowThreshold` for a
+draining battery, `highTint`/`highThreshold` for a saturating load metric) /
+`VinylDisc` (spins 12 s/turn while playing, frozen angle on pause;
 page swap = `AnimatedContent` keyed on the bitmap, clipped at island) / `MarqueeText`
 (scroll iff overflowing) / `TrackProgress` (inset lane, head iff seekable).
 Waveform = faux analyser (2 sines/band + shared envelope, 8–40 bars by width, white or
@@ -279,6 +304,13 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
 - Progress outline straddles the island edge from a padded wrapper sibling
   (the island clip would cut its outer half); pad is 0 when the ring is off.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
+- System monitor (macOS probe): `netstat` **must** be `-n` (without it every interface
+  address resolves through DNS and the probe blocked ~5 s); `netstat -ib` repeats a row
+  per address family and only the first carries the counters (de-dupe by interface,
+  skip `lo0`); `df` the `/System/Volumes/Data` volume (root reads ~14% falsely);
+  `ioreg -c IOAccelerator` gives GPU load only where the driver prints
+  `Device Utilization %`. On Windows the PDH sample itself costs ~1 s, so the poll is
+  4 s and RAM total / GPU name come from one `-Static` run.
 - Calendar: RFC3339 times; 403 body names a disabled API; Testing clients need test users;
   loopback port must be `--strictPort`-stable and the URI identical in app + page + console.
 - macOS `prev` restarts the track when position > ~3 s — verify via position, not title.

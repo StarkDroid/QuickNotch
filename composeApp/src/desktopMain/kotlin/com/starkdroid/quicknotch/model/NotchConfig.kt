@@ -123,6 +123,13 @@ data class WidgetsConfig(
      */
     val showWeather: Boolean = true,
     /**
+     * System monitor as an expanded wheel page: CPU, GPU (when the OS reports
+     * one), memory, boot-volume fill and network throughput, each as the same
+     * ring the pill uses for volume/battery, with the live value beneath it.
+     * The poller only runs while this is on, so switching it off costs nothing.
+     */
+    val showSystem: Boolean = true,
+    /**
      * Manual weather place picked from Open-Meteo geocoding (label +
      * coordinates). Null means the automatic IP-geolocated position; a manual
      * pick replaces it for the pill, the page, and the poll. Old configs load

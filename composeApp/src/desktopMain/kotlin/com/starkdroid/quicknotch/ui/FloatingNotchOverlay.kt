@@ -67,6 +67,7 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
+import com.starkdroid.quicknotch.system.SystemMetrics
 import com.starkdroid.quicknotch.weather.Weather
 import com.starkdroid.quicknotch.weather.WeatherState
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +166,11 @@ internal fun FloatingNotchOverlay(
     // the same rule the calendar page follows.
     val weatherReady = config.widgets.showWeather &&
         (weatherData != null || weatherFetching || weatherState is WeatherState.Loading)
+    // The System page joins the wheel only once there is a reading to draw: a
+    // widget that is switched off (or whose very first probe failed) must never
+    // become a dead stop between the dock and the outlook.
+    val systemState by SystemMetrics.state.collectAsState()
+    val systemReady = config.widgets.showSystem && systemState != null
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -230,6 +236,7 @@ internal fun FloatingNotchOverlay(
         if (isExpanded) {
             AudioBattery.poke()
             SystemBattery.poke()
+            SystemMetrics.poke()
         }
     }
 
@@ -274,10 +281,19 @@ internal fun FloatingNotchOverlay(
     // the native sizer follow (a toggled-off calendar must neither draw nor
     // reserve a page).
     val calendarReady = config.widgets.showCalendar && calendarConnected
-    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarReady, weatherReady) {
+    val pages = remember(
+        config.widgets.pinnedAppsEnabled,
+        musicLive,
+        calendarReady,
+        weatherReady,
+        systemReady
+    ) {
         buildList {
             if (musicLive) add(WidgetPage.Music)
             if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
+            // System sits between the dock and the outlook: it is a "glance at
+            // the machine" page, not part of the day (weather/calendar) pair.
+            if (systemReady) add(WidgetPage.System)
             if (weatherReady) add(WidgetPage.Weather)
             // Last so the wheel reaches it after the dock, and only when there
             // is a connection behind it -- an empty page would be a dead stop.
@@ -392,8 +408,24 @@ internal fun FloatingNotchOverlay(
         weatherVisible = weatherData != null
     )
 
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarReady, weatherReady) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarReady, weatherReady)
+    val metrics = remember(
+        config,
+        favorites.size,
+        musicLive,
+        indicatorSlots,
+        calendarReady,
+        weatherReady,
+        systemReady
+    ) {
+        computeNotchMetrics(
+            config,
+            favorites.size,
+            musicLive,
+            indicatorSlots,
+            calendarReady,
+            weatherReady,
+            systemReady
+        )
     }
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
@@ -802,6 +834,7 @@ internal fun FloatingNotchOverlay(
                         weatherState = weatherState,
                         weatherFetching = weatherFetching,
                         fahrenheit = config.widgets.weatherFahrenheit,
+                        system = systemState,
                         onRefreshWeather = { Weather.refresh() },
                         onLaunch = { app ->
                             scope.launch {
