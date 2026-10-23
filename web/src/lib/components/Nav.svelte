@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { nav, site } from '$data/site';
+	import { buyCta, nav, site } from '$data/site';
 	import { scrollToId } from '$lib/motion/smoothScroll';
 
 	let scrolled = $state(false);
@@ -88,13 +88,13 @@
 		<div class="nav__actions">
 			<a
 				class="btn btn--primary btn--sm"
-				href={site.downloadUrl}
+				href={site.purchaseUrl}
 				data-magnetic
 				target="_blank"
 				rel="noopener noreferrer"
 			>
-				<Icon name="download" size={16} />
-				Download
+				<Icon name="cart" size={16} />
+				{buyCta}
 			</a>
 			<button
 				class="nav__toggle"
@@ -113,9 +113,9 @@
 		{#each nav as item (item.href)}
 			<a href={item.href} onclick={(event) => go(event, item.href)}>{item.label}</a>
 		{/each}
-		<a class="btn btn--primary btn--block" href={site.downloadUrl} target="_blank" rel="noopener noreferrer">
-			<Icon name="download" size={16} />
-			Download for Windows & macOS
+		<a class="btn btn--primary btn--block" href={site.purchaseUrl} target="_blank" rel="noopener noreferrer">
+			<Icon name="cart" size={16} />
+			{buyCta} · Windows &amp; macOS
 		</a>
 	</div>
 

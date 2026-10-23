@@ -4,11 +4,11 @@
 	import { widgets, type WidgetId } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
-	const widgetIcons: Record<WidgetId, 'apps' | 'sun' | 'cpu' | 'bolt' | 'play'> = {
+	const widgetIcons: Record<WidgetId, 'apps' | 'cpu' | 'sun' | 'calendar' | 'play'> = {
 		apps: 'apps',
-		weather: 'sun',
 		system: 'cpu',
-		fps: 'bolt',
+		weather: 'sun',
+		calendar: 'calendar',
 		music: 'play'
 	};
 </script>
@@ -19,8 +19,8 @@
 			<p class="eyebrow">Widgets</p>
 			<h2 class="display h2">A whole dockful of widgets.</h2>
 			<p class="lead">
-				Scroll up or down inside the notch to hop between your apps, the weather,
-				system stats, game FPS and your music. No windows, no hunting.
+				Scroll up or down inside the notch to hop between your apps, the system
+				rings, the weather, the day ahead and your music. No windows, no hunting.
 			</p>
 		</header>
 
@@ -49,9 +49,9 @@
 				{/each}
 			</ul>
 
-			<p class="teaser" aria-label="Widgets in the pipeline">
+			<p class="teaser" aria-label="More widgets are planned">
 				<Icon name="sparkle" size={15} />
-				In the oven: a clipboard, keyboard shortcuts, a stopwatch and friends.
+				More widgets are in the oven.
 			</p>
 		</div>
 	</div>

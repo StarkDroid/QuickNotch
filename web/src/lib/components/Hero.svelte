@@ -2,7 +2,7 @@
 	import Icon from './Icon.svelte';
 	import NotchWidgetDemo from './NotchWidgetDemo.svelte';
 	import ScreenFrame from './ScreenFrame.svelte';
-	import { hero, platforms, site } from '$data/site';
+	import { buyCta, hero, platforms, site } from '$data/site';
 	import { loadMotion, prefersReducedMotion } from '$lib/motion/gsap';
 	import { magnetic } from '$lib/actions/magnetic';
 	import { scrollToId } from '$lib/motion/smoothScroll';
@@ -196,13 +196,13 @@
 			<div class="hero__cta" data-hero-extra>
 				<a
 					class="btn btn--primary btn--lg"
-					href={site.downloadUrl}
+					href={site.purchaseUrl}
 					use:magnetic
 					target="_blank"
 					rel="noopener noreferrer"
 				>
-					<Icon name="download" size={18} />
-					{hero.primaryCta}
+					<Icon name="cart" size={18} />
+					{buyCta}
 				</a>
 				<button class="btn btn--ghost btn--lg" type="button" onclick={() => scrollToId('widgets')}>
 					{hero.secondaryCta}
@@ -245,16 +245,18 @@
 				{#each platforms as platform (platform.id)}
 					<a
 						class="platform"
-						href={site.downloadUrl}
-						target="_blank"
-						rel="noopener noreferrer"
+						href="#pricing"
+						onclick={(event) => {
+							event.preventDefault();
+							scrollToId('pricing');
+						}}
 					>
 						<span class="platform__icon"><Icon name={platform.icon} size={20} /></span>
 						<span class="platform__text">
 							<strong>{platform.name}</strong>
 							<span>{platform.note}</span>
 						</span>
-						<Icon name="arrow-up-right" size={16} />
+						<Icon name="check" size={16} />
 					</a>
 				{/each}
 			</div>

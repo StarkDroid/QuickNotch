@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { download, hero, platforms, site } from '$data/site';
+	import { buyCta, download, platforms, pricing, site } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 </script>
 
@@ -11,9 +11,9 @@
 			<span class="panel__ticket" aria-hidden="true"></span>
 
 			<div class="panel__inner">
-				<span class="sticker panel__ribbon" aria-hidden="true">no card required ★</span>
+				<span class="sticker panel__ribbon" aria-hidden="true">licence in your inbox ★</span>
 
-				<p class="eyebrow">Get started</p>
+				<p class="eyebrow">Install</p>
 
 				<h2 class="display h2">{download.title}</h2>
 
@@ -22,12 +22,12 @@
 				<div class="actions">
 					<a
 						class="btn btn--primary btn--lg"
-						href={site.downloadUrl}
+						href={site.purchaseUrl}
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						<Icon name="download" size={18} />
-						{hero.primaryCta}
+						<Icon name="cart" size={18} />
+						{buyCta}
 					</a>
 
 					<div class="platforms">
@@ -55,8 +55,8 @@
 				</ul>
 
 				<ul class="trust">
-					<li><Icon name="shield" size={15} />No account · No telemetry</li>
-					<li><Icon name="check" size={15} />v{site.version}</li>
+					<li><Icon name="shield" size={15} />One licence · both platforms</li>
+					<li><Icon name="check" size={15} />{pricing.label} {pricing.unit} · v{site.version}</li>
 				</ul>
 			</div>
 		</div>

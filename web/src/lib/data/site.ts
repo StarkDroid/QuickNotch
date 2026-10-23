@@ -8,22 +8,30 @@ export const site = {
 	name: 'QuickNotch',
 	url: 'https://quicknotch.app',
 	/**
-	 * Where the installers live. This is the one place to configure the download
-	 * destination — nothing else on the site links off to a code host, so that it
-	 * never implies the product's source is available.
+	 * Where the installers live, for people who already own a licence. This is
+	 * the one place to configure the download destination — nothing else on the
+	 * site links off to a code host, so that it never implies the product's
+	 * source is available.
 	 *
 	 * TODO before launch: publish this page. Absolute rather than a relative
 	 * `/download` so the prerenderer does not try to crawl it and fail the build.
 	 */
 	downloadUrl: 'https://quicknotch.app/download',
+	/**
+	 * Checkout. Every "buy" button on the site points here, and the price below
+	 * is the single source of truth for what it costs, so the button, the card
+	 * and the structured data can never disagree.
+	 *
+	 * TODO before launch: point this at the live checkout (a hosted cart page or
+	 * a payment processor's checkout link).
+	 */
+	purchaseUrl: 'https://quicknotch.app/buy',
 	version: '1.0.0',
-	price: '0',
-	currency: 'USD',
-	tagline: 'One tiny notch. Apps, weather, stats and more.',
+	tagline: 'One tiny notch. Apps, system, weather and more.',
 	description:
-		'QuickNotch is a free floating notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
+		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle.',
 	shortDescription:
-		'A free floating notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
+		'A floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
 	keywords: [
 		'app launcher',
@@ -36,11 +44,12 @@ export const site = {
 		'dock replacement',
 		'notch app launcher',
 		'quick launcher',
-		'free app dock',
+		'app dock',
 		'widgets',
 		'weather widget',
 		'system monitor',
-		'fps counter',
+		'CPU and memory monitor',
+		'calendar widget',
 		'live activities',
 		'now playing widget',
 		'notch themes',
@@ -48,10 +57,38 @@ export const site = {
 	]
 } as const;
 
+/**
+ * Commerce. One payment, both installers, every widget — the whole site reads
+ * the price from here, including the structured data in `Seo.svelte`.
+ */
+export const pricing = {
+	/** Kept separate from the display label for schema.org's numeric field. */
+	amount: '9',
+	label: '$9',
+	currency: 'USD',
+	unit: 'one-time',
+	eyebrow: 'The price',
+	title: 'One tiny notch. One small price.',
+	body: 'Pay once and the notch is yours on both platforms: every widget page, all three looks, and the updates that follow. No subscription, no in-app purchases, no account.',
+	/** What the payment actually buys — rendered beside the price. */
+	includes: [
+		'Windows and macOS installers on one licence',
+		'Quick launch, system, weather, calendar and live media',
+		'All three notch styles and every surface finish',
+		'Updates included for as long as the app ships'
+	],
+	/** Receipt-footer line under the buy button. */
+	finePrint: 'Instant download · Both platforms · No subscription'
+} as const;
+
+/** One label for every buy button, so the price is written exactly once. */
+export const buyCta = `Buy now — ${pricing.label}` as const;
+
 export const nav = [
 	{ label: 'Widgets', href: '#widgets' },
 	{ label: 'Themes', href: '#themes' },
 	{ label: 'Launch', href: '#launch' },
+	{ label: 'Pricing', href: '#pricing' },
 	{ label: 'FAQ', href: '#faq' }
 ] as const;
 
@@ -74,33 +111,36 @@ export const platforms = [
 
 export const hero = {
 	// Sticker ribbon that sits on top of the headline.
-	badge: 'a notchful of good stuff · 100% free',
+	badge: 'a notchful of good stuff · pay once',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'A notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around, without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
-	primaryCta: 'Download for free',
+	sub: 'A notch that lives at the top of your screen, always ready. Pin your apps, watch the machine — CPU, GPU, memory, storage and network as live rings — check the weather and the day ahead, and boss your music around, without ever leaving the window you are in.',
 	secondaryCta: 'See how it works',
-	trust: ['No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
+	trust: ['One-time purchase', 'No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
 } as const;
 
 export const stats = [
 	{
 		value: '5',
 		label: 'Widgets, always up top',
-		detail: 'Apps, weather, stats, FPS and live controls'
+		detail: 'Apps, system rings, weather, calendar and live media'
 	},
 	{ value: '3', label: 'Looks, all yours', detail: 'AMOLED notch, floating pill or drag handle' },
-	{ value: '2', label: 'Platforms, one app', detail: 'Same vibe on Windows and macOS' },
+	{ value: '2', label: 'Platforms, one licence', detail: 'Buy once, install on Windows and macOS' },
 	{ value: '1', label: 'Click and you are in', detail: 'Open any pinned app in an instant' }
 ] as const;
 
-export type WidgetId = 'apps' | 'weather' | 'system' | 'fps' | 'music';
+export type WidgetId = 'apps' | 'system' | 'weather' | 'calendar' | 'music';
 
 export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
 	{ id: 'apps', label: 'Quick launch', blurb: 'Your pinned apps, one sunny click away.' },
-	{ id: 'weather', label: 'Weather', blurb: 'Peek outside without standing up.' },
-	{ id: 'system', label: 'System usage', blurb: 'CPU, RAM, GPU and network, live and honest.' },
-	{ id: 'fps', label: 'Game mode', blurb: 'A live FPS counter. Your framerate has a fan club now.' },
+	{
+		id: 'system',
+		label: 'System rings',
+		blurb: 'CPU, GPU, memory, storage and network. Ring, glyph, live value.'
+	},
+	{ id: 'weather', label: 'Weather', blurb: 'Today plus a seven-day outlook. Peek outside without standing up.' },
+	{ id: 'calendar', label: 'Calendar', blurb: 'The day ahead from Google Calendar, no tab required.' },
 	{ id: 'music', label: 'Live activities', blurb: 'Now playing, with the important buttons.' }
 ];
 
@@ -110,6 +150,22 @@ export const themes: { id: ThemeId; label: string; blurb: string }[] = [
 	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Deep black, vanishes into the screen edge. There only when you look.' },
 	{ id: 'pill', label: 'Floating pill', blurb: 'A plump little capsule, hovering just off the edge of forever.' },
 	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet grip. Very chill. Barely any notice.' }
+];
+
+/** Solid ink or frosted glass — the second axis of "how it looks". */
+export type SurfaceId = 'solid' | 'frost';
+
+export const surfaces: { id: SurfaceId; label: string; blurb: string }[] = [
+	{
+		id: 'solid',
+		label: 'Solid',
+		blurb: 'Flat, opaque ink. Nothing shows through, nothing distracts.'
+	},
+	{
+		id: 'frost',
+		label: 'Frosted glass',
+		blurb: 'The desktop blurs through the island, so your wallpaper tints it. On Windows as well as macOS.'
+	}
 ];
 
 export const launch = {
@@ -134,24 +190,24 @@ export const launch = {
 
 export const download = {
 	title: 'Slap a notch on your desktop',
-	body: 'Grab the installer for your platform, run it once, and boom: a tiny superpower notch. Apps, weather, stats and media controls on day one, with new widgets queued up after. No account, no credit card, no signing your soul away.',
+	body: 'Already own a licence? Grab the installer for the machine you are on, run it once, and boom: a tiny superpower notch. The same licence covers the other platform too, so install it there whenever you like.',
 	notes: [
 		'Installs on Windows 10 & 11 and macOS 12 or newer.',
-		'No account, no telemetry, no cloud.',
+		'One licence, both installers — no per-platform upgrade.',
 		'Runs offline. The app never phones home.'
 	]
 } as const;
 
 export const faq = [
 	{
-		question: 'Is QuickNotch really free?',
+		question: 'How much does QuickNotch cost?',
 		answer:
-			'Yes, completely. There is no trial, no in-app purchase and no account to create. Download the installer, launch it once, and it just works.'
+			`${pricing.label}, once. No subscription, no in-app purchases, no account to create. The one payment covers Windows and macOS, and updates are included.`
 	},
 	{
 		question: 'Does QuickNotch work on Windows and macOS?',
 		answer:
-			'It runs on Windows 10 & 11 and macOS 12 or newer, on both Apple silicon and Intel. The same app, the same notch, on both platforms.'
+			'It runs on Windows 10 & 11 and macOS 12 or newer, on both Apple silicon and Intel. The same app, the same notch, on both platforms — and one licence covers both.'
 	},
 	{
 		question: 'Does QuickNotch collect or send my data?',
@@ -181,7 +237,7 @@ export const faq = [
 	{
 		question: 'Is QuickNotch more than an app launcher?',
 		answer:
-			'It started as a launcher, and the notch has grown into a whole widget stack: apps, weather, system usage, game FPS and live media controls today, with more widgets and tricks queued up for the next updates. Every bit of it is free, offline-facing and one glance away.'
+			'It is. Beyond quick launch there are live system rings (CPU, GPU, memory, storage, upload and download), a seven-day weather outlook, your Google Calendar day ahead and now-playing controls — plus volume, battery and notification indicators in the pill itself.'
 	}
 ] as const;
 

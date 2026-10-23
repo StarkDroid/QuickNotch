@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { themes } from '$data/site';
+	import { surfaces, themes } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 </script>
 
@@ -9,8 +9,7 @@
 			<p class="eyebrow">Theming</p>
 			<h2 class="display h2">Your notch, your look.</h2>
 			<p class="lead">
-				Three moods to pick from, and no commitment. Flip between them any time from
-				Settings.
+				Three shapes and two finishes. Flip between them any time from Settings.
 			</p>
 		</header>
 
@@ -33,6 +32,20 @@
 				</article>
 			{/each}
 		</div>
+
+		<ul class="surfaces" use:stagger={{ step: 0.08 }} data-stagger>
+			{#each surfaces as surface (surface.id)}
+				<li class="surface">
+					<span class="surface__chip" aria-hidden="true">
+						<span class="surface__pill" data-surface={surface.id}></span>
+					</span>
+					<span class="surface__text">
+						<strong>{surface.label}</strong>
+						<span>{surface.blurb}</span>
+					</span>
+				</li>
+			{/each}
+		</ul>
 	</div>
 </section>
 
@@ -198,6 +211,82 @@
 	}
 
 	.theme__text p {
+		font-size: var(--fs-small);
+		color: var(--text-3);
+	}
+
+	/* ---- Finishes: solid ink vs frosted glass ----------------------------- */
+	.surfaces {
+		display: grid;
+		gap: clamp(0.9rem, 2vw, 1.4rem);
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+		margin-top: clamp(1.2rem, 2.5vw, 1.8rem);
+		list-style: none;
+	}
+
+	.surface {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.85rem 1rem;
+		border: 2px dashed var(--line-strong);
+		border-radius: var(--r-md);
+		background: var(--paper-lift);
+	}
+
+	/* A striped "wallpaper" behind each swatch, so the two finishes visibly
+	   differ: one hides it, one blurs it into the notch. */
+	.surface__chip {
+		position: relative;
+		flex: none;
+		width: 88px;
+		height: 52px;
+		border: 2px solid var(--ink);
+		border-radius: 10px;
+		overflow: hidden;
+		background-image: repeating-linear-gradient(
+			45deg,
+			rgb(232 72 28 / 0.35) 0 7px,
+			rgb(31 79 216 / 0.3) 7px 14px
+		);
+	}
+
+	.surface__pill {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		translate: -50% 0;
+		width: 52px;
+		height: 20px;
+		border-radius: 0 0 10px 10px;
+		border: 1.5px solid rgb(255 255 255 / 0.14);
+		border-top: none;
+	}
+
+	.surface__pill[data-surface='solid'] {
+		background: #0a0a0a;
+	}
+
+	.surface__pill[data-surface='frost'] {
+		background: rgb(255 255 255 / 0.18);
+		backdrop-filter: blur(5px) saturate(150%);
+		-webkit-backdrop-filter: blur(5px) saturate(150%);
+	}
+
+	.surface__text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+
+	.surface__text strong {
+		font-family: var(--font-display);
+		font-size: 1rem;
+		color: var(--text);
+	}
+
+	.surface__text > span {
 		font-size: var(--fs-small);
 		color: var(--text-3);
 	}

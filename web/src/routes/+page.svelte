@@ -7,6 +7,7 @@
 	import ThemesSection from '$components/ThemesSection.svelte';
 	import LaunchSection from '$components/LaunchSection.svelte';
 	import FaqSection from '$components/FaqSection.svelte';
+	import PricingSection from '$components/PricingSection.svelte';
 	import DownloadSection from '$components/DownloadSection.svelte';
 	import Footer from '$components/Footer.svelte';
 	import Marquee from '$components/Marquee.svelte';
@@ -14,18 +15,18 @@
 
 	const marqueeItems = [
 		'Quick launch',
+		'System rings',
 		'Weather',
-		'System stats',
-		'Game FPS',
+		'Calendar',
 		'Live activities',
 		'AMOLED notch',
 		'Floating pill',
 		'Drag handle',
 		'Always on top',
+		'One-time licence',
 		'No account',
 		'No telemetry',
 		'Runs offline',
-		'100% free',
 		'More on the way'
 	];
 </script>
@@ -50,6 +51,8 @@
 	<ThemesSection />
 
 	<LaunchSection />
+
+	<PricingSection />
 
 	<FaqSection />
 

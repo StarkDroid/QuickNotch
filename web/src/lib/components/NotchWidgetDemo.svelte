@@ -8,8 +8,8 @@
 	 * The glanceable notch, showing one widget at a time.
 	 *
 	 * "Vertical scroll pagination": scrolling over the notch (or using the left /
-	 * right arrows below) moves through the widget stack — quick launch, weather,
-	 * system usage, game FPS and live activities. Each switch slides the next
+	 * right arrows below) moves through the widget stack — quick launch, system
+	 * rings, weather, calendar and live activities. Each switch slides the next
 	 * widget into view.
 	 *
 	 * The notch is a real control: prev/next and the dots are buttons, and the
@@ -33,6 +33,40 @@
 		interactive = true,
 		label = 'Notch widgets'
 	}: Props = $props();
+
+	/**
+	 * The System page, at demo scale: one ring per metric, the glyph inside the
+	 * arc and the live value beneath — the same indicator the app draws, swept
+	 * over 288° with the 20% gap held at the bottom.
+	 */
+	const systemMetrics: {
+		icon: 'cpu' | 'gpu' | 'ram' | 'storage' | 'download' | 'upload';
+		name: string;
+		value: string;
+		percent: number;
+	}[] = [
+		{ icon: 'cpu', name: 'CPU', value: '34%', percent: 34 },
+		{ icon: 'gpu', name: 'GPU', value: '12%', percent: 12 },
+		{ icon: 'ram', name: 'Memory', value: '61%', percent: 61 },
+		{ icon: 'storage', name: 'Storage', value: '48%', percent: 48 },
+		{ icon: 'download', name: 'Download', value: '1.2M/s', percent: 26 },
+		{ icon: 'upload', name: 'Upload', value: '8K/s', percent: 6 }
+	];
+
+	/** The ring geometry, shared by every gauge: r=16, 288° of the 360°. */
+	const RING_CIRCUMFERENCE = 2 * Math.PI * 16;
+
+	/** Dash length for a level, as an `stroke-dasharray` value. */
+	function ringDash(percent: number): string {
+		const swept = (RING_CIRCUMFERENCE * 0.8 * percent) / 100;
+		return `${swept.toFixed(1)} ${RING_CIRCUMFERENCE.toFixed(1)}`;
+	}
+
+	const agenda = [
+		{ time: '09:30', what: 'Standup' },
+		{ time: '14:00', what: 'Design review' },
+		{ time: '17:30', what: 'Ship 1.0.2' }
+	];
 
 	let active = $state(0);
 	let pausedUntil = 0;
@@ -113,28 +147,42 @@
 						</div>
 					{:else if current.id === 'system'}
 						<div class="widget__system">
-							{#each [
-								['CPU', 34],
-								['RAM', 61],
-								['GPU', 12],
-								['NET', 8]
-							] as metric (metric[0])}
-								<span class="meter">
-									<span class="meter__label mono">{metric[0]}</span>
-									<span class="meter__track"><i style:width="{metric[1]}%"></i></span>
-									<span class="meter__value">{metric[1]}</span>
+							{#each systemMetrics as metric (metric.name)}
+								<span class="gauge" role="img" aria-label="{metric.name}: {metric.value}" title="{metric.name}: {metric.value}">
+									<span class="gauge__dial">
+										<svg viewBox="0 0 40 40" aria-hidden="true">
+											<g transform="rotate(126 20 20)">
+												<circle class="dial__track" cx="20" cy="20" r="16" />
+												<circle
+													class="dial__bar"
+													cx="20"
+													cy="20"
+													r="16"
+													style:stroke-dasharray={ringDash(metric.percent)}
+												/>
+											</g>
+										</svg>
+										<Icon name={metric.icon} size={13} />
+									</span>
+									<span class="gauge__value mono">{metric.value}</span>
 								</span>
 							{/each}
 						</div>
-					{:else if current.id === 'fps'}
-						<div class="widget__fps">
-							<span class="fps__number"><strong>144</strong> FPS</span>
-							<span class="fps__graph" aria-hidden="true">
-								{#each [40, 58, 46, 70, 62, 78, 68, 88, 74, 92] as h (h)}
-									<i style:height="{h}%"></i>
-								{/each}
+					{:else if current.id === 'calendar'}
+						<div class="widget__calendar">
+							<span class="cal__day">
+								<span class="cal__dow mono">FRI</span>
+								<strong>23</strong>
 							</span>
-							<span class="fps__tag mono">Game mode</span>
+							<ul class="cal__list">
+								{#each agenda as item (item.time)}
+									<li>
+										<span class="cal__time mono">{item.time}</span>
+										<span class="cal__what">{item.what}</span>
+									</li>
+								{/each}
+							</ul>
+							<span class="cal__tag mono">Google Calendar</span>
 						</div>
 					{:else if current.id === 'music'}
 						<div class="widget__music">
@@ -318,89 +366,131 @@
 		color: var(--on-dark-2);
 	}
 
+	/* System rings: six small gauges, glyph inside, value under — the notch
+	   page's actual indicator, at demo scale. */
 	.widget__system {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem 1rem;
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.35rem;
 		width: 100%;
 	}
 
-	.meter {
-		display: grid;
-		grid-template-columns: 2.2rem 1fr 1.6rem;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.meter__label {
-		font-size: 9px;
-		color: var(--on-dark-3);
-	}
-
-	.meter__track {
-		height: 4px;
-		border-radius: 99px;
-		background: rgb(255 255 255 / 0.1);
-		overflow: hidden;
-	}
-
-	.meter__track i {
-		display: block;
-		height: 100%;
-		border-radius: 99px;
-		background: var(--accent);
-	}
-
-	.meter__value {
-		font-size: 10px;
-		font-variant-numeric: tabular-nums;
-		color: var(--on-dark-2);
-		text-align: right;
-	}
-
-	.widget__fps {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.fps__number {
+	.gauge {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		line-height: 1;
-		font-family: var(--font-mono);
-		font-size: 11px;
-		letter-spacing: 0.1em;
-		color: var(--on-dark-3);
-		text-transform: uppercase;
+		align-items: center;
+		gap: 0.22rem;
 	}
 
-	.fps__number strong {
-		font-family: var(--font-display);
-		font-size: 2rem;
-		letter-spacing: -0.03em;
-		color: var(--green);
+	.gauge__dial {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		color: var(--on-dark);
 	}
 
-	.fps__graph {
+	.gauge__dial svg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.dial__track,
+	.dial__bar {
+		fill: none;
+		stroke-width: 2.6;
+		stroke-linecap: round;
+	}
+
+	.dial__track {
+		stroke: rgb(255 255 255 / 0.16);
+		stroke-dasharray: 80.4 100.5;
+	}
+
+	.dial__bar {
+		stroke: currentColor;
+	}
+
+	.gauge__value {
+		font-size: 9px;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
+		color: var(--on-dark-2);
+	}
+
+	/* Calendar: the day stamp, the agenda, and where it came from. */
+	.widget__calendar {
 		display: flex;
-		align-items: flex-end;
-		gap: 3px;
-		height: 40px;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
 	}
 
-	.fps__graph i {
-		width: 5px;
-		border-radius: 2px;
-		background: var(--green);
-		opacity: 0.7;
+	.cal__day {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		line-height: 1;
+		padding: 0.3rem 0.55rem;
+		border-radius: 12px;
+		background: rgb(232 72 28 / 0.14);
+		color: var(--on-accent);
+		flex: none;
 	}
 
-	.fps__tag {
-		margin-left: auto;
+	.cal__dow {
+		font-size: 8px;
+		letter-spacing: 0.12em;
+		color: #f6a58c;
+	}
+
+	.cal__day strong {
+		font-family: var(--font-display);
+		font-size: 1.25rem;
+		color: var(--on-dark);
+	}
+
+	.cal__list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.18rem;
+		min-width: 0;
+		flex: 1;
+		list-style: none;
+	}
+
+	.cal__list li {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		font-size: 11px;
+		line-height: 1.25;
+	}
+
+	.cal__time {
 		font-size: 9px;
 		color: var(--on-dark-3);
+		flex: none;
+	}
+
+	.cal__what {
+		color: var(--on-dark);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.cal__tag {
+		flex: none;
+		font-size: 8px;
+		letter-spacing: 0.08em;
+		color: var(--on-dark-3);
+		writing-mode: vertical-rl;
+		text-orientation: mixed;
 	}
 
 	.widget__music {
