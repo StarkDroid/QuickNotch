@@ -2,7 +2,6 @@
 	import Icon from './Icon.svelte';
 	import { buyCta, pricing, site } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
-	import { scrollToId } from '$lib/motion/smoothScroll';
 
 	/**
 	 * The price, as a printed ticket.
@@ -54,9 +53,6 @@
 						<Icon name="cart" size={18} />
 						{buyCta}
 					</a>
-					<button class="btn btn--ghost" type="button" onclick={() => scrollToId('tour')}>
-						Take the tour
-					</button>
 				</div>
 
 				<p class="mono ticket__fine">{pricing.finePrint}</p>
