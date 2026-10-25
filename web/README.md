@@ -177,10 +177,14 @@ Two details worth knowing before editing it:
   can never be stranded invisible.
 - **`TourSection`** is a plain scroll handler rather than a ScrollTrigger pin:
   the stage is `position: sticky`, and progress is written straight to CSS
-  variables on the device (rotation, hinge angle, scale, shadow) so a frame never
+  variables on the device (yaw, pitch, hinge angle, scale, shadow) so a frame never
   touches Svelte state. Only the step index crosses into the component, and only
-  when it changes. The seven captions share one grid cell, so swapping never
-  shifts the layout, and all seven stay in the DOM for crawlers/AT. Reduced
+  when it changes. The laptop arrives skewed and lands frontal as the lid opens;
+  its base is only a thickness strip, so no angle ever shows keys. After a scroll
+  gesture ends inside the steps region, the section glides to the nearest step
+  centre — one flick advances one segment instead of flying past the tour. The
+  seven captions share one grid cell, so swapping never shifts the layout, and
+  all seven stay in the DOM for crawlers/AT. Reduced
   motion or no JS un-sticks the stage and shows the list with the laptop parked
   beside it.
 - **The laptop is CSS 3D, not WebGL.** Its screen holds real `NotchPanel` markup,

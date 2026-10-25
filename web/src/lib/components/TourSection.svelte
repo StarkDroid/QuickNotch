@@ -7,8 +7,9 @@
 	/**
 	 * The tour: every widget explained in one place.
 	 *
-	 * A tall section with a sticky stage. The device settles, the lid opens and
-	 * the screen walks through the seven states while the copy beside it swaps.
+	 * A tall section with a sticky stage. The device swings from a skewed
+	 * three-quarter view to frontal as the lid opens, then the screen walks
+	 * through the seven states while the copy beside it swaps.
 	 * The section is deliberately the only place widgets are described — it
 	 * replaced four separate sections (widget cards, hover demo, gaming page,
 	 * theme cards) and the copy is one sentence per state.
@@ -45,6 +46,50 @@
 
 		let frame = 0;
 		let disposed = false;
+		let snapTimer = 0;
+
+		/** Idle settling: after a scroll gesture ends, glide to the centre of the
+		 * nearest step so one flick advances one segment instead of flying past
+		 * the whole tour. Skipped at the pin's edges, where the user is leaving
+		 * the section either way. */
+		const SNAP_IDLE_MS = 200;
+
+		function smoothTo(y: number) {
+			const lenis = (
+				window as unknown as { __lenis?: { scrollTo: (t: number, o?: object) => void } }
+			).__lenis;
+			// Through Lenis when it owns the scroll: a native jump issued while a
+			// Lenis animation is running gets stomped by its rAF loop, so the
+			// glide must go through the same driver. Native smooth scrolling is
+			// instantly cancelled by new wheel input, so a fresh gesture always
+			// wins over a stale glide and the snap simply re-fires at next idle.
+			if (lenis) lenis.scrollTo(y, { duration: 0.7 });
+			else window.scrollTo({ top: y, behavior: 'smooth' });
+		}
+
+		function maybeSnap() {
+			if (!pin || disposed) return;
+			const rect = pin.getBoundingClientRect();
+			const travel = rect.height - window.innerHeight;
+			if (!(travel > 0)) return;
+			const progress = clamp01(-rect.top / travel);
+			// Only inside the steps region: the settle/open intro is a transient
+			// animation to scroll through, not a segment to rest on.
+			if (progress < STEPS_START || progress >= 0.995) return;
+			const walk = clamp01((progress - STEPS_START) / (1 - STEPS_START));
+			const index = Math.min(steps.length - 1, Math.floor(walk * steps.length));
+			const centre = (index + 0.5) / steps.length;
+			const pinTop = rect.top + window.scrollY;
+			const targetY = pinTop + (STEPS_START + (1 - STEPS_START) * centre) * travel;
+			if (Math.abs(targetY - window.scrollY) < 6) return;
+			smoothTo(Math.round(targetY));
+		}
+
+		const onScroll = () => {
+			if (!frame) frame = requestAnimationFrame(paint);
+			window.clearTimeout(snapTimer);
+			snapTimer = window.setTimeout(maybeSnap, SNAP_IDLE_MS);
+		};
 
 		const paint = () => {
 			frame = 0;
@@ -56,11 +101,14 @@
 			const open = easeOut(clamp01((progress - OPEN_START) / (OPEN_END - OPEN_START)));
 			const walk = clamp01((progress - STEPS_START) / (1 - STEPS_START));
 
-			// Frontal, always: the device only scales and rises into place. Rotation
-			// is what made the base read as a skewed wedge with visible keys, so
-			// there is none — the lid hinge carries the whole motion.
+			// Skewed at first, frontal at rest: the yaw and pitch settle out while
+			// the lid swings up, so the laptop turns to face you as it opens.
+			// (The base is only a thickness strip, so no angle ever shows keys.)
+			device.style.setProperty('--ry', `${(-20 + 20 * settle).toFixed(2)}deg`);
+			device.style.setProperty('--rx', `${(12 - 10 * settle).toFixed(2)}deg`);
 			device.style.setProperty('--sc', (0.88 + 0.12 * settle).toFixed(3));
 			device.style.setProperty('--ty', `${(-6 + 6 * settle).toFixed(2)}%`);
+			device.style.setProperty('--tx', `${(5 - 5 * settle).toFixed(2)}%`);
 			device.style.setProperty('--lid', `${(-60 + 61 * open).toFixed(2)}deg`);
 			// The display wakes only once the lid is most of the way up, so the first
 			// beat is a dark slab turning into place rather than a lit screen sliding.
@@ -72,10 +120,6 @@
 					? 0
 					: Math.min(steps.length - 1, Math.floor(walk * steps.length));
 			if (index !== step) step = index;
-		};
-
-		const onScroll = () => {
-			if (!frame) frame = requestAnimationFrame(paint);
 		};
 
 		window.addEventListener('scroll', onScroll, { passive: true });
@@ -90,6 +134,7 @@
 		return () => {
 			disposed = true;
 			if (frame) cancelAnimationFrame(frame);
+			window.clearTimeout(snapTimer);
 			window.removeEventListener('scroll', onScroll);
 			window.removeEventListener('resize', onScroll);
 		};
@@ -401,8 +446,11 @@
 
 	:global(html:not(.js)) .tour__device,
 	:global(html.reduced-motion) .tour__device {
+		--ry: 0deg;
+		--rx: 2deg;
 		--sc: 1;
 		--ty: 0%;
+		--tx: 0%;
 		--lid: 1deg;
 		--shadow-opacity: 0.5;
 	}

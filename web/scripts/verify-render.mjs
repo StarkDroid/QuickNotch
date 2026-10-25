@@ -374,8 +374,13 @@ const tourReport = async () => {
 	const samples = [];
 	for (const fraction of [0.02, 0.42, 0.92]) {
 		const y = pin.top + Math.round(pin.height * fraction);
-		await evaluate(`window.scrollTo(0, ${y})`);
-		await sleep(900);
+		// Through Lenis when it owns the scroll: a native jump issued while a
+		// Lenis animation (including the tour's own snap glide) is running gets
+		// stomped by its rAF loop, so the probe must use the same driver.
+		await evaluate(
+			`window.__lenis ? window.__lenis.scrollTo(${y}, { duration: 0.6 }) : window.scrollTo(0, ${y})`
+		);
+		await sleep(1600);
 		samples.push(await read());
 	}
 	await evaluate(`window.scrollTo(0, 0)`);

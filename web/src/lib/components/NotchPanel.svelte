@@ -46,20 +46,21 @@
 		{ icon: 'upload' as const, name: 'Upload', value: '8K/s', percent: 6 }
 	];
 
-	const forecast = [
-		{ day: 'Mon', temp: '21°' },
-		{ day: 'Tue', temp: '23°' },
-		{ day: 'Wed', temp: '19°' },
-		{ day: 'Thu', temp: '17°' },
-		{ day: 'Fri', temp: '20°' },
-		{ day: 'Sat', temp: '22°' },
-		{ day: 'Sun', temp: '18°' }
+	const forecast: { dow: string; today?: boolean; icon: 'sun' | 'cloud' | 'partly' | 'rain'; high: string; low: string }[] = [
+		{ dow: 'Today', today: true, icon: 'sun', high: '23°', low: '16°' },
+		{ dow: 'Tue', icon: 'partly', high: '21°', low: '15°' },
+		{ dow: 'Wed', icon: 'cloud', high: '19°', low: '14°' },
+		{ dow: 'Thu', icon: 'rain', high: '17°', low: '12°' },
+		{ dow: 'Fri', icon: 'sun', high: '20°', low: '13°' },
+		{ dow: 'Sat', icon: 'partly', high: '22°', low: '15°' },
+		{ dow: 'Sun', icon: 'cloud', high: '18°', low: '13°' }
 	];
 
-	const agenda = [
-		{ time: '09:30', what: 'Standup' },
-		{ time: '14:00', what: 'Design review' },
-		{ time: '17:30', what: 'Ship 1.0.2' }
+	const dates = [
+		{ label: '24 Oct', count: 2 },
+		{ label: '27 Oct', count: 1 },
+		{ label: '29 Oct', count: 3 },
+		{ label: '31 Oct', count: 1 }
 	];
 
 	const hud = [
@@ -143,37 +144,42 @@
 			</div>
 		{:else if state === 'weather'}
 			<div class="page page--weather">
-				<div class="weather__now">
-					<span class="weather__sun"><Icon name="sun" size="100%" /></span>
-					<span class="weather__main">
-						<strong>23°</strong>
-						<span>Partly cloudy</span>
+				<div class="wx__now">
+					<span class="wx__top">
+						<span class="wx__glyph"><Icon name="sun" size="100%" /></span>
+						<strong>23°C</strong>
 					</span>
-					<span class="weather__place">Berlin</span>
+					<span class="wx__place">Berlin</span>
+					<span class="wx__hilow">H 23° · L 16°</span>
+					<span class="wx__extra">20% precip · UV 3</span>
 				</div>
-				<ul class="weather__days">
-					{#each forecast as day, index (day.day)}
-						<li class:today={index === 1}>
-							<span>{day.day}</span>
-							<b>{day.temp}</b>
-						</li>
-					{/each}
-				</ul>
+				<span class="page__divider"></span>
+				{#each forecast as day (day.dow)}
+					<span class="wx__day">
+						<span class="wx__dow" class:today={day.today}>{day.dow}</span>
+						<span class="wx__icon"><Icon name={day.icon} size="100%" /></span>
+						<span class="wx__hi">{day.high}</span>
+						<span class="wx__lo">{day.low}</span>
+					</span>
+				{/each}
 			</div>
 		{:else if state === 'calendar'}
 			<div class="page page--calendar">
-				<span class="cal__day">
-					<span class="cal__dow">Fri</span>
+				<span class="cal__today">
 					<strong>23</strong>
+					<span class="cal__meta">
+						<b>Fri</b>
+						<span>Oct</span>
+					</span>
 				</span>
-				<ul class="cal__list">
-					{#each agenda as item (item.time)}
-						<li>
-							<span class="cal__time">{item.time}</span>
-							<span class="cal__what">{item.what}</span>
-						</li>
-					{/each}
-				</ul>
+				<span class="page__divider"></span>
+				{#each dates as date, index (date.label)}
+					{#if index > 0}<span class="page__divider page__divider--sm"></span>{/if}
+					<span class="cal__tile">
+						<b>{date.label}</b>
+						<span class="cal__count">{date.count}</span>
+					</span>
+				{/each}
 			</div>
 		{:else if state === 'music'}
 			<div class="page page--music">
@@ -239,19 +245,19 @@
 	}
 
 	.notch--expanded {
-		width: 46cqw;
-		min-height: 23cqw;
-		padding: 2cqw;
+		width: 40cqw;
+		min-height: 16cqw;
+		padding: 1.5cqw 1.6cqw;
 		align-items: stretch;
 	}
 
 	.notch[data-state='apps'] {
-		width: 42cqw;
-		min-height: 13.5cqw;
+		width: 38cqw;
+		min-height: 12cqw;
 	}
 
 	.notch[data-state='music'] {
-		min-height: 21.5cqw;
+		min-height: 18cqw;
 	}
 
 	/* Transparent in games: body gone, thin rim, numbers carry their own shadow. */
@@ -508,15 +514,15 @@
 	}
 
 	.ring--gauge {
-		width: 6.3cqw;
-		height: 6.3cqw;
+		width: 5.4cqw;
+		height: 5.4cqw;
 	}
 
 	.gauge__glyph {
 		display: grid;
 		place-items: center;
-		width: 2.1cqw;
-		height: 2.1cqw;
+		width: 1.9cqw;
+		height: 1.9cqw;
 		color: var(--on-dark);
 	}
 
@@ -527,7 +533,7 @@
 
 	.gauge__value {
 		font-family: var(--font-mono);
-		font-size: 1.5cqw;
+		font-size: 1.35cqw;
 		line-height: 1;
 		color: var(--on-dark);
 		font-variant-numeric: tabular-nums;
@@ -535,154 +541,227 @@
 
 	.gauge__name {
 		font-family: var(--font-mono);
-		font-size: 0.95cqw;
+		font-size: 0.85cqw;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--on-dark-3);
 	}
 
-	/* ---- Weather page ---------------------------------------------------- */
-	.page--weather {
-		flex-direction: column;
-		justify-content: space-between;
-		gap: 1.6cqw;
+	/* Hairline between the anchor block and the day tiles, like the app's
+	   NotchBorder dividers. */
+	.page__divider {
+		flex: none;
+		align-self: stretch;
+		width: 1px;
+		margin-inline: 1.2cqw;
+		background: rgb(245 242 234 / 0.12);
 	}
 
-	.weather__now {
+	.page__divider--sm {
+		align-self: center;
+		height: 7cqw;
+		margin-inline: 0;
+	}
+
+	/* ---- Weather page ----------------------------------------------------
+	   Mirrors WeatherNotchPage: current conditions anchored left (glyph +
+	   temperature, place, high/low, precip · UV), then one tile per outlook day
+	   — weekday over glyph over high over low. */
+	.page--weather {
+		align-items: center;
+		gap: 0.5cqw;
+	}
+
+	.wx__now {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		gap: 0.3cqw;
+		width: 12.5cqw;
+	}
+
+	.wx__top {
 		display: flex;
 		align-items: center;
-		gap: 1.4cqw;
+		gap: 0.8cqw;
 	}
 
-	.weather__sun {
+	.wx__glyph {
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 7.4cqw;
-		height: 7.4cqw;
-		border-radius: 2.4cqw;
-		background: rgb(251 191 36 / 0.14);
+		width: 3.4cqw;
+		height: 3.4cqw;
 		color: #fbbf24;
 	}
 
-	.weather__sun :global(svg) {
-		width: 4.6cqw;
-		height: 4.6cqw;
+	.wx__glyph :global(svg) {
+		width: 100%;
+		height: 100%;
 	}
 
-	.weather__main {
-		display: flex;
-		flex-direction: column;
-		line-height: 1.02;
-	}
-
-	.weather__main strong {
+	.wx__top strong {
 		font-family: var(--font-display);
-		font-size: 4.8cqw;
-		letter-spacing: -0.04em;
+		font-size: 2.6cqw;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+		line-height: 1;
 		color: var(--on-dark);
+		font-variant-numeric: tabular-nums;
 	}
 
-	.weather__main span {
-		font-size: 1.5cqw;
+	.wx__place {
+		font-size: 1.15cqw;
+		color: var(--on-dark-2);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.wx__hilow {
+		font-size: 1.05cqw;
+		color: var(--on-dark-2);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.wx__extra {
+		font-size: 1cqw;
 		color: var(--on-dark-3);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
-	.weather__place {
-		margin-left: auto;
-		font-family: var(--font-mono);
-		font-size: 1.2cqw;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		color: var(--on-dark-3);
-	}
-
-	.weather__days {
-		display: flex;
-		justify-content: space-between;
-		gap: 0.4cqw;
-		padding-top: 1.2cqw;
-		border-top: 1px solid var(--on-dark-line);
-	}
-
-	.weather__days li {
+	.wx__day {
 		display: flex;
 		flex: 1 1 0;
 		flex-direction: column;
 		align-items: center;
 		gap: 0.4cqw;
-		font-family: var(--font-mono);
-		font-size: 1cqw;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--on-dark-3);
-	}
-
-	.weather__days li b {
-		font-size: 1.45cqw;
-		font-weight: 500;
-		letter-spacing: 0;
-		color: var(--on-dark-2);
-	}
-
-	.weather__days li.today b {
-		color: var(--tomato);
-	}
-
-	/* ---- Calendar page --------------------------------------------------- */
-	.page--calendar {
-		align-items: center;
-		gap: 2cqw;
-	}
-
-	.cal__day {
-		display: flex;
-		flex: none;
-		flex-direction: column;
-		align-items: center;
-		padding-right: 2cqw;
-		border-right: 1px solid var(--on-dark-line);
-	}
-
-	.cal__dow {
-		font-family: var(--font-mono);
-		font-size: 1.2cqw;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: var(--tomato);
-	}
-
-	.cal__day strong {
-		font-family: var(--font-display);
-		font-size: 4.6cqw;
-		line-height: 1;
-		letter-spacing: -0.04em;
-		color: var(--on-dark);
-	}
-
-	.cal__list {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		gap: 0.9cqw;
 		min-width: 0;
 	}
 
-	.cal__list li {
-		display: flex;
-		align-items: baseline;
-		gap: 1cqw;
-		font-size: 1.45cqw;
-	}
-
-	.cal__time {
+	.wx__dow {
 		font-family: var(--font-mono);
-		font-size: 1.05cqw;
+		font-size: 0.95cqw;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
 		color: var(--on-dark-3);
 	}
 
-	.cal__what {
+	.wx__dow.today {
 		color: var(--on-dark);
+		font-weight: 700;
+	}
+
+	.wx__icon {
+		display: grid;
+		place-items: center;
+		width: 1.9cqw;
+		height: 1.9cqw;
+		color: var(--on-dark-2);
+	}
+
+	.wx__icon :global(svg) {
+		width: 100%;
+		height: 100%;
+	}
+
+	.wx__hi {
+		font-family: var(--font-mono);
+		font-size: 1.2cqw;
+		font-weight: 600;
+		line-height: 1;
+		color: var(--on-dark);
+	}
+
+	.wx__lo {
+		font-family: var(--font-mono);
+		font-size: 1.05cqw;
+		line-height: 1;
+		color: var(--on-dark-3);
+	}
+
+	/* ---- Calendar page ---------------------------------------------------
+	   Mirrors CalendarNotchPage: today anchored left (big date in accent with
+	   weekday + month beside it), then one tile per upcoming date — "24 Oct"
+	   over its red count badge. */
+	.page--calendar {
+		align-items: center;
+		gap: 0.6cqw;
+	}
+
+	.cal__today {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 0.9cqw;
+		padding-inline: 0.6cqw;
+	}
+
+	.cal__today strong {
+		font-family: var(--font-display);
+		font-size: 4.4cqw;
+		font-weight: 600;
+		line-height: 1;
+		letter-spacing: -0.03em;
+		color: var(--tomato);
+	}
+
+	.cal__meta {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15cqw;
+	}
+
+	.cal__meta b {
+		font-family: var(--font-mono);
+		font-size: 1.15cqw;
+		font-weight: 500;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--on-dark);
+	}
+
+	.cal__meta span {
+		font-family: var(--font-mono);
+		font-size: 1.05cqw;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--on-dark-3);
+	}
+
+	.cal__tile {
+		display: flex;
+		flex: 1 1 0;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.55cqw;
+		min-width: 0;
+	}
+
+	.cal__tile b {
+		font-size: 1.35cqw;
+		font-weight: 600;
+		letter-spacing: 0;
+		color: var(--on-dark);
+		white-space: nowrap;
+	}
+
+	/* The app's CountBadge: red pill, white count, same ramp everywhere. */
+	.cal__count {
+		display: grid;
+		place-items: center;
+		min-width: 1.9cqw;
+		height: 1.5cqw;
+		padding-inline: 0.45cqw;
+		border-radius: 999px;
+		background: var(--tomato);
+		color: #fff;
+		font-family: var(--font-mono);
+		font-size: 0.95cqw;
+		font-weight: 700;
+		line-height: 1;
 	}
 
 	/* ---- Music page ------------------------------------------------------ */

@@ -6,12 +6,10 @@
 	/**
 	 * The laptop the tour happens on.
 	 *
-	 * Deliberately frontal, not a 3/4 product shot: the lid faces the viewer
-	 * straight on and the base is only ever a thin thickness strip under the
-	 * hinge — never a visible deck. There are no keys to see, from no angle, so
-	 * the screen (which holds the actual `NotchPanel` markup) is the whole
-	 * device. Scroll drives the hinge from shut to open; the display wakes once
-	 * the lid is most of the way up.
+	 * Deliberately frontal at rest, skewed on arrival: the settle drives the yaw
+	 * and pitch out as the lid swings up, so the laptop turns to face you as it
+	 * opens. The base is only ever a thin thickness strip under the hinge —
+	 * never a visible deck.
 	 *
 	 * The lid angle, settle and wake are written by `TourSection` as CSS
 	 * variables on the wrapper — per-frame values must never round-trip through
@@ -102,8 +100,12 @@
 		aspect-ratio: 16 / 10;
 		margin-inline: auto;
 		transform-style: preserve-3d;
-		/* Frontal, always: settle is scale + a small rise, never a yaw. */
-		transform: translate3d(0, var(--ty, 0), 0) scale(var(--sc, 1));
+		/* Skewed at first, frontal at rest: the settle drives the yaw and pitch
+		   out while the lid swings up, so the laptop turns to face you as it
+		   opens. The base is only a thickness strip, so there are no keys to
+		   glimpse at any angle. */
+		transform: translate3d(var(--tx, 5%), var(--ty, -6%), 0) rotateX(var(--rx, 12deg))
+			rotateY(var(--ry, -20deg)) scale(var(--sc, 0.88));
 		will-change: transform;
 	}
 

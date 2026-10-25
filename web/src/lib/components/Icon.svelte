@@ -41,6 +41,9 @@
 		| 'box'
 		| 'menu'
 		| 'sun'
+		| 'cloud'
+		| 'partly'
+		| 'rain'
 		| 'play'
 		| 'pause'
 		| 'next'
@@ -99,6 +102,10 @@
 		menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
 		calendar: '<rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8 3.2v3.4M16 3.2v3.4"/>',
 		sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
+		cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18.2 10.5 3.8 3.8 0 0 1 17.5 18.5z"/>',
+		partly:
+			'<circle cx="9" cy="9" r="3"/><path d="M9 3.5v1.6M3.5 9h1.6M5.1 5.1l1.1 1.1M12.9 5.1l-1.1 1.1"/><path d="M8 20.5h9.5a3.5 3.5 0 0 0 .6-6.9 5.5 5.5 0 0 0-10.7 1A3.2 3.2 0 0 0 8 20.5z"/>',
+		rain: '<path d="M7 15.5a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18.2 7.5 3.8 3.8 0 0 1 17.5 15.5z"/><path d="M8 18.5v2M12 18.5v2M16 18.5v2"/>',
 		play: '<path d="M8 5.2v13.6L18 12z" fill="currentColor" stroke="none"/>',
 		pause: '<rect x="7" y="5.5" width="3.2" height="13" rx="1.1" fill="currentColor" stroke="none"/><rect x="13.8" y="5.5" width="3.2" height="13" rx="1.1" fill="currentColor" stroke="none"/>',
 		next: '<path d="M5 6.5v11l8-5.5z" fill="currentColor" stroke="none"/><path d="M15.5 6h2.3v12h-2.3z" fill="currentColor" stroke="none"/>',
