@@ -1,5 +1,7 @@
 package com.starkdroid.quicknotch.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,9 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,6 +34,7 @@ import com.starkdroid.quicknotch.generated.resources.system_metric_gpu
 import com.starkdroid.quicknotch.generated.resources.system_metric_ram
 import com.starkdroid.quicknotch.generated.resources.system_metric_storage
 import com.starkdroid.quicknotch.generated.resources.system_metric_up
+import com.starkdroid.quicknotch.generated.resources.system_open_monitor
 import com.starkdroid.quicknotch.generated.resources.system_reading
 import com.starkdroid.quicknotch.generated.resources.system_reading_unknown
 import com.starkdroid.quicknotch.generated.resources.system_unknown
@@ -74,11 +79,35 @@ private data class SystemTileSpec(
  * caller keeps the whole page off the wheel until the first sample lands.
  */
 @Composable
-internal fun SystemNotchPage(snapshot: SystemSnapshot?) {
+internal fun SystemNotchPage(
+    snapshot: SystemSnapshot?,
+    interactive: Boolean = false,
+    onOpenMonitor: () -> Unit = {}
+) {
     val tiles = systemTiles(snapshot)
+    val openLabel = stringResource(Res.string.system_open_monitor)
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxSize()
+            // The whole page is the target, not the individual rings: a click
+            // anywhere on the row means "show me the processes behind this".
+            // Installed only while the page is the active, expanded one — a
+            // disabled clickable still occupies the hit path and would swallow
+            // the wheel from the page beneath (see DockContent's app tiles).
+            .then(
+                if (interactive) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClickLabel = openLabel,
+                        role = Role.Button,
+                        onClick = onOpenMonitor
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = DockLayout.ContentPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)

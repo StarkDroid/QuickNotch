@@ -137,7 +137,7 @@ export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
 	{
 		id: 'system',
 		label: 'System rings',
-		blurb: 'CPU, GPU, memory, storage and network. Ring, glyph, live value.'
+		blurb: 'CPU, GPU, memory, storage and network as rings. Click through to Task Manager or Activity Monitor.'
 	},
 	{ id: 'weather', label: 'Weather', blurb: 'Today plus a seven-day outlook. Peek outside without standing up.' },
 	{ id: 'calendar', label: 'Calendar', blurb: 'The day ahead from Google Calendar, no tab required.' },

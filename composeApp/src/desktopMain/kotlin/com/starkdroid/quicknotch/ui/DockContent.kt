@@ -130,6 +130,8 @@ internal fun WidgetPages(
     /** Latest CPU/GPU/memory/storage/network reading for the System page. */
     system: SystemSnapshot?,
     onRefreshWeather: () -> Unit,
+    /** A click anywhere on the System page hands off to the OS task inspector. */
+    onOpenSystemMonitor: () -> Unit,
     onLaunch: (AppItem) -> Unit
 ) {
     Box(Modifier.fillMaxSize()) {
@@ -172,9 +174,11 @@ internal fun WidgetPages(
                         interactive = interactive && isActive,
                         onRefresh = onRefreshWeather
                     )
-                    // Read-only page: rings and values, nothing to click, so it
-                    // never installs a pointer modifier of its own.
-                    WidgetPage.System -> SystemNotchPage(snapshot = system)
+                    // The whole page is the click target: hand off to the OS
+                    // task inspector (see SystemNotchPage).
+                    WidgetPage.System -> SystemNotchPage(
+                        system, interactive && isActive, onOpenSystemMonitor
+                    )
                     WidgetPage.Music -> if (session != null) {
                         MusicPage(
                             session = session,

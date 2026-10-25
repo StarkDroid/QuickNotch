@@ -139,7 +139,8 @@
 
     <!-- System monitor widget -->
     <string name="system_section_title">System</string>
-    <string name="system_hint">CPU, memory, GPU, storage and network rings with the live value under each. The GPU ring appears only where the OS reports a graphics engine.</string>
+    <string name="system_hint">CPU, memory, GPU, storage and network rings with the live value under each. The GPU ring appears only where the OS reports a graphics engine. Click the page to open Task Manager (Windows) or Activity Monitor (macOS).</string>
+    <string name="system_open_monitor">Open the system task manager</string>
     <string name="system_metric_cpu">CPU</string>
     <string name="system_metric_gpu">GPU</string>
     <string name="system_metric_ram">Memory</string>

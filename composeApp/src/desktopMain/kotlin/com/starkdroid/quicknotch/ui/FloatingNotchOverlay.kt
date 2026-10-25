@@ -57,6 +57,7 @@ import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
 import com.starkdroid.quicknotch.datasource.MacContentBlur
 import com.starkdroid.quicknotch.datasource.SystemAccent
+import com.starkdroid.quicknotch.datasource.SystemMonitor
 import com.starkdroid.quicknotch.datasource.WindowsBackdropBlur
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
@@ -836,6 +837,9 @@ internal fun FloatingNotchOverlay(
                         fahrenheit = config.widgets.weatherFahrenheit,
                         system = systemState,
                         onRefreshWeather = { Weather.refresh() },
+                        onOpenSystemMonitor = {
+                            scope.launch { SystemMonitor.open() }
+                        },
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)
