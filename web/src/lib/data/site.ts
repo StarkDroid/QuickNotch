@@ -88,11 +88,6 @@ export const pricing = {
 /** One label for every buy button, so the price is written exactly once. */
 export const buyCta = `Buy now — ${pricing.label}` as const;
 
-export const nav = [
-	{ label: 'Tour', href: '#tour' },
-	{ label: 'FAQ', href: '#faq' }
-] as const;
-
 export const platforms = [
 	{
 		id: 'windows',

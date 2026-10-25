@@ -84,17 +84,18 @@ web/
 `Hero` (`#top`) → `TourSection` (`#tour`) → `LookSection` (`#look`) →
 `PricingSection` (`#pricing`) → `FaqSection` (`#faq`) → `Footer`.
 
-Only Tour and FAQ are in the header; the look and the price are found by
-scrolling. The FAQ is the last section — there is no separate download section,
+The header is a notch, not a menu: a dark capsule at the top with the mark, the
+wordmark and the buy button. It rests compact at the top of the page and opens
+to full width as you scroll, closing again when you return to the top. There are
+no section links at all — the tour, the look and the price are found by
+scrolling. The FAQ is the last section; there is no separate download section,
 because the buy button in pricing is the one call to action.
 
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
 opens and its screen walks through the seven states — quickview, dock, system,
 weather, calendar, music, gaming — with one caption each. It replaced four
 separate sections (widget cards, hover demo, gaming page, theme cards) and is the
-only place widgets are described. The ids above are the anchors the nav links
-to; `Nav.svelte` derives its active-section highlighting from `nav` in
-`site.ts`.
+only place widgets are described.
 
 ---
 
