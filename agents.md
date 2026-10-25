@@ -270,6 +270,16 @@ failed probe keeps last value; high-frequency state collected in the drawing sub
 frame clocks local to their composable; monotonic clocks for extrapolation.
 Verify: `compileKotlinDesktop` → `desktopJar` → `:composeApp:run` → `:composeApp:detekt`.
 
+**Every feature ships on three surfaces — app, onboarding, web.** A new widget,
+toggle or interaction is not finished until (a) it works in the overlay, (b) the
+onboarding walkthrough can show it or set it where a first-run user would meet
+it, and (c) `web/` tells the same story: the demo notch paints the same widget
+with the same layout and labels, and the copy, feature list, keywords, FAQ and
+structured data name it. Land all three in the same commit. A marketing demo of
+a widget we do not ship — or an onboarding step describing one we removed — is a
+bug, not a nicety. When the demo needs a visual the app has, match the app's
+geometry (ring sweep, capsule shapes, dot sizes) rather than inventing one.
+
 DON'T: force SOFTWARE renderer; set `skiko.renderApi` unconditionally; edit
 `resources/windows/*.ps1` (edit `native/windows/`); `java -jar` the plain jar; resize the
 overlay per open/close; re-place from live window dims; derive placement/math from
@@ -279,7 +289,7 @@ in a loop; native side effects in composable bodies; `dispatch_sync` to AppKit f
 path on Windows; static WinRT stream-extension calls in `smtc.ps1` (pre-bind the
 MethodInfo — see §7); per-tick persistence (repo coalesces); new strings/colors/glyphs inline;
 `String.format` assumptions on `stringResource` (`%1$s` bare substitution — `%%` doubles);
-scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
+scope-creep (new notch positions, Android/iOS) unless asked.
 
 ## 7. Critical gotchas (distilled — full stories were in §10)
 
@@ -324,7 +334,8 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
 Branch `main` (older work: `cursor/macos-compose-adaptation`). One logical change per
 commit, imperative summary, GPG-sign (`git commit -S`), author stays the user, never push.
 Before commit: compile + jar + smoke run + detekt green + resource sweep (unused
-`Res.*`, zero `Brush.*Gradient` in settings/onboarding). End with clean `git status`;
+`Res.*`, zero `Brush.*Gradient` in settings/onboarding) + web/onboarding parity
+(§6) — app, onboarding and `web/` in the same commit. End with clean `git status`;
 note unverifiable paths honestly (macOS-only paths have no machine here: CGS/panel
 blur, passthrough bridge, menu-bar presence; needs live eyes: morph smoothness,
 waveform feel, blur look).
