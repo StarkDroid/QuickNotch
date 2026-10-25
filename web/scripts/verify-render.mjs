@@ -337,20 +337,67 @@ const hero = (await safe('hero report', heroReport)) ?? {
 	inkTop: 0
 };
 
+/**
+ * The scroll tour is the one interactive centrepiece: probe it at three depths
+ * of its pin and confirm the hinge actually opens and the step advances.
+ */
+const tourReport = async () => {
+	const pin = await safe(
+		'tour pin',
+		`(() => {
+			const el = document.querySelector('.tour__pin');
+			if (!el) return null;
+			const r = el.getBoundingClientRect();
+			return { top: Math.round(r.top + window.scrollY), height: Math.round(r.height) };
+		})()`
+	);
+	if (!pin) return null;
+
+	const read = async () => {
+		return await safe(
+			'tour state',
+			`(() => {
+				const tour = document.querySelector('#tour');
+				const device = document.querySelector('.tour__device');
+				const stepEl = document.querySelector('.tour__step.active');
+				return {
+					step: Number(tour?.dataset.step ?? -1),
+					lid: (device?.style.getPropertyValue('--lid') ?? '').trim(),
+					caption: stepEl?.querySelector('.tour__title')?.textContent ?? '',
+					visible: !!device && device.getBoundingClientRect().width > 0
+				};
+			})()`
+		);
+	};
+
+	const samples = [];
+	for (const fraction of [0.02, 0.42, 0.92]) {
+		const y = pin.top + Math.round(pin.height * fraction);
+		await evaluate(`window.scrollTo(0, ${y})`);
+		await sleep(900);
+		samples.push(await read());
+	}
+	await evaluate(`window.scrollTo(0, 0)`);
+	await sleep(800);
+	return { pin, samples };
+};
+
+const tour = await tourReport();
+
 // Walk the spotlight down the page and confirm it tracks and lands on target.
 await evaluate(`window.scrollTo(0, 0)`);
 await sleep(1400);
 const spotTop = await safe('spotlight at top', spotlightReport);
 
-await safe('scroll to #themes', `(() => {
-	const el = document.querySelector('#themes .grid');
+await safe('scroll to #look', `(() => {
+	const el = document.querySelector('#look .look__row');
 	if (!el) return false;
 	const r = el.getBoundingClientRect();
 	window.scrollTo(0, r.top + window.scrollY - window.innerHeight / 2);
 	return true;
 })()`);
 await sleep(1700);
-const spotMid = await safe('spotlight at #themes', spotlightReport);
+const spotMid = await safe('spotlight at #look', spotlightReport);
 
 await safe('scroll to #download', `(() => {
 	const el = document.querySelector('#download .actions');
@@ -428,7 +475,7 @@ if (!spotTop || !spotMid || !spotEnd) {
 	line('spotlight', 'NOT RENDERED');
 } else {
 	line('at top', `${spotTop.x}, ${spotTop.y} · core ${spotTop.width}px`);
-	line('at #themes', `${spotMid.x}, ${spotMid.y} · core ${spotMid.width}px`);
+	line('at #look', `${spotMid.x}, ${spotMid.y} · core ${spotMid.width}px`);
 	line('at #download', `${spotEnd.x}, ${spotEnd.y} · core ${spotEnd.width}px`);
 	line(
 		'distance to CTA',
@@ -440,6 +487,22 @@ if (!spotTop || !spotMid || !spotEnd) {
 		'tracks scroll',
 		spotTop.y !== spotMid.y || spotMid.y !== spotEnd.y ? 'yes' : 'NO — it never moved'
 	);
+}
+
+console.log('\n── Scroll tour ─────────────────────────────────────');
+if (!tour) {
+	line('tour', 'NOT RENDERED');
+} else {
+	tour.samples.forEach((sample, index) => {
+		line(
+			`at ${index === 0 ? 'start' : index === 1 ? 'middle' : 'end'}`,
+			`step ${sample.step} · lid ${sample.lid || 'none'} · ${sample.caption}`
+		);
+	});
+	const advanced = tour.samples[2].step > tour.samples[0].step;
+	const opened = parseFloat(tour.samples[2].lid) > parseFloat(tour.samples[0].lid);
+	line('step advances', advanced ? 'yes' : 'NO');
+	line('lid opens', opened ? 'yes' : 'NO');
 }
 
 console.log('\n── Hero entrance ───────────────────────────────────');

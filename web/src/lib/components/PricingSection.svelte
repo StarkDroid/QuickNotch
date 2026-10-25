@@ -54,8 +54,8 @@
 						<Icon name="cart" size={18} />
 						{buyCta}
 					</a>
-					<button class="btn btn--ghost" type="button" onclick={() => scrollToId('widgets')}>
-						See the widgets
+					<button class="btn btn--ghost" type="button" onclick={() => scrollToId('tour')}>
+						Take the tour
 					</button>
 				</div>
 

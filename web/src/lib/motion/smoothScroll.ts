@@ -47,14 +47,21 @@ export function scrollToId(id: string): void {
 	const target = document.getElementById(id);
 	if (!target) return;
 
-	// Both paths land the section's top just below the sticky header: Lenis reads
-	// `scroll-padding-top` from the root itself, and the native `scrollIntoView`
-	// fallback honours the same CSS, so no explicit offset is needed here.
-	const lenis = (window as unknown as { __lenis?: { scrollTo: (t: Element, o?: object) => void } })
-		.__lenis;
+	// Land the section's top just below the sticky header. Lenis' `scrollTo`
+	// does not read `scroll-padding-top`, so the offset is computed here and
+	// the native fallback gets the same number — one rule for both paths.
+	const header = parseFloat(
+		getComputedStyle(document.documentElement).getPropertyValue('--header-h')
+	);
+	const offset = Number.isFinite(header) ? header : 0;
+	const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - offset);
+
+	const lenis = (
+		window as unknown as { __lenis?: { scrollTo: (t: number, o?: object) => void } }
+	).__lenis;
 	if (lenis) {
-		lenis.scrollTo(target);
+		lenis.scrollTo(top);
 		return;
 	}
-	target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+	window.scrollTo({ top, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
 }

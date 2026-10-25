@@ -43,7 +43,10 @@
 		| 'sun'
 		| 'play'
 		| 'pause'
-		| 'next';
+		| 'next'
+		| 'bell'
+		| 'volume'
+		| 'battery';
 
 	interface Props {
 		name: IconName;
@@ -98,7 +101,12 @@
 		sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
 		play: '<path d="M8 5.2v13.6L18 12z" fill="currentColor" stroke="none"/>',
 		pause: '<rect x="7" y="5.5" width="3.2" height="13" rx="1.1" fill="currentColor" stroke="none"/><rect x="13.8" y="5.5" width="3.2" height="13" rx="1.1" fill="currentColor" stroke="none"/>',
-		next: '<path d="M5 6.5v11l8-5.5z" fill="currentColor" stroke="none"/><path d="M15.5 6h2.3v12h-2.3z" fill="currentColor" stroke="none"/>'
+		next: '<path d="M5 6.5v11l8-5.5z" fill="currentColor" stroke="none"/><path d="M15.5 6h2.3v12h-2.3z" fill="currentColor" stroke="none"/>',
+		bell: '<path d="M18 9a6 6 0 0 0-12 0c0 4-1.5 5.5-2 6h16c-.5-.5-2-2-2-6z"/><path d="M10 18.5a2.2 2.2 0 0 0 4 0"/>',
+		volume:
+			'<path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
+		battery:
+			'<rect x="2.5" y="8" width="17" height="8" rx="2.5"/><path d="M22 11v2"/><rect x="5" y="10.5" width="8.5" height="3" rx="1" fill="currentColor" stroke="none"/>'
 	};
 
 	const html = $derived(strokeIcons[name] ?? '');

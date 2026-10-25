@@ -1,7 +1,8 @@
 # QuickNotch — marketing site
 
 The landing page for QuickNotch: a bold, light, scroll-driven single page that
-explains the glanceable notch, its widgets and themes, and links to the installers.
+explains the glanceable notch and its widgets in one tour, shows the two looks,
+and links to the installers.
 
 It lives in the same repository as the Kotlin desktop app but is a completely
 separate workspace — the app's Gradle build and the site's Node build never
@@ -63,6 +64,9 @@ web/
 │   │   │   ├── gsap.ts           # lazy GSAP + ScrollTrigger loader
 │   │   │   └── smoothScroll.ts   # Lenis, wired into the GSAP ticker
 │   │   └── components/           # one component per section, plus shared primitives
+│   │       ├── TourSection.svelte # the sticky scroll tour (state machine)
+│   │       ├── TourDevice.svelte  # the CSS-3D laptop chassis
+│   │       ├── NotchPanel.svelte  # one notch state, drawn to the app's geometry
 │   │       ├── Spotlight.svelte  # scroll-driven glow (flat colour + blur)
 │   │       └── Grain.svelte      # generated film-grain background layer
 │   └── routes/
@@ -77,12 +81,17 @@ web/
 
 ### Page order
 
-`Hero` → `StatsStrip` → marquee → `ManifestoSection` (scroll-driven kinetic type) →
-`WidgetsSection` (`#widgets`) → `ThemesSection` (`#themes`) →
-`LaunchSection` (`#launch`) → `DownloadSection` (`#download`) → `Footer`.
+`Hero` (`#top`) → `TourSection` (`#tour`) → `LookSection` (`#look`) →
+`PricingSection` (`#pricing`) → `FaqSection` (`#faq`) →
+`DownloadSection` (`#download`) → `Footer`.
 
-The ids in parentheses are the anchors the nav links to; `Nav.svelte` derives
-its active-section highlighting from `nav` in `site.ts`.
+The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
+opens and its screen walks through the seven states — quickview, dock, system,
+weather, calendar, music, gaming — with one caption each. It replaced four
+separate sections (widget cards, hover demo, gaming page, theme cards) and is the
+only place widgets are described. The ids above are the anchors the nav links
+to; `Nav.svelte` derives its active-section highlighting from `nav` in
+`site.ts`.
 
 ---
 
@@ -103,11 +112,10 @@ Three rules shape it:
 
 1. **No gradients anywhere.** Every accent is a flat colour (`--accent`,
    `--accent-text`, `--accent-soft`, `--accent-line`); panels, tiles, mock
-   windows, buttons and chart fills are all solid. Depth comes from hairlines,
-   inset highlights and translucency instead of gradient washes. The only
-   `linear-gradient` left in the codebase is a `mask-image` used to fade the
-   marquee's edges — a crop, not a painted colour. `npm run verify` fails the
-   build's smoke test if any element renders a painted gradient.
+   windows, the game backdrop, buttons and chart fills are all solid. Depth comes
+   from hairlines, inset highlights and translucency instead of gradient washes —
+   the one exception is a `repeating-linear-gradient` that is gone now, so the
+   runtime smoke test reports **0 painted gradients**.
 2. **Flat ambient background.** There is no aurora and no grid overlay. The page
    is a light base plus one flat tint, with the spotlight glow and the film
    grain layered behind the content (see below).
@@ -164,10 +172,17 @@ Two details worth knowing before editing it:
   handler. If the GSAP import fails they fall back to a CSS transition, and a
   page-wide safety net reveals anything still hidden after 8 seconds so content
   can never be stranded invisible.
-- **`ManifestoSection`** is the scroll-driven kinetic type: three big statements
-  brighten and rise as they cross the reading line, scrubbed to the scroll
-  position via ScrollTrigger. They are plain text with no JS-hidden state, so
-  without JavaScript they simply render in full.
+- **`TourSection`** is a plain scroll handler rather than a ScrollTrigger pin:
+  the stage is `position: sticky`, and progress is written straight to CSS
+  variables on the device (rotation, hinge angle, scale, shadow) so a frame never
+  touches Svelte state. Only the step index crosses into the component, and only
+  when it changes. The seven captions share one grid cell, so swapping never
+  shifts the layout, and all seven stay in the DOM for crawlers/AT. Reduced
+  motion or no JS un-sticks the stage and shows the list with the laptop parked
+  beside it.
+- **The laptop is CSS 3D, not WebGL.** Its screen holds real `NotchPanel` markup,
+  which keeps the mock at the app's own geometry and the text crisp; there is no
+  three.js chunk to load or to fail on a machine without WebGL.
 - The **spotlight** and **grain** (see [Design system](#design-system)) provide
   the environmental depth. The spotlight reads layout in one batched pass per
   frame and stops once settled; the grain is a single static layer, so it costs
@@ -181,10 +196,10 @@ Measured from a production build:
 
 | Asset | Size | gzip | On the critical path? |
 | :--- | ---: | ---: | :--- |
-| `index.html` (incl. inlined critical CSS) | 173 kB | 25.3 kB | yes |
-| Page CSS | 51 kB | 8.9 kB | yes |
-| Page + entry JS | ~101 kB | ~35 kB | yes |
-| GSAP + ScrollTrigger chunk | 115 kB | 46 kB | no — loaded on mount/idle |
+| `index.html` (incl. inlined critical CSS) | 71 kB | 15.7 kB | yes |
+| Page CSS | 53 kB | 12.2 kB | yes |
+| Page + entry JS | 151 kB | 59.4 kB | yes |
+| GSAP + ScrollTrigger chunk | 115 kB | 45.4 kB | no — loaded on mount/idle |
 
 There is no renderer chunk: the hero was previously a three.js scene, and dropping
 it removed a 510 kB (129 kB gzip) lazily-loaded chunk as well as the WebGL risk on
@@ -230,11 +245,12 @@ Other deliberate choices:
 - Landmarks throughout (`header`, `main`, `footer`, one `<section id>` per
   topic), a skip link, and visible `:focus-visible` rings everywhere —
   including a `:focus-within` ring on inputs whose native outline is removed.
-- The widget notch is a real control: the prev/next arrows and dots are
-  buttons, the current widget is announced via `aria-label`, and the autoplay
-  pauses after any interaction. Decorative mock chrome is `aria-hidden`.
-- `prefers-reduced-motion` disables Lenis, the spotlight tracking, the widget
-  autoplay and all reveal animations.
+- The tour is content, not a control: all seven captions are in the DOM (only
+  their pixels swap), each is a real heading, and the device and its screen are
+  `aria-hidden` because the caption carries the meaning. There are no buttons to
+  tab through mid-scroll.
+- `prefers-reduced-motion` disables Lenis, the spotlight tracking and the scroll
+  scrub; the tour becomes a static device plus a plain list.
 
 ---
 
@@ -253,10 +269,11 @@ It drives headless Chrome over the DevTools Protocol (no extra dependencies)
 and reports, in order: **page health** (uncaught errors and console errors,
 reported first so a hydration crash is obvious), whether the reveal actions fire,
 whether the **spotlight tracks the scroll and lands within a few pixels of the
-download buttons**, whether the hero entrance completes with each headline line
-at rest inside its mask, **whether any element renders a painted gradient**
-(must be 0) and whether the grain texture generated, any horizontal overflow at
-1440 px and 390 px, and finally any console errors raised during interaction.
+download buttons**, whether the **tour advances its step and opens the lid**,
+whether the hero entrance completes with each headline line at rest inside its
+mask, **whether any element renders a painted gradient** (must be 0) and whether
+the grain texture generated, any horizontal overflow at 1440 px and 390 px, and
+finally any console errors raised during interaction.
 
 Each probe is isolated, so one failing probe cannot abort the report.
 

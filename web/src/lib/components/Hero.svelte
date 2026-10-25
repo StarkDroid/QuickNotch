@@ -1,8 +1,8 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import NotchWidgetDemo from './NotchWidgetDemo.svelte';
+	import NotchPanel from './NotchPanel.svelte';
 	import ScreenFrame from './ScreenFrame.svelte';
-	import { buyCta, hero, platforms, site } from '$data/site';
+	import { buyCta, hero, site } from '$data/site';
 	import { loadMotion, prefersReducedMotion } from '$lib/motion/gsap';
 	import { magnetic } from '$lib/actions/magnetic';
 	import { scrollToId } from '$lib/motion/smoothScroll';
@@ -10,67 +10,6 @@
 	let copyEl: HTMLDivElement | undefined = $state();
 	/** Reveals the hero immediately if the entrance timeline never runs. */
 	let staticFallback = $state(false);
-
-	// Subtle pointer tilt on the mock screen: the screen leans a couple of
-	// degrees toward the cursor on fine-pointer devices. Transform-only and
-	// batched through one rAF, so it never triggers layout. Disabled entirely
-	// for touch and reduced-motion visitors.
-	let screenWrap: HTMLDivElement | undefined = $state();
-	let tiltRunning = false;
-	let tiltTarget = { rx: 0, ry: 0, tx: 0, ty: 0 };
-	let tiltCurrent = { rx: 0, ry: 0, tx: 0, ty: 0 };
-	let tiltRaf = 0;
-
-	function tiltFrame() {
-		tiltRaf = requestAnimationFrame(tiltFrame);
-		const k = 0.12;
-		tiltCurrent.rx += (tiltTarget.rx - tiltCurrent.rx) * k;
-		tiltCurrent.ry += (tiltTarget.ry - tiltCurrent.ry) * k;
-		tiltCurrent.tx += (tiltTarget.tx - tiltCurrent.tx) * k;
-		tiltCurrent.ty += (tiltTarget.ty - tiltCurrent.ty) * k;
-		if (screenWrap) {
-			screenWrap.style.transform = `perspective(1100px) rotateX(${tiltCurrent.rx.toFixed(2)}deg) rotateY(${tiltCurrent.ry.toFixed(2)}deg) translate3d(${tiltCurrent.tx.toFixed(1)}px, ${tiltCurrent.ty.toFixed(1)}px, 0)`;
-		}
-		const settled =
-			Math.abs(tiltTarget.rx - tiltCurrent.rx) < 0.01 &&
-			Math.abs(tiltTarget.ry - tiltCurrent.ry) < 0.01 &&
-			Math.abs(tiltTarget.tx - tiltCurrent.tx) < 0.05 &&
-			Math.abs(tiltTarget.ty - tiltCurrent.ty) < 0.05;
-		if (settled) {
-			cancelAnimationFrame(tiltRaf);
-			tiltRaf = 0;
-			tiltRunning = false;
-		}
-	}
-
-	function onScreenMove(event: PointerEvent) {
-		if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
-		if (prefersReducedMotion()) return;
-		if (!screenWrap) return;
-		const rect = screenWrap.getBoundingClientRect();
-		const px = (event.clientX - rect.left) / rect.width;
-		const py = (event.clientY - rect.top) / rect.height;
-		tiltTarget.ry = (px - 0.5) * 5;
-		tiltTarget.rx = -(py - 0.5) * 4;
-		tiltTarget.tx = (px - 0.5) * 10;
-		tiltTarget.ty = (py - 0.5) * 8;
-		if (!tiltRunning && !tiltRaf) {
-			tiltRunning = true;
-			tiltRaf = requestAnimationFrame(tiltFrame);
-		}
-	}
-
-	function onScreenLeave() {
-		if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
-		tiltTarget.rx = 0;
-		tiltTarget.ry = 0;
-		tiltTarget.tx = 0;
-		tiltTarget.ty = 0;
-		if (!tiltRunning && !tiltRaf) {
-			tiltRunning = true;
-			tiltRaf = requestAnimationFrame(tiltFrame);
-		}
-	}
 
 	$effect(() => {
 		const copy = copyEl;
@@ -99,8 +38,8 @@
 			if (disposed) return;
 			started = true;
 
-			// Scoped to the whole section, not just the copy block: `.hero__screen` is
-			// a sibling of `.hero__copy`, so querying inside `copy` would skip it.
+			// Scoped to the whole section, not just the copy block: the screen is a
+			// sibling of the copy, so querying inside `copy` would skip it.
 			const section = copy.closest('section') ?? copy;
 			const extras = section.querySelectorAll<HTMLElement>('[data-hero-extra]');
 			const screen = section.querySelector<HTMLElement>('.hero__screen');
@@ -123,7 +62,7 @@
 					'-=0.62'
 				);
 
-			// Gentle scroll parallax: copy drifts up, the mock screen settles back.
+			// Gentle scroll parallax: copy drifts up, the screen settles back.
 			const parallax = gsap.timeline({
 				scrollTrigger: {
 					trigger: section,
@@ -132,8 +71,8 @@
 					scrub: 0.6
 				}
 			});
-			parallax.to(copy, { yPercent: -9, opacity: 0.35, ease: 'none' }, 0);
-			if (screen) parallax.to(screen, { yPercent: -4, scale: 0.985, ease: 'none' }, 0);
+			parallax.to(copy, { yPercent: -7, opacity: 0.4, ease: 'none' }, 0);
+			if (screen) parallax.to(screen, { yPercent: -3, scale: 0.985, ease: 'none' }, 0);
 
 			cleanup = () => {
 				timeline.kill();
@@ -156,14 +95,6 @@
 			cleanup?.();
 		};
 	});
-
-	// Tear down the tilt loop on unmount so a stale rAF never touches a dead node.
-	$effect(() => {
-		return () => {
-			if (tiltRaf) cancelAnimationFrame(tiltRaf);
-			tiltRaf = 0;
-		};
-	});
 </script>
 
 <section class="hero" class:hero--static={staticFallback} id="top">
@@ -178,7 +109,6 @@
 			/>
 			<circle cx="60" cy="60" r="7" fill="currentColor" />
 		</svg>
-		<span class="hero__diag mono" aria-hidden="true">hand-numbered · edition no. 1</span>
 	</div>
 
 	<div class="container hero__inner">
@@ -204,7 +134,7 @@
 					<Icon name="cart" size={18} />
 					{buyCta}
 				</a>
-				<button class="btn btn--ghost btn--lg" type="button" onclick={() => scrollToId('widgets')}>
+				<button class="btn btn--ghost btn--lg" type="button" onclick={() => scrollToId('tour')}>
 					{hero.secondaryCta}
 					<Icon name="arrow-right" size={18} />
 				</button>
@@ -217,7 +147,7 @@
 			</ul>
 
 			<div class="hero__scrollhint mono" data-hero-extra aria-hidden="true">
-				<span>the good stuff is below</span>
+				<span>one scroll, the whole tour</span>
 				<svg viewBox="0 0 16 24" width="12" height="18" aria-hidden="true">
 					<path d="M8 2 v14 M8 16 l-5 -5 M8 16 l5 -5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 				</svg>
@@ -225,41 +155,13 @@
 		</div>
 
 		<div class="hero__screen" data-hero-extra>
-			<div
-				class="hero__tilt"
-				role="presentation"
-				bind:this={screenWrap}
-				onpointermove={onScreenMove}
-				onpointerleave={onScreenLeave}
-			>
-				<ScreenFrame tall>
-					{#snippet notch()}
-						<NotchWidgetDemo theme="amoled" label="Notch widgets, scroll to change" />
-					{/snippet}
-				</ScreenFrame>
-			</div>
+			<ScreenFrame>
+				{#snippet notch()}
+					<NotchPanel state="apps" shape="amoled" />
+				{/snippet}
+			</ScreenFrame>
 
-			<span class="sticker hero__screen-note" aria-hidden="true">docked in an instant ★</span>
-
-			<div class="hero__platforms">
-				{#each platforms as platform (platform.id)}
-					<a
-						class="platform"
-						href="#pricing"
-						onclick={(event) => {
-							event.preventDefault();
-							scrollToId('pricing');
-						}}
-					>
-						<span class="platform__icon"><Icon name={platform.icon} size={20} /></span>
-						<span class="platform__text">
-							<strong>{platform.name}</strong>
-							<span>{platform.note}</span>
-						</span>
-						<Icon name="check" size={16} />
-					</a>
-				{/each}
-			</div>
+			<span class="sticker hero__screen-note" aria-hidden="true">hover it — there is the dock</span>
 		</div>
 	</div>
 </section>
@@ -269,13 +171,12 @@
 		position: relative;
 		/* Deliberately tight: the headline should sit right under the nav rather
 		   than leaving a gap of empty space at the top of the page. */
-		padding-top: clamp(0.75rem, 2vw, 2rem);
-		padding-bottom: clamp(4rem, 9vw, 8rem);
+		padding-top: clamp(1rem, 2.5vw, 2.5rem);
+		padding-bottom: clamp(2.5rem, 6vw, 5rem);
 	}
 
-	/* Poster set-dressing: a stamped sunburst and a hand-written edge note.
-	   Absolutely positioned so they never affect layout, clipped so they never
-	   push the document wider than the viewport. */
+	/* Poster set-dressing: a stamped sunburst, clipped so it never widens the
+	   document. */
 	.hero__deco {
 		position: absolute;
 		inset: 0;
@@ -286,22 +187,12 @@
 
 	.hero__burst {
 		position: absolute;
-		top: clamp(2rem, 7vw, 5rem);
+		top: clamp(1rem, 4vw, 3rem);
 		right: calc(var(--gutter) * -0.15);
-		width: clamp(7rem, 17vw, 12rem);
-		height: clamp(7rem, 17vw, 12rem);
+		width: clamp(6rem, 13vw, 10rem);
+		height: clamp(6rem, 13vw, 10rem);
 		color: rgb(33 28 19 / 0.08);
 		rotate: 7deg;
-	}
-
-	.hero__diag {
-		position: absolute;
-		right: clamp(1rem, 6vw, 4rem);
-		bottom: clamp(1rem, 4vw, 2.5rem);
-		color: var(--ink-3);
-		opacity: 0.7;
-		rotate: -3deg;
-		pointer-events: none;
 	}
 
 	.hero__inner {
@@ -309,20 +200,22 @@
 		z-index: 1;
 		display: grid;
 		gap: clamp(2.5rem, 5vw, 4.5rem);
+		align-items: center;
 	}
 
 	.hero__copy {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		text-align: center;
-		gap: 1.5rem;
-		max-width: 62rem;
-		margin-inline: auto;
+		align-items: flex-start;
+		gap: 1.4rem;
+		max-width: 40rem;
 	}
 
 	.hero__title {
-		margin-block: 0.6rem 0.2rem;
+		margin-block: 0.4rem 0.1rem;
+		/* Two columns mean the poster type has to fit its own column; the full
+		   `--fs-mega` was sized for a centred headline across the page. */
+		font-size: clamp(2.4rem, 5.3vw, 4.75rem);
 		letter-spacing: -0.035em;
 	}
 
@@ -336,21 +229,18 @@
 	}
 
 	.hero__lead {
-		max-width: 54ch;
-		margin-inline: auto;
+		max-width: 44ch;
 	}
 
 	.hero__cta {
 		display: flex;
 		flex-wrap: wrap;
-		justify-content: center;
 		gap: 0.85rem;
 	}
 
 	.hero__trust {
 		display: flex;
 		flex-wrap: wrap;
-		justify-content: center;
 		gap: 0.6rem 1rem;
 		font-size: var(--fs-small);
 		color: var(--text-3);
@@ -390,83 +280,18 @@
 
 	.hero__screen {
 		position: relative;
-		max-width: 68rem;
 		width: 100%;
+		max-width: 40rem;
 		margin-inline: auto;
-	}
-
-	/* The tilt wrapper carries the pointer-drive perspective spin; at rest it must
-	   add nothing to layout, so the entrance parallax / layout stays untouched. */
-	.hero__tilt {
-		transform-style: preserve-3d;
-		will-change: transform;
 	}
 
 	/* A torn-decal note slapped onto the mock, like a caption on a print proof. */
 	.hero__screen-note {
 		position: absolute;
-		top: 1.5rem;
-		left: clamp(0.5rem, 4vw, 3rem);
+		bottom: 1.1rem;
+		left: -0.6rem;
 		z-index: 2;
-		rotate: -4deg;
-	}
-
-	.hero__platforms {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		gap: 0.8rem;
-		margin-top: 1.75rem;
-	}
-
-	.platform {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.7rem;
-		padding: 0.6rem 1rem;
-		border-radius: var(--r-sm);
-		border: 2px solid var(--ink);
-		background: var(--paper-lift);
-		box-shadow: 3px 3px 0 rgb(33 28 19 / 0.85);
-		transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur) var(--ease-out),
-			background-color var(--dur) var(--ease-out);
-	}
-
-	.platform:hover {
-		transform: translate(-1px, -1px);
-		box-shadow: 4px 4px 0 rgb(33 28 19 / 0.85);
-		background: var(--paper-deep);
-	}
-
-	.platform:nth-child(2) {
-		rotate: 0.6deg;
-	}
-
-	.platform__icon {
-		display: grid;
-		place-items: center;
-		color: var(--text);
-	}
-
-	.platform__text {
-		display: flex;
-		flex-direction: column;
-		line-height: 1.25;
-	}
-
-	.platform__text strong {
-		font-family: var(--font-display);
-		font-size: 0.9rem;
-		color: var(--text);
-	}
-
-	.platform__text span {
-		font-size: var(--fs-micro);
-		color: var(--text-3);
-	}
-
-	.platform :global(svg:last-child) {
-		color: var(--text-3);
+		rotate: -3deg;
 	}
 
 	/* --- Entrance guard ----------------------------------------------------
@@ -497,9 +322,39 @@
 		transform: none;
 	}
 
-	@media (min-width: 720px) {
+	@media (min-width: 960px) {
+		.hero__inner {
+			grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+			gap: clamp(2rem, 4vw, 4rem);
+		}
+
+		.hero__screen {
+			max-width: none;
+		}
+
 		.hero__lead {
-			max-width: 48ch;
+			max-width: 40ch;
+		}
+	}
+
+	@media (max-width: 959px) {
+		.hero__copy {
+			align-items: center;
+			text-align: center;
+			margin-inline: auto;
+		}
+
+		.hero__lead {
+			margin-inline: auto;
+		}
+
+		.hero__cta,
+		.hero__trust {
+			justify-content: center;
+		}
+
+		.hero__screen-note {
+			left: 0.5rem;
 		}
 	}
 </style>

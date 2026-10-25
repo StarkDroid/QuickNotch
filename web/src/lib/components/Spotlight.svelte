@@ -26,12 +26,7 @@
 	}
 
 	let {
-		targets = [
-			'#widgets .stage',
-			'#themes .grid',
-			'#launch .cards',
-			'#download .actions'
-		]
+		targets = ['#tour .tour__device', '#look .look__row', '#download .actions']
 	}: Props = $props();
 
 	let coreEl: HTMLSpanElement | undefined = $state();

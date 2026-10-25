@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { faq, platforms, pricing, site, stats, widgets, themes } from '$data/site';
+	import { facts, faq, platforms, pricing, site, themes, tour } from '$data/site';
 
 	/**
 	 * All document-level SEO in one place.
@@ -67,10 +67,10 @@
 			'One licence covers Windows and macOS'
 		],
 		// Interesting, indexable facts rather than generic marketing filler.
-		additionalProperty: stats.map((stat) => ({
+		additionalProperty: facts.map((fact) => ({
 			'@type': 'PropertyValue',
-			name: stat.label,
-			value: stat.value
+			name: fact.label,
+			value: fact.value
 		}))
 	};
 
@@ -113,16 +113,16 @@
 		}))
 	};
 
-	/** ItemList of the widget stack, for entity-rich crawlable signals. */
+	/** ItemList of the tour's states, for entity-rich crawlable signals. */
 	const widgetListSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'ItemList',
 		name: 'QuickNotch widgets',
-		itemListElement: widgets.map((widget, index) => ({
+		itemListElement: tour.steps.map((step, index) => ({
 			'@type': 'ListItem',
 			position: index + 1,
-			name: widget.label,
-			description: widget.blurb
+			name: step.label,
+			description: step.body
 		}))
 	};
 

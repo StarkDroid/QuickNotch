@@ -322,10 +322,13 @@ a widget we do not ship — or an onboarding step describing one we removed — 
 bug, not a nicety. When the demo needs a visual the app has, match the app's
 geometry (ring sweep, capsule shapes, dot sizes) rather than inventing one.
 A feature that is **not** a wheel page (the gaming HUD is the collapsed pill's
-own state) still needs all three surfaces, but it must not enter `widgets` in
-`web/src/lib/data/site.ts`: that array drives the five-page pager, the stats
-count and the SEO `ItemList`. Give it its own export + section, and add it to
-`NotchWidgetDemo.svelte`'s demo pages only if the state is otherwise invisible.
+own state) still needs all three surfaces. On the site the scroll tour is the
+single place widgets are explained: a state is a `tour.steps` entry plus a
+`NotchPanel` branch, never a new section. `NotchPanel` is the one mock — the
+hero, the laptop screen and the static fallback all draw it — so the marketing
+demo cannot drift from the app's geometry. The page keeps exactly one tour, one
+look band, pricing, FAQ and download; do not reintroduce per-widget sections or
+a second demo.
 
 DON'T: force SOFTWARE renderer; set `skiko.renderApi` unconditionally; edit
 `resources/windows/*.ps1` (edit `native/windows/`); `java -jar` the plain jar; resize the

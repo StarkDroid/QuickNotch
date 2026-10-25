@@ -89,10 +89,8 @@ export const pricing = {
 export const buyCta = `Buy now — ${pricing.label}` as const;
 
 export const nav = [
-	{ label: 'Widgets', href: '#widgets' },
-	{ label: 'Gaming', href: '#gaming' },
-	{ label: 'Themes', href: '#themes' },
-	{ label: 'Launch', href: '#launch' },
+	{ label: 'Tour', href: '#tour' },
+	{ label: 'Look', href: '#look' },
 	{ label: 'Pricing', href: '#pricing' },
 	{ label: 'FAQ', href: '#faq' }
 ] as const;
@@ -119,79 +117,81 @@ export const hero = {
 	badge: 'a notchful of good stuff · pay once',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'A notch that lives at the top of your screen, always ready. Pin your apps, watch the machine — CPU, GPU, memory, storage and network as live rings — check the weather and the day ahead, and boss your music around, without ever leaving the window you are in.',
-	secondaryCta: 'See how it works',
+	sub: 'Pin your apps, watch the machine, check the sky and your day, and boss your music around — from one slim notch at the top of the screen. No windows to arrange, no tab to find.',
+	secondaryCta: 'Take the tour',
 	trust: ['One-time purchase', 'No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
 } as const;
 
-export const stats = [
-	{
-		value: '5',
-		label: 'Widgets, always up top',
-		detail: 'Apps, system rings, weather, calendar and live media'
-	},
-	{ value: '3', label: 'Looks, all yours', detail: 'AMOLED notch, floating pill or drag handle' },
-	{ value: '2', label: 'Platforms, one licence', detail: 'Buy once, install on Windows and macOS' },
-	{ value: '1', label: 'Click and you are in', detail: 'Open any pinned app in an instant' }
+/** Indexable facts. Not rendered: the tour and the look band already say them. */
+export const facts = [
+	{ label: 'Widget pages', value: '5' },
+	{ label: 'Notch styles', value: '3' },
+	{ label: 'Platforms on one licence', value: '2' }
 ] as const;
 
-export type WidgetId = 'apps' | 'system' | 'weather' | 'calendar' | 'music';
-
-export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
-	{ id: 'apps', label: 'Quick launch', blurb: 'Your pinned apps, one sunny click away.' },
-	{
-		id: 'system',
-		label: 'System rings',
-		blurb: 'CPU, GPU, memory, storage and network as rings. Click through to Task Manager or Activity Monitor.'
-	},
-	{ id: 'weather', label: 'Weather', blurb: 'Today plus a seven-day outlook. Peek outside without standing up.' },
-	{ id: 'calendar', label: 'Calendar', blurb: 'The day ahead from Google Calendar, no tab required.' },
-	{ id: 'music', label: 'Live activities', blurb: 'Now playing, with the important buttons.' }
-];
-
 /**
- * The gaming quickview.
+ * The scroll tour: the one place every widget is explained.
  *
- * Not a wheel page and not a widget you switch on: while a fullscreen game owns
- * the screen, the collapsed pill itself is replaced by this readout. It is
- * modelled here rather than in `widgets` so the widget count, the pager and the
- * structured data keep describing the actual page stack.
+ * Seven states, in the order you meet them — the resting pill, then each page
+ * of the wheel, then the gaming HUD that replaces the pill. Copy is deliberately
+ * one line and one sentence: the animation carries the rest, and the whole thing
+ * replaces what used to be four separate sections.
  */
-export const gaming = {
-	eyebrow: 'Gaming HUD',
-	title: 'Your pill becomes a performance readout.',
-	body: 'Start a fullscreen game and the collapsed notch trades its clock or album art for live numbers: frames per second, CPU and GPU load, latency and download rate. Nothing to launch, nothing to configure — and nothing covering the game, because the notch already lives on the top edge of the screen. Hover still opens the dock, exactly as it always does.',
-	cells: [
-		{ label: 'FPS', value: '144' },
-		{ label: 'CPU', value: '38%' },
-		{ label: 'GPU', value: '91%' },
-		{ label: 'PING', value: '12 ms' },
-		{ label: 'NET', value: '1.4M/s' }
-	],
-	modes: [
+export type TourStepId =
+	| 'quickview'
+	| 'apps'
+	| 'system'
+	| 'weather'
+	| 'calendar'
+	| 'music'
+	| 'gaming';
+
+export const tour = {
+	eyebrow: 'The tour',
+	title: 'One notch. The whole desktop.',
+	lead: 'Hover for your apps. Scroll for the machine, the sky, your day and your music. One shape, seven jobs — and nothing new to learn.',
+	steps: [
 		{
-			id: 'body',
-			label: 'Solid body',
-			blurb: 'The HUD sits on whatever surface you already picked — ink or frosted glass.'
+			id: 'quickview',
+			label: 'Quickview',
+			title: 'The day, in a sliver.',
+			body: 'Date, time, weather, battery and notifications, hugging the top edge. Nothing to dismiss.'
 		},
 		{
-			id: 'clear',
-			label: 'Transparent in games',
-			blurb: 'One toggle drops the body and keeps a thin rim plus a soft shadow, so the numbers read over busy scenery.'
-		}
-	],
-	notes: [
-		{
-			title: 'Detected, not configured',
-			body: 'A fullscreen window is the trigger — there is no game list to keep up to date. Close the game and the pill is back.'
+			id: 'apps',
+			label: 'Dock',
+			title: 'Hover. Your apps arrive.',
+			body: 'The pill grows into a dock of pinned apps that lean toward the cursor. One click launches.'
 		},
 		{
-			title: 'FPS on Windows, load everywhere',
-			body: "Frame rate comes from Intel PresentMon on Windows. macOS shows load and latency instead, because no supported API exposes another app's frame rate."
+			id: 'system',
+			label: 'System',
+			title: 'Six rings for the machine.',
+			body: 'CPU, GPU, memory, storage, download and upload. Click the page for Task Manager or Activity Monitor.'
 		},
 		{
-			title: 'A readout, never a target',
-			body: 'The strip has no buttons: bringing the cursor up expands the dock as usual, so nothing is accidentally clicked mid-match.'
+			id: 'weather',
+			label: 'Weather',
+			title: 'The week, without a tab.',
+			body: 'Today plus a seven-day outlook, automatic by location or pinned to your own town.'
+		},
+		{
+			id: 'calendar',
+			label: 'Calendar',
+			title: 'Your day, one glance.',
+			body: 'Google Calendar on the page, and the next meeting ticking along in the pill.'
+		},
+		{
+			id: 'music',
+			label: 'Music',
+			title: 'Now playing, hands on it.',
+			body: 'Cover, progress and transport on the page; a spinning disc in the pill while it plays.'
+		},
+		{
+			id: 'gaming',
+			label: 'Gaming',
+			title: 'Game on. Numbers up.',
+			body: 'A fullscreen game swaps the pill for FPS, CPU, GPU, ping and download. Nothing to launch.'
 		}
 	]
 } as const;
@@ -199,9 +199,9 @@ export const gaming = {
 export type ThemeId = 'amoled' | 'pill' | 'handle';
 
 export const themes: { id: ThemeId; label: string; blurb: string }[] = [
-	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Deep black, vanishes into the screen edge. There only when you look.' },
-	{ id: 'pill', label: 'Floating pill', blurb: 'A plump little capsule, hovering just off the edge of forever.' },
-	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet grip. Very chill. Barely any notice.' }
+	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Deep black, flush with the edge. There only when you look.' },
+	{ id: 'pill', label: 'Floating pill', blurb: 'A plump little capsule, hovering just off the edge.' },
+	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet grip. Barely any notice.' }
 ];
 
 /** Solid ink or frosted glass — the second axis of "how it looks". */
@@ -211,33 +211,20 @@ export const surfaces: { id: SurfaceId; label: string; blurb: string }[] = [
 	{
 		id: 'solid',
 		label: 'Solid',
-		blurb: 'Flat, opaque ink. Nothing shows through, nothing distracts.'
+		blurb: 'Flat, opaque ink. Nothing shows through.'
 	},
 	{
 		id: 'frost',
 		label: 'Frosted glass',
-		blurb: 'The desktop blurs through the island, so your wallpaper tints it. On Windows as well as macOS.'
+		blurb: 'The desktop blurs through, so the wallpaper tints it — on Windows too.'
 	}
 ];
 
-export const launch = {
-	eyebrow: 'The notch overlay',
-	title: 'Hover the notch. Get what you need.',
-	body: 'The notch rests slim at the top-centre of your screen. Hover it and the overlay answers with an app dock that grows straight out of the notch, right where you are looking. Move along and it tucks itself away, leaving a pixel-wide nothing behind.',
-	items: [
-		{
-			title: 'Hover to expand',
-			body: 'Rest over the notch and it grows into an app dock. No clicks, no menu, no fumbling.'
-		},
-		{
-			title: 'Always on top',
-			body: 'Keep the notch above everything, or let it politely recede when you want a clean canvas.'
-		},
-		{
-			title: 'Tucks away on its own',
-			body: 'Move along and the overlay collapses back to a slim notch. Nothing lingers, nothing gets in your way, and a single press of Escape closes it too.'
-		}
-	]
+/** The compact "look" band that replaced the three theme cards. */
+export const look = {
+	eyebrow: 'The look',
+	title: 'Three shapes. Two finishes.',
+	lead: 'Swap the profile and the surface any time from Settings. Every page keeps its layout.'
 } as const;
 
 export const download = {
@@ -254,52 +241,37 @@ export const faq = [
 	{
 		question: 'How much does QuickNotch cost?',
 		answer:
-			`${pricing.label}, once. No subscription, no in-app purchases, no account to create. The one payment covers Windows and macOS, and updates are included.`
+			`${pricing.label}, once. No subscription, no in-app purchases, no account. The one payment covers Windows and macOS, and updates are included.`
 	},
 	{
 		question: 'Does QuickNotch work on Windows and macOS?',
 		answer:
-			'It runs on Windows 10 & 11 and macOS 12 or newer, on both Apple silicon and Intel. The same app, the same notch, on both platforms — and one licence covers both.'
+			'Yes — Windows 10 & 11 and macOS 12 or newer, on Apple silicon and Intel. The same app, the same notch, on both, on one licence.'
 	},
 	{
 		question: 'Does QuickNotch collect or send my data?',
 		answer:
-			'No telemetry, no analytics, no cloud. QuickNotch runs entirely offline and never phones home. Your pinned apps and settings stay in a local file on your machine.'
+			'No telemetry, no analytics, no cloud. It runs offline and never phones home; your pinned apps and settings stay in a local file.'
 	},
 	{
 		question: 'Can I pin any app?',
 		answer:
-			'Any app that is installed. Search your installed apps, or browse for an app bundle or executable on disk. Reorder and remove them any time from Settings.'
-	},
-	{
-		question: 'Will the notch get in the way?',
-		answer:
-			'That is the point: it should not get in the way. It stays as a slim pill at the top-centre of your screen and only expands into a dock when you hover over it. You can set it to always stay on top, or collapse it the moment you launch an app.'
-	},
-	{
-		question: 'Can I change how the notch looks?',
-		answer:
-			'Yes. Pick between an AMOLED notch, a floating pill or a slim drag handle, and tune the magnification, icon size, geometry and whether labels show.'
-	},
-	{
-		question: 'Does QuickNotch start automatically?',
-		answer:
-			'If you want it to. Toggle "start at login" in Settings and QuickNotch will be waiting on your desktop edge after every restart.'
+			'Any installed app. Search the list or browse for a bundle or executable on disk, then reorder from Settings.'
 	},
 	{
 		question: 'Does QuickNotch show FPS while I game?',
 		answer:
-			'Yes, on Windows. When a fullscreen game takes the screen the collapsed notch turns into a gaming HUD with frame rate, CPU and GPU load, latency and download rate. The frame rate comes from Intel PresentMon. macOS shows load and latency only, because macOS exposes no supported API for another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
+			'On Windows, yes: a fullscreen game turns the pill into a HUD with frame rate, CPU and GPU load, latency and download rate, via Intel PresentMon. macOS shows load and latency only — no supported API exposes another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
 	},
 	{
-		question: 'Does the gaming HUD get in the way of the game?',
+		question: 'Will the notch get in the way?',
 		answer:
-			'No. It replaces the collapsed pill at the very top of the screen, which is already outside the game\u2019s content, and it has no buttons — moving the cursor up expands the dock exactly as before. If you want even less on screen, "transparent in games" drops the notch body and leaves just the numbers, a thin rim and a soft shadow.'
+			'It stays a slim pill at the top-centre of the screen and only grows when you hover it. You can keep it always on top, or have it collapse the moment an app launches — Escape closes it too.'
 	},
 	{
-		question: 'Is QuickNotch more than an app launcher?',
+		question: 'Does QuickNotch start automatically?',
 		answer:
-			'It is. Beyond quick launch there are live system rings (CPU, GPU, memory, storage, upload and download), a seven-day weather outlook, your Google Calendar day ahead and now-playing controls — plus volume, battery and notification indicators in the pill itself.'
+			'Toggle "start at login" in Settings and it will be waiting on the edge after every restart.'
 	}
 ] as const;
 
