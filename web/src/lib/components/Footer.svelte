@@ -21,7 +21,6 @@
 			<a href={site.purchaseUrl} target="_blank" rel="noopener noreferrer">
 				Buy — {pricing.label}
 			</a>
-			<a href="/connect">Connect Google Calendar</a>
 			<a href="{site.url}">Back to top</a>
 		</nav>
 

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import Seo from '$components/Seo.svelte';
 	import Icon from '$components/Icon.svelte';
 	import { site } from '$data/site';
 	import CalendarNotchMock from '$components/CalendarNotchMock.svelte';
@@ -92,7 +91,16 @@
 	}
 </script>
 
-<Seo />
+<svelte:head>
+	<title>Connect Google Calendar · {site.name}</title>
+	<meta name="description" content="Sign in with Google so QuickNotch can show your calendar. This page is opened by the desktop app, not linked from the site." />
+	<!-- App-invoked OAuth step: reachable only from the desktop app's sign-in
+	     button. Never indexed, never followed, never shown in search. The
+	     X-Robots-Tag in _headers says the same thing at the HTTP layer. -->
+	<meta name="robots" content="noindex, nofollow, noarchive" />
+	<meta name="referrer" content="strict-origin-when-cross-origin" />
+	<meta name="theme-color" content="#f9f3e7" />
+</svelte:head>
 
 <!-- A slim bar rather than the site Nav: this page is a step inside a flow,
      not a section of the landing page, and the marketing nav's section

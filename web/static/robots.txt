@@ -1,7 +1,11 @@
 User-agent: *
 Allow: /
 
-# Everything is prerendered static HTML, so there is nothing to exclude from the
-# single marketing page.
+# The Calendar OAuth flow is app-invoked only: the desktop opens /connect with
+# a loopback state, Google bounces to /oauth/callback, and that page jumps home
+# to 127.0.0.1. Neither page is linked from anywhere on the site, and neither
+# must be crawled, indexed or shown in search.
+Disallow: /connect
+Disallow: /oauth/
 
 Sitemap: https://quicknotch.app/sitemap.xml

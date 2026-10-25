@@ -326,7 +326,9 @@ own state) still needs all three surfaces. On the site the scroll tour is the
 single place widgets are explained: a state is a `tour.steps` entry plus a
 `NotchPanel` branch, never a new section. `NotchPanel` is the one mock — the
 hero, the laptop screen and the static fallback all draw it — so the marketing
-demo cannot drift from the app's geometry. The page keeps exactly one tour, one
+demo cannot drift from the app's geometry. The laptop itself stays frontal:
+the lid faces the viewer and the base is only a thickness strip, never a deck
+with keys. The page keeps exactly one tour, one
 look band, pricing and FAQ; do not reintroduce per-widget sections, a download
 section or a second demo.
 

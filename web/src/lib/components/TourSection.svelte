@@ -56,11 +56,11 @@
 			const open = easeOut(clamp01((progress - OPEN_START) / (OPEN_END - OPEN_START)));
 			const walk = clamp01((progress - STEPS_START) / (1 - STEPS_START));
 
-			device.style.setProperty('--ry', `${(-20 + 20 * settle).toFixed(2)}deg`);
-			device.style.setProperty('--rx', `${(14 + 8 * settle).toFixed(2)}deg`);
+			// Frontal, always: the device only scales and rises into place. Rotation
+			// is what made the base read as a skewed wedge with visible keys, so
+			// there is none — the lid hinge carries the whole motion.
 			device.style.setProperty('--sc', (0.88 + 0.12 * settle).toFixed(3));
 			device.style.setProperty('--ty', `${(-6 + 6 * settle).toFixed(2)}%`);
-			device.style.setProperty('--tx', `${(5 - 5 * settle).toFixed(2)}%`);
 			device.style.setProperty('--lid', `${(-60 + 61 * open).toFixed(2)}deg`);
 			// The display wakes only once the lid is most of the way up, so the first
 			// beat is a dark slab turning into place rather than a lit screen sliding.
@@ -401,11 +401,8 @@
 
 	:global(html:not(.js)) .tour__device,
 	:global(html.reduced-motion) .tour__device {
-		--ry: 0deg;
-		--rx: 22deg;
 		--sc: 1;
 		--ty: 0%;
-		--tx: 0%;
 		--lid: 1deg;
 		--shadow-opacity: 0.5;
 	}

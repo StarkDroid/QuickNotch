@@ -6,16 +6,17 @@
 	/**
 	 * The laptop the tour happens on.
 	 *
-	 * Real CSS 3D, not a picture: a lid on a hinge over a base, so the scroll can
-	 * rotate it into place and lift the lid, with the notch already living on the
-	 * screen behind it. The screen holds the actual `NotchPanel` markup, which is
-	 * why the tour can show the app's own geometry rather than an illustration.
+	 * Deliberately frontal, not a 3/4 product shot: the lid faces the viewer
+	 * straight on and the base is only ever a thin thickness strip under the
+	 * hinge — never a visible deck. There are no keys to see, from no angle, so
+	 * the screen (which holds the actual `NotchPanel` markup) is the whole
+	 * device. Scroll drives the hinge from shut to open; the display wakes once
+	 * the lid is most of the way up.
 	 *
-	 * The lid's angle, the device's rotation and its settle are written by
-	 * `TourSection` as CSS variables on `.device` / `.lid` — per-frame values must
-	 * never round-trip through Svelte state. Everything here is decorative: the
-	 * captions beside it carry the meaning, so the whole device is hidden from
-	 * assistive tech.
+	 * The lid angle, settle and wake are written by `TourSection` as CSS
+	 * variables on the wrapper — per-frame values must never round-trip through
+	 * Svelte state. Everything here is decorative: the captions beside it carry
+	 * the meaning, so the whole device is hidden from assistive tech.
 	 */
 
 	interface Props {
@@ -24,8 +25,6 @@
 	}
 
 	let { state, shape = 'amoled' }: Props = $props();
-
-	const keys = [13, 13, 12, 11];
 </script>
 
 <div class="device-stage" aria-hidden="true">
@@ -77,27 +76,10 @@
 			</div>
 		</div>
 
-		<div class="base">
-			<div class="deck">
-				<!-- The deck is seen through a 90° hinge, so its DOM order is
-				     flipped on screen: the first child is the near edge. Author
-				     it near-to-far — trackpad, spacebar, then the number rows. -->
-				<span class="trackpad"></span>
-				<div class="keys">
-					<span class="keys__row keys__row--space">
-						<i></i>
-					</span>
-					{#each keys as count, row (row)}
-						<span class="keys__row">
-							{#each Array(count) as _, key (key)}
-								<i></i>
-							{/each}
-						</span>
-					{/each}
-				</div>
-			</div>
-			<span class="base__lip"></span>
-		</div>
+		<!-- The base is only ever this strip: the front thickness of the laptop
+		     seen head-on. No deck, no keys, no trackpad — from the front there
+		     is nothing else to see, which is the point. -->
+		<div class="base"></div>
 	</div>
 
 	<span class="device__shadow"></span>
@@ -107,22 +89,21 @@
 	.device-stage {
 		position: relative;
 		width: 100%;
-		/* Room for the base to swing toward the viewer without clipping, and for
-		   the lid to land when it is closed. */
-		padding-block: 2% 10%;
+		/* Room for the thickness strip and its shadow below the hinge. */
+		padding-block: 2% 9%;
 		container-type: inline-size;
-		perspective: 2800px;
-		perspective-origin: 50% 44%;
+		perspective: 2200px;
+		perspective-origin: 50% 40%;
 	}
 
 	.device {
 		position: relative;
 		width: 100%;
-		aspect-ratio: 1.5;
+		aspect-ratio: 16 / 10;
 		margin-inline: auto;
 		transform-style: preserve-3d;
-		transform: translate3d(var(--tx, 0%), var(--ty, 0), 0) rotateX(var(--rx, 18deg)) rotateY(var(--ry, 0deg))
-			scale(var(--sc, 1));
+		/* Frontal, always: settle is scale + a small rise, never a yaw. */
+		transform: translate3d(0, var(--ty, 0), 0) scale(var(--sc, 1));
 		will-change: transform;
 	}
 
@@ -399,87 +380,28 @@
 		z-index: 3;
 	}
 
-	/* ---- Base ------------------------------------------------------------ */
-	/* The deck rotates forward out of the hinge, so it reads as the foreground of
-	   a laptop seen from the front — the lid rises out of its near edge. */
+	/* ---- Base: the laptop's front thickness, seen head-on ----------------- */
 	.base {
 		position: absolute;
 		top: 100%;
-		left: 0;
-		left: 6%;
-		width: 88%;
-		height: 56%;
-		transform-origin: 50% 0;
-		transform: rotateX(90deg);
-		transform-style: preserve-3d;
-		border-radius: 3cqw;
-		background: #171209;
+		left: 2%;
+		width: 96%;
+		height: clamp(9px, 2cqw, 15px);
+		margin-top: -2px;
+		border-radius: 0 0 1.2cqw 1.2cqw;
+		background: #14100a;
 		border: 2px solid var(--ink);
-	}
-
-	.deck {
-		position: absolute;
-		inset: 8% 7% 12%;
-		display: flex;
-		flex-direction: column;
-		gap: 2.2%;
-	}
-
-	.keys {
-		display: flex;
-		flex-direction: column;
-		gap: 9%;
-		flex: 1;
-	}
-
-	.keys__row {
-		display: flex;
-		gap: 1%;
-		justify-content: center;
-		flex: 1;
-	}
-
-	.keys__row i {
-		flex: 1 1 0;
-		max-width: 6.4%;
-		border-radius: 2px;
-		background: #2b2418;
-		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.07),
-			inset 0 -1px 0 rgb(0 0 0 / 0.35);
-	}
-
-	.keys__row--space i {
-		flex: 0 0 42%;
-		max-width: none;
-	}
-
-	.trackpad {
-		display: block;
-		align-self: center;
-		width: 28%;
-		height: 22%;
-		margin-bottom: 2%;
-		border-radius: 0.5rem;
-		border: 1px solid rgb(255 255 255 / 0.06);
-		background: #1c1710;
-	}
-
-	.base__lip {
-		position: absolute;
-		inset: auto 0 0;
-		height: 8%;
-		border-radius: 0 0 1.6cqw 1.6cqw;
-		background: #0e0b06;
+		border-top: none;
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09);
 	}
 
 	/* ---- Ground shadow --------------------------------------------------- */
 	.device__shadow {
 		position: absolute;
 		left: 50%;
-		bottom: 22%;
-		width: 62%;
-		height: 6%;
+		bottom: 1.5%;
+		width: 58%;
+		height: 4.5%;
 		border-radius: 50%;
 		background: rgb(33 28 19 / 0.55);
 		filter: blur(26px);
@@ -489,12 +411,8 @@
 	}
 
 	@media (max-width: 720px) {
-		.device {
-			width: 100%;
-		}
-
 		.device-stage {
-			perspective: 1200px;
+			perspective: 1800px;
 		}
 	}
 </style>

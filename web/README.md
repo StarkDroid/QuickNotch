@@ -73,7 +73,7 @@ web/
 │       ├── +layout.ts            # `prerender = true`
 │       ├── +layout.svelte        # fonts, styles, smooth-scroll, backdrop layers
 │       └── +page.svelte          # page composition (section order)
-├── static/                       # favicon, icons, og.png, robots.txt, sitemap.xml, manifest
+├── static/                       # favicon, icons, og.png, robots.txt, sitemap.xml, manifest, _headers
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
     └── verify-render.mjs         # runtime smoke test over the DevTools Protocol
@@ -242,6 +242,53 @@ Other deliberate choices:
 2. **Confirm the domain.** `site.url` drives the canonical URL, the Open Graph
    image URL, the sitemap and the JSON-LD. Update it alongside
    `static/sitemap.xml` and `static/robots.txt`.
+
+### Hosting on Cloudflare (prepared, not yet live)
+
+The build is already Cloudflare-Pages-shaped: `adapter-static` emits plain
+files to `build/`, all asset URLs are relative, and there is no server code —
+no SSR, no edge functions, no environment variables. To go live:
+
+1. In Cloudflare Pages, create a project from this repo with build command
+   `npm run build` (working directory `web/`) and output directory `build`.
+2. Add the custom domain `quicknotch.app` (apex) in the Pages project. Approve
+   the automatic DNS handling, then confirm Cloudflare owns DNS for the apex —
+   proxy (orange cloud) on, **Always Use HTTPS** on, **Automatic HTTPS Rewrites**
+   on.
+3. Add a `www` → apex redirect (a single Redirect Rule: `www.quicknotch.app/*`
+   → `https://quicknotch.app/$1`, 301). The site's canonical, sitemap and
+   structured data all name the apex, so there must be exactly one.
+4. In the Google OAuth client, register the production redirect URI
+   `https://quicknotch.app/oauth/callback` alongside the local preview URIs.
+   The desktop reads the loopback port out of `state`, so no app change is
+   needed — but consent fails as `redirect_uri_mismatch` until the URI is
+   registered, and new URIs can take time to propagate.
+5. After the first deploy, check: `https://quicknotch.app/` loads with HSTS,
+   `/_headers` took effect (DevTools → response headers shows `content-security-policy`),
+   `/robots.txt` serves the flow disallows, `/sitemap.xml` lists only `/`,
+   and `/connect?standby=1` renders the standby card with a `noindex` robots
+   meta (view source — it must never be reachable from any link on `/`).
+
+Security posture, all in-repo rather than in-dashboard:
+
+- `static/_headers` sets the baseline on every response: `nosniff`,
+  `DENY` framing, strict `Referrer-Policy`, a minimal `Permissions-Policy`,
+  HSTS with `includeSubDomains; preload`, and a tight `Content-Security-Policy`
+  (`'self'` + inline scripts/styles for SvelteKit hydration, `data:` images and
+  fonts, Google OAuth endpoints in `connect-src`/`form-action` only).
+  `frame-ancestors 'none'` backs the `X-Frame-Options` header. There is
+  deliberately no `Cross-Origin-Opener-Policy`: the OAuth flow is plain
+  top-level navigation (`location.assign`), not a popup, and a restrictive COOP
+  would add failure modes without adding protection.
+- `/connect` and `/oauth/*` carry `X-Robots-Tag: noindex, nofollow, noarchive`
+  at the HTTP layer *and* a `noindex` meta in the markup, *and* `robots.txt`
+  disallows. They are also unlinked: no nav, footer, sitemap or copy points at
+  them. The only in-repo `/connect` reference is the OAuth error page's
+  "Start again" link, which is itself inside the unindexed flow.
+- No secrets in the repo: the OAuth `client_id` is a public identifier by
+  design; the `client_secret` never leaves the desktop app and appears nowhere
+  in `web/`. There is no token endpoint, no cookie, no analytics, no third-party
+  script — so there is nothing to leak and nothing to consent to.
 
 ---
 
