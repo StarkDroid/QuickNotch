@@ -70,7 +70,7 @@
 		{ label: 'NET', value: '1.4M/s' }
 	];
 
-	const tiles = dockTiles.slice(0, 7);
+	const tiles = dockTiles.slice(0, 6);
 </script>
 
 <div class="notch-stage {className}" aria-hidden="true">
@@ -212,9 +212,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 46cqw;
-		min-height: 10.2cqw;
-		padding: 1.3cqw 2.2cqw;
+		width: 34cqw;
+		min-height: 9cqw;
+		padding: 1.1cqw 1.8cqw;
 		border-radius: 0 0 2.6cqw 2.6cqw;
 		border: 1px solid var(--on-dark-line-strong);
 		background: rgb(12 12 12 / 0.94);
@@ -239,23 +239,24 @@
 	}
 
 	.notch--expanded {
-		width: 56cqw;
-		min-height: 27cqw;
-		padding: 2.4cqw;
+		width: 46cqw;
+		min-height: 23cqw;
+		padding: 2cqw;
 		align-items: stretch;
 	}
 
 	.notch[data-state='apps'] {
-		min-height: 16.5cqw;
+		width: 42cqw;
+		min-height: 13.5cqw;
 	}
 
 	.notch[data-state='music'] {
-		min-height: 25cqw;
+		min-height: 21.5cqw;
 	}
 
 	/* Transparent in games: body gone, thin rim, numbers carry their own shadow. */
 	.notch--game {
-		width: 54cqw;
+		width: 42cqw;
 		border-color: rgb(0 0 0 / 0.55);
 		background: rgb(8 10 14 / 0.2);
 		box-shadow: 0 2.4cqw 4.4cqw rgb(0 0 0 / 0.5);
@@ -294,13 +295,13 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 3cqw;
+		width: 2.6cqw;
 		color: var(--tomato);
 	}
 
 	.pill__time {
 		font-family: var(--font-display);
-		font-size: 2.7cqw;
+		font-size: 2.4cqw;
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		line-height: 1;
@@ -310,8 +311,8 @@
 
 	.pill__date {
 		font-family: var(--font-mono);
-		font-size: 1.45cqw;
-		letter-spacing: 0.05em;
+		font-size: 1.25cqw;
+		letter-spacing: 0.04em;
 		text-transform: uppercase;
 		color: var(--on-dark-3);
 	}
@@ -321,18 +322,18 @@
 		align-items: center;
 		gap: 0.65cqw;
 		margin-left: auto;
-		font-size: 1.75cqw;
+		font-size: 1.55cqw;
 		color: #fbbf24;
 	}
 
 	.pill__weather :global(svg) {
-		width: 2.2cqw;
-		height: 2.2cqw;
+		width: 1.9cqw;
+		height: 1.9cqw;
 	}
 
 	.pill__weather b {
 		font-family: var(--font-mono);
-		font-size: 1.7cqw;
+		font-size: 1.45cqw;
 		font-weight: 500;
 		letter-spacing: 0.02em;
 		color: var(--on-dark-2);
@@ -342,13 +343,13 @@
 		position: relative;
 		display: grid;
 		place-items: center;
-		width: 2.4cqw;
+		width: 2.1cqw;
 		color: var(--on-dark-2);
 	}
 
 	.pill__bell :global(svg) {
-		width: 2.4cqw;
-		height: 2.4cqw;
+		width: 2.1cqw;
+		height: 2.1cqw;
 	}
 
 	.pill__bell b {
@@ -357,14 +358,14 @@
 		right: -0.6cqw;
 		display: grid;
 		place-items: center;
-		min-width: 1.7cqw;
-		height: 1.7cqw;
+		min-width: 1.5cqw;
+		height: 1.5cqw;
 		padding-inline: 0.3cqw;
 		border-radius: 999px;
 		background: var(--tomato);
 		color: #fff;
 		font-family: var(--font-mono);
-		font-size: 1.05cqw;
+		font-size: 0.95cqw;
 		font-weight: 700;
 	}
 
@@ -374,8 +375,8 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 3.6cqw;
-		height: 3.6cqw;
+		width: 3.2cqw;
+		height: 3.2cqw;
 	}
 
 	.ring svg {
@@ -423,7 +424,7 @@
 
 	.hud__cell strong {
 		font-family: var(--font-mono);
-		font-size: 2.3cqw;
+		font-size: 2.1cqw;
 		font-weight: 600;
 		letter-spacing: 0;
 		color: #fff;
@@ -433,7 +434,7 @@
 
 	.hud__cell span {
 		font-family: var(--font-mono);
-		font-size: 1.15cqw;
+		font-size: 1.02cqw;
 		letter-spacing: 0.1em;
 		color: rgb(245 242 234 / 0.55);
 		text-shadow: 0 1px 4px rgb(0 0 0 / 0.9);
@@ -442,7 +443,7 @@
 	.hud__divider {
 		flex: none;
 		width: 1px;
-		height: 4.2cqw;
+		height: 3.8cqw;
 		background: rgb(0 0 0 / 0.5);
 	}
 
@@ -460,8 +461,8 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 5.8cqw;
-		height: 5.8cqw;
+		width: 5.3cqw;
+		height: 5.3cqw;
 		border-radius: 1.8cqw;
 		background: var(--tile);
 		box-shadow:
@@ -494,7 +495,7 @@
 	.page--system {
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.8cqw;
+		gap: 0.6cqw;
 	}
 
 	.gauge {
@@ -507,15 +508,15 @@
 	}
 
 	.ring--gauge {
-		width: 8.4cqw;
-		height: 8.4cqw;
+		width: 6.3cqw;
+		height: 6.3cqw;
 	}
 
 	.gauge__glyph {
 		display: grid;
 		place-items: center;
-		width: 2.6cqw;
-		height: 2.6cqw;
+		width: 2.1cqw;
+		height: 2.1cqw;
 		color: var(--on-dark);
 	}
 
@@ -526,7 +527,7 @@
 
 	.gauge__value {
 		font-family: var(--font-mono);
-		font-size: 1.8cqw;
+		font-size: 1.5cqw;
 		line-height: 1;
 		color: var(--on-dark);
 		font-variant-numeric: tabular-nums;
@@ -534,8 +535,8 @@
 
 	.gauge__name {
 		font-family: var(--font-mono);
-		font-size: 1.1cqw;
-		letter-spacing: 0.12em;
+		font-size: 0.95cqw;
+		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--on-dark-3);
 	}
@@ -557,16 +558,16 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 8.6cqw;
-		height: 8.6cqw;
+		width: 7.4cqw;
+		height: 7.4cqw;
 		border-radius: 2.4cqw;
 		background: rgb(251 191 36 / 0.14);
 		color: #fbbf24;
 	}
 
 	.weather__sun :global(svg) {
-		width: 5.4cqw;
-		height: 5.4cqw;
+		width: 4.6cqw;
+		height: 4.6cqw;
 	}
 
 	.weather__main {
@@ -577,7 +578,7 @@
 
 	.weather__main strong {
 		font-family: var(--font-display);
-		font-size: 5.6cqw;
+		font-size: 4.8cqw;
 		letter-spacing: -0.04em;
 		color: var(--on-dark);
 	}
@@ -609,16 +610,16 @@
 		flex: 1 1 0;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.45cqw;
+		gap: 0.4cqw;
 		font-family: var(--font-mono);
-		font-size: 1.15cqw;
+		font-size: 1cqw;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--on-dark-3);
 	}
 
 	.weather__days li b {
-		font-size: 1.7cqw;
+		font-size: 1.45cqw;
 		font-weight: 500;
 		letter-spacing: 0;
 		color: var(--on-dark-2);
@@ -653,7 +654,7 @@
 
 	.cal__day strong {
 		font-family: var(--font-display);
-		font-size: 5.4cqw;
+		font-size: 4.6cqw;
 		line-height: 1;
 		letter-spacing: -0.04em;
 		color: var(--on-dark);
@@ -663,20 +664,20 @@
 		display: flex;
 		flex: 1;
 		flex-direction: column;
-		gap: 1.05cqw;
+		gap: 0.9cqw;
 		min-width: 0;
 	}
 
 	.cal__list li {
 		display: flex;
 		align-items: baseline;
-		gap: 1.1cqw;
-		font-size: 1.65cqw;
+		gap: 1cqw;
+		font-size: 1.45cqw;
 	}
 
 	.cal__time {
 		font-family: var(--font-mono);
-		font-size: 1.2cqw;
+		font-size: 1.05cqw;
 		color: var(--on-dark-3);
 	}
 
@@ -695,8 +696,8 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 11cqw;
-		height: 11cqw;
+		width: 9.6cqw;
+		height: 9.6cqw;
 		border-radius: 50%;
 		background: #0a0a0a;
 		box-shadow:
@@ -706,8 +707,8 @@
 	}
 
 	.vinyl__label {
-		width: 4.2cqw;
-		height: 4.2cqw;
+		width: 3.7cqw;
+		height: 3.7cqw;
 		border-radius: 50%;
 		background: var(--tomato);
 		box-shadow: inset 0 0 0 1.1cqw rgb(0 0 0 / 0.18);
@@ -723,14 +724,14 @@
 
 	.music__meta strong {
 		font-family: var(--font-display);
-		font-size: 2.5cqw;
+		font-size: 2.15cqw;
 		letter-spacing: -0.02em;
 		line-height: 1.05;
 		color: var(--on-dark);
 	}
 
 	.music__meta > span {
-		font-size: 1.35cqw;
+		font-size: 1.15cqw;
 		color: var(--on-dark-3);
 		white-space: nowrap;
 		overflow: hidden;
@@ -762,14 +763,14 @@
 	.transport {
 		display: grid;
 		place-items: center;
-		width: 3.2cqw;
-		height: 3.2cqw;
+		width: 2.8cqw;
+		height: 2.8cqw;
 		color: var(--on-dark-2);
 	}
 
 	.transport :global(svg) {
-		width: 2.3cqw;
-		height: 2.3cqw;
+		width: 2cqw;
+		height: 2cqw;
 	}
 
 	.transport :global(.flip) {
@@ -777,8 +778,8 @@
 	}
 
 	.transport--play {
-		width: 4.4cqw;
-		height: 4.4cqw;
+		width: 3.9cqw;
+		height: 3.9cqw;
 		border-radius: 50%;
 		background: var(--on-dark);
 		color: #0b0b0b;
@@ -797,7 +798,7 @@
 	}
 
 	.music__rings .ring {
-		width: 5.2cqw;
-		height: 5.2cqw;
+		width: 4.6cqw;
+		height: 4.6cqw;
 	}
 </style>

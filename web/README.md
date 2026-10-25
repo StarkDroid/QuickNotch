@@ -82,8 +82,11 @@ web/
 ### Page order
 
 `Hero` (`#top`) → `TourSection` (`#tour`) → `LookSection` (`#look`) →
-`PricingSection` (`#pricing`) → `FaqSection` (`#faq`) →
-`DownloadSection` (`#download`) → `Footer`.
+`PricingSection` (`#pricing`) → `FaqSection` (`#faq`) → `Footer`.
+
+Only Tour and FAQ are in the header; the look and the price are found by
+scrolling. The FAQ is the last section — there is no separate download section,
+because the buy button in pricing is the one call to action.
 
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
 opens and its screen walks through the seven states — quickview, dock, system,
@@ -225,15 +228,17 @@ Other deliberate choices:
 - `static/sitemap.xml` and `static/robots.txt`.
 - One `<h1>` and one `<h2>` per section, with `h3`s beneath.
 - Descriptive anchor text on every link, and `alt`/`aria-label` coverage.
-- The site links nowhere but `site.downloadUrl`; there is no code-host,
-  licence or issue-tracker reference anywhere in the markup, the copy, the
-  structured data or the generated Open Graph image.
+- The visible CTAs all point at `site.purchaseUrl`; `site.downloadUrl` survives
+  only in the `SoftwareApplication` schema. There is no code-host, licence or
+  issue-tracker reference anywhere in the markup, the copy, the structured data
+  or the generated Open Graph image.
 
 ### Before deploying
 
-1. **Set the download destination.** `site.downloadUrl` in `src/lib/data/site.ts`
-   points at `https://quicknotch.app/download` as a placeholder — publish that
-   page, or change the URL. It is the only outbound link on the site.
+1. **Set the purchase destination.** Every visible CTA reads `site.purchaseUrl`
+   in `src/lib/data/site.ts` (`https://quicknotch.app/buy` as a placeholder).
+   `site.downloadUrl` is schema-only now; point it at the installer or drop the
+   property.
 2. **Confirm the domain.** `site.url` drives the canonical URL, the Open Graph
    image URL, the sitemap and the JSON-LD. Update it alongside
    `static/sitemap.xml` and `static/robots.txt`.
@@ -269,7 +274,7 @@ It drives headless Chrome over the DevTools Protocol (no extra dependencies)
 and reports, in order: **page health** (uncaught errors and console errors,
 reported first so a hydration crash is obvious), whether the reveal actions fire,
 whether the **spotlight tracks the scroll and lands within a few pixels of the
-download buttons**, whether the **tour advances its step and opens the lid**,
+pricing CTA**, whether the **tour advances its step and opens the lid**,
 whether the hero entrance completes with each headline line at rest inside its
 mask, **whether any element renders a painted gradient** (must be 0) and whether
 the grain texture generated, any horizontal overflow at 1440 px and 390 px, and

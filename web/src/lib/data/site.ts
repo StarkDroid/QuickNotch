@@ -90,8 +90,6 @@ export const buyCta = `Buy now — ${pricing.label}` as const;
 
 export const nav = [
 	{ label: 'Tour', href: '#tour' },
-	{ label: 'Look', href: '#look' },
-	{ label: 'Pricing', href: '#pricing' },
 	{ label: 'FAQ', href: '#faq' }
 ] as const;
 
@@ -225,16 +223,6 @@ export const look = {
 	eyebrow: 'The look',
 	title: 'Three shapes. Two finishes.',
 	lead: 'Swap the profile and the surface any time from Settings. Every page keeps its layout.'
-} as const;
-
-export const download = {
-	title: 'Slap a notch on your desktop',
-	body: 'Already own a licence? Grab the installer for the machine you are on, run it once, and boom: a tiny superpower notch. The same licence covers the other platform too, so install it there whenever you like.',
-	notes: [
-		'Installs on Windows 10 & 11 and macOS 12 or newer.',
-		'One licence, both installers — no per-platform upgrade.',
-		'Runs offline. The app never phones home.'
-	]
 } as const;
 
 export const faq = [

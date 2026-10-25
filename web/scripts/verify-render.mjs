@@ -208,7 +208,8 @@ const revealReport = `(() => {
 		staggerTotal: staggers.length,
 		staggerShown: staggers.filter((el) => el.classList.contains('is-in')).length,
 		hiddenOpacity: all.filter((el) => getComputedStyle(el).opacity === '0').length,
-		scrollHeight: document.documentElement.scrollHeight
+		scrollHeight: document.documentElement.scrollHeight,
+		lastSection: document.querySelector('main > section:last-of-type')?.id ?? ''
 	};
 })()`;
 
@@ -399,19 +400,19 @@ await safe('scroll to #look', `(() => {
 await sleep(1700);
 const spotMid = await safe('spotlight at #look', spotlightReport);
 
-await safe('scroll to #download', `(() => {
-	const el = document.querySelector('#download .actions');
+await safe('scroll to #pricing', `(() => {
+	const el = document.querySelector('#pricing .ticket__cta');
 	if (!el) return false;
 	const r = el.getBoundingClientRect();
 	window.scrollTo(0, r.top + window.scrollY - window.innerHeight / 2);
 	return true;
 })()`);
 await sleep(2100);
-const spotEnd = await safe('spotlight at #download', spotlightReport);
+const spotEnd = await safe('spotlight at #pricing', spotlightReport);
 const downloadTarget = await safe(
-	'download target rect',
+	'pricing CTA rect',
 	`(() => {
-	const el = document.querySelector('#download .actions');
+	const el = document.querySelector('#pricing .ticket__cta');
 	if (!el) return null;
 	const r = el.getBoundingClientRect();
 	return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
@@ -469,6 +470,7 @@ line(
 );
 line('still at opacity 0', afterScroll.hiddenOpacity);
 line('document height', firstPaint.scrollHeight);
+line('last section', firstPaint.lastSection);
 
 console.log('\n── Spotlight ──────────────────────────────────────');
 if (!spotTop || !spotMid || !spotEnd) {
@@ -476,7 +478,7 @@ if (!spotTop || !spotMid || !spotEnd) {
 } else {
 	line('at top', `${spotTop.x}, ${spotTop.y} · core ${spotTop.width}px`);
 	line('at #look', `${spotMid.x}, ${spotMid.y} · core ${spotMid.width}px`);
-	line('at #download', `${spotEnd.x}, ${spotEnd.y} · core ${spotEnd.width}px`);
+	line('at #pricing', `${spotEnd.x}, ${spotEnd.y} · core ${spotEnd.width}px`);
 	line(
 		'distance to CTA',
 		downloadTarget

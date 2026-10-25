@@ -56,12 +56,15 @@
 			const open = easeOut(clamp01((progress - OPEN_START) / (OPEN_END - OPEN_START)));
 			const walk = clamp01((progress - STEPS_START) / (1 - STEPS_START));
 
-			device.style.setProperty('--ry', `${(-26 + 18 * settle - 4 * walk).toFixed(2)}deg`);
-			device.style.setProperty('--rx', `${(20 + 4 * settle).toFixed(2)}deg`);
-			device.style.setProperty('--sc', (0.82 + 0.18 * settle).toFixed(3));
-			device.style.setProperty('--ty', `${(-8 + 8 * settle).toFixed(2)}%`);
-			device.style.setProperty('--tx', `${(7 - 7 * settle).toFixed(2)}%`);
-			device.style.setProperty('--lid', `${(-64 + 70 * open).toFixed(2)}deg`);
+			device.style.setProperty('--ry', `${(-20 + 20 * settle).toFixed(2)}deg`);
+			device.style.setProperty('--rx', `${(14 + 8 * settle).toFixed(2)}deg`);
+			device.style.setProperty('--sc', (0.88 + 0.12 * settle).toFixed(3));
+			device.style.setProperty('--ty', `${(-6 + 6 * settle).toFixed(2)}%`);
+			device.style.setProperty('--tx', `${(5 - 5 * settle).toFixed(2)}%`);
+			device.style.setProperty('--lid', `${(-60 + 61 * open).toFixed(2)}deg`);
+			// The display wakes only once the lid is most of the way up, so the first
+			// beat is a dark slab turning into place rather than a lit screen sliding.
+			device.style.setProperty('--wake', clamp01((open - 0.25) / 0.45).toFixed(2));
 			device.style.setProperty('--shadow-opacity', (0.2 + 0.3 * settle).toFixed(2));
 
 			const index =
@@ -104,7 +107,6 @@
 		<div class="tour__stage">
 			<div class="container tour__grid">
 				<div class="tour__visual">
-					<span class="mono tour__tag">the notch, in place</span>
 					<div class="tour__device" bind:this={deviceEl}>
 						<TourDevice state={steps[step].id} />
 					</div>
@@ -186,14 +188,6 @@
 		display: flex;
 		justify-content: center;
 		min-width: 0;
-	}
-
-	.tour__tag {
-		position: absolute;
-		top: 0.2rem;
-		left: 0;
-		color: var(--ink-3);
-		opacity: 0.8;
 	}
 
 	.tour__device {
@@ -329,10 +323,6 @@
 			align-content: center;
 		}
 
-		.tour__tag {
-			display: none;
-		}
-
 		.tour__steps {
 			order: 2;
 		}
@@ -411,12 +401,12 @@
 
 	:global(html:not(.js)) .tour__device,
 	:global(html.reduced-motion) .tour__device {
-		--ry: -8deg;
-		--rx: 12deg;
+		--ry: 0deg;
+		--rx: 22deg;
 		--sc: 1;
 		--ty: 0%;
 		--tx: 0%;
-		--lid: 6deg;
+		--lid: 1deg;
 		--shadow-opacity: 0.5;
 	}
 

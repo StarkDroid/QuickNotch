@@ -327,8 +327,8 @@ single place widgets are explained: a state is a `tour.steps` entry plus a
 `NotchPanel` branch, never a new section. `NotchPanel` is the one mock — the
 hero, the laptop screen and the static fallback all draw it — so the marketing
 demo cannot drift from the app's geometry. The page keeps exactly one tour, one
-look band, pricing, FAQ and download; do not reintroduce per-widget sections or
-a second demo.
+look band, pricing and FAQ; do not reintroduce per-widget sections, a download
+section or a second demo.
 
 DON'T: force SOFTWARE renderer; set `skiko.renderApi` unconditionally; edit
 `resources/windows/*.ps1` (edit `native/windows/`); `java -jar` the plain jar; resize the

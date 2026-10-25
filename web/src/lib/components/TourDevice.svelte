@@ -79,7 +79,14 @@
 
 		<div class="base">
 			<div class="deck">
+				<!-- The deck is seen through a 90° hinge, so its DOM order is
+				     flipped on screen: the first child is the near edge. Author
+				     it near-to-far — trackpad, spacebar, then the number rows. -->
+				<span class="trackpad"></span>
 				<div class="keys">
+					<span class="keys__row keys__row--space">
+						<i></i>
+					</span>
 					{#each keys as count, row (row)}
 						<span class="keys__row">
 							{#each Array(count) as _, key (key)}
@@ -87,11 +94,7 @@
 							{/each}
 						</span>
 					{/each}
-					<span class="keys__row keys__row--space">
-						<i></i>
-					</span>
 				</div>
-				<span class="trackpad"></span>
 			</div>
 			<span class="base__lip"></span>
 		</div>
@@ -108,7 +111,7 @@
 		   the lid to land when it is closed. */
 		padding-block: 2% 10%;
 		container-type: inline-size;
-		perspective: 2000px;
+		perspective: 2800px;
 		perspective-origin: 50% 44%;
 	}
 
@@ -118,8 +121,8 @@
 		aspect-ratio: 1.5;
 		margin-inline: auto;
 		transform-style: preserve-3d;
-		transform: translate3d(var(--tx, 0%), var(--ty, 0), 0) rotateX(var(--rx, 16deg)) rotateY(var(--ry, -30deg))
-			scale(var(--sc, 0.9));
+		transform: translate3d(var(--tx, 0%), var(--ty, 0), 0) rotateX(var(--rx, 18deg)) rotateY(var(--ry, 0deg))
+			scale(var(--sc, 1));
 		will-change: transform;
 	}
 
@@ -128,7 +131,7 @@
 		position: absolute;
 		inset: 0;
 		transform-origin: 50% 100%;
-		transform: rotateX(var(--lid, 6deg));
+		transform: rotateX(var(--lid, 1deg));
 		transform-style: preserve-3d;
 		will-change: transform;
 	}
@@ -199,7 +202,9 @@
 		height: 100%;
 		border-radius: 1.1cqw;
 		overflow: hidden;
-		background: #0d1219;
+		background: #101826;
+		/* 0 while the lid is down, 1 once it is up. Unset = awake (no-JS). */
+		opacity: var(--wake, 1);
 		container-type: inline-size;
 	}
 
@@ -214,7 +219,7 @@
 		position: absolute;
 		border-radius: 50%;
 		filter: blur(70px);
-		opacity: 0.3;
+		opacity: 0.42;
 	}
 
 	.wall__blob--a {
@@ -401,20 +406,20 @@
 		position: absolute;
 		top: 100%;
 		left: 0;
-		left: 3%;
-		width: 94%;
-		height: 58%;
+		left: 6%;
+		width: 88%;
+		height: 56%;
 		transform-origin: 50% 0;
 		transform: rotateX(90deg);
 		transform-style: preserve-3d;
-		border-radius: 1.6cqw;
+		border-radius: 3cqw;
 		background: #171209;
 		border: 2px solid var(--ink);
 	}
 
 	.deck {
 		position: absolute;
-		inset: 7% 6% 10%;
+		inset: 8% 7% 12%;
 		display: flex;
 		flex-direction: column;
 		gap: 2.2%;
@@ -452,9 +457,9 @@
 	.trackpad {
 		display: block;
 		align-self: center;
-		width: 32%;
-		height: 26%;
-		margin-top: 2%;
+		width: 28%;
+		height: 22%;
+		margin-bottom: 2%;
 		border-radius: 0.5rem;
 		border: 1px solid rgb(255 255 255 / 0.06);
 		background: #1c1710;

@@ -8,7 +8,7 @@
 	 * A fixed layer holding two heavily blurred flat discs. It rests near the top
 	 * of the viewport as the hero's "glow from above", then follows the reading
 	 * position down the page, settling on one focal element per section and
-	 * finishing on the download buttons.
+	 * finishing on the pricing CTA.
 	 *
 	 * Two deliberate choices:
 	 *  - The glow is flat colour blurred with `filter: blur()`, not a
@@ -26,7 +26,7 @@
 	}
 
 	let {
-		targets = ['#tour .tour__device', '#look .look__row', '#download .actions']
+		targets = ['#tour .tour__device', '#look .look__row', '#pricing .ticket__cta']
 	}: Props = $props();
 
 	let coreEl: HTMLSpanElement | undefined = $state();

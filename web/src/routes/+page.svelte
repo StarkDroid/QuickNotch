@@ -6,7 +6,6 @@
 	import LookSection from '$components/LookSection.svelte';
 	import PricingSection from '$components/PricingSection.svelte';
 	import FaqSection from '$components/FaqSection.svelte';
-	import DownloadSection from '$components/DownloadSection.svelte';
 	import Footer from '$components/Footer.svelte';
 
 	/**
@@ -14,9 +13,9 @@
 	 * a launch section.
 	 *
 	 * The page now reads: the promise, the whole product in one scroll, the two
-	 * knobs you can turn, the price, the questions, the download. Everything a
-	 * widget does is explained once, where it is animated, so there is no second
-	 * pass to skim.
+	 * knobs you can turn, the price, then the questions. Everything a widget does
+	 * is explained once, where it is animated, so there is no second pass to
+	 * skim — and the FAQ is the last word, not a download detour.
 	 */
 </script>
 
@@ -35,7 +34,6 @@
 
 	<FaqSection />
 
-	<DownloadSection />
 </main>
 
 <Footer />
