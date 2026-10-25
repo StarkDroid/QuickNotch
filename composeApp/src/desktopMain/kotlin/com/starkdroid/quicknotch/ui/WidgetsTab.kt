@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -48,6 +49,12 @@ import com.starkdroid.quicknotch.generated.resources.waveform_hide_title
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_title
 import com.starkdroid.quicknotch.generated.resources.weather_section_title
 import com.starkdroid.quicknotch.generated.resources.show_labels_title
+import com.starkdroid.quicknotch.generated.resources.system_disabled
+import com.starkdroid.quicknotch.generated.resources.system_hint
+import com.starkdroid.quicknotch.generated.resources.system_preview
+import com.starkdroid.quicknotch.generated.resources.system_section_title
+import com.starkdroid.quicknotch.generated.resources.system_unknown
+import com.starkdroid.quicknotch.generated.resources.system_waiting
 import com.starkdroid.quicknotch.generated.resources.widget_apps_title
 import com.starkdroid.quicknotch.generated.resources.widget_music_title
 import com.starkdroid.quicknotch.generated.resources.widget_no_session
@@ -61,6 +68,8 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.model.WaveformTint
+import com.starkdroid.quicknotch.system.SystemMetrics
+import com.starkdroid.quicknotch.system.SystemSnapshot
 import com.starkdroid.quicknotch.theme.AccentGreen
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.NotchBorder
@@ -354,6 +363,42 @@ internal fun WidgetsTab(
                 }
             }
         }
+        item(key = "system") {
+            // Same ownership rule: this accordion collects the readings itself,
+            // so the settings screen and the other tabs never recompose for a
+            // network tick.
+            val systemState by SystemMetrics.state.collectAsState()
+            TabEntrance(index = 4) {
+                WidgetAccordion(
+                    icon = Icons.Default.Memory,
+                    title = stringResource(Res.string.system_section_title),
+                    enabled = config.widgets.showSystem,
+                    onToggleEnabled = { enabled ->
+                        onUpdate { it.copy(widgets = it.widgets.copy(showSystem = enabled)) }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
+                            .padding(bottom = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SystemStatusRow(
+                            snapshot = systemState,
+                            enabled = config.widgets.showSystem
+                        )
+                        Text(
+                            text = stringResource(Res.string.system_hint),
+                            style = AppTypography.bodySmall,
+                            color = TextSecondary,
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+        }
 
     }
 }
@@ -403,6 +448,53 @@ internal fun NowPlayingStatus(
                 stringResource(Res.string.widget_now_playing, session.title, session.artist.ifBlank { stringResource(Res.string.widget_unknown_artist) })
             } else {
                 stringResource(Res.string.widget_no_session)
+            },
+            style = AppTypography.bodySmall,
+            color = if (live) TextPrimary else TextSecondary,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Live readout for the System widget accordion: the exact numbers the notch
+ * page is drawing right now (CPU, memory, download). A switched-off widget has
+ * no reading at all (the poller is stopped, not idling), and a fresh one has an
+ * honest "collecting the first sample" line, so the row never implies data it
+ * does not have. Same pill chrome as the Now Playing status above it.
+ */
+@Composable
+internal fun SystemStatusRow(snapshot: SystemSnapshot?, enabled: Boolean) {
+    val unknown = stringResource(Res.string.system_unknown)
+    val live = enabled && snapshot != null
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(SettingsElevated)
+            .border(1.dp, SettingsBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (live) AccentGreen else TextMuted.copy(alpha = 0.4f))
+        )
+        Spacer(modifier = Modifier.width(9.dp))
+        Text(
+            text = when {
+                !enabled -> stringResource(Res.string.system_disabled)
+                snapshot == null -> stringResource(Res.string.system_waiting)
+                else -> stringResource(
+                    Res.string.system_preview,
+                    snapshot.cpuPercent?.let { "$it%" } ?: unknown,
+                    snapshot.ramPercent?.let { "$it%" } ?: unknown,
+                    systemRate(snapshot.downBytesPerSec)
+                )
             },
             style = AppTypography.bodySmall,
             color = if (live) TextPrimary else TextSecondary,

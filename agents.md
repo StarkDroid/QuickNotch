@@ -13,11 +13,14 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
 - **Collapsed pill (QuickView):** live-media branch (vinyl disc, marquee title,
   optional waveform analyser, volume + device-battery rings), idle-clock branch
   (date/time + weather chip + laptop-battery ring + notification bell), idle dots,
-  drag-handle style. Content-hugging: clock/dots shrink to measured width;
-  live media fills the configured width.
-- **Expanded pages (wheel order):** Music (when live) → Apps → Weather → Calendar.
-  Music page: vinyl + title/artist—album + progress + transport + rings.
-  Calendar page: schedule view + ticker. Weather page: today + 7-day.
+  drag-handle style, **gaming branch** (a fullscreen game replaces the pill with a
+  live FPS/CPU/GPU/ping/download strip). Content-hugging: clock/dots shrink to
+  measured width; live media and the gaming HUD fill the configured width.
+- **Expanded pages (wheel order):** Music (when live) → Apps → System (when on) →
+  Weather → Calendar. Music page: vinyl + title/artist—album + progress + transport
+  + rings. Calendar page: schedule view + ticker. Weather page: today + 7-day.
+  System page: one `LevelRing` per metric (glyph inside, live value under it) —
+  CPU, GPU (only where the OS reports an engine), memory, storage, download, upload.
 - **macOS placement:** island sits flush at the true top of the screen, above the
   menu bar (`NSStatusWindowLevel` 25, joins all Spaces, over full-screen apps).
   Unreachable via AWT — an ObjC dylib parks it there.
@@ -48,7 +51,8 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
   **no `java.net.http`, no `jdk.httpserver`**. Anything needing those crashes only
   in the installed app (`NoClassDefFoundError`, an `Error` — catch `Error` too).
 - `desktopMain` = everything platform: `main.kt`, `datasource/`, `media/`,
-  `calendar/GoogleCalendar`, `weather/Weather`, `ui/`, `model/`.
+  `calendar/GoogleCalendar`, `weather/Weather`, `system/` (SystemMetrics +
+  per-platform probes), `ui/`, `model/`.
 - OAuth loopback is a hand-rolled `ServerSocket` (single GET), never `HttpServer`.
 - Resources: strings in `commonMain/composeResources/values/strings.xml` → `Res.string.x`;
   glyphs in `drawable/*.svg` (solid `fill="currentColor"` silhouettes, tinted SrcIn).
@@ -69,10 +73,11 @@ SKIKO_RENDER_API=SOFTWARE ./gradlew :composeApp:run    # one-off rasterizer A/B
 ```
 
 Bridge tasks (`composeApp/build.gradle.kts`, auto-run by jar/run): `syncWindowsBridge`
-(`native/windows/*.ps1` → resources; edit source, never the copy),
+(`native/windows/*` → resources; edit source, never the copy),
 `compileMacNowPlayingBridge` / `compileMacBtWatchBridge` / `compileMacPassthroughBridge`
-/ `compileMacArtworkBridge` + `syncMacArtworkDriver` (macOS hosts only; absent resource =
-controller stays silent by design). Kill a run via the `MainKt|quicknotch` java process.
+/ `compileMacArtworkBridge` / `compileMacGameWatchBridge` + `syncMacArtworkDriver`
+(macOS hosts only; absent resource = controller stays silent by design). Kill a run via
+the `MainKt|quicknotch` java process.
 Install a DMG with `rsync -a` (`cp -R`/`ditto` leave empty bundles).
 
 ## 4. Architecture
@@ -86,8 +91,9 @@ Always-on-top toggle (mirrors Behavior tab), Settings, reset, quit.
 Pollers on `Dispatchers.IO`, UI observes `StateFlow`s on EDT. `OverlayPager` is touched
 from the AWT wheel listener and composition on the same thread — no locks.
 
-- **Fixed footprint, drawn growth.** The native window keeps one size (expanded dock
-  size) for life; open/collapse is drawn island growth inside it. Never resize the
+- **Fixed footprint, drawn growth.** The native window keeps one size (`NotchMetrics.window`
+  = widest of expanded dock and `GameHudWidth`) for life; open/collapse, a track starting
+  and a game starting are all drawn island growth inside it. Never resize the
   transparent window per open/close (macOS white-flash/frame-skip). Position atomically
   (`LaunchedEffect(config.style, targetSize)`); never re-place from live window dims.
 - **macOS above-menu-bar** (`MacAppKit` + `passthrough_bridge.m` dylib, main-queue
@@ -111,8 +117,14 @@ from the AWT wheel listener and composition on the same thread — no locks.
 ### 4.2 Overlay: geometry, hover, pager, morph
 
 - `OverlayGeometry.kt`: `computeNotchMetrics` + `DockLayout` own footprints.
-  Island depth = `expandedNotchHeightDp`(70–86, default 78) + 6. Widths: music/weather
-  pages 356dp, live-collapsed 236dp, clock/dots hugged (floor 32dp + 16dp pad).
+  Island depth = `expandedNotchHeightDp`(70–86, default 78) + 6. Widths: music/weather/
+  system pages 356dp, live-collapsed 236dp, gaming HUD 320dp (depth floor 34dp),
+  clock/dots hugged (floor 32dp + 16dp pad). `metrics.window` (max of expanded and
+  `GameHudWidth`) is the native window; `metrics.expanded` is no longer it.
+  `calendarConnected`/`weatherReady`/`systemReady` gate those pages and the width, so a
+  page with nothing behind it never becomes a dead stop on the wheel.
+  `gameActive` widens the collapsed pill and lifts its depth floor — and it is the
+  reason a game starting needs no window resize.
   Indicator slots (+28dp each: device + laptop battery, notification bell, weather = 2)
   come from `quickViewIndicatorSlots(...)` — **both** the window sizer and content must
   use it or the right icon clips.
@@ -132,6 +144,18 @@ from the AWT wheel listener and composition on the same thread — no locks.
   down, dock scales up from 0.82 behind it). Animated island size is `State<Dp>` read
   **only in the layout phase** (`Modifier.animatedIslandSize`) + `snapshotFlow` to the
   blur bridge — reading it in composition recomposes the whole tree per spring frame.
+- Gaming quickview (`GameHud.kt` + `FloatingNotchOverlay`): while `GameDetector.game`
+  is non-null **and** `widgets.showGameHud`, the collapsed slot renders the HUD instead
+  of `QuickView` — same island, same collapse, no pointer target of its own (hover still
+  expands the dock). The HUD is a fill branch, so it disables width hugging
+  (`hugVisible`) and the playback outline (`showOutline`) it has no content for.
+  `transparentInGame` applies **only** while collapsed and only to the HUD
+  (`gameTransparent`): the body drops (`IslandSurface.gameTransparent`, a transparent
+  fill + 1dp black rim — never a `NotchSurface` entry), the island carries
+  `Modifier.shadow(12dp, clip = false)` and the glyphs get their own shadow, and both
+  blur carriers are switched **off** rather than hidden (`blurActive`/`frostActive`) —
+  otherwise the macOS helper panel / Windows frost would repaint the body we just
+  removed. Opening the dock over a game always uses the user's real material.
 - Inactive pages must not compose pointer modifiers at all (`.then(if (interactive) …)` /
   `onClick = null`); `enabled = false` is still hit-testable and blocks pages beneath.
 
@@ -180,6 +204,45 @@ from the AWT wheel listener and composition on the same thread — no locks.
 - **Notifications (macOS):** `count(*)` on usernoted `record` (WAL-aware: fingerprint
   db/-wal/-shm at 250 ms + 3 s backstop). Needs Full Disk Access (settings deep-links
   the pane, re-pokes on focus); unreadable → hidden. Windows has no store → hidden.
+- **System monitor** (`system/`, `WidgetsConfig.showSystem`, default on): one
+  `StateFlow<SystemSnapshot?>`, poll **gated on the toggle** (`SystemMetrics.setEnabled`
+  → a switched-off widget spawns nothing and clears the snapshot). macOS runs exactly
+  one `/bin/sh` per 2 s tick (`sysctl hw.ncpu hw.memsize`, `ps -A -o %cpu=`, `vm_stat`,
+  `netstat -ibn`, `df -k /System/Volumes/Data`, `ioreg -c IOAccelerator`) ≈ 40 ms;
+  Windows runs one `system-metrics.ps1` per 4 s tick (`Get-Counter` PDH over a 1 s
+  sample for CPU/memory/GPU-engine/network, `DriveInfo` for the disk). Static facts
+  (total RAM, GPU name via `system_profiler` ≈ 300 ms) are read **once per run**, never
+  per tick. Readings: CPU = Σ`ps %cpu` ÷ cores; memory = active + wired + compressor;
+  storage = the **data** volume (the read-only system volume reads ~14% falsely);
+  GPU = highest `Device Utilization %` (macOS) / summed 3D-engine utilization clamped
+  to 100 (Windows) — no counter means no GPU tile (`gpuAvailable`). Throughput comes
+  from cumulative counters, so **both directions must share one delta** and the first
+  sample is always null. `emit()` refuses a sample that lands after the switch-off, or
+  the settings row shows a frozen reading forever. Load metrics warm to `LoadHighTint`
+  ≥ 85; network rings use a log sweep (1 KB/s → 0 … 1 GB/s → 100) and the label carries
+  the exact rate.
+- **Gaming** (`system/GameDetector.kt` + `FpsProbe.kt` + `datasource/MacGameWatch.kt`,
+  `WidgetsConfig.showGameHud` default on, `NotchConfig.transparentInGame` default off):
+  one `StateFlow<GameSession?>` is the entire trigger. Detector runs only while
+  `showGameHud || transparentInGame` (`GameDetector.setEnabled`), and a session needs
+  `MissingProbesBeforeIdle` = 2 consecutive misses (~3 s) to clear, so a loading screen
+  or alt-tab cannot blink the HUD. macOS = `MacGameWatch.fullscreenOwner()` every 1.5 s,
+  an in-process JNA call into `gamewatch-bridge.dylib` (`CGWindowListCopyWindowInfo`:
+  layer-0 window within 2 pt of the display bounds, owner not a system shell or us —
+  owner names/bounds need no Screen Recording consent, titles do). Windows = **one
+  long-lived** `game-detect.ps1` printing `1|name|pid` / `0||` per 1.5 s tick
+  (foreground rect vs `MonitorFromWindow` rect, or
+  `SHQueryUserNotificationState == QUNS_RUNNING_D3D_FULL_SCREEN`; shell classes and
+  explorer excluded; exits when its parent JVM disappears). **Never spawn it per probe**
+  — its `Add-Type` costs ~1 s in PS 5.1. FPS = `FpsProbe` on Windows only: one PresentMon
+  capture per 6 s (`--timed 2`, mean of `msBetweenPresents` → `1000/mean`), its own
+  coroutine so a 2 s capture never delays a system sample; it tries `--` then `-` option
+  spelling once and remembers the winner. Every failure — no binary, refused ETW,
+  macOS — yields **no FPS cell**, never a fabricated number. Latency is
+  `SystemSnapshot.pingMs`: one TCP handshake to `1.1.1.1:443` every other system tick
+  (4 s macOS / 8 s Windows, 1 s timeout, fail-soft), kept off the System page. A game
+  also force-enables `SystemMetrics` (`showSystem || gamingActive`) because the HUD needs
+  CPU/GPU — the System *page* stays off the wheel when its toggle is off.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`
@@ -217,8 +280,10 @@ Root choreography `FloatingNotchOverlay`; pill branches + strip `QuickView`;
 pages + fisheye dock `DockContent`; vinyl/marquee/progress/transport/waveform
 `MediaWidgets`; morph keys `NowPlayingMorph`; hover `OverlayHover`; springs/timings
 `NotchMotion`; metrics `OverlayGeometry`; pager `OverlayPager`; rings `LevelRing`;
-clock/bell `QuickViewClock`; surfaces `IslandSurface`; skeleton `Shimmer`;
-`CalendarWidget`, `WeatherWidget`, `OnboardingScreen` (gates overlay on
+gaming HUD `GameHud` (value over caption cells, hairline dividers, shadow only in
+transparent mode); clock/bell `QuickViewClock`; surfaces `IslandSurface`; skeleton `Shimmer`;
+`CalendarWidget`, `WeatherWidget`, `SystemWidget` (System page: six ring tiles,
+`systemRate`/`systemRateLevel`), `OnboardingScreen` (gates overlay on
 `onboardingDone`), `PinnedAppsPanel`, settings `SettingsScreen`/`WidgetsTab`/
 `DockSizingTab`/`BehaviorTab`/`SettingsComponents` (shared chrome + `plainClickable` /
 `trackHoverPress` helpers; tabs collect their own state — screen collects none).
@@ -227,7 +292,9 @@ clock/bell `QuickViewClock`; surfaces `IslandSurface`; skeleton `Shimmer`;
 
 Palette in `theme/Color.kt` (+ overlay-local `LiveAccent` etc. in `MediaWidgets.kt`).
 Settings/onboarding are gradient-free solids. Glyphs = tinted SVGs only.
-Reusable `LevelRing` / `VinylDisc` (spins 12 s/turn while playing, frozen angle on pause;
+Reusable `LevelRing` (one ring, several alert rules: `lowTint`/`lowThreshold` for a
+draining battery, `highTint`/`highThreshold` for a saturating load metric) /
+`VinylDisc` (spins 12 s/turn while playing, frozen angle on pause;
 page swap = `AnimatedContent` keyed on the bitmap, clipped at island) / `MarqueeText`
 (scroll iff overflowing) / `TrackProgress` (inset lane, head iff seekable).
 Waveform = faux analyser (2 sines/band + shared envelope, 8–40 bars by width, white or
@@ -245,6 +312,27 @@ failed probe keeps last value; high-frequency state collected in the drawing sub
 frame clocks local to their composable; monotonic clocks for extrapolation.
 Verify: `compileKotlinDesktop` → `desktopJar` → `:composeApp:run` → `:composeApp:detekt`.
 
+**Every feature ships on three surfaces — app, onboarding, web.** A new widget,
+toggle or interaction is not finished until (a) it works in the overlay, (b) the
+onboarding walkthrough can show it or set it where a first-run user would meet
+it, and (c) `web/` tells the same story: the demo notch paints the same widget
+with the same layout and labels, and the copy, feature list, keywords, FAQ and
+structured data name it. Land all three in the same commit. A marketing demo of
+a widget we do not ship — or an onboarding step describing one we removed — is a
+bug, not a nicety. When the demo needs a visual the app has, match the app's
+geometry (ring sweep, capsule shapes, dot sizes) rather than inventing one.
+A feature that is **not** a wheel page (the gaming HUD is the collapsed pill's
+own state) still needs all three surfaces. On the site the scroll tour is the
+single place widgets are explained: a state is a `tour.steps` entry plus a
+`NotchPanel` branch, never a new section. `NotchPanel` is the one mock — the
+hero, the laptop screen and the static fallback all draw it — so the marketing
+demo cannot drift from the app's geometry. The laptop arrives skewed and lands
+frontal as the lid opens; its base is a solid front-elevation body at the hinge
+with the machine's real thickness — never a deck, so no angle ever shows keys.
+The page keeps exactly one tour, one
+look band, pricing and FAQ; do not reintroduce per-widget sections, a download
+section or a second demo.
+
 DON'T: force SOFTWARE renderer; set `skiko.renderApi` unconditionally; edit
 `resources/windows/*.ps1` (edit `native/windows/`); `java -jar` the plain jar; resize the
 overlay per open/close; re-place from live window dims; derive placement/math from
@@ -254,7 +342,7 @@ in a loop; native side effects in composable bodies; `dispatch_sync` to AppKit f
 path on Windows; static WinRT stream-extension calls in `smtc.ps1` (pre-bind the
 MethodInfo — see §7); per-tick persistence (repo coalesces); new strings/colors/glyphs inline;
 `String.format` assumptions on `stringResource` (`%1$s` bare substitution — `%%` doubles);
-scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
+scope-creep (new notch positions, Android/iOS) unless asked.
 
 ## 7. Critical gotchas (distilled — full stories were in §10)
 
@@ -279,8 +367,22 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
 - Progress outline straddles the island edge from a padded wrapper sibling
   (the island clip would cut its outer half); pad is 0 when the ring is off.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
+- System monitor (macOS probe): `netstat` **must** be `-n` (without it every interface
+  address resolves through DNS and the probe blocked ~5 s); `netstat -ib` repeats a row
+  per address family and only the first carries the counters (de-dupe by interface,
+  skip `lo0`); `df` the `/System/Volumes/Data` volume (root reads ~14% falsely);
+  `ioreg -c IOAccelerator` gives GPU load only where the driver prints
+  `Device Utilization %`. On Windows the PDH sample itself costs ~1 s, so the poll is
+  4 s and RAM total / GPU name come from one `-Static` run.
 - Calendar: RFC3339 times; 403 body names a disabled API; Testing clients need test users;
   loopback port must be `--strictPort`-stable and the URI identical in app + page + console.
+- Gaming: `game-detect.ps1` is a **watcher, not a probe** — `Add-Type` costs ~1 s in
+  PowerShell 5.1, so a per-tick spawn burns a fifth of a core forever; one process, one
+  compile. macOS exposes no supported per-app frame rate, so FPS is Windows-only by
+  design (not a TODO), and `PresentMon.exe` is **not committed** (third-party binary —
+  drop it in `native/windows/`, see `README-presentmon.md`); without it the HUD drops the
+  FPS cell. Transparent-in-games must switch the blur carriers **off**, not merely hide
+  them, or the native panel/frost paints the body back.
 - macOS `prev` restarts the track when position > ~3 s — verify via position, not title.
 - Detekt 1.23.8 gates new code (`UnusedImports` on); old findings in `baseline.xml`,
   re-cut with `detektBaseline` only after deliberate fixes; tunings: `MagicNumber` off,
@@ -292,7 +394,8 @@ scope-creep (`web/`, new notch positions, Android/iOS) unless asked.
 Branch `main` (older work: `cursor/macos-compose-adaptation`). One logical change per
 commit, imperative summary, GPG-sign (`git commit -S`), author stays the user, never push.
 Before commit: compile + jar + smoke run + detekt green + resource sweep (unused
-`Res.*`, zero `Brush.*Gradient` in settings/onboarding). End with clean `git status`;
+`Res.*`, zero `Brush.*Gradient` in settings/onboarding) + web/onboarding parity
+(§6) — app, onboarding and `web/` in the same commit. End with clean `git status`;
 note unverifiable paths honestly (macOS-only paths have no machine here: CGS/panel
 blur, passthrough bridge, menu-bar presence; needs live eyes: morph smoothness,
 waveform feel, blur look).

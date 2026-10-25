@@ -18,3 +18,6 @@ replay_pid*
 # Generated at build time by gradle tasks (macOS bridge binary, Windows SMTC script)
 /composeApp/src/desktopMain/resources/macos/
 /composeApp/src/desktopMain/resources/windows/
+
+# Agent tooling state (local machine memory, never shared)
+/.serena/

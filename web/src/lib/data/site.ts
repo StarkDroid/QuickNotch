@@ -8,22 +8,30 @@ export const site = {
 	name: 'QuickNotch',
 	url: 'https://quicknotch.app',
 	/**
-	 * Where the installers live. This is the one place to configure the download
-	 * destination — nothing else on the site links off to a code host, so that it
-	 * never implies the product's source is available.
+	 * Where the installers live, for people who already own a licence. This is
+	 * the one place to configure the download destination — nothing else on the
+	 * site links off to a code host, so that it never implies the product's
+	 * source is available.
 	 *
 	 * TODO before launch: publish this page. Absolute rather than a relative
 	 * `/download` so the prerenderer does not try to crawl it and fail the build.
 	 */
 	downloadUrl: 'https://quicknotch.app/download',
+	/**
+	 * Checkout. Every "buy" button on the site points here, and the price below
+	 * is the single source of truth for what it costs, so the button, the card
+	 * and the structured data can never disagree.
+	 *
+	 * TODO before launch: point this at the live checkout (a hosted cart page or
+	 * a payment processor's checkout link).
+	 */
+	purchaseUrl: 'https://quicknotch.app/buy',
 	version: '1.0.0',
-	price: '0',
-	currency: 'USD',
-	tagline: 'One tiny notch. Apps, weather, stats and more.',
+	tagline: 'One tiny notch. Apps, system, weather and more.',
 	description:
-		'QuickNotch is a free floating notch and app launcher dock for Windows and macOS. Pin your apps, check the weather, system usage, game FPS and live controls at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle. The widget stack keeps growing, so there is always a new reason to glance up.',
+		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. Start a fullscreen game and the notch turns into a live performance HUD. Style it as an AMOLED notch, a floating pill or a slim drag handle.',
 	shortDescription:
-		'A free floating notch and app dock that shows your apps, weather, stats and live controls at a glance on Windows and macOS.',
+		'A floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
 	keywords: [
 		'app launcher',
@@ -36,24 +44,49 @@ export const site = {
 		'dock replacement',
 		'notch app launcher',
 		'quick launcher',
-		'free app dock',
+		'app dock',
 		'widgets',
 		'weather widget',
 		'system monitor',
-		'fps counter',
+		'CPU and memory monitor',
+		'calendar widget',
 		'live activities',
 		'now playing widget',
+		'gaming HUD',
+		'FPS counter',
+		'in-game overlay',
+		'performance monitor',
 		'notch themes',
 		'productivity utility'
 	]
 } as const;
 
-export const nav = [
-	{ label: 'Widgets', href: '#widgets' },
-	{ label: 'Themes', href: '#themes' },
-	{ label: 'Launch', href: '#launch' },
-	{ label: 'FAQ', href: '#faq' }
-] as const;
+/**
+ * Commerce. One payment, both installers, every widget — the whole site reads
+ * the price from here, including the structured data in `Seo.svelte`.
+ */
+export const pricing = {
+	/** Kept separate from the display label for schema.org's numeric field. */
+	amount: '9',
+	label: '$9',
+	currency: 'USD',
+	unit: 'one-time',
+	eyebrow: 'The price',
+	title: 'One tiny notch. One small price.',
+	body: 'Pay once and the notch is yours on both platforms: every widget page, all three looks, and the updates that follow. No subscription, no in-app purchases, no account.',
+	/** What the payment actually buys — rendered beside the price. */
+	includes: [
+		'Windows and macOS installers on one licence',
+		'Quick launch, system, weather, calendar and live media',
+		'All three notch styles and every surface finish',
+		'Updates included for as long as the app ships'
+	],
+	/** Receipt-footer line under the buy button. */
+	finePrint: 'Instant download · Both platforms · No subscription'
+} as const;
+
+/** One label for every buy button, so the price is written exactly once. */
+export const buyCta = `Buy now — ${pricing.label}` as const;
 
 export const platforms = [
 	{
@@ -74,114 +107,154 @@ export const platforms = [
 
 export const hero = {
 	// Sticker ribbon that sits on top of the headline.
-	badge: 'a notchful of good stuff · 100% free',
+	badge: 'a notchful of good stuff · pay once',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'A notch that lives at the top of your screen, always ready. Pin your apps, peek at the weather, watch your FPS and boss your music around, without ever leaving the window you are in. And it keeps growing: more widgets and tricks land with every release, so there is always a fresh reason to glance up.',
-	primaryCta: 'Download for free',
-	secondaryCta: 'See how it works',
-	trust: ['No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
+	sub: 'Pin your apps, watch the machine, check the sky and your day, and boss your music around — from one slim notch at the top of the screen. No windows to arrange, no tab to find.',
+	secondaryCta: 'Take the tour',
+	trust: ['One-time purchase', 'No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
 } as const;
 
-export const stats = [
-	{
-		value: '5',
-		label: 'Widgets, always up top',
-		detail: 'Apps, weather, stats, FPS and live controls'
-	},
-	{ value: '3', label: 'Looks, all yours', detail: 'AMOLED notch, floating pill or drag handle' },
-	{ value: '2', label: 'Platforms, one app', detail: 'Same vibe on Windows and macOS' },
-	{ value: '1', label: 'Click and you are in', detail: 'Open any pinned app in an instant' }
+/** Indexable facts. Not rendered: the tour and the look band already say them. */
+export const facts = [
+	{ label: 'Widget pages', value: '5' },
+	{ label: 'Notch styles', value: '3' },
+	{ label: 'Platforms on one licence', value: '2' }
 ] as const;
 
-export type WidgetId = 'apps' | 'weather' | 'system' | 'fps' | 'music';
+/**
+ * The scroll tour: the one place every widget is explained.
+ *
+ * Seven states, in the order you meet them — the resting pill, then each page
+ * of the wheel, then the gaming HUD that replaces the pill. Copy is deliberately
+ * one line and one sentence: the animation carries the rest, and the whole thing
+ * replaces what used to be four separate sections.
+ */
+export type TourStepId =
+	| 'quickview'
+	| 'apps'
+	| 'system'
+	| 'weather'
+	| 'calendar'
+	| 'music'
+	| 'gaming';
 
-export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
-	{ id: 'apps', label: 'Quick launch', blurb: 'Your pinned apps, one sunny click away.' },
-	{ id: 'weather', label: 'Weather', blurb: 'Peek outside without standing up.' },
-	{ id: 'system', label: 'System usage', blurb: 'CPU, RAM, GPU and network, live and honest.' },
-	{ id: 'fps', label: 'Game mode', blurb: 'A live FPS counter. Your framerate has a fan club now.' },
-	{ id: 'music', label: 'Live activities', blurb: 'Now playing, with the important buttons.' }
-];
-
-export type ThemeId = 'amoled' | 'pill' | 'handle';
-
-export const themes: { id: ThemeId; label: string; blurb: string }[] = [
-	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Deep black, vanishes into the screen edge. There only when you look.' },
-	{ id: 'pill', label: 'Floating pill', blurb: 'A plump little capsule, hovering just off the edge of forever.' },
-	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet grip. Very chill. Barely any notice.' }
-];
-
-export const launch = {
-	eyebrow: 'The notch overlay',
-	title: 'Hover the notch. Get what you need.',
-	body: 'The notch rests slim at the top-centre of your screen. Hover it and the overlay answers with an app dock that grows straight out of the notch, right where you are looking. Move along and it tucks itself away, leaving a pixel-wide nothing behind.',
-	items: [
+export const tour = {
+	eyebrow: 'The tour',
+	title: 'One notch. The whole desktop.',
+	lead: 'Hover for your apps. Scroll for the machine, the sky, your day and your music. One shape, seven jobs — and nothing new to learn.',
+	steps: [
 		{
-			title: 'Hover to expand',
-			body: 'Rest over the notch and it grows into an app dock. No clicks, no menu, no fumbling.'
+			id: 'quickview',
+			label: 'Quickview',
+			title: 'The day, in a sliver.',
+			body: 'Date, time, weather, battery and notifications, hugging the top edge. Nothing to dismiss.'
 		},
 		{
-			title: 'Always on top',
-			body: 'Keep the notch above everything, or let it politely recede when you want a clean canvas.'
+			id: 'apps',
+			label: 'Dock',
+			title: 'Hover. Your apps arrive.',
+			body: 'The pill grows into a dock of pinned apps that lean toward the cursor. One click launches.'
 		},
 		{
-			title: 'Tucks away on its own',
-			body: 'Move along and the overlay collapses back to a slim notch. Nothing lingers, nothing gets in your way, and a single press of Escape closes it too.'
+			id: 'system',
+			label: 'System',
+			title: 'Six rings for the machine.',
+			body: 'CPU, GPU, memory, storage, download and upload. Click the page for Task Manager or Activity Monitor.'
+		},
+		{
+			id: 'weather',
+			label: 'Weather',
+			title: 'The week, without a tab.',
+			body: 'Today plus a seven-day outlook, automatic by location or pinned to your own town.'
+		},
+		{
+			id: 'calendar',
+			label: 'Calendar',
+			title: 'Your day, one glance.',
+			body: 'Google Calendar on the page, and the next meeting ticking along in the pill.'
+		},
+		{
+			id: 'music',
+			label: 'Music',
+			title: 'Now playing, hands on it.',
+			body: 'Cover, progress and transport on the page; a spinning disc in the pill while it plays.'
+		},
+		{
+			id: 'gaming',
+			label: 'Gaming',
+			title: 'Game on. Numbers up.',
+			body: 'A fullscreen game swaps the pill for FPS, CPU, GPU, ping and download. Nothing to launch.'
 		}
 	]
 } as const;
 
-export const download = {
-	title: 'Slap a notch on your desktop',
-	body: 'Grab the installer for your platform, run it once, and boom: a tiny superpower notch. Apps, weather, stats and media controls on day one, with new widgets queued up after. No account, no credit card, no signing your soul away.',
-	notes: [
-		'Installs on Windows 10 & 11 and macOS 12 or newer.',
-		'No account, no telemetry, no cloud.',
-		'Runs offline. The app never phones home.'
-	]
+export type ThemeId = 'amoled' | 'pill' | 'handle';
+
+export const themes: { id: ThemeId; label: string; blurb: string }[] = [
+	{ id: 'amoled', label: 'AMOLED notch', blurb: 'Deep black, flush with the edge. There only when you look.' },
+	{ id: 'pill', label: 'Floating pill', blurb: 'A plump little capsule, hovering just off the edge.' },
+	{ id: 'handle', label: 'Drag handle', blurb: 'A slim, quiet grip. Barely any notice.' }
+];
+
+/** Solid ink or frosted glass — the second axis of "how it looks". */
+export type SurfaceId = 'solid' | 'frost';
+
+export const surfaces: { id: SurfaceId; label: string; blurb: string }[] = [
+	{
+		id: 'solid',
+		label: 'Solid',
+		blurb: 'Flat, opaque ink. Nothing shows through.'
+	},
+	{
+		id: 'frost',
+		label: 'Frosted glass',
+		blurb: 'The desktop blurs through, so the wallpaper tints it — on Windows too.'
+	}
+];
+
+/** The compact "look" band that replaced the three theme cards. */
+export const look = {
+	eyebrow: 'The look',
+	title: 'Three shapes. Two finishes.',
+	lead: 'Swap the profile and the surface any time from Settings. Every page keeps its layout.'
 } as const;
 
 export const faq = [
 	{
-		question: 'Is QuickNotch really free?',
+		question: 'How much does QuickNotch cost?',
 		answer:
-			'Yes, completely. There is no trial, no in-app purchase and no account to create. Download the installer, launch it once, and it just works.'
+			`${pricing.label}, once. No subscription, no in-app purchases, no account. The one payment covers Windows and macOS, and updates are included.`
 	},
 	{
 		question: 'Does QuickNotch work on Windows and macOS?',
 		answer:
-			'It runs on Windows 10 & 11 and macOS 12 or newer, on both Apple silicon and Intel. The same app, the same notch, on both platforms.'
+			'Yes — Windows 10 & 11 and macOS 12 or newer, on Apple silicon and Intel. The same app, the same notch, on both, on one licence.'
 	},
 	{
 		question: 'Does QuickNotch collect or send my data?',
 		answer:
-			'No telemetry, no analytics, no cloud. QuickNotch runs entirely offline and never phones home. Your pinned apps and settings stay in a local file on your machine.'
+			'No telemetry, no analytics, no cloud. It runs offline and never phones home; your pinned apps and settings stay in a local file.'
 	},
 	{
 		question: 'Can I pin any app?',
 		answer:
-			'Any app that is installed. Search your installed apps, or browse for an app bundle or executable on disk. Reorder and remove them any time from Settings.'
+			'Any installed app. Search the list or browse for a bundle or executable on disk, then reorder from Settings.'
+	},
+	{
+		question: 'Does QuickNotch show FPS while I game?',
+		answer:
+			'On Windows, yes: a fullscreen game turns the pill into a HUD with frame rate, CPU and GPU load, latency and download rate, via Intel PresentMon. macOS shows load and latency only — no supported API exposes another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
 	},
 	{
 		question: 'Will the notch get in the way?',
 		answer:
-			'That is the point: it should not get in the way. It stays as a slim pill at the top-centre of your screen and only expands into a dock when you hover over it. You can set it to always stay on top, or collapse it the moment you launch an app.'
-	},
-	{
-		question: 'Can I change how the notch looks?',
-		answer:
-			'Yes. Pick between an AMOLED notch, a floating pill or a slim drag handle, and tune the magnification, icon size, geometry and whether labels show.'
+			'It stays a slim pill at the top-centre of the screen and only grows when you hover it. You can keep it always on top, or have it collapse the moment an app launches — Escape closes it too.'
 	},
 	{
 		question: 'Does QuickNotch start automatically?',
 		answer:
-			'If you want it to. Toggle "start at login" in Settings and QuickNotch will be waiting on your desktop edge after every restart.'
-	},
-	{
-		question: 'Is QuickNotch more than an app launcher?',
-		answer:
-			'It started as a launcher, and the notch has grown into a whole widget stack: apps, weather, system usage, game FPS and live media controls today, with more widgets and tricks queued up for the next updates. Every bit of it is free, offline-facing and one glance away.'
+			'Toggle "start at login" in Settings and it will be waiting on the edge after every restart.'
 	}
 ] as const;
 

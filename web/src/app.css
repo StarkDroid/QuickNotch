@@ -354,10 +354,6 @@ p {
 	padding-block: clamp(2rem, 4vw, 3rem) var(--section-y);
 }
 
-.section-tight {
-	padding-block: clamp(3rem, 6vw, 6rem);
-}
-
 .stack {
 	display: flex;
 	flex-direction: column;
@@ -669,44 +665,7 @@ p {
 	}
 }
 
-/* ---------- 9. Marquee ---------- */
-.marquee {
-	position: relative;
-	display: flex;
-	overflow: hidden;
-	user-select: none;
-	mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
-	-webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
-}
-
-.marquee__track {
-	display: flex;
-	flex: none;
-	align-items: center;
-	gap: var(--marquee-gap, 3rem);
-	padding-right: var(--marquee-gap, 3rem);
-	animation: marquee-scroll var(--marquee-duration, 32s) linear infinite;
-	will-change: transform;
-}
-
-.marquee[data-direction='right'] .marquee__track {
-	animation-direction: reverse;
-}
-
-.marquee:hover .marquee__track {
-	animation-play-state: paused;
-}
-
-@keyframes marquee-scroll {
-	from {
-		transform: translate3d(0, 0, 0);
-	}
-	to {
-		transform: translate3d(-100%, 0, 0);
-	}
-}
-
-/* ---------- 10. Utilities ---------- */
+/* ---------- 9. Utilities ---------- */
 .sr-only {
 	position: absolute;
 	width: 1px;
@@ -744,24 +703,6 @@ p {
 	height: 0;
 	border: 0;
 	border-top: 2px dashed var(--line-strong);
-}
-
-.grid-2 {
-	display: grid;
-	gap: clamp(1rem, 2vw, 1.6rem);
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-}
-
-.grid-3 {
-	display: grid;
-	gap: clamp(1rem, 2vw, 1.6rem);
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-}
-
-.grid-4 {
-	display: grid;
-	gap: clamp(0.85rem, 1.6vw, 1.25rem);
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 }
 
 /* ---------- 11. Scrollbar ---------- */

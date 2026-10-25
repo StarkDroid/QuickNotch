@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Minimize
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,6 +25,10 @@ import com.starkdroid.quicknotch.generated.resources.autostart_title_mac
 import com.starkdroid.quicknotch.generated.resources.autostart_title_windows
 import com.starkdroid.quicknotch.generated.resources.behavior_header
 import com.starkdroid.quicknotch.generated.resources.collapse_on_launch_title
+import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_hint
+import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_title
+import com.starkdroid.quicknotch.generated.resources.game_transparent_hint
+import com.starkdroid.quicknotch.generated.resources.game_transparent_title
 import com.starkdroid.quicknotch.generated.resources.settings_behavior_desc
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchConfig
@@ -87,8 +93,49 @@ internal fun BehaviorTab(
                             onUpdate { it.copy(hideOnAppLaunch = checked) }
                         }
                     )
+
+                    GamingBehaviorRows(config = config, onUpdate = onUpdate)
                 }
             }
         }
     }
+}
+
+/**
+ * The two gaming switches, split out of [BehaviorTab] so the tab's card stays
+ * one screenful of reading rather than one very long composable.
+ *
+ * Both are behaviour, not appearance: the HUD is automatic (a fullscreen game
+ * is the trigger) and transparency is a repaint of that HUD only, never a
+ * fourth material — Solid / Blurred / System accent keep their meaning
+ * everywhere else, which is why these rows do not live in the Appearance tab.
+ */
+@Composable
+private fun GamingBehaviorRows(
+    config: NotchConfig,
+    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit
+) {
+    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+    BehaviorSwitchRow(
+        icon = Icons.Default.SportsEsports,
+        title = stringResource(Res.string.game_hud_toggle_title),
+        subtitle = stringResource(Res.string.game_hud_toggle_hint),
+        checked = config.widgets.showGameHud,
+        onCheckedChange = { checked ->
+            onUpdate { it.copy(widgets = it.widgets.copy(showGameHud = checked)) }
+        }
+    )
+
+    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+    BehaviorSwitchRow(
+        icon = Icons.Default.Visibility,
+        title = stringResource(Res.string.game_transparent_title),
+        subtitle = stringResource(Res.string.game_transparent_hint),
+        checked = config.transparentInGame,
+        onCheckedChange = { checked ->
+            onUpdate { it.copy(transparentInGame = checked) }
+        }
+    )
 }

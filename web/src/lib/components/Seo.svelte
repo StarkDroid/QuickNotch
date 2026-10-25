@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { faq, platforms, site, stats, widgets, themes } from '$data/site';
+	import { facts, faq, platforms, pricing, site, themes, tour } from '$data/site';
 
 	/**
 	 * All document-level SEO in one place.
@@ -9,7 +9,7 @@
 	 * exactly what rich-result validators complain about.
 	 */
 
-	const title = 'QuickNotch: Free floating notch app launcher & dock for Windows and macOS';
+	const title = 'QuickNotch: the desktop notch, app launcher and widgets for Windows and macOS';
 	const canonical = `${site.url}/`;
 	const ogImage = `${site.url}/og.png`;
 	const logo = `${site.url}/icon-512.png`;
@@ -29,16 +29,16 @@
 		installUrl: site.downloadUrl,
 		fileFormat: 'application/octet-stream',
 		sameAs: [canonical],
-		isAccessibleForFree: true,
+		isAccessibleForFree: false,
 		description: site.description,
 		inLanguage: 'en',
 		keywords: site.keywords.join(', '),
 		offers: {
 			'@type': 'Offer',
-			price: site.price,
-			priceCurrency: site.currency,
+			price: pricing.amount,
+			priceCurrency: pricing.currency,
 			availability: 'https://schema.org/InStock',
-			url: site.downloadUrl
+			url: site.purchaseUrl
 		},
 		author: {
 			'@type': 'Organization',
@@ -54,18 +54,23 @@
 		},
 		featureList: [
 			'Five glanceable widgets with vertical-scroll pagination',
-			'Quick-launch apps, weather, system usage, game FPS and live activity controls',
+			'Quick-launch apps, live system rings, weather, calendar and now-playing controls',
+			'System page: CPU, GPU, memory, storage, download and upload rings',
+			'Gaming HUD: FPS, CPU, GPU, latency and download rate while a fullscreen game runs',
+			'Transparent in games: the notch body drops away, leaving a thin rim and soft shadow',
 			'Three notch styles: AMOLED notch, floating pill or drag handle',
+			'Solid ink or frosted glass, with the desktop blurring through the island',
 			'Pin any installed app or browse for one on disk',
 			'Launch from anywhere with always-on-top overlay',
 			'Start at login automatically',
-			'Runs 100% offline with no account and no telemetry'
+			'Runs offline with no account and no telemetry',
+			'One licence covers Windows and macOS'
 		],
 		// Interesting, indexable facts rather than generic marketing filler.
-		additionalProperty: stats.map((stat) => ({
+		additionalProperty: facts.map((fact) => ({
 			'@type': 'PropertyValue',
-			name: stat.label,
-			value: stat.value
+			name: fact.label,
+			value: fact.value
 		}))
 	};
 
@@ -90,7 +95,7 @@
 		name: site.author,
 		url: site.url,
 		logo: { '@type': 'ImageObject', url: logo },
-		description: `Makers of ${site.name}, a free floating app launcher and notch for Windows and macOS.`
+		description: `Makers of ${site.name}, a floating app launcher and notch for Windows and macOS.`
 	};
 
 	/**
@@ -108,16 +113,16 @@
 		}))
 	};
 
-	/** ItemList of the widget stack, for entity-rich crawlable signals. */
+	/** ItemList of the tour's states, for entity-rich crawlable signals. */
 	const widgetListSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'ItemList',
 		name: 'QuickNotch widgets',
-		itemListElement: widgets.map((widget, index) => ({
+		itemListElement: tour.steps.map((step, index) => ({
 			'@type': 'ListItem',
 			position: index + 1,
-			name: widget.label,
-			description: widget.blurb
+			name: step.label,
+			description: step.body
 		}))
 	};
 
@@ -167,7 +172,7 @@
 	<meta property="og:image:type" content="image/png" />
 	<meta
 		property="og:image:alt"
-		content="QuickNotch: a free floating notch on a desktop that expands into a dock of pinned apps for Windows and macOS."
+		content="QuickNotch: a floating notch at the top of a desktop that expands into a dock of pinned apps, with system, weather and calendar widgets, for Windows and macOS."
 	/>
 
 	<meta name="twitter:card" content="summary_large_image" />
@@ -176,7 +181,7 @@
 	<meta name="twitter:image" content={ogImage} />
 	<meta
 		name="twitter:image:alt"
-		content="QuickNotch: a free floating notch on a desktop that expands into a dock of pinned apps."
+		content="QuickNotch: a floating notch at the top of a desktop that expands into a dock of pinned apps."
 	/>
 
 	{@html `<script type="application/ld+json">${serialise(softwareSchema)}<\/script>`}

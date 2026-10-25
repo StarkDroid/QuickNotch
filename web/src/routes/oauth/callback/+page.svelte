@@ -1,5 +1,4 @@
 <script lang="ts">
-	import Seo from '$components/Seo.svelte';
 	import Footer from '$components/Footer.svelte';
 	import Icon from '$components/Icon.svelte';
 	import { onMount, onDestroy } from 'svelte';
@@ -117,7 +116,14 @@
 	onDestroy(() => clearTimeout(handoff));
 </script>
 
-<Seo />
+<svelte:head>
+	<title>Returning to QuickNotch</title>
+	<meta name="description" content="Google sent you back; this page hands the sign-in to the QuickNotch app. Opened by the OAuth flow, not linked from the site." />
+	<!-- Second half of the app-invoked OAuth flow. Never indexed — see _headers. -->
+	<meta name="robots" content="noindex, nofollow, noarchive" />
+	<meta name="referrer" content="strict-origin-when-cross-origin" />
+	<meta name="theme-color" content="#f9f3e7" />
+</svelte:head>
 
 <main class="page">
 	<section class="section">

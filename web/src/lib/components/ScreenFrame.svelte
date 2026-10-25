@@ -177,6 +177,8 @@
 		z-index: 4;
 		display: flex;
 		justify-content: center;
+		/* Size container for the notch mock: one `cqw` is 1% of the screen. */
+		container-type: inline-size;
 	}
 
 	.mock-window {

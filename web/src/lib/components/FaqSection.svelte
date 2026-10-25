@@ -33,8 +33,7 @@
 <section class="section faq" id="faq" aria-labelledby="faq-heading">
 	<div class="container container-narrow">
 		<header class="section-head section-head--center" use:reveal={{ from: 'up' }} data-reveal="up">
-			<p class="eyebrow">Questions</p>
-			<h2 class="display h2" id="faq-heading">Before you download</h2>
+			<h2 class="display h2" id="faq-heading">FAQ</h2>
 			<p class="lead">Straight answers about the things people ask us most.</p>
 		</header>
 
@@ -148,5 +147,10 @@
 	.faq__panel p {
 		max-width: 62ch;
 		line-height: 1.62;
+	}
+
+	/* It is the last section on the page: keep the footer close. */
+	.faq {
+		padding-bottom: clamp(1.5rem, 3vw, 2.5rem);
 	}
 </style>

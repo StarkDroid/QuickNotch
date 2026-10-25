@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { site } from '$data/site';
+	import { pricing, site } from '$data/site';
 
 	// Prerendered at build time; the constant is a defensive fallback so a missing
 	// or unusable Date can never crash the render.
@@ -18,7 +18,9 @@
 		<p class="footer__tagline">{site.tagline}</p>
 
 		<nav class="footer__links" aria-label="More">
-			<a href="/connect">Connect Google Calendar</a>
+			<a href={site.purchaseUrl} target="_blank" rel="noopener noreferrer">
+				Buy — {pricing.label}
+			</a>
 			<a href="{site.url}">Back to top</a>
 		</nav>
 

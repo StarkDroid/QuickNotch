@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
@@ -57,6 +58,7 @@ import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.MacAppKit
 import com.starkdroid.quicknotch.datasource.MacContentBlur
 import com.starkdroid.quicknotch.datasource.SystemAccent
+import com.starkdroid.quicknotch.datasource.SystemMonitor
 import com.starkdroid.quicknotch.datasource.WindowsBackdropBlur
 import com.starkdroid.quicknotch.media.AudioBattery
 import com.starkdroid.quicknotch.media.AudioDeviceBattery
@@ -67,6 +69,9 @@ import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
+import com.starkdroid.quicknotch.system.FpsProbe
+import com.starkdroid.quicknotch.system.GameDetector
+import com.starkdroid.quicknotch.system.SystemMetrics
 import com.starkdroid.quicknotch.weather.Weather
 import com.starkdroid.quicknotch.weather.WeatherState
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +170,18 @@ internal fun FloatingNotchOverlay(
     // the same rule the calendar page follows.
     val weatherReady = config.widgets.showWeather &&
         (weatherData != null || weatherFetching || weatherState is WeatherState.Loading)
+    // The System page joins the wheel only once there is a reading to draw: a
+    // widget that is switched off (or whose very first probe failed) must never
+    // become a dead stop between the dock and the outlook.
+    val systemState by SystemMetrics.state.collectAsState()
+    val systemReady = config.widgets.showSystem && systemState != null
+    // Gaming: the detector publishes the fullscreen app it found (or null) and
+    // the HUD takes the pill's place while it lasts. FPS comes from a separate
+    // probe because a PresentMon capture takes seconds — it must never delay a
+    // system sample.
+    val game by GameDetector.game.collectAsState()
+    val fps by FpsProbe.fps.collectAsState()
+    val gameHudVisible = game != null && config.widgets.showGameHud
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -230,6 +247,7 @@ internal fun FloatingNotchOverlay(
         if (isExpanded) {
             AudioBattery.poke()
             SystemBattery.poke()
+            SystemMetrics.poke()
         }
     }
 
@@ -274,10 +292,19 @@ internal fun FloatingNotchOverlay(
     // the native sizer follow (a toggled-off calendar must neither draw nor
     // reserve a page).
     val calendarReady = config.widgets.showCalendar && calendarConnected
-    val pages = remember(config.widgets.pinnedAppsEnabled, musicLive, calendarReady, weatherReady) {
+    val pages = remember(
+        config.widgets.pinnedAppsEnabled,
+        musicLive,
+        calendarReady,
+        weatherReady,
+        systemReady
+    ) {
         buildList {
             if (musicLive) add(WidgetPage.Music)
             if (config.widgets.pinnedAppsEnabled) add(WidgetPage.Apps)
+            // System sits between the dock and the outlook: it is a "glance at
+            // the machine" page, not part of the day (weather/calendar) pair.
+            if (systemReady) add(WidgetPage.System)
             if (weatherReady) add(WidgetPage.Weather)
             // Last so the wheel reaches it after the dock, and only when there
             // is a connection behind it -- an empty page would be a dead stop.
@@ -392,8 +419,26 @@ internal fun FloatingNotchOverlay(
         weatherVisible = weatherData != null
     )
 
-    val metrics = remember(config, favorites.size, musicLive, indicatorSlots, calendarReady, weatherReady) {
-        computeNotchMetrics(config, favorites.size, musicLive, indicatorSlots, calendarReady, weatherReady)
+    val metrics = remember(
+        config,
+        favorites.size,
+        musicLive,
+        indicatorSlots,
+        calendarReady,
+        weatherReady,
+        systemReady,
+        gameHudVisible
+    ) {
+        computeNotchMetrics(
+            config,
+            favorites.size,
+            musicLive,
+            indicatorSlots,
+            calendarReady,
+            weatherReady,
+            systemReady,
+            gameHudVisible
+        )
     }
     // Cached per surface choice *and* per accent value: the brushes are built
     // once and the accented style is rebuilt only when the OS accent changes,
@@ -407,16 +452,6 @@ internal fun FloatingNotchOverlay(
     // GPU/CPU-blurred strip drawn inside the window on Windows — falling back
     // to painted glass where it does not. Only the scrim differs between the
     // two, so it rides the same remember key as the surface.
-    val blurNative = windowsBlur != null || macBlur.available
-    val blurActive = config.surface == NotchSurface.TRANSLUCENT && blurNative
-    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
-    // Windows paints its frost INSIDE the window (the capture leaf below), so
-    // the painted body must get out of the way while frost is live; macOS
-    // keeps the painted scrim over the native panel. Same rule, two carriers.
-    val frostActive = blurActive && windowsBlur != null
-    val surface = remember(config.surface, accent, blurActive, blurIntensity) {
-        IslandSurface.styleFor(config.surface, accent, blurActive, blurIntensity)
-    }
 
     // The dock reveal is a layer animation (fade + scale) over the always
     // expanded-size dock. Driving it through [MutableTransitionState] rather
@@ -432,21 +467,43 @@ internal fun FloatingNotchOverlay(
     // fixed (expanded) native window, so the collapsed pill nests into the
     // window's top edge and needs no gutter.
     val islandExpanded = isExpanded || dockState.currentState || dockState.targetState
+
+    // "Transparent in games" applies to the collapsed gaming HUD only: the
+    // expanded dock keeps whatever material the user picked, so opening it over
+    // a game still reads as a panel rather than floating numbers. Deliberately
+    // not a NotchSurface entry — the three user-picked materials keep their
+    // meaning everywhere else.
+    val gameTransparent = gameHudVisible && config.transparentInGame && !islandExpanded
+    val blurNative = windowsBlur != null || macBlur.available
+    // No native blur behind a transparent island: the panel/frost would paint
+    // the body we just removed. Both carriers are switched off, not merely
+    // hidden, so the macOS helper panel stops compositing too.
+    val blurActive = !gameTransparent && config.surface == NotchSurface.TRANSLUCENT && blurNative
+    val blurIntensity = config.blurRadius.coerceIn(BlurRadiusMin, BlurRadiusMax)
+    // Windows paints its frost INSIDE the window (the capture leaf below), so
+    // the painted body must get out of the way while frost is live; macOS
+    // keeps the painted scrim over the native panel. Same rule, two carriers.
+    val frostActive = blurActive && windowsBlur != null
+    val surface = remember(config.surface, accent, blurActive, blurIntensity, gameTransparent) {
+        IslandSurface.styleFor(config.surface, accent, blurActive, blurIntensity, gameTransparent)
+    }
+
     // Content-hugging collapsed pill: the wrapping branches (idle clock, idle
     // dots) report their measured width, and the island shrinks to exactly
     // that — the row already carries its own 2dp side insets, so the pill ends
     // up with ~4px of black on each end and no slider dead air. Fill branches
-    // (live media, ticker) keep the configured width; the native window never
-    // moves either way, so hugging is pure drawn growth like every expansion.
+    // (live media, ticker, gaming HUD) keep the configured width; the native
+    // window never moves either way, so hugging is pure drawn growth like every
+    // expansion.
     var hugWidth by remember { mutableStateOf<Dp?>(null) }
-    val hugVisible = !musicLive && calendarTicker?.summary == null &&
+    val hugVisible = !musicLive && calendarTicker?.summary == null && !gameHudVisible &&
         config.style != NotchStyle.DRAG_HANDLE
     val formulaCollapsed = metrics.islandFor(false)
     val collapsedWidth = hugCollapsedWidth(
         hugVisible = hugVisible,
         hugWidth = hugWidth,
         formula = formulaCollapsed,
-        window = metrics.expanded
+        window = metrics.window
     )
     val targetSize = if (islandExpanded) metrics.islandFor(true)
     else formulaCollapsed.copy(width = collapsedWidth)
@@ -501,8 +558,10 @@ internal fun FloatingNotchOverlay(
     // Outline progress needs a live track, a collapsed pill and its own
     // toggle on. It rides the island's edge, so it coexists with the
     // visualiser (bars inside, ring outside) — the two toggles are
-    // independent.
-    val showOutline = !isExpanded && liveNow != null && config.widgets.showProgressBorder
+    // independent. The gaming HUD replaces the pill's content, so the
+    // playback ring has nothing to belong to while it shows.
+    val showOutline = !isExpanded && liveNow != null && config.widgets.showProgressBorder &&
+        !gameHudVisible
     val outlinePad = if (showOutline) OutlinePad else 0.dp
     // Mirrors notchShape(): capsule rounds every corner, the flush style only
     // the two facing the screen.
@@ -599,6 +658,18 @@ internal fun FloatingNotchOverlay(
                         islandCoordinates = coords
                         publishTouchTarget(coords)
                     }
+                    // Transparent-in-games has no body to read against, so the
+                    // island carries its own soft drop shadow: drawn outside
+                    // the clip (clip = false) and before it, it lifts the
+                    // floating readout off busy scenery. Every other surface
+                    // already delimits itself and skips this.
+                    .then(
+                        if (gameTransparent) {
+                            Modifier.shadow(GameHudShadowElevation, shape, clip = false)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .clip(shape)
                     // Windows frost replaces the painted body: the captured
                     // backdrop is drawn by the leaf below and the scrim rides
@@ -609,7 +680,13 @@ internal fun FloatingNotchOverlay(
                         if (frostActive) {
                             Modifier
                         } else {
-                            Modifier.islandSurface(config.surface, accent, blurActive, blurIntensity)
+                            Modifier.islandSurface(
+                                config.surface,
+                                accent,
+                                blurActive,
+                                blurIntensity,
+                                gameTransparent
+                            )
                         }
                     )
                     .border(surface.borderWidth.dp, surface.border, shape),
@@ -657,49 +734,66 @@ internal fun FloatingNotchOverlay(
                     enter = quickEnter,
                     exit = quickExit
                 ) {
-                    val collapsedScope = this
-                    QuickView(
-                        style = config.style,
-                        surface = config.surface,
-                        media = if (musicLive) liveSession else null,
-                        volumePercent = volumePercent,
-                        volumeMuted = volumeMuted,
-                        battery = battery,
-                        deviceBattery = deviceBattery,
-                        notificationCount =
-                            if (config.widgets.showCollapsedNotifications) notificationCount else null,
-                        showVolume = config.widgets.showCollapsedVolume,
-                        showBattery = config.widgets.showCollapsedBattery,
-                        showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
-                        // Calendar stays out of the morph: it is a collapsed-only
-                        // element, and the ticker borrows the media branch's slot
-                        // rather than a shared key, so nothing about the now-playing
-                        // morph changes when a meeting starts.
-                        showCalendar = config.widgets.showCalendar,
-                        calendarEvent = calendarTicker?.summary,
-                        calendarEventCount = calendarEventCount,
-                        showWeather = config.widgets.showWeather,
-                        weather = weatherData,
-                        fahrenheit = config.widgets.weatherFahrenheit,
-                        showWaveform = config.widgets.showCollapsedWaveform,
-                        waveformColor = waveformColor,
-                        visualiserStyle = config.widgets.visualiserStyle,
-                        waveformHidesTitle =
-                            config.widgets.showCollapsedWaveform && config.widgets.waveformHidesTitle,
-                        discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, collapsedScope),
-                        titleModifier = sharedScope.nowPlayingSharedElement(NowPlayingTitleKey, collapsedScope),
-                        volumeRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingVolumeKey, collapsedScope),
-                        batteryRingModifier = sharedScope.nowPlayingSharedElement(NowPlayingBatteryKey, collapsedScope),
-                        clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
-                            ClockPrefs(
-                                showDate = config.clockDate,
-                                showTime = config.clockTime,
-                                clock24Hour = config.clock24Hour,
-                                dateFormat = config.clockDateFormat
-                            )
-                        },
-                        onWrapWidthChange = { hugWidth = it }
-                    )
+                    val activeGame = game
+                    if (gameHudVisible && activeGame != null) {
+                        // The HUD takes the pill's whole slot: same island, same
+                        // collapse behaviour, one line of live numbers instead
+                        // of clock/media. Hovering still expands the dock, so it
+                        // installs no pointer target of its own.
+                        GameHud(
+                            game = activeGame,
+                            system = systemState,
+                            fps = fps,
+                            transparent = gameTransparent,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        val collapsedScope = this
+                        QuickView(
+                            style = config.style,
+                            surface = config.surface,
+                            media = if (musicLive) liveSession else null,
+                            volumePercent = volumePercent,
+                            volumeMuted = volumeMuted,
+                            battery = battery,
+                            deviceBattery = deviceBattery,
+                            notificationCount =
+                                if (config.widgets.showCollapsedNotifications) notificationCount else null,
+                            showVolume = config.widgets.showCollapsedVolume,
+                            showBattery = config.widgets.showCollapsedBattery,
+                            showDeviceBattery = config.widgets.showCollapsedDeviceBattery,
+                            // Calendar stays out of the morph: it is a collapsed-only
+                            // element, and the ticker borrows the media branch's slot
+                            // rather than a shared key, so nothing about the now-playing
+                            // morph changes when a meeting starts.
+                            showCalendar = config.widgets.showCalendar,
+                            calendarEvent = calendarTicker?.summary,
+                            calendarEventCount = calendarEventCount,
+                            showWeather = config.widgets.showWeather,
+                            weather = weatherData,
+                            fahrenheit = config.widgets.weatherFahrenheit,
+                            showWaveform = config.widgets.showCollapsedWaveform,
+                            waveformColor = waveformColor,
+                            visualiserStyle = config.widgets.visualiserStyle,
+                            waveformHidesTitle =
+                                config.widgets.showCollapsedWaveform && config.widgets.waveformHidesTitle,
+                            discModifier = sharedScope.nowPlayingSharedElement(NowPlayingDiscKey, collapsedScope),
+                            titleModifier = sharedScope.nowPlayingSharedElement(NowPlayingTitleKey, collapsedScope),
+                            volumeRingModifier =
+                                sharedScope.nowPlayingSharedElement(NowPlayingVolumeKey, collapsedScope),
+                            batteryRingModifier =
+                                sharedScope.nowPlayingSharedElement(NowPlayingBatteryKey, collapsedScope),
+                            clock = remember(config.clockDate, config.clockTime, config.clock24Hour, config.clockDateFormat) {
+                                ClockPrefs(
+                                    showDate = config.clockDate,
+                                    showTime = config.clockTime,
+                                    clock24Hour = config.clock24Hour,
+                                    dateFormat = config.clockDateFormat
+                                )
+                            },
+                            onWrapWidthChange = { hugWidth = it }
+                        )
+                    }
                 }
             }
             // Playback progress straddles the island's own outline — half
@@ -802,7 +896,11 @@ internal fun FloatingNotchOverlay(
                         weatherState = weatherState,
                         weatherFetching = weatherFetching,
                         fahrenheit = config.widgets.weatherFahrenheit,
+                        system = systemState,
                         onRefreshWeather = { Weather.refresh() },
+                        onOpenSystemMonitor = {
+                            scope.launch { SystemMonitor.open() }
+                        },
                         onLaunch = { app ->
                             scope.launch {
                                 AppLauncher.launch(app)
@@ -918,3 +1016,12 @@ private const val SystemAccentPollMs = 3000L
  * into. One stroke width each side: the ring straddles the edge exactly.
  */
 private val OutlinePad = 2.dp
+
+/**
+ * Drop shadow carried by the island in transparent-in-games mode. Compose draws
+ * it as a blurred copy of the island shape outside the clip, which is what makes
+ * a body-less HUD read as a layer over the game instead of numbers smeared on
+ * the scenery. Sized to the island's slim cross-section: enough to separate,
+ * small enough not to halo.
+ */
+private val GameHudShadowElevation = 12.dp

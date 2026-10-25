@@ -123,6 +123,13 @@ data class WidgetsConfig(
      */
     val showWeather: Boolean = true,
     /**
+     * System monitor as an expanded wheel page: CPU, GPU (when the OS reports
+     * one), memory, boot-volume fill and network throughput, each as the same
+     * ring the pill uses for volume/battery, with the live value beneath it.
+     * The poller only runs while this is on, so switching it off costs nothing.
+     */
+    val showSystem: Boolean = true,
+    /**
      * Manual weather place picked from Open-Meteo geocoding (label +
      * coordinates). Null means the automatic IP-geolocated position; a manual
      * pick replaces it for the pill, the page, and the poll. Old configs load
@@ -155,7 +162,14 @@ data class WidgetsConfig(
      * get the whole title frame (18dp instead of a 7dp band). Meaningless with
      * the waveform off, so the settings row appears only inside that section.
      */
-    val waveformHidesTitle: Boolean = false
+    val waveformHidesTitle: Boolean = false,
+    /**
+     * Gaming performance HUD: while a fullscreen game is detected, the
+     * collapsed quickview is replaced by live FPS (Windows, via PresentMon),
+     * CPU, GPU, latency and download rate. Detection only runs while this is
+     * on, so a user who never games pays no probe at all.
+     */
+    val showGameHud: Boolean = true
 )
 
 /**
@@ -199,6 +213,14 @@ data class NotchConfig(
      */
     val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
+    /**
+     * Gaming-only transparency: while the gaming HUD is showing, the island
+     * drops its body entirely and keeps a thin dark rim plus a soft shadow, so
+     * the readout stays legible over whatever the game is drawing. Deliberately
+     * separate from [surface]: Solid / Blurred / System accent are untouched,
+     * and this only ever applies while a game is detected.
+     */
+    val transparentInGame: Boolean = false,
     /**
      * Backdrop blur intensity for the Blurred surface (macOS compositor blur
      * radius; on Windows it scales the acrylic tint instead, since DWM has no

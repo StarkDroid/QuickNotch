@@ -50,6 +50,12 @@ internal val LevelRingTrack = Color.White.copy(alpha = 0.16f)
 internal val BatteryLowTint = Color(0xFFF59E0B)
 internal const val BatteryLowThreshold = 20
 
+// Load indicators (CPU/GPU/memory/storage) run the same ring but warm up as
+// they approach saturation, where a battery warns as it drains. One threshold
+// for every load metric: above ~85% the machine is visibly working.
+internal val LoadHighTint = Color(0xFFF97316)
+internal const val LoadHighThreshold = 85
+
 // The ring sweeps 288° of the circle — 360° minus a 72° gap (20% of the
 // circle) held at the bottom, so the indicator never reads as a full, closed
 // ring. The level still maps the whole 0..100: at 100% the sweep closes the
@@ -84,6 +90,14 @@ internal fun LevelRing(
     lowTint: Color? = null,
     lowThreshold: Int = BatteryLowThreshold,
     /**
+     * High-level alert tint, the mirror of [lowTint]: a load metric (CPU, GPU,
+     * memory, storage) turns warm once it crosses [highThreshold]. Null keeps
+     * the ring's normal colour at every level, so battery/volume rings are
+     * untouched. A low-level warning wins over a high one.
+     */
+    highTint: Color? = null,
+    highThreshold: Int = LoadHighThreshold,
+    /**
      * Optional count badge on the ring's top-right corner — how many devices the
      * reading covers, when that is more than one (e.g. several Bluetooth devices
      * connected while the ring shows one of their levels). Null or ≤ 1 draws
@@ -92,8 +106,13 @@ internal fun LevelRing(
     badgeCount: Int? = null
 ) {
     val clamped = level.coerceIn(0, 100)
-    val levelColor = if (lowTint != null && clamped <= lowThreshold) lowTint else tint
-    val ringStroke = if (lowTint != null && clamped <= lowThreshold) lowTint else ringColor
+    val alertTint = when {
+        lowTint != null && clamped <= lowThreshold -> lowTint
+        highTint != null && clamped >= highThreshold -> highTint
+        else -> null
+    }
+    val levelColor = alertTint ?: tint
+    val ringStroke = alertTint ?: ringColor
     val fraction by animateFloatAsState(
         targetValue = clamped / 100f,
         animationSpec = tween(RingSweepAnimationMs),
