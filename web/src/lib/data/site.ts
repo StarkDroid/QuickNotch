@@ -29,7 +29,7 @@ export const site = {
 	version: '1.0.0',
 	tagline: 'One tiny notch. Apps, system, weather and more.',
 	description:
-		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. Style it as an AMOLED notch, a floating pill or a slim drag handle.',
+		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. Start a fullscreen game and the notch turns into a live performance HUD. Style it as an AMOLED notch, a floating pill or a slim drag handle.',
 	shortDescription:
 		'A floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
@@ -52,6 +52,10 @@ export const site = {
 		'calendar widget',
 		'live activities',
 		'now playing widget',
+		'gaming HUD',
+		'FPS counter',
+		'in-game overlay',
+		'performance monitor',
 		'notch themes',
 		'productivity utility'
 	]
@@ -86,6 +90,7 @@ export const buyCta = `Buy now — ${pricing.label}` as const;
 
 export const nav = [
 	{ label: 'Widgets', href: '#widgets' },
+	{ label: 'Gaming', href: '#gaming' },
 	{ label: 'Themes', href: '#themes' },
 	{ label: 'Launch', href: '#launch' },
 	{ label: 'Pricing', href: '#pricing' },
@@ -143,6 +148,53 @@ export const widgets: { id: WidgetId; label: string; blurb: string }[] = [
 	{ id: 'calendar', label: 'Calendar', blurb: 'The day ahead from Google Calendar, no tab required.' },
 	{ id: 'music', label: 'Live activities', blurb: 'Now playing, with the important buttons.' }
 ];
+
+/**
+ * The gaming quickview.
+ *
+ * Not a wheel page and not a widget you switch on: while a fullscreen game owns
+ * the screen, the collapsed pill itself is replaced by this readout. It is
+ * modelled here rather than in `widgets` so the widget count, the pager and the
+ * structured data keep describing the actual page stack.
+ */
+export const gaming = {
+	eyebrow: 'Gaming HUD',
+	title: 'Your pill becomes a performance readout.',
+	body: 'Start a fullscreen game and the collapsed notch trades its clock or album art for live numbers: frames per second, CPU and GPU load, latency and download rate. Nothing to launch, nothing to configure — and nothing covering the game, because the notch already lives on the top edge of the screen. Hover still opens the dock, exactly as it always does.',
+	cells: [
+		{ label: 'FPS', value: '144' },
+		{ label: 'CPU', value: '38%' },
+		{ label: 'GPU', value: '91%' },
+		{ label: 'PING', value: '12 ms' },
+		{ label: 'NET', value: '1.4M/s' }
+	],
+	modes: [
+		{
+			id: 'body',
+			label: 'Solid body',
+			blurb: 'The HUD sits on whatever surface you already picked — ink or frosted glass.'
+		},
+		{
+			id: 'clear',
+			label: 'Transparent in games',
+			blurb: 'One toggle drops the body and keeps a thin rim plus a soft shadow, so the numbers read over busy scenery.'
+		}
+	],
+	notes: [
+		{
+			title: 'Detected, not configured',
+			body: 'A fullscreen window is the trigger — there is no game list to keep up to date. Close the game and the pill is back.'
+		},
+		{
+			title: 'FPS on Windows, load everywhere',
+			body: "Frame rate comes from Intel PresentMon on Windows. macOS shows load and latency instead, because no supported API exposes another app's frame rate."
+		},
+		{
+			title: 'A readout, never a target',
+			body: 'The strip has no buttons: bringing the cursor up expands the dock as usual, so nothing is accidentally clicked mid-match.'
+		}
+	]
+} as const;
 
 export type ThemeId = 'amoled' | 'pill' | 'handle';
 
@@ -233,6 +285,16 @@ export const faq = [
 		question: 'Does QuickNotch start automatically?',
 		answer:
 			'If you want it to. Toggle "start at login" in Settings and QuickNotch will be waiting on your desktop edge after every restart.'
+	},
+	{
+		question: 'Does QuickNotch show FPS while I game?',
+		answer:
+			'Yes, on Windows. When a fullscreen game takes the screen the collapsed notch turns into a gaming HUD with frame rate, CPU and GPU load, latency and download rate. The frame rate comes from Intel PresentMon. macOS shows load and latency only, because macOS exposes no supported API for another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
+	},
+	{
+		question: 'Does the gaming HUD get in the way of the game?',
+		answer:
+			'No. It replaces the collapsed pill at the very top of the screen, which is already outside the game\u2019s content, and it has no buttons — moving the cursor up expands the dock exactly as before. If you want even less on screen, "transparent in games" drops the notch body and leaves just the numbers, a thin rim and a soft shadow.'
 	},
 	{
 		question: 'Is QuickNotch more than an app launcher?',

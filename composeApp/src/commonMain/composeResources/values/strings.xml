@@ -15,6 +15,7 @@
     <string name="onboarding_feature_media">See what is playing and control it</string>
     <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
     <string name="onboarding_feature_quiet">Stays out of the way until you hover</string>
+    <string name="onboarding_feature_gaming">Gaming HUD — FPS, CPU, GPU, ping and download, live while a fullscreen game runs.</string>
     <string name="onboarding_back">Back</string>
     <string name="onboarding_skip">Skip for now</string>
     <string name="onboarding_continue">Continue</string>
@@ -154,6 +155,17 @@
     <string name="system_disabled">Switched off — the page stays hidden and nothing is polled.</string>
     <string name="system_preview">CPU %1$s · Memory %2$s · %3$s down</string>
 
+    <!-- Gaming quickview: the performance HUD that replaces the pill while a
+         fullscreen game is on screen. -->
+    <string name="game_hud_fps">FPS</string>
+    <string name="game_hud_cpu">CPU</string>
+    <string name="game_hud_gpu">GPU</string>
+    <string name="game_hud_ping">PING</string>
+    <string name="game_hud_net">NET</string>
+    <string name="game_hud_unknown">—</string>
+    <string name="game_hud_ping_value">%1$d ms</string>
+    <string name="game_hud_summary">Gaming performance in %1$s: %2$s</string>
+
     <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>
     <string name="clock_show_date">Show Date</string>
@@ -204,6 +216,10 @@ Add apps from the list on the right.</string>
     <string name="autostart_title_windows">Start on Windows Boot</string>
     <string name="always_on_top_title">Always on Top</string>
     <string name="collapse_on_launch_title">Collapse on Launch</string>
+    <string name="game_hud_toggle_title">Gaming Performance HUD</string>
+    <string name="game_hud_toggle_hint">Swap the collapsed pill for live FPS, CPU, GPU, latency and download rate while a fullscreen game is on screen. Hover still opens the dock.</string>
+    <string name="game_transparent_title">Transparent in Games</string>
+    <string name="game_transparent_hint">While the gaming HUD is showing, drop the notch body and outline it with a thin dark rim and soft shadow, so it stays legible over game scenery. Every other surface is untouched.</string>
 
     <!-- About dialog -->
     <string name="about_header">About QuickNotch</string>

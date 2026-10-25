@@ -88,6 +88,23 @@ internal object DockLayout {
     val LiveCollapsedWidth: Dp = 236.dp
 
     /**
+     * Gaming HUD length while a fullscreen game is detected: five readouts
+     * (frames, CPU, GPU, latency, download) need more room than the pill, and
+     * the strip is a fixed-width fill branch like the live media pill. The
+     * *window* always reserves this width (see `NotchMetrics.window`) so
+     * starting a game never resizes the native window; only the drawn island
+     * grows.
+     */
+    val GameHudWidth: Dp = 320.dp
+
+    /**
+     * Minimum collapsed depth while the HUD shows: value over caption needs a
+     * touch more than the 30dp pill, and a user-shrunk quickview must not clip
+     * the second line.
+     */
+    val GameHudHeight: Dp = 34.dp
+
+    /**
      * Extra quickview length per indicator shown in the idle pill (22dp ring or
      * bell + 6dp spacing). The idle pill widens by this per indicator so
      * date/time + device battery + laptop battery + notifications all coexist
@@ -112,6 +129,13 @@ data class NotchMetrics(
     val islandCollapsed: DpSize,
     /** Box the dock fills (the island itself for a top-centred notch). */
     val dockArea: DpSize,
+    /**
+     * Native window footprint. Always at least as wide as the widest thing the
+     * island can ever draw — the expanded dock *and* the gaming HUD — so
+     * starting a game widens the drawn island without resizing the window
+     * (a per-open/close resize is what flashes on macOS; see main.kt).
+     */
+    val window: DpSize = dockArea,
     /**
      * How far the window is floated off the anchored screen edge (points). The
      * gap is applied to the window *position*, not the footprint, so the island
@@ -143,7 +167,8 @@ fun computeNotchMetrics(
     indicatorSlots: Int = 0,
     calendarActive: Boolean = false,
     weatherActive: Boolean = false,
-    systemActive: Boolean = false
+    systemActive: Boolean = false,
+    gameActive: Boolean = false
 ): NotchMetrics {
     val calendarActiveWidth = if (calendarActive) DockLayout.CalendarPageWidth else 0.dp
     val base = config.baseIconSizeDp.dp
@@ -162,7 +187,8 @@ fun computeNotchMetrics(
     val alongCollapsed = maxOf(
         config.quickViewWidthDp.dp + DockLayout.CollapsedMargin +
             DockLayout.QuickViewIndicatorSlot * indicatorSlots.coerceAtLeast(0),
-        if (musicActive) DockLayout.LiveCollapsedWidth else 0.dp
+        if (musicActive) DockLayout.LiveCollapsedWidth else 0.dp,
+        if (gameActive) DockLayout.GameHudWidth else 0.dp
     )
 
     val islandDepth = config.expandedNotchHeightDp.dp + DockLayout.ExpandedDepthMargin
@@ -173,10 +199,18 @@ fun computeNotchMetrics(
         if (config.style == NotchStyle.DRAG_HANDLE) DockLayout.DragHandleHeightDp
         else config.quickViewHeightDp
     val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
+    // The HUD stacks a value over a caption, so it keeps a floor of its own
+    // even when the quickview has been shrunk to a slim pill.
+    val collapsedDepth =
+        if (gameActive) maxOf(islandCollapsedDepth, DockLayout.GameHudHeight)
+        else islandCollapsedDepth
 
     val islandExpanded = DpSize(alongExpanded, islandDepth)
-    val islandCollapsed = DpSize(alongCollapsed, islandCollapsedDepth)
+    val islandCollapsed = DpSize(alongCollapsed, collapsedDepth)
     val dockArea = DpSize(alongExpanded, islandDepth)
+    // The window reserves the widest footprint the island can take, so a game
+    // starting (HUD) or a track starting (live pill) is drawn growth only.
+    val window = DpSize(maxOf(alongExpanded, DockLayout.GameHudWidth), islandDepth)
 
     return NotchMetrics(
         collapsed = islandCollapsed,
@@ -184,6 +218,7 @@ fun computeNotchMetrics(
         island = islandExpanded,
         islandCollapsed = islandCollapsed,
         dockArea = dockArea,
+        window = window,
         edgeGapDp = config.style.edgeGapDp
     )
 }

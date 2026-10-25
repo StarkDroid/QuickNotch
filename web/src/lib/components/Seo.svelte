@@ -56,6 +56,8 @@
 			'Five glanceable widgets with vertical-scroll pagination',
 			'Quick-launch apps, live system rings, weather, calendar and now-playing controls',
 			'System page: CPU, GPU, memory, storage, download and upload rings',
+			'Gaming HUD: FPS, CPU, GPU, latency and download rate while a fullscreen game runs',
+			'Transparent in games: the notch body drops away, leaving a thin rim and soft shadow',
 			'Three notch styles: AMOLED notch, floating pill or drag handle',
 			'Solid ink or frosted glass, with the desktop blurring through the island',
 			'Pin any installed app or browse for one on disk',

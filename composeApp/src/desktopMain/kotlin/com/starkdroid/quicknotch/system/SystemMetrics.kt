@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
@@ -38,7 +40,14 @@ data class SystemSnapshot(
     val ramTotalBytes: Long? = null,
     val storagePercent: Int? = null,
     val downBytesPerSec: Long = 0L,
-    val upBytesPerSec: Long = 0L
+    val upBytesPerSec: Long = 0L,
+    /**
+     * Round-trip time of one TCP handshake to a public resolver, in ms. Used by
+     * the gaming HUD ("how is my connection to the match server") and kept off
+     * the System page, which is about load rather than reachability. Null until
+     * the first probe answers, and on a machine with no route out.
+     */
+    val pingMs: Int? = null
 ) {
     /** Memory in use as 0-100, or null until both sides of the ratio are known. */
     val ramPercent: Int?
@@ -79,7 +88,8 @@ internal data class SystemSample(
     val ramTotalBytes: Long? = null,
     val storagePercent: Int? = null,
     val downBytesPerSec: Long? = null,
-    val upBytesPerSec: Long? = null
+    val upBytesPerSec: Long? = null,
+    val pingMs: Int? = null
 )
 
 /**
@@ -98,6 +108,11 @@ object SystemMetrics {
     /** macOS ticks fast enough to feel live; a Windows PDH sample itself takes ~1 s. */
     private val pollMs: Long = if (HostPlatform.isWindows) 4_000L else 2_000L
     private const val ProbeTimeoutMs = 12_000L
+
+    /** Latency is probed every other tick: 4 s on macOS, 8 s on Windows. */
+    private const val PingEveryTicks = 2L
+
+    private var sampleTick = 0L
 
     private val _state = MutableStateFlow<SystemSnapshot?>(null)
     val state: StateFlow<SystemSnapshot?> = _state.asStateFlow()
@@ -174,8 +189,14 @@ object SystemMetrics {
 
     private fun sample() {
         if (!enabled) return
+        // Latency is one TCP handshake, not a per-tick cost worth paying: a
+        // round trip does not change every two seconds, and the HUD only needs
+        // to catch a connection going bad. Every other tick keeps it fresh
+        // enough (4 s on macOS, 8 s on Windows) while halving the sockets.
+        sampleTick++
+        val ping = if (sampleTick % PingEveryTicks == 1L) probePingMs() else null
         val fresh = if (HostPlatform.isWindows) WindowsSystemProbe.sample(windowsScript) else macSample()
-        if (fresh != null) emit(fresh)
+        if (fresh != null) emit(fresh.copy(pingMs = ping))
     }
 
     /** macOS: one shell round-trip for CPU, memory, network, disk and GPU. */
@@ -234,7 +255,8 @@ object SystemMetrics {
             ramTotalBytes = sample.ramTotalBytes ?: previous?.ramTotalBytes,
             storagePercent = sample.storagePercent ?: previous?.storagePercent,
             downBytesPerSec = sample.downBytesPerSec ?: previous?.downBytesPerSec ?: 0L,
-            upBytesPerSec = sample.upBytesPerSec ?: previous?.upBytesPerSec ?: 0L
+            upBytesPerSec = sample.upBytesPerSec ?: previous?.upBytesPerSec ?: 0L,
+            pingMs = sample.pingMs ?: previous?.pingMs
         )
         // Nothing at all means the probe answered with an empty payload (every
         // counter failed): publishing it would put a page of dashes on the wheel.
@@ -262,3 +284,31 @@ object SystemMetrics {
             process.inputStream.bufferedReader().readText()
         }.getOrNull()
 }
+
+/** Public resolver used for the latency probe (Cloudflare, TCP 443). */
+private const val PingHost = "1.1.1.1"
+private const val PingPort = 443
+private const val PingTimeoutMs = 1_000
+
+/**
+ * One TCP connect to a public resolver and back, in whole milliseconds.
+ * Chosen over ICMP because a raw socket needs root/Administrator while a TCP
+ * handshake is an ordinary outbound connection — and because a game's own
+ * traffic is TCP/UDP to a server, so a completed handshake measures the thing
+ * the player actually cares about (route + queueing) rather than a host that
+ * may deprioritise echo requests.
+ *
+ * File-level rather than a member of [SystemMetrics]: the poller already sits
+ * on detekt's function-count ceiling, and this shares nothing with it but the
+ * constants above.
+ *
+ * Fail-soft: no route, a firewall, a captive portal or a 1 s timeout all return
+ * null and the previous reading stands.
+ */
+private fun probePingMs(): Int? = runCatching {
+    val started = System.nanoTime()
+    Socket().use { socket ->
+        socket.connect(InetSocketAddress(PingHost, PingPort), PingTimeoutMs)
+    }
+    ((System.nanoTime() - started) / 1_000_000L).toInt().coerceAtLeast(0)
+}.getOrNull()

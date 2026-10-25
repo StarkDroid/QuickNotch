@@ -205,11 +205,40 @@ val syncMacArtworkDriver by tasks.registering(Copy::class) {
     into("src/desktopMain/resources/macos")
 }
 
+// macOS fullscreen-game detector: `gamewatch_bridge.m` exposes one C entry
+// point (`qn_fullscreen_game`) that answers "is a non-shell app covering the
+// main display right now, and which one?" from CGWindowList — the only signal
+// available without Screen Recording or Accessibility permission. Called
+// in-process through JNA (see `MacGameWatch`), so polling costs a few
+// microseconds and spawns nothing. Only built on macOS hosts.
+val compileMacGameWatchBridge by tasks.registering(Exec::class) {
+    onlyIf {
+        val os = System.getProperty("os.name").lowercase()
+        os.contains("mac") || os.contentEquals("darwin")
+    }
+    doFirst {
+        project.file("src/desktopMain/resources/macos").mkdirs()
+    }
+    workingDir = project.file("native/macos")
+    commandLine(
+        "cc",
+        "-O2",
+        "-mmacosx-version-min=12.0",
+        "-fobjc-arc",
+        "-dynamiclib",
+        "-framework", "Foundation",
+        "-framework", "AppKit",
+        "-framework", "CoreGraphics",
+        "gamewatch_bridge.m",
+        "-o", project.file("src/desktopMain/resources/macos/gamewatch-bridge.dylib")
+    )
+}
+
 tasks.named("desktopJar") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, syncMacArtworkDriver)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, compileMacGameWatchBridge, syncMacArtworkDriver)
 }
 tasks.named("desktopProcessResources") {
-    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, syncMacArtworkDriver)
+    dependsOn(syncWindowsBridge, compileMacNowPlayingBridge, compileMacBtWatchBridge, compileMacPassthroughBridge, compileMacArtworkBridge, compileMacGameWatchBridge, syncMacArtworkDriver)
 }
 
 // AppKit writes a session saved-state file at launch and prints one

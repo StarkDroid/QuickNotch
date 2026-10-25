@@ -53,6 +53,8 @@ import com.starkdroid.quicknotch.weather.WeatherState
 import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
+import com.starkdroid.quicknotch.system.FpsProbe
+import com.starkdroid.quicknotch.system.GameDetector
 import com.starkdroid.quicknotch.system.SystemMetrics
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
 import com.starkdroid.quicknotch.ui.FloatingNotchOverlay
@@ -146,6 +148,14 @@ fun main(args: Array<String>) {
         val config by repository.config.collectAsState()
         val favorites by repository.favorites.collectAsState()
 
+        // One gaming signal for the whole app: the overlay swaps in the HUD,
+        // the window sizer reserves its width, and the system poller runs while
+        // it is up. `gamingActive` (not the raw session) is the gate, so a user
+        // who switches the HUD off pays nothing even though the detector still
+        // knows a game is running.
+        val gameSession by GameDetector.game.collectAsState()
+        val gamingActive = gameSession != null && config.widgets.showGameHud
+
         // One system-wide media feed for the whole app: the tray, the overlay
         // and the settings window all observe the same session.
         val media = remember { MediaControllerFactory.create() }
@@ -155,6 +165,11 @@ fun main(args: Array<String>) {
             AudioBattery.start()
             SystemBattery.start()
             SystemMetrics.start()
+            // The gaming detector is started once and gated by its toggle: on
+            // macOS it is an in-process CoreGraphics call, on Windows one
+            // long-lived PowerShell watcher (see GameDetector).
+            GameDetector.start()
+            GameDetector.logAvailability()
             NotificationCount.start()
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
@@ -169,6 +184,7 @@ fun main(args: Array<String>) {
                 AudioBattery.stop()
                 SystemBattery.stop()
                 SystemMetrics.stop()
+                GameDetector.stop()
                 NotificationCount.stop()
                 Weather.stop()
             }
@@ -204,9 +220,25 @@ fun main(args: Array<String>) {
 
         // The system monitor only polls while its widget is switched on: a user
         // who turns the page off pays no process spawns at all, rather than a
-        // poller idling in the background forever.
-        LaunchedEffect(config.widgets.showSystem) {
-            SystemMetrics.setEnabled(config.widgets.showSystem)
+        // poller idling in the background forever. The gaming HUD is the one
+        // exception — it needs CPU/GPU/latency, so a game switches the poller on
+        // even when the System page itself is off (the page stays off the wheel;
+        // only the readout is fed).
+        LaunchedEffect(config.widgets.showSystem, gamingActive) {
+            SystemMetrics.setEnabled(config.widgets.showSystem || gamingActive)
+        }
+
+        // Detection only runs while something consumes it: the HUD, or the
+        // transparent-in-games repaint. Switched off means no probe at all.
+        LaunchedEffect(config.widgets.showGameHud, config.transparentInGame) {
+            GameDetector.setEnabled(config.widgets.showGameHud || config.transparentInGame)
+        }
+
+        // FPS follows the detected game. A PresentMon capture takes ~2 s, so it
+        // lives in its own coroutine and never delays a system sample; the
+        // effect's cancellation is what stops the capture when the game ends.
+        LaunchedEffect(gameSession?.pid, gamingActive) {
+            if (gamingActive) FpsProbe.follow(gameSession)
         }
 
         // Dock presence is a function of the Settings window, never of the
@@ -382,6 +414,11 @@ private fun NotchOverlayWindow(
     // exists once there is a reading behind it.
     val systemState by SystemMetrics.state.collectAsState()
     val systemReady = config.widgets.showSystem && systemState != null
+    // The gaming HUD claims the same width the overlay draws it at. Collected
+    // here too because the native window must already be wide enough the
+    // instant a game starts — resizing the window then would flash on macOS.
+    val game by GameDetector.game.collectAsState()
+    val gameHudActive = game != null && config.widgets.showGameHud
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
         weatherVisible = weatherData != null
@@ -393,7 +430,8 @@ private fun NotchOverlayWindow(
         indicatorSlots,
         calendarConnected,
         weatherReady,
-        systemReady
+        systemReady,
+        gameHudActive
     ) {
         computeNotchMetrics(
             config,
@@ -402,13 +440,16 @@ private fun NotchOverlayWindow(
             indicatorSlots,
             calendarConnected,
             weatherReady,
-            systemReady
+            systemReady,
+            gameHudActive
         )
     }
     // The native window keeps the expanded footprint at all times (see class
     // doc): opening/collapsing never resizes the transparent window, which is
     // what would flash on macOS. The visible island animates inside it instead.
-    val targetSize = metrics.expanded
+    // `window` (not `expanded`) reserves the widest thing the island can draw,
+    // so the gaming HUD needs no resize either.
+    val targetSize = metrics.window
 
     val overlayState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.TopCenter),

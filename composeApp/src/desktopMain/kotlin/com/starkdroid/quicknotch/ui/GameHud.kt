@@ -1,0 +1,186 @@
+package com.starkdroid.quicknotch.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.generated.resources.Res
+import com.starkdroid.quicknotch.generated.resources.game_hud_cpu
+import com.starkdroid.quicknotch.generated.resources.game_hud_fps
+import com.starkdroid.quicknotch.generated.resources.game_hud_gpu
+import com.starkdroid.quicknotch.generated.resources.game_hud_net
+import com.starkdroid.quicknotch.generated.resources.game_hud_ping
+import com.starkdroid.quicknotch.generated.resources.game_hud_ping_value
+import com.starkdroid.quicknotch.generated.resources.game_hud_summary
+import com.starkdroid.quicknotch.generated.resources.game_hud_unknown
+import com.starkdroid.quicknotch.system.GameSession
+import com.starkdroid.quicknotch.system.SystemSnapshot
+import org.jetbrains.compose.resources.stringResource
+
+/** One readout: a big value over a small caps caption. */
+private data class HudCell(
+    val label: String,
+    val value: String,
+    /** False when the OS could not answer; drawn dim instead of inventing a number. */
+    val known: Boolean,
+    /** Load metrics tint at the same threshold the System page's rings use. */
+    val alert: Boolean = false
+)
+
+/** Load metrics turn amber at this level, matching `LevelRing`'s high threshold. */
+private const val HudAlertPercent = 85
+
+private val HudSidePadding = 14.dp
+private val HudDividerHeight = 16.dp
+
+/**
+ * The gaming quickview: a live performance strip that stands in for the pill
+ * while a fullscreen game owns the screen.
+ *
+ * Deliberately a *readout*, not a control surface — hovering still expands the
+ * dock, so nothing here needs to be clickable, and the whole strip stays one
+ * unbroken line of numbers. Cells are ordered by how often a player glances at
+ * them: frames, then the two loads, then the network.
+ *
+ * Missing readings drop their cell rather than showing a dash that never
+ * resolves: FPS is absent on macOS (no supported API) and on Windows installs
+ * without PresentMon, GPU is absent where the OS exposes no engine counter.
+ * That is the same rule the System page follows, and it keeps every number on
+ * screen true.
+ *
+ * [transparent] is the "transparent in games" mode: the island body is gone, so
+ * each glyph carries a soft black shadow to stay legible over game scenery —
+ * exactly the same idea as the rim the surface draws around the island.
+ */
+@Composable
+internal fun GameHud(
+    game: GameSession,
+    system: SystemSnapshot?,
+    fps: Int?,
+    transparent: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val unknown = stringResource(Res.string.game_hud_unknown)
+    val fpsLabel = stringResource(Res.string.game_hud_fps)
+    val cpuLabel = stringResource(Res.string.game_hud_cpu)
+    val gpuLabel = stringResource(Res.string.game_hud_gpu)
+    val pingLabel = stringResource(Res.string.game_hud_ping)
+    val netLabel = stringResource(Res.string.game_hud_net)
+    val pingText = system?.pingMs?.let { stringResource(Res.string.game_hud_ping_value, it) }
+
+    val cells = buildList {
+        if (fps != null) add(HudCell(fpsLabel, fps.toString(), known = true))
+        system?.cpuPercent?.let { cpu ->
+            add(HudCell(cpuLabel, "$cpu%", known = true, alert = cpu >= HudAlertPercent))
+        }
+        val gpu = system?.gpuPercent
+        if (system?.gpuAvailable == true && gpu != null) {
+            add(HudCell(gpuLabel, "$gpu%", known = true, alert = gpu >= HudAlertPercent))
+        }
+        add(HudCell(pingLabel, pingText ?: unknown, known = pingText != null))
+        add(
+            HudCell(
+                netLabel,
+                system?.let { systemRate(it.downBytesPerSec) } ?: unknown,
+                known = system != null
+            )
+        )
+    }
+    val summary = stringResource(
+        Res.string.game_hud_summary,
+        game.name,
+        cells.joinToString(", ") { "${it.label} ${it.value}" }
+    )
+    Row(
+        modifier = modifier
+            .fillMaxSize()
+            .semantics(mergeDescendants = true) { contentDescription = summary }
+            .padding(horizontal = HudSidePadding),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        cells.forEachIndexed { index, cell ->
+            if (index > 0) HudDivider(transparent)
+            HudCellView(cell, transparent, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun HudCellView(cell: HudCell, transparent: Boolean, modifier: Modifier = Modifier) {
+    val shadow = hudShadow(transparent)
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = cell.value,
+            color = when {
+                !cell.known -> Color.White.copy(alpha = 0.45f)
+                cell.alert -> LoadHighTint
+                else -> Color.White.copy(alpha = 0.96f)
+            },
+            style = TextStyle(shadow = shadow),
+            fontSize = 12.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = cell.label,
+            color = Color.White.copy(alpha = 0.5f),
+            style = TextStyle(shadow = shadow),
+            fontSize = 7.sp,
+            lineHeight = 8.sp,
+            letterSpacing = 0.5.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * A hairline between cells. White on a body, near-black when transparent: the
+ * island has no fill there, so a white line would disappear over bright scenery
+ * while the shadowed text still read.
+ */
+@Composable
+private fun HudDivider(transparent: Boolean) {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(HudDividerHeight)
+            .background(
+                if (transparent) Color.Black.copy(alpha = 0.5f)
+                else Color.White.copy(alpha = 0.10f)
+            )
+    )
+}
+
+/**
+ * Text shadow only in transparent mode: on a solid or blurred body the island
+ * already guarantees contrast, and a shadow there would just smear the glyphs.
+ */
+private fun hudShadow(transparent: Boolean): Shadow? =
+    if (transparent) Shadow(Color.Black.copy(alpha = 0.92f), Offset(0f, 1f), 5f) else null

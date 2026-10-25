@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -85,6 +86,7 @@ import com.starkdroid.quicknotch.generated.resources.onboarding_feature_apps
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_calendar
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_media
 import com.starkdroid.quicknotch.generated.resources.onboarding_back
+import com.starkdroid.quicknotch.generated.resources.onboarding_feature_gaming
 import com.starkdroid.quicknotch.generated.resources.onboarding_feature_quiet
 import com.starkdroid.quicknotch.generated.resources.onboarding_welcome_subtitle
 import com.starkdroid.quicknotch.generated.resources.onboarding_welcome_title
@@ -255,11 +257,13 @@ internal fun OnboardingScreen(
                             title = stringResource(Res.string.onboarding_welcome_title),
                             subtitle = stringResource(Res.string.onboarding_welcome_subtitle)
                         )
-                        Spacer(modifier = Modifier.height(22.dp))
-                        // Two-by-two feature cards with staggered entrances.
+                        Spacer(modifier = Modifier.height(14.dp))
+                        // Two-by-two feature cards with staggered entrances,
+                        // plus the gaming banner: the HUD is automatic, so it
+                        // reads as one wide headline instead of a fifth square.
                         Column(
                             modifier = Modifier.width(460.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
                                 modifier = Modifier.height(IntrinsicSize.Min),
@@ -302,6 +306,18 @@ internal fun OnboardingScreen(
                                         )
                                     }
                                 }
+                            }
+                            // Gaming gets a wide banner rather than a fifth
+                            // tile: it is automatic (a fullscreen game is the
+                            // trigger), so the first-run story is "this exists
+                            // and you do not have to switch it on", which reads
+                            // better as one line than as another square.
+                            TabEntrance(index = 4) {
+                                FeatureCard(
+                                    Icons.Default.SportsEsports,
+                                    stringResource(Res.string.onboarding_feature_gaming),
+                                    wide = true
+                                )
                             }
                         }
                     }
@@ -677,20 +693,18 @@ private fun StyleCards(
  * surface. Row siblings share the tallest card's height (the row sizes itself
  * to its tallest child and every card stretches to fill it), so wrapped
  * labels never clip and all four boxes stay proportionate.
+ *
+ * [wide] is the gaming banner: the same chrome, laid out icon-beside-text
+ * across the whole column. The HUD is automatic, so it reads as a headline
+ * ("this happens on its own") rather than as a fifth square to configure.
  */
 @Composable
-private fun FeatureCard(icon: androidx.compose.ui.graphics.vector.ImageVector?, label: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(14.dp))
-            .background(SettingsCard)
-            .border(1.dp, SettingsBorder, RoundedCornerShape(14.dp))
-            .padding(14.dp),
-        horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
+private fun FeatureCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    label: String,
+    wide: Boolean = false
+) {
+    val badge: @Composable () -> Unit = {
         Box(
             modifier = Modifier
                 .size(34.dp)
@@ -715,14 +729,33 @@ private fun FeatureCard(icon: androidx.compose.ui.graphics.vector.ImageVector?, 
                 )
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = label,
-            style = AppTypography.bodyMedium,
-            fontSize = 12.5.sp,
-            lineHeight = 17.sp,
-            color = TextSecondary
-        )
+    }
+    val chrome = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(14.dp))
+        .background(SettingsCard)
+        .border(1.dp, SettingsBorder, RoundedCornerShape(14.dp))
+    val caption: @Composable () -> Unit = {
+        Text(label, style = AppTypography.bodyMedium, fontSize = 12.5.sp, lineHeight = 17.sp, color = TextSecondary)
+    }
+    if (wide) {
+        Row(
+            modifier = chrome.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            badge()
+            Spacer(modifier = Modifier.width(12.dp))
+            caption()
+        }
+    } else {
+        Column(
+            modifier = chrome.fillMaxHeight().padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            badge()
+            Spacer(modifier = Modifier.height(10.dp))
+            caption()
+        }
     }
 }
 

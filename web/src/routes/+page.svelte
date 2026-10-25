@@ -4,6 +4,7 @@
 	import Hero from '$components/Hero.svelte';
 	import StatsStrip from '$components/StatsStrip.svelte';
 	import WidgetsSection from '$components/WidgetsSection.svelte';
+	import GamingSection from '$components/GamingSection.svelte';
 	import ThemesSection from '$components/ThemesSection.svelte';
 	import LaunchSection from '$components/LaunchSection.svelte';
 	import FaqSection from '$components/FaqSection.svelte';
@@ -19,6 +20,9 @@
 		'Weather',
 		'Calendar',
 		'Live activities',
+		'Gaming HUD',
+		'FPS, CPU, GPU',
+		'Transparent in games',
 		'AMOLED notch',
 		'Floating pill',
 		'Drag handle',
@@ -47,6 +51,8 @@
 	<ManifestoSection />
 
 	<WidgetsSection />
+
+	<GamingSection />
 
 	<ThemesSection />
 

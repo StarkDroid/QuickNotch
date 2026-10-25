@@ -1,7 +1,7 @@
 <script lang="ts">
 	import AppTile from './AppTile.svelte';
 	import Icon from './Icon.svelte';
-	import { dockTiles, widgets } from '$data/site';
+	import { dockTiles, gaming, widgets, type WidgetId } from '$data/site';
 	import { prefersReducedMotion } from '$lib/motion/gsap';
 
 	/**
@@ -9,8 +9,10 @@
 	 *
 	 * "Vertical scroll pagination": scrolling over the notch (or using the left /
 	 * right arrows below) moves through the widget stack — quick launch, system
-	 * rings, weather, calendar and live activities. Each switch slides the next
-	 * widget into view.
+	 * rings, weather, calendar, live activities — and then the gaming HUD, which
+	 * is not a wheel page in the app but the collapsed pill's own state while a
+	 * fullscreen game runs. It earns a slot here because it is the one state you
+	 * would otherwise never see in a demo.
 	 *
 	 * The notch is a real control: prev/next and the dots are buttons, and the
 	 * current widget is announced via `aria-label`. Autoplay pauses for a few
@@ -33,6 +35,13 @@
 		interactive = true,
 		label = 'Notch widgets'
 	}: Props = $props();
+
+	/** The wheel pages, plus the gaming state, in the order the demo walks them. */
+	type DemoId = WidgetId | 'gaming';
+	const pages: { id: DemoId; label: string }[] = [
+		...widgets.map((widget) => ({ id: widget.id as DemoId, label: widget.label })),
+		{ id: 'gaming', label: 'Gaming HUD' }
+	];
 
 	/**
 	 * The System page, at demo scale: one ring per metric, the glyph inside the
@@ -72,8 +81,13 @@
 	let pausedUntil = 0;
 	let reduced = false;
 
-	const count = widgets.length;
-	const current = $derived(widgets[active]);
+	const count = pages.length;
+	const current = $derived(pages[active]);
+
+	/** Spoken summary of the gaming strip; the cells themselves are decorative. */
+	const hudSummary = `Gaming HUD: ${gaming.cells
+		.map((cell) => `${cell.label} ${cell.value}`)
+		.join(', ')}`;
 
 	function go(delta: number) {
 		active = (active + delta + count) % count;
@@ -113,93 +127,115 @@
 </script>
 
 <div class="notch-wrap">
-	<div
-		class="notch"
-		class:notch--amoled={theme === 'amoled'}
-		class:notch--handle={theme === 'handle'}
-		use:wheelPager
-		role="region"
-		aria-label="{label}, {current.label}"
-	>
-		<span class="notch__title mono" aria-hidden="true">{current.label}</span>
+	<!-- The notch is wrapped so the gaming page can put scenery *behind* it:
+	     that state drops the body, and a transparent panel over blank paper
+	     would demo nothing. -->
+	<div class="notch-shell">
+		{#if current.id === 'gaming'}
+			<span class="notch-scene" aria-hidden="true"></span>
+		{/if}
+		<div
+			class="notch"
+			class:notch--amoled={theme === 'amoled'}
+			class:notch--handle={theme === 'handle'}
+			class:notch--game={current.id === 'gaming'}
+			use:wheelPager
+			role="region"
+			aria-label="{label}, {current.label}"
+		>
+			<span class="notch__title mono" aria-hidden="true">{current.label}</span>
 
-		<div class="notch__body">
-			{#key active}
-				<div class="widget">
-					{#if current.id === 'apps'}
-						<div class="widget__apps">
-							{#each dockTiles.slice(0, 5) as tile (tile.id)}
-								<AppTile {tile} size={40} decorative />
-							{/each}
-						</div>
-					{:else if current.id === 'weather'}
-						<div class="widget__weather">
-							<span class="weather__icon"><Icon name="sun" size={30} /></span>
-							<span class="weather__main">
-								<strong>23°</strong>
-								<span>Partly cloudy</span>
-							</span>
-							<span class="weather__forecast">
-								<i>Tue <b>21°</b></i>
-								<i>Wed <b>19°</b></i>
-								<i>Thu <b>17°</b></i>
-							</span>
-						</div>
-					{:else if current.id === 'system'}
-						<div class="widget__system">
-							{#each systemMetrics as metric (metric.name)}
-								<span class="gauge" role="img" aria-label="{metric.name}: {metric.value}" title="{metric.name}: {metric.value}">
-									<span class="gauge__dial">
-										<svg viewBox="0 0 40 40" aria-hidden="true">
-											<g transform="rotate(126 20 20)">
-												<circle class="dial__track" cx="20" cy="20" r="16" />
-												<circle
-													class="dial__bar"
-													cx="20"
-													cy="20"
-													r="16"
-													style:stroke-dasharray={ringDash(metric.percent)}
-												/>
-											</g>
-										</svg>
-										<Icon name={metric.icon} size={13} />
-									</span>
-									<span class="gauge__value mono">{metric.value}</span>
-								</span>
-							{/each}
-						</div>
-					{:else if current.id === 'calendar'}
-						<div class="widget__calendar">
-							<span class="cal__day">
-								<span class="cal__dow mono">FRI</span>
-								<strong>23</strong>
-							</span>
-							<ul class="cal__list">
-								{#each agenda as item (item.time)}
-									<li>
-										<span class="cal__time mono">{item.time}</span>
-										<span class="cal__what">{item.what}</span>
-									</li>
+			<div class="notch__body">
+				{#key active}
+					<div class="widget">
+						{#if current.id === 'apps'}
+							<div class="widget__apps">
+								{#each dockTiles.slice(0, 5) as tile (tile.id)}
+									<AppTile {tile} size={40} decorative />
 								{/each}
-							</ul>
-							<span class="cal__tag mono">Google Calendar</span>
-						</div>
-					{:else if current.id === 'music'}
-						<div class="widget__music">
-							<AppTile tile={dockTiles.find((t) => t.id === 'music')!} size={44} decorative />
-							<span class="music__meta">
-								<strong>Midnight City</strong>
-								<span>M83</span>
-							</span>
-							<span class="music__controls">
-								<button type="button" aria-label="Previous track"><Icon name="next" size={15} class="flip" /></button>
-								<button type="button" aria-label="Play" class="music__play"><Icon name="play" size={15} /></button>
-								<button type="button" aria-label="Next track"><Icon name="next" size={15} /></button>
-							</span>
-						</div>
-					{/if}
-				</div>
-			{/key}
+							</div>
+						{:else if current.id === 'weather'}
+							<div class="widget__weather">
+								<span class="weather__icon"><Icon name="sun" size={30} /></span>
+								<span class="weather__main">
+									<strong>23°</strong>
+									<span>Partly cloudy</span>
+								</span>
+								<span class="weather__forecast">
+									<i>Tue <b>21°</b></i>
+									<i>Wed <b>19°</b></i>
+									<i>Thu <b>17°</b></i>
+								</span>
+							</div>
+						{:else if current.id === 'system'}
+							<div class="widget__system">
+								{#each systemMetrics as metric (metric.name)}
+									<span class="gauge" role="img" aria-label="{metric.name}: {metric.value}" title="{metric.name}: {metric.value}">
+										<span class="gauge__dial">
+											<svg viewBox="0 0 40 40" aria-hidden="true">
+												<g transform="rotate(126 20 20)">
+													<circle class="dial__track" cx="20" cy="20" r="16" />
+													<circle
+														class="dial__bar"
+														cx="20"
+														cy="20"
+														r="16"
+														style:stroke-dasharray={ringDash(metric.percent)}
+													/>
+												</g>
+											</svg>
+											<Icon name={metric.icon} size={13} />
+										</span>
+										<span class="gauge__value mono">{metric.value}</span>
+									</span>
+								{/each}
+							</div>
+						{:else if current.id === 'calendar'}
+							<div class="widget__calendar">
+								<span class="cal__day">
+									<span class="cal__dow mono">FRI</span>
+									<strong>23</strong>
+								</span>
+								<ul class="cal__list">
+									{#each agenda as item (item.time)}
+										<li>
+											<span class="cal__time mono">{item.time}</span>
+											<span class="cal__what">{item.what}</span>
+										</li>
+									{/each}
+								</ul>
+								<span class="cal__tag mono">Google Calendar</span>
+							</div>
+						{:else if current.id === 'music'}
+							<div class="widget__music">
+								<AppTile tile={dockTiles.find((t) => t.id === 'music')!} size={44} decorative />
+								<span class="music__meta">
+									<strong>Midnight City</strong>
+									<span>M83</span>
+								</span>
+								<span class="music__controls">
+									<button type="button" aria-label="Previous track"><Icon name="next" size={15} class="flip" /></button>
+									<button type="button" aria-label="Play" class="music__play"><Icon name="play" size={15} /></button>
+									<button type="button" aria-label="Next track"><Icon name="next" size={15} /></button>
+								</span>
+							</div>
+						{:else if current.id === 'gaming'}
+							<div class="widget__hud" role="group" aria-label={hudSummary}>
+								{#each gaming.cells as cell, index (cell.label)}
+									{#if index > 0}
+										<span class="hud__divider" aria-hidden="true"></span>
+									{/if}
+									<span class="hud__cell">
+										<strong>{cell.value}</strong>
+										<span class="hud__label mono">{cell.label}</span>
+									</span>
+								{/each}
+							</div>
+							<span class="hud__hint mono">auto · fullscreen game detected</span>
+						{/if}
+					</div>
+				{/key}
+			</div>
 		</div>
 	</div>
 
@@ -209,15 +245,15 @@
 		</button>
 
 		<div class="pager__dots" role="tablist" aria-label="Widgets">
-			{#each widgets as widget, index (widget.id)}
+			{#each pages as page, index (page.id)}
 				<button
 					type="button"
 					class="pager__dot"
 					class:active={active === index}
 					role="tab"
 					aria-selected={active === index}
-					aria-label={widget.label}
-					title={widget.label}
+					aria-label={page.label}
+					title={page.label}
 					onclick={() => {
 						active = index;
 						pausedUntil = Date.now() + 6000;
@@ -241,9 +277,53 @@
 	}
 
 	/* ---- The notch container --------------------------------------------- */
+	/* The shell owns the width so the gaming page's scenery layer can sit
+	   exactly behind the notch, whatever height the current widget needs. */
+	.notch-shell {
+		position: relative;
+		display: flex;
+		width: min(92vw, 380px);
+	}
+
+	/* Stand-in for the game: the gaming state is the transparent-in-games
+	   demo, and a transparent panel over blank paper would show nothing. Flat
+	   fill plus two blurred blobs — no painted gradients. */
+	.notch-scene {
+		position: absolute;
+		inset: 0;
+		border-radius: 22px;
+		overflow: hidden;
+		background: #0e141d;
+	}
+
+	.notch-scene::before,
+	.notch-scene::after {
+		content: '';
+		position: absolute;
+		border-radius: 50%;
+		filter: blur(26px);
+		opacity: 0.85;
+	}
+
+	.notch-scene::before {
+		top: -34%;
+		left: -8%;
+		width: 58%;
+		height: 130%;
+		background: #1d4d6b;
+	}
+
+	.notch-scene::after {
+		right: -6%;
+		bottom: -36%;
+		width: 52%;
+		height: 120%;
+		background: #7c2f18;
+	}
+
 	.notch {
 		position: relative;
-		width: min(92vw, 380px);
+		width: 100%;
 		min-height: 92px;
 		padding: 1.6rem 1.15rem 0.95rem;
 		border-radius: 22px;
@@ -271,6 +351,17 @@
 		border-color: rgb(255 255 255 / 0.08);
 		background: rgb(10 10 10 / 0.55);
 		box-shadow: none;
+	}
+
+	/* Gaming page: this is the "transparent in games" state — the body drops
+	   away, leaving a thin dark rim and a soft shadow so the numbers stay
+	   legible over whatever the game is drawing. */
+	.notch--game {
+		border-color: rgb(0 0 0 / 0.55);
+		background: rgb(8 10 14 / 0.3);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		box-shadow: 0 14px 30px rgb(0 0 0 / 0.5);
 	}
 
 	.notch__title {
@@ -549,6 +640,59 @@
 	.music__controls .music__play:hover {
 		background: var(--tomato-deep);
 		color: var(--on-accent);
+	}
+
+	/* Gaming HUD: a value over a small caps caption, one hairline between
+	   cells — the strip the app draws in the collapsed pill. Nothing here is a
+	   button: bringing the cursor up opens the dock instead. */
+	.widget__hud {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+	}
+
+	.hud__cell {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex: 1 1 0;
+		min-width: 0;
+		text-shadow: 0 1px 4px rgb(0 0 0 / 0.85);
+	}
+
+	.hud__cell strong {
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0;
+		white-space: nowrap;
+		color: var(--on-dark);
+	}
+
+	.hud__label {
+		font-size: 7.5px;
+		letter-spacing: 0.12em;
+		white-space: nowrap;
+		color: var(--on-dark-3);
+	}
+
+	.hud__divider {
+		flex: none;
+		width: 1px;
+		height: 16px;
+		background: rgb(0 0 0 / 0.5);
+	}
+
+	.hud__hint {
+		display: block;
+		margin-top: 0.3rem;
+		font-size: 8px;
+		letter-spacing: 0.07em;
+		text-align: center;
+		color: var(--on-dark-3);
+		text-shadow: 0 1px 4px rgb(0 0 0 / 0.85);
 	}
 
 	/* ---- Pager ------------------------------------------------------------- */
