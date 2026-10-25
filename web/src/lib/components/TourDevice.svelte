@@ -75,11 +75,17 @@
 			</div>
 		</div>
 
-		<!-- The deck: the laptop's footprint, hinged at the lid's bottom edge and
-		     folded out toward the viewer. Same width as the lid, clean surface —
-		     no keys, no trackpad. Skewed it reads as the keyboard deck; frontal
-		     it is edge-on and only the front lip shows. -->
+		<!-- The base is the laptop's front elevation: a solid body hanging from
+		     the hinge with the machine's actual thickness. It lives in the
+		     device's own plane, so the same perspective that tilts the lid
+		     tilts the base — a body, not a paper edge. No deck and no keys:
+		     from the front there is nothing else of a laptop to see, and a
+		     blank body cannot look deformed. -->
 		<div class="base"></div>
+
+		<!-- The hinge: a bar across the seam, so the lid and the body read as one
+		     object rather than two planes meeting in mid-air. -->
+		<span class="hinge"></span>
 	</div>
 
 	<span class="device__shadow"></span>
@@ -384,29 +390,53 @@
 		z-index: 3;
 	}
 
-	/* ---- Base: the deck, hinged out toward the viewer ----------------------
-	   Same footprint as the lid, folded 90° out of the hinge. Skewed you see
-	   its clean top surface; frontal it is edge-on and only the front lip —
-	   the laptop's thickness — remains. Deliberately blank: keys are what made
-	   the old deck read as deformed, and a deck has no job in this tour. */
+	/* ---- Base: the front elevation of the machine -------------------------
+	   A solid body hanging from the hinge, drawn in the device's own plane so
+	   it shares the lid's perspective. Height is the machine's real thickness
+	   (~3.4% of its width), with the lid's width, rounded lower corners and a
+	   small thumb notch — the front of a closed laptop, not a sheet of paper. */
 	.base {
 		position: absolute;
 		top: 100%;
-		/* A hair narrower than the lid: edge-on and closer to the camera, the
-		   deck would otherwise print slightly wider than the lid silhouette. */
 		left: 1.5%;
 		width: 97%;
-		height: 58%;
-		transform-origin: 50% 0;
-		transform: rotateX(90deg);
-		transform-style: preserve-3d;
-		border-radius: 0 0 1.6cqw 1.6cqw;
-		background: #171209;
-		border: 2px solid var(--ink);
-		border-top: none;
+		height: 3.4cqw;
+		margin-top: -1px;
+		border-radius: 0.4cqw 0.4cqw 1.4cqw 1.4cqw;
+		background: #191410;
 		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.08),
-			inset 0 -1px 0 rgb(0 0 0 / 0.4);
+			inset 0 2px 0 rgb(255 255 255 / 0.07),
+			inset 0 -2px 0 rgb(0 0 0 / 0.45),
+			inset 0 0 0 1px rgb(33 28 19 / 0.95),
+			0 3px 5px rgb(0 0 0 / 0.35);
+	}
+
+	/* Thumb notch on the front lip, like the real thing's lid-lift cut-out. */
+	.base::after {
+		content: '';
+		position: absolute;
+		left: 50%;
+		bottom: 0;
+		width: 7%;
+		height: 42%;
+		translate: -50% 0;
+		border-radius: 999px 999px 0 0;
+		background: #0b0804;
+		box-shadow: inset 0 1px 0 rgb(0 0 0 / 0.6);
+	}
+
+	/* ---- Hinge ------------------------------------------------------------ */
+	.hinge {
+		position: absolute;
+		left: 4%;
+		top: calc(100% - 0.55cqw);
+		width: 92%;
+		height: 1.1cqw;
+		border-radius: 999px;
+		background: #0c0905;
+		box-shadow:
+			inset 0 1px 0 rgb(255 255 255 / 0.07),
+			0 1px 2px rgb(0 0 0 / 0.6);
 	}
 
 	/* ---- Ground shadow --------------------------------------------------- */

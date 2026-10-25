@@ -180,7 +180,8 @@ Two details worth knowing before editing it:
   variables on the device (yaw, pitch, hinge angle, scale, shadow) so a frame never
   touches Svelte state. Only the step index crosses into the component, and only
   when it changes. The laptop arrives skewed and lands frontal as the lid opens;
-  its base is only a thickness strip, so no angle ever shows keys. After a scroll
+  its base is a solid body at the hinge with the machine's real thickness, not a
+  deck — so no angle ever shows keys. After a scroll
   gesture ends inside the steps region, the section glides to the nearest step
   centre — one flick advances one segment instead of flying past the tour. The
   seven captions share one grid cell, so swapping never shifts the layout, and

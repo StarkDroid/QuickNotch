@@ -327,9 +327,9 @@ single place widgets are explained: a state is a `tour.steps` entry plus a
 `NotchPanel` branch, never a new section. `NotchPanel` is the one mock — the
 hero, the laptop screen and the static fallback all draw it — so the marketing
 demo cannot drift from the app's geometry. The laptop arrives skewed and lands
-frontal as the lid opens; its deck matches the lid's footprint on a 90° hinge
-(visible mid-turn, edge-on front lip only at rest) and stays blank, so no
-angle ever shows keys. The page keeps exactly one tour, one
+frontal as the lid opens; its base is a solid front-elevation body at the hinge
+with the machine's real thickness — never a deck, so no angle ever shows keys.
+The page keeps exactly one tour, one
 look band, pricing and FAQ; do not reintroduce per-widget sections, a download
 section or a second demo.
 
