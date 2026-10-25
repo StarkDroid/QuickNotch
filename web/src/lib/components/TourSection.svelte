@@ -72,6 +72,18 @@
 
 		function maybeSnap() {
 			if (!pin || disposed) return;
+			// Never snap mid-animation: a Lenis glide still in flight reports a
+			// position that is not where the user is going to rest, and snapping
+			// from there can settle one step short of a large jump.
+			const lenisState = (
+				window as unknown as {
+					__lenis?: { isScrolling?: boolean; isSmooth?: boolean };
+				}
+			).__lenis;
+			if (lenisState && (lenisState.isScrolling || lenisState.isSmooth)) {
+				snapTimer = window.setTimeout(maybeSnap, 120);
+				return;
+			}
 			const rect = pin.getBoundingClientRect();
 			const travel = rect.height - window.innerHeight;
 			if (!(travel > 0)) return;

@@ -70,17 +70,16 @@
 		position: sticky;
 		top: 0;
 		z-index: 100;
-		/* Fixed height: the pill grows inside this box, so opening the notch never
-		   shifts the page content below it (a changing sticky height would nudge
-		   the whole layout as you cross the threshold). */
+		/* Flush with the top edge, like the notch: no gap, no floating padding.
+		   The wrapper keeps a fixed height so opening never shifts the page. */
 		height: var(--header-h);
-		padding: 0.55rem var(--gutter) 0;
 		pointer-events: none;
 	}
 
-	/* The notch itself. Width, radius and padding are the only things that
-	   animate; the height steps once so the bar has a little more presence when
-	   open. Both states are plain lengths, which is what lets them transition. */
+	/* The notch itself. Flat against the top edge — square upper corners, only
+	   the two facing the page rounded — and it grows inside the wrapper's fixed
+	   height, so opening never nudges the layout. Width, height and padding are
+	   plain lengths, which is what lets them transition. */
 	.nav__pill {
 		position: relative;
 		pointer-events: auto;
@@ -90,22 +89,22 @@
 		width: min(92%, 22.5rem);
 		height: 3.05rem;
 		margin-inline: auto;
-		padding: 0 0.4rem 0 0.75rem;
-		border-radius: 999px;
+		padding: 0 0.4rem 0 0.8rem;
+		border-radius: 0 0 1.15rem 1.15rem;
 		border: 1px solid var(--on-dark-line-strong);
+		border-top: none;
 		background: rgb(10 10 10 / 0.94);
 		backdrop-filter: blur(16px) saturate(140%);
 		-webkit-backdrop-filter: blur(16px) saturate(140%);
 		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.07),
-			0 10px 26px -16px rgb(0 0 0 / 0.85);
+			inset 0 -1px 0 rgb(255 255 255 / 0.05),
+			0 18px 34px -18px rgb(0 0 0 / 0.85);
 		color: var(--on-dark);
 		overflow: hidden;
 		transition:
 			width 560ms var(--ease-out),
 			height 560ms var(--ease-out),
 			padding 560ms var(--ease-out),
-			border-radius 560ms var(--ease-out),
 			background-color 360ms var(--ease-out),
 			box-shadow 560ms var(--ease-out);
 	}
@@ -114,10 +113,9 @@
 		width: min(100%, var(--maxw));
 		height: 3.4rem;
 		padding: 0 0.5rem 0 1rem;
-		border-radius: 18px;
 		box-shadow:
-			inset 0 1px 0 rgb(255 255 255 / 0.07),
-			0 16px 34px -22px rgb(0 0 0 / 0.9);
+			inset 0 -1px 0 rgb(255 255 255 / 0.05),
+			0 22px 40px -20px rgb(0 0 0 / 0.9);
 	}
 
 	.brand {
@@ -194,7 +192,9 @@
 
 	@media (max-width: 560px) {
 		.nav__pill {
-			width: min(96%, 22.5rem);
+			/* Leave a visible step between rest and open on a phone: a
+			   content-wide notch that grows to the full width. */
+			width: min(88%, 22.5rem);
 			padding-left: 0.6rem;
 		}
 

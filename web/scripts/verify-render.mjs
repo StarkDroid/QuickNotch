@@ -380,7 +380,7 @@ const tourReport = async () => {
 		await evaluate(
 			`window.__lenis ? window.__lenis.scrollTo(${y}, { duration: 0.6 }) : window.scrollTo(0, ${y})`
 		);
-		await sleep(1600);
+		await sleep(2000);
 		samples.push(await read());
 	}
 	await evaluate(`window.scrollTo(0, 0)`);

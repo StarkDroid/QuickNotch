@@ -84,9 +84,11 @@ web/
 `Hero` (`#top`) → `TourSection` (`#tour`) → `LookSection` (`#look`) →
 `PricingSection` (`#pricing`) → `FaqSection` (`#faq`) → `Footer`.
 
-The header is a notch, not a menu: a dark capsule at the top with the mark, the
-wordmark and the buy button. It rests compact at the top of the page and opens
-to full width as you scroll, closing again when you return to the top. There are
+The header is a notch, not a menu: a dark bar flush with the top edge — square
+upper corners, only the two facing the page rounded, exactly the app's base
+notch — carrying the mark, the wordmark and the buy button. It rests compact at
+the top of the page and opens to full width as you scroll, closing again when
+you return to the top; the progress hairline runs along its lower edge. There are
 no section links at all — the tour, the look and the price are found by
 scrolling. The FAQ is the last section; there is no separate download section,
 because the buy button in pricing is the one call to action.
