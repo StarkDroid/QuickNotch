@@ -8,8 +8,9 @@
 	 *
 	 * Deliberately frontal at rest, skewed on arrival: the settle drives the yaw
 	 * and pitch out as the lid swings up, so the laptop turns to face you as it
-	 * opens. The base is only ever a thin thickness strip under the hinge —
-	 * never a visible deck.
+	 * opens. The deck matches the lid's footprint on a 90° hinge — visible while
+	 * skewed, edge-on (front lip only) when frontal — and stays blank, so no
+	 * angle ever shows keys.
 	 *
 	 * The lid angle, settle and wake are written by `TourSection` as CSS
 	 * variables on the wrapper — per-frame values must never round-trip through
@@ -74,9 +75,10 @@
 			</div>
 		</div>
 
-		<!-- The base is only ever this strip: the front thickness of the laptop
-		     seen head-on. No deck, no keys, no trackpad — from the front there
-		     is nothing else to see, which is the point. -->
+		<!-- The deck: the laptop's footprint, hinged at the lid's bottom edge and
+		     folded out toward the viewer. Same width as the lid, clean surface —
+		     no keys, no trackpad. Skewed it reads as the keyboard deck; frontal
+		     it is edge-on and only the front lip shows. -->
 		<div class="base"></div>
 	</div>
 
@@ -91,7 +93,7 @@
 		padding-block: 2% 9%;
 		container-type: inline-size;
 		perspective: 2200px;
-		perspective-origin: 50% 40%;
+		perspective-origin: 50% 65%;
 	}
 
 	.device {
@@ -104,7 +106,7 @@
 		   out while the lid swings up, so the laptop turns to face you as it
 		   opens. The base is only a thickness strip, so there are no keys to
 		   glimpse at any angle. */
-		transform: translate3d(var(--tx, 5%), var(--ty, -6%), 0) rotateX(var(--rx, 12deg))
+		transform: translate3d(var(--tx, 5%), var(--ty, -6%), 0) rotateX(var(--rx, 26deg))
 			rotateY(var(--ry, -20deg)) scale(var(--sc, 0.88));
 		will-change: transform;
 	}
@@ -382,19 +384,29 @@
 		z-index: 3;
 	}
 
-	/* ---- Base: the laptop's front thickness, seen head-on ----------------- */
+	/* ---- Base: the deck, hinged out toward the viewer ----------------------
+	   Same footprint as the lid, folded 90° out of the hinge. Skewed you see
+	   its clean top surface; frontal it is edge-on and only the front lip —
+	   the laptop's thickness — remains. Deliberately blank: keys are what made
+	   the old deck read as deformed, and a deck has no job in this tour. */
 	.base {
 		position: absolute;
 		top: 100%;
-		left: 2%;
-		width: 96%;
-		height: clamp(9px, 2cqw, 15px);
-		margin-top: -2px;
-		border-radius: 0 0 1.2cqw 1.2cqw;
-		background: #14100a;
+		/* A hair narrower than the lid: edge-on and closer to the camera, the
+		   deck would otherwise print slightly wider than the lid silhouette. */
+		left: 1.5%;
+		width: 97%;
+		height: 58%;
+		transform-origin: 50% 0;
+		transform: rotateX(90deg);
+		transform-style: preserve-3d;
+		border-radius: 0 0 1.6cqw 1.6cqw;
+		background: #171209;
 		border: 2px solid var(--ink);
 		border-top: none;
-		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09);
+		box-shadow:
+			inset 0 1px 0 rgb(255 255 255 / 0.08),
+			inset 0 -1px 0 rgb(0 0 0 / 0.4);
 	}
 
 	/* ---- Ground shadow --------------------------------------------------- */

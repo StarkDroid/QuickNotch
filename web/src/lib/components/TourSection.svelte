@@ -29,10 +29,13 @@
 	const steps = tour.steps;
 	const total = String(steps.length).padStart(2, '0');
 
-	/** Phase boundaries as a fraction of the pin's scrollable span. */
-	const SETTLE_END = 0.12;
-	const OPEN_START = 0.1;
-	const OPEN_END = 0.28;
+	/** Phase boundaries as a fraction of the pin's scrollable span. The lid
+	 * starts opening almost immediately while the yaw is still settling out,
+	 * so the deck has a moment as a visible surface mid-turn — by the time the
+	 * device is frontal the lid is up and the deck is edge-on. */
+	const SETTLE_END = 0.22;
+	const OPEN_START = 0.0;
+	const OPEN_END = 0.3;
 	const STEPS_START = 0.3;
 
 	const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
@@ -97,7 +100,11 @@
 			const travel = rect.height - window.innerHeight;
 			const progress = travel > 0 ? clamp01(-rect.top / travel) : 0;
 
-			const settle = easeOut(clamp01(progress / SETTLE_END));
+			// Linear, not eased: an ease-out would finish the turn while the lid is
+			// still shut and the deck would never show as a surface — it would
+			// go straight from hidden to edge-on. Linear keeps the skew alive
+			// while the lid swings up, so the deck has its moment mid-turn.
+			const settle = clamp01(progress / SETTLE_END);
 			const open = easeOut(clamp01((progress - OPEN_START) / (OPEN_END - OPEN_START)));
 			const walk = clamp01((progress - STEPS_START) / (1 - STEPS_START));
 
@@ -105,7 +112,7 @@
 			// the lid swings up, so the laptop turns to face you as it opens.
 			// (The base is only a thickness strip, so no angle ever shows keys.)
 			device.style.setProperty('--ry', `${(-20 + 20 * settle).toFixed(2)}deg`);
-			device.style.setProperty('--rx', `${(12 - 10 * settle).toFixed(2)}deg`);
+			device.style.setProperty('--rx', `${(26 - 24 * settle).toFixed(2)}deg`);
 			device.style.setProperty('--sc', (0.88 + 0.12 * settle).toFixed(3));
 			device.style.setProperty('--ty', `${(-6 + 6 * settle).toFixed(2)}%`);
 			device.style.setProperty('--tx', `${(5 - 5 * settle).toFixed(2)}%`);
