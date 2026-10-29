@@ -49,8 +49,8 @@ private data class HudCell(
 /** Load metrics turn amber at this level, matching `LevelRing`'s high threshold. */
 private const val HudAlertPercent = 85
 
-private val HudSidePadding = 14.dp
-private val HudDividerHeight = 16.dp
+private val HudSidePadding = 10.dp
+private val HudDividerHeight = 14.dp
 
 /**
  * The gaming quickview: a live performance strip that stands in for the pill
@@ -67,9 +67,10 @@ private val HudDividerHeight = 16.dp
  * That is the same rule the System page follows, and it keeps every number on
  * screen true.
  *
- * [transparent] is the "transparent in games" mode: the island body is gone, so
- * each glyph carries a soft black shadow to stay legible over game scenery —
- * exactly the same idea as the rim the surface draws around the island.
+ * [transparent] is the "transparent in games" mode: only the numbers remain.
+ * The body, the dividers and the island shadow are all dropped, so nothing but
+ * the metrics is drawn over the game; each glyph carries its own soft black
+ * shadow for legibility. The solid mode keeps the body and its hairlines.
  */
 @Composable
 internal fun GameHud(
@@ -118,7 +119,8 @@ internal fun GameHud(
         verticalAlignment = Alignment.CenterVertically
     ) {
         cells.forEachIndexed { index, cell ->
-            if (index > 0) HudDivider(transparent)
+            // Transparent mode is metrics only: no hairlines at all.
+            if (index > 0 && !transparent) HudDivider()
             HudCellView(cell, transparent, Modifier.weight(1f))
         }
     }
@@ -140,8 +142,8 @@ private fun HudCellView(cell: HudCell, transparent: Boolean, modifier: Modifier 
                 else -> Color.White.copy(alpha = 0.96f)
             },
             style = TextStyle(shadow = shadow),
-            fontSize = 12.sp,
-            lineHeight = 13.sp,
+            fontSize = 11.sp,
+            lineHeight = 12.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             textAlign = TextAlign.Center
@@ -150,9 +152,9 @@ private fun HudCellView(cell: HudCell, transparent: Boolean, modifier: Modifier 
             text = cell.label,
             color = Color.White.copy(alpha = 0.5f),
             style = TextStyle(shadow = shadow),
-            fontSize = 7.sp,
-            lineHeight = 8.sp,
-            letterSpacing = 0.5.sp,
+            fontSize = 6.sp,
+            lineHeight = 7.sp,
+            letterSpacing = 0.4.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             textAlign = TextAlign.Center
@@ -161,20 +163,16 @@ private fun HudCellView(cell: HudCell, transparent: Boolean, modifier: Modifier 
 }
 
 /**
- * A hairline between cells. White on a body, near-black when transparent: the
- * island has no fill there, so a white line would disappear over bright scenery
- * while the shadowed text still read.
+ * A hairline between cells, drawn only on a solid body. Transparent mode drops
+ * every rule, so the strip reads as numbers floating over the game.
  */
 @Composable
-private fun HudDivider(transparent: Boolean) {
+private fun HudDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
             .height(HudDividerHeight)
-            .background(
-                if (transparent) Color.Black.copy(alpha = 0.5f)
-                else Color.White.copy(alpha = 0.10f)
-            )
+            .background(Color.White.copy(alpha = 0.12f))
     )
 }
 

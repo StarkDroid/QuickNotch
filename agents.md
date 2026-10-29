@@ -158,12 +158,13 @@ from the AWT wheel listener and composition on the same thread — no locks.
   expands the dock). The HUD is a fill branch, so it disables width hugging
   (`hugVisible`) and the playback outline (`showOutline`) it has no content for.
   `transparentInGame` applies **only** while collapsed and only to the HUD
-  (`gameTransparent`): the body drops (`IslandSurface.gameTransparent`, a transparent
-  fill + 1dp black rim — never a `NotchSurface` entry), the island carries
-  `Modifier.shadow(12dp, clip = false)` and the glyphs get their own shadow, and both
-  blur carriers are switched **off** rather than hidden (`blurActive`/`frostActive`) —
-  otherwise the macOS helper panel / Windows frost would repaint the body we just
-  removed. Opening the dock over a game always uses the user's real material.
+  (`gameTransparent`): the body, the cell hairlines, the rim and the island shadow are
+  all dropped (`IslandSurface.gameTransparent` = transparent fill, transparent border,
+  width 0 — never a `NotchSurface` entry), leaving only the metric glyphs with their own
+  text shadow; the solid mode keeps the body and its dividers. Both blur carriers are
+  switched **off** rather than hidden (`blurActive`/`frostActive`) — otherwise the
+  macOS helper panel / Windows frost would repaint the body we just removed. Opening
+  the dock over a game always uses the user's real material.
 - Inactive pages must not compose pointer modifiers at all (`.then(if (interactive) …)` /
   `onClick = null`); `enabled = false` is still hit-testable and blocks pages beneath.
 
