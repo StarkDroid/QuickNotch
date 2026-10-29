@@ -180,7 +180,8 @@ internal fun FloatingNotchOverlay(
     // system sample.
     val game by GameDetector.game.collectAsState()
     val fps by FpsProbe.fps.collectAsState()
-    val gameHudVisible = game != null && config.widgets.showGameHud
+    // Windows-only, matching the HUD's switches (hidden elsewhere).
+    val gameHudVisible = HostPlatform.isWindows && game != null && config.widgets.showGameHud
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current

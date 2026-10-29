@@ -29,7 +29,7 @@ export const site = {
 	version: '1.0.0',
 	tagline: 'One tiny notch. Apps, system, weather and more.',
 	description:
-		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. Start a fullscreen game and the notch turns into a live performance HUD. Style it as an AMOLED notch, a floating pill or a slim drag handle.',
+		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. On Windows, start a fullscreen game and the notch turns into a live performance HUD. Style it as an AMOLED notch, a floating pill or a slim drag handle.',
 	shortDescription:
 		'A floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS.',
 	author: 'StarkDroid',
@@ -184,7 +184,7 @@ export const tour = {
 			id: 'gaming',
 			label: 'Gaming',
 			title: 'Game on. Numbers up.',
-			body: 'A fullscreen game swaps the pill for FPS, CPU, GPU, ping and download. Nothing to launch.'
+			body: 'On Windows, a fullscreen game swaps the pill for FPS, CPU, GPU, ping and download. Nothing to launch.'
 		}
 	]
 } as const;
@@ -244,7 +244,7 @@ export const faq = [
 	{
 		question: 'Does QuickNotch show FPS while I game?',
 		answer:
-			'On Windows, yes: a borderless-fullscreen game turns the pill into a HUD with frame rate, CPU and GPU load, latency and download rate, via Intel PresentMon. Exclusive fullscreen bypasses the desktop compositor, so the HUD can't overlay it — switch the game to borderless fullscreen. macOS shows load and latency only — no supported API exposes another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
+			'On Windows, yes: a borderless-fullscreen game turns the pill into a HUD with frame rate, CPU and GPU load, latency and download rate, via Intel PresentMon. Exclusive fullscreen bypasses the desktop compositor, so the HUD can\u2019t overlay it — switch the game to borderless fullscreen. The HUD is Windows-only: macOS exposes no supported API for another app\u2019s frame rate, so there is no gaming HUD there. Turn it off in Settings if you would rather keep the clock.'
 	},
 	{
 		question: 'Will the notch get in the way?',

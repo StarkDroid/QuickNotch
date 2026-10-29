@@ -13,8 +13,8 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
 - **Collapsed pill (QuickView):** live-media branch (vinyl disc, marquee title,
   optional waveform analyser, volume + device-battery rings), idle-clock branch
   (date/time + weather chip + laptop-battery ring + notification bell), idle dots,
-  drag-handle style, **gaming branch** (a fullscreen game replaces the pill with a
-  live FPS/CPU/GPU/ping/download strip). Content-hugging: clock/dots shrink to
+  drag-handle style, **gaming branch** (Windows only: a fullscreen game replaces the
+  pill with a live FPS/CPU/GPU/ping/download strip). Content-hugging: clock/dots shrink to
   measured width; live media and the gaming HUD fill the configured width.
 - **Expanded pages (wheel order):** Music (when live) → Apps → System (when on) →
   Weather → Calendar. Music page: vinyl + title/artist—album + progress + transport
@@ -75,9 +75,9 @@ SKIKO_RENDER_API=SOFTWARE ./gradlew :composeApp:run    # one-off rasterizer A/B
 Bridge tasks (`composeApp/build.gradle.kts`, auto-run by jar/run): `syncWindowsBridge`
 (`native/windows/*` → resources; edit source, never the copy),
 `compileMacNowPlayingBridge` / `compileMacBtWatchBridge` / `compileMacPassthroughBridge`
-/ `compileMacArtworkBridge` / `compileMacGameWatchBridge` + `syncMacArtworkDriver`
-(macOS hosts only; absent resource = controller stays silent by design). Kill a run via
-the `MainKt|quicknotch` java process.
+/ `compileMacArtworkBridge` + `syncMacArtworkDriver` (macOS hosts only; absent resource =
+controller stays silent by design). `compileMacGameWatchBridge` still builds the dormant
+macOS game probe. Kill a run via the `MainKt|quicknotch` java process.
 Install a DMG with `rsync -a` (`cp -R`/`ditto` leave empty bundles).
 
 ## 4. Architecture
@@ -230,31 +230,31 @@ from the AWT wheel listener and composition on the same thread — no locks.
   a switched-off page can never show a frozen reading forever. Load metrics warm to `LoadHighTint`
   ≥ 85; network rings use a log sweep (1 KB/s → 0 … 1 GB/s → 100) and the label carries
   the exact rate.
-- **Gaming** (`system/GameDetector.kt` + `FpsProbe.kt` + `datasource/MacGameWatch.kt`,
+- **Gaming (Windows only)** (`system/GameDetector.kt` + `FpsProbe.kt`,
   `WidgetsConfig.showGameHud` default on, `NotchConfig.transparentInGame` default off):
-  one `StateFlow<GameSession?>` is the entire trigger. Detector runs only while
+  one `StateFlow<GameSession?>` is the entire trigger. `gamingActive` / `gameHudVisible`
+  gate on `HostPlatform.isWindows`, the detector is only *started* on Windows, and both
+  Settings switches live in the System widget accordion only on Windows — a Mac never
+  probes for, or offers, a HUD it cannot show. Detector runs only while
   `showGameHud || transparentInGame` (`GameDetector.setEnabled`), and a session needs
   `MissingProbesBeforeIdle` = 2 consecutive misses (~3 s) to clear, so a loading screen
-  or alt-tab cannot blink the HUD. macOS = `MacGameWatch.fullscreenOwner()` every 1.5 s,
-  an in-process JNA call into `gamewatch-bridge.dylib` (`CGWindowListCopyWindowInfo`:
-  layer-0 window within 2 pt of the display bounds, owner not a system shell or us —
-  owner names/bounds need no Screen Recording consent, titles do). Windows = **one
-  long-lived** `game-detect.ps1` printing `1|name|pid` / `0||` per 1.5 s tick
-  (foreground rect vs `MonitorFromWindow` rect, or
-  `SHQueryUserNotificationState == QUNS_RUNNING_D3D_FULL_SCREEN`; shell classes and
-  explorer excluded; exits when its parent JVM disappears). **Never spawn it per probe**
-  — its `Add-Type` costs ~1 s in PS 5.1. FPS = `FpsProbe` on Windows only: one PresentMon
-  capture per 6 s (`--timed 2`, mean of `msBetweenPresents` → `1000/mean`), its own
-  coroutine so a 2 s capture never delays a system sample; it tries `--` then `-` option
-  spelling once and remembers the winner. Every failure — no binary, refused ETW,
-  macOS — yields **no FPS cell**, never a fabricated number. Latency is
+  or alt-tab cannot blink the HUD. Windows = **one long-lived** `game-detect.ps1`
+  printing `1|name|pid` / `0||` per 1.5 s tick (foreground rect vs `MonitorFromWindow`
+  rect, or `SHQueryUserNotificationState == QUNS_RUNNING_D3D_FULL_SCREEN`; shell
+  classes and explorer excluded; exits when its parent JVM disappears). **Never spawn
+  it per probe** — its `Add-Type` costs ~1 s in PS 5.1. FPS = `FpsProbe` on Windows
+  only: one PresentMon capture per 6 s (`--timed 2`, mean of `msBetweenPresents` →
+  `1000/mean`), its own coroutine so a 2 s capture never delays a system sample; it
+  tries `--` then `-` option spelling once and remembers the winner. Every failure —
+  no binary, refused ETW — yields **no FPS cell**, never a fabricated number. Latency is
   `SystemSnapshot.pingMs`: one TCP handshake to `1.1.1.1:443` every other system tick
   (4 s macOS / 8 s Windows, 1 s timeout, fail-soft), kept off the System page. A game
   also force-enables `SystemMetrics` (`showSystem || gamingActive`) because the HUD needs
-  CPU/GPU — the System *page* stays off the wheel when its toggle is off. Both gaming
-  switches live inside the System widget accordion, with the Windows-only
-  exclusive-fullscreen note directly under the HUD switch (a true exclusive swap chain
-  cannot be overlaid; borderless fullscreen is the supported case).
+  CPU/GPU — the System *page* stays off the wheel when its toggle is off. The one thing
+  the HUD cannot do is written directly under its switch: a true exclusive-fullscreen
+  swap chain cannot be overlaid (borderless fullscreen is the supported case).
+  The macOS detection path (`MacGameWatch.kt` + `gamewatch-bridge.dylib`) is kept in the
+  tree but no longer started — dormant until a macOS HUD exists.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`

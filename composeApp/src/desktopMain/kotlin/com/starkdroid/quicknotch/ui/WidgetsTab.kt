@@ -397,8 +397,11 @@ internal fun WidgetsTab(
                             // The gaming HUD is fed by the same poller (a game
                             // force-enables it even when the System page is
                             // off), so its switches live in this widget rather
-                            // than in the Behavior tab.
-                            GamingWidgetRows(config = config, onUpdate = onUpdate)
+                            // than in the Behavior tab. Windows only: the
+                            // detector and PresentMon have no macOS twin.
+                            if (HostPlatform.isWindows) {
+                                GamingWidgetRows(config = config, onUpdate = onUpdate)
+                            }
                         }
                     }
                 }
@@ -436,18 +439,16 @@ private fun GamingWidgetRows(
     // The one thing the HUD cannot do belongs directly under its switch: a
     // true exclusive-fullscreen swap chain bypasses DWM, so no ordinary window
     // can draw over it. Kept inside the accordion with the switch it qualifies.
-    if (HostPlatform.isWindows) {
-        Text(
-            text = stringResource(Res.string.game_hud_fullscreen_note),
-            style = AppTypography.bodySmall,
-            color = TextMuted,
-            fontSize = 11.5.sp,
-            lineHeight = 16.sp,
-            // Align with the switch's title (8 dp row inset + 30 dp icon +
-            // 12 dp gap), so the caveat reads as part of the HUD row.
-            modifier = Modifier.padding(start = 50.dp, end = 8.dp)
-        )
-    }
+    Text(
+        text = stringResource(Res.string.game_hud_fullscreen_note),
+        style = AppTypography.bodySmall,
+        color = TextMuted,
+        fontSize = 11.5.sp,
+        lineHeight = 16.sp,
+        // Align with the switch's title (8 dp row inset + 30 dp icon +
+        // 12 dp gap), so the caveat reads as part of the HUD row.
+        modifier = Modifier.padding(start = 50.dp, end = 8.dp)
+    )
 
     HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
 

@@ -15,7 +15,7 @@
     <string name="onboarding_feature_media">See what is playing and control it</string>
     <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
     <string name="onboarding_feature_quiet">Stays out of the way until you hover</string>
-    <string name="onboarding_feature_gaming">Gaming HUD — FPS, CPU, GPU, ping and download, live while a fullscreen game runs.</string>
+    <string name="onboarding_feature_gaming">Windows only — the gaming HUD shows FPS, CPU, GPU, ping and download while a fullscreen game runs.</string>
     <string name="onboarding_back">Back</string>
     <string name="onboarding_skip">Skip for now</string>
     <string name="onboarding_continue">Continue</string>

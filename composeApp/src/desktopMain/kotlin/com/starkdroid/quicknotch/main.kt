@@ -155,7 +155,12 @@ fun main(args: Array<String>) {
         // who switches the HUD off pays nothing even though the detector still
         // knows a game is running.
         val gameSession by GameDetector.game.collectAsState()
-        val gamingActive = gameSession != null && config.widgets.showGameHud
+        // Windows-only: the HUD's frame rate comes from PresentMon and the
+        // switches are hidden everywhere else, so a macOS session must never
+        // light up a feature the user cannot see or turn off.
+        val gamingActive = HostPlatform.isWindows &&
+            gameSession != null &&
+            config.widgets.showGameHud
 
         // One system-wide media feed for the whole app: the tray, the overlay
         // and the settings window all observe the same session.
@@ -169,8 +174,12 @@ fun main(args: Array<String>) {
             // The gaming detector is started once and gated by its toggle: on
             // macOS it is an in-process CoreGraphics call, on Windows one
             // long-lived PowerShell watcher (see GameDetector).
-            GameDetector.start()
-            GameDetector.logAvailability()
+            // Gaming is a Windows feature end to end; starting the detector on a
+            // Mac would only probe for a HUD that is gated off below.
+            if (HostPlatform.isWindows) {
+                GameDetector.start()
+                GameDetector.logAvailability()
+            }
             NotificationCount.start()
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
@@ -419,7 +428,7 @@ private fun NotchOverlayWindow(
     // here too because the native window must already be wide enough the
     // instant a game starts — resizing the window then would flash on macOS.
     val game by GameDetector.game.collectAsState()
-    val gameHudActive = game != null && config.widgets.showGameHud
+    val gameHudActive = HostPlatform.isWindows && game != null && config.widgets.showGameHud
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
         weatherVisible = weatherData != null
