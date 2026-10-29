@@ -32,6 +32,7 @@ import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.datasource.MacDockPresence
 import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
+import com.starkdroid.quicknotch.datasource.WindowsOverlayWindowPolicy
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.app_name
 import com.starkdroid.quicknotch.generated.resources.menu_always_on_top
@@ -491,6 +492,21 @@ private fun NotchOverlayWindow(
         }
         DisposableEffect(awtWindow) {
             onDispose { macPolicy?.close() }
+        }
+
+        // Windows z-order keeper: AWT sets WS_EX_TOPMOST once, but a fullscreen
+        // game re-raises its own window into the same band and ends up above
+        // the notch — the HUD then only surfaces after an alt-tab re-shuffles
+        // the z-order. Re-assert topmost on a slow tick (fast while a game is
+        // detected) without activating or moving the window. Off-Windows it
+        // installs nothing; a true exclusive-fullscreen swap chain still cannot
+        // be overlaid, but borderless fullscreen (the common case) can.
+        val windowsPolicy = remember(awtWindow) { WindowsOverlayWindowPolicy.install(awtWindow) }
+        LaunchedEffect(config.alwaysOnTop, game != null) {
+            windowsPolicy?.update(config.alwaysOnTop, game != null)
+        }
+        DisposableEffect(awtWindow) {
+            onDispose { windowsPolicy?.close() }
         }
 
         // Shared widget-pager state; on Windows the wheel listener below drives

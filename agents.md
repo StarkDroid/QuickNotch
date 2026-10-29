@@ -113,6 +113,14 @@ from the AWT wheel listener and composition on the same thread — no locks.
   `dispatch_sync` at 33 Hz deadlocks) + delayed synthetic MOUSE_MOVED re-arm. Fail-soft:
   handle/bridge missing → fully interactive. Native handle via reflected AWT peer +
   `--add-opens` (`java.awt`, `sun.lwawt[.macosx]` / `sun.awt.windows`, host-gated).
+- **Windows z-order** (`WindowsOverlayWindowPolicy`): AWT sets `WS_EX_TOPMOST` once;
+  a fullscreen game re-raises its own window into the band, leaving the HUD underneath
+  until an alt-tab re-shuffles it. Re-assert `SetWindowPos(HWND_TOPMOST)` on a 1.5 s
+  reconcile tick (250 ms while `GameDetector` has a session) with
+  `SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE|SWP_ASYNCWINDOWPOS`. `HWND_TOPMOST` must be a
+  real `Pointer(-1L)` — `Pointer.createConstant(-1)` reaches the call as an invalid
+  handle (1400). True exclusive-fullscreen swap chains still cannot be overlaid;
+  borderless fullscreen (and Windows' fullscreen optimizations) is covered.
 
 ### 4.2 Overlay: geometry, hover, pager, morph
 
@@ -366,6 +374,11 @@ scope-creep (new notch positions, Android/iOS) unless asked.
   32bpp BI_RGB alpha is undefined — force opaque.
 - Progress outline straddles the island edge from a padded wrapper sibling
   (the island clip would cut its outer half); pad is 0 when the ring is off.
+- Windows z-order: AWT's one-shot `alwaysOnTop` loses the topmost band to a
+  fullscreen game's own `SetWindowPos`; `WindowsOverlayWindowPolicy` re-asserts
+  `HWND_TOPMOST` with `SWP_NOACTIVATE`. Pass `Pointer(-1L)`, not
+  `Pointer.createConstant(-1)` — the latter arrives as an invalid handle (1400)
+  and the call silently no-ops. Exclusive fullscreen still cannot be overlaid.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
 - System monitor (macOS probe): `netstat` **must** be `-n` (without it every interface
   address resolves through DNS and the probe blocked ~5 s); `netstat -ib` repeats a row
