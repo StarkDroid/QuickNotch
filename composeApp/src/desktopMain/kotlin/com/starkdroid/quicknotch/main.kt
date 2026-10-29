@@ -160,7 +160,7 @@ fun main(args: Array<String>) {
         // light up a feature the user cannot see or turn off.
         val gamingActive = HostPlatform.isWindows &&
             gameSession != null &&
-            config.widgets.showGameHud
+            config.gameHudEnabled
 
         // One system-wide media feed for the whole app: the tray, the overlay
         // and the settings window all observe the same session.
@@ -238,10 +238,11 @@ fun main(args: Array<String>) {
             SystemMetrics.setEnabled(config.widgets.showSystem || gamingActive)
         }
 
-        // Detection only runs while something consumes it: the HUD, or the
-        // transparent-in-games repaint. Switched off means no probe at all.
-        LaunchedEffect(config.widgets.showGameHud, config.transparentInGame) {
-            GameDetector.setEnabled(config.widgets.showGameHud || config.transparentInGame)
+        // Detection only runs while the HUD can actually draw: its switch is on
+        // and at least one metric is selected. Switching the last metric off
+        // stops the probe just like switching the HUD off does.
+        LaunchedEffect(config.gameHudEnabled) {
+            GameDetector.setEnabled(config.gameHudEnabled)
         }
 
         // FPS follows the detected game. A PresentMon capture takes ~2 s, so it
@@ -428,7 +429,7 @@ private fun NotchOverlayWindow(
     // here too because the native window must already be wide enough the
     // instant a game starts — resizing the window then would flash on macOS.
     val game by GameDetector.game.collectAsState()
-    val gameHudActive = HostPlatform.isWindows && game != null && config.widgets.showGameHud
+    val gameHudActive = HostPlatform.isWindows && game != null && config.gameHudEnabled
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
         weatherVisible = weatherData != null

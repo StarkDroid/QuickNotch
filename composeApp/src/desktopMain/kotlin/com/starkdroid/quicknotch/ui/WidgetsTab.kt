@@ -1,6 +1,8 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,10 +36,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +50,12 @@ import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.game_hud_cpu
+import com.starkdroid.quicknotch.generated.resources.game_hud_fps
+import com.starkdroid.quicknotch.generated.resources.game_hud_gpu
+import com.starkdroid.quicknotch.generated.resources.game_hud_net
+import com.starkdroid.quicknotch.generated.resources.game_hud_ping
+import com.starkdroid.quicknotch.generated.resources.game_metrics_title
 import com.starkdroid.quicknotch.generated.resources.game_hud_fullscreen_note
 import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_hint
 import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_title
@@ -69,10 +80,12 @@ import com.starkdroid.quicknotch.generated.resources.widget_unknown_artist
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
+import com.starkdroid.quicknotch.model.GameMetrics
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.theme.AccentGreen
+import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.NotchBorder
 import com.starkdroid.quicknotch.theme.NotchDeepBlack
@@ -450,6 +463,10 @@ private fun GamingWidgetRows(
         modifier = Modifier.padding(start = 50.dp, end = 8.dp)
     )
 
+    if (config.widgets.showGameHud) {
+        GameMetricRow(config = config, onUpdate = onUpdate)
+    }
+
     HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
 
     BehaviorSwitchRow(
@@ -461,6 +478,85 @@ private fun GamingWidgetRows(
             onUpdate { it.copy(transparentInGame = checked) }
         }
     )
+}
+
+/**
+ * The per-cell switch row: a caption plus five compact chips. Extracted from
+ * [GamingWidgetRows] so each stays one readable screenful.
+ */
+@Composable
+private fun GameMetricRow(config: NotchConfig, onUpdate: ((NotchConfig) -> NotchConfig) -> Unit) {
+    val metrics = config.widgets.gameMetrics
+    val setMetric: ((GameMetrics) -> GameMetrics) -> Unit = { update ->
+        onUpdate {
+            it.copy(widgets = it.widgets.copy(gameMetrics = update(it.widgets.gameMetrics)))
+        }
+    }
+
+    Text(
+        text = stringResource(Res.string.game_metrics_title),
+        style = AppTypography.labelSmall,
+        color = TextMuted,
+        fontSize = 10.5.sp,
+        modifier = Modifier.padding(start = 50.dp, end = 8.dp)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 50.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        GameMetricChip(stringResource(Res.string.game_hud_fps), metrics.fps) { on ->
+            setMetric { it.copy(fps = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_cpu), metrics.cpu) { on ->
+            setMetric { it.copy(cpu = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_gpu), metrics.gpu) { on ->
+            setMetric { it.copy(gpu = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_ping), metrics.ping) { on ->
+            setMetric { it.copy(ping = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_net), metrics.net) { on ->
+            setMetric { it.copy(net = on) }
+        }
+    }
+}
+
+/**
+ * One metric in the HUD's per-cell switch row: a compact chip that reads as a
+ * checkbox (selected = accent fill and border), so five of them fit on one line
+ * instead of five full switch rows.
+ */
+@Composable
+private fun GameMetricChip(label: String, selected: Boolean, onToggle: (Boolean) -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) AccentSolid.copy(alpha = 0.18f) else SettingsElevated)
+            .border(
+                1.dp,
+                if (selected) AccentSolid.copy(alpha = 0.85f) else SettingsBorder,
+                RoundedCornerShape(8.dp)
+            )
+            .toggleable(
+                value = selected,
+                onValueChange = onToggle,
+                role = Role.Checkbox,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            style = AppTypography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            color = if (selected) TextPrimary else TextMuted
+        )
+    }
 }
 
 /**

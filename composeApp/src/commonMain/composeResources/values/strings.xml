@@ -15,7 +15,7 @@
     <string name="onboarding_feature_media">See what is playing and control it</string>
     <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
     <string name="onboarding_feature_quiet">Stays out of the way until you hover</string>
-    <string name="onboarding_feature_gaming">Windows only — the gaming HUD shows FPS, CPU, GPU, ping and download while a fullscreen game runs.</string>
+    <string name="onboarding_feature_gaming">Windows only — FPS, CPU, GPU, ping and download while a fullscreen game runs; pick which show in Settings.</string>
     <string name="onboarding_back">Back</string>
     <string name="onboarding_skip">Skip for now</string>
     <string name="onboarding_continue">Continue</string>
@@ -166,6 +166,7 @@
     <string name="game_hud_toggle_hint">Swap the collapsed pill for live FPS, CPU, GPU, latency and download rate while a fullscreen game is on screen. Hover still opens the dock. Works even when the System page is off.</string>
     <string name="game_transparent_title">Transparent in Games</string>
     <string name="game_transparent_hint">While the gaming HUD is showing, drop the notch body, its dividers and its shadow, leaving only the numbers over the game. The solid HUD keeps its body. Every other surface is untouched.</string>
+    <string name="game_metrics_title">Metrics shown</string>
     <string name="game_hud_fullscreen_note">Windows can't draw the HUD over exclusive fullscreen. If it doesn't appear over a game, switch the game to borderless fullscreen.</string>
 
     <!-- Idle clock in the quickview -->

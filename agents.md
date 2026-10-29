@@ -252,7 +252,11 @@ from the AWT wheel listener and composition on the same thread — no locks.
   also force-enables `SystemMetrics` (`showSystem || gamingActive`) because the HUD needs
   CPU/GPU — the System *page* stays off the wheel when its toggle is off. The one thing
   the HUD cannot do is written directly under its switch: a true exclusive-fullscreen
-  swap chain cannot be overlaid (borderless fullscreen is the supported case).
+  swap chain cannot be overlaid (borderless fullscreen is the supported case). Each of
+  the five cells has its own switch (`WidgetsConfig.gameMetrics`, chips under the HUD
+  row); with every cell off `NotchConfig.gameHudEnabled` is false and the overlay, the
+  window sizer, the system poller and the detector all fall back to the ordinary pill —
+  never an empty strip.
   The macOS detection path (`MacGameWatch.kt` + `gamewatch-bridge.dylib`) is kept in the
   tree but no longer started — dormant until a macOS HUD exists.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)

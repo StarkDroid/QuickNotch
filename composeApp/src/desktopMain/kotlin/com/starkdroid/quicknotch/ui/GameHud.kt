@@ -32,6 +32,7 @@ import com.starkdroid.quicknotch.generated.resources.game_hud_ping
 import com.starkdroid.quicknotch.generated.resources.game_hud_ping_value
 import com.starkdroid.quicknotch.generated.resources.game_hud_summary
 import com.starkdroid.quicknotch.generated.resources.game_hud_unknown
+import com.starkdroid.quicknotch.model.GameMetrics
 import com.starkdroid.quicknotch.system.GameSession
 import com.starkdroid.quicknotch.system.SystemSnapshot
 import org.jetbrains.compose.resources.stringResource
@@ -77,8 +78,8 @@ internal fun GameHud(
     game: GameSession,
     system: SystemSnapshot?,
     fps: Int?,
-    transparent: Boolean,
-    modifier: Modifier = Modifier
+    metrics: GameMetrics,
+    transparent: Boolean
 ) {
     val unknown = stringResource(Res.string.game_hud_unknown)
     val fpsLabel = stringResource(Res.string.game_hud_fps)
@@ -88,31 +89,23 @@ internal fun GameHud(
     val netLabel = stringResource(Res.string.game_hud_net)
     val pingText = system?.pingMs?.let { stringResource(Res.string.game_hud_ping_value, it) }
 
-    val cells = buildList {
-        if (fps != null) add(HudCell(fpsLabel, fps.toString(), known = true))
-        system?.cpuPercent?.let { cpu ->
-            add(HudCell(cpuLabel, "$cpu%", known = true, alert = cpu >= HudAlertPercent))
-        }
-        val gpu = system?.gpuPercent
-        if (system?.gpuAvailable == true && gpu != null) {
-            add(HudCell(gpuLabel, "$gpu%", known = true, alert = gpu >= HudAlertPercent))
-        }
-        add(HudCell(pingLabel, pingText ?: unknown, known = pingText != null))
-        add(
-            HudCell(
-                netLabel,
-                system?.let { systemRate(it.downBytesPerSec) } ?: unknown,
-                known = system != null
-            )
-        )
-    }
+    // Only the cells the user asked for, and only where the OS has a real
+    // number: a selected metric with no reading still drops its cell rather
+    // than inventing one.
+    val cells = listOfNotNull(
+        if (metrics.fps) fpsCell(fps, fpsLabel) else null,
+        if (metrics.cpu) cpuCell(system, cpuLabel) else null,
+        if (metrics.gpu) gpuCell(system, gpuLabel) else null,
+        if (metrics.ping) pingCell(pingText, unknown, pingLabel) else null,
+        if (metrics.net) netCell(system, unknown, netLabel) else null
+    )
     val summary = stringResource(
         Res.string.game_hud_summary,
         game.name,
         cells.joinToString(", ") { "${it.label} ${it.value}" }
     )
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .semantics(mergeDescendants = true) { contentDescription = summary }
             .padding(horizontal = HudSidePadding),
@@ -125,6 +118,33 @@ internal fun GameHud(
         }
     }
 }
+
+private fun fpsCell(fps: Int?, label: String): HudCell? =
+    fps?.let { HudCell(label, it.toString(), known = true) }
+
+private fun cpuCell(system: SystemSnapshot?, label: String): HudCell? =
+    system?.cpuPercent?.let {
+        HudCell(label, "$it%", known = true, alert = it >= HudAlertPercent)
+    }
+
+private fun gpuCell(system: SystemSnapshot?, label: String): HudCell? {
+    val gpu = system?.gpuPercent
+    return if (system?.gpuAvailable == true && gpu != null) {
+        HudCell(label, "$gpu%", known = true, alert = gpu >= HudAlertPercent)
+    } else {
+        null
+    }
+}
+
+private fun pingCell(value: String?, unknown: String, label: String): HudCell =
+    HudCell(label, value ?: unknown, known = value != null)
+
+private fun netCell(system: SystemSnapshot?, unknown: String, label: String): HudCell =
+    HudCell(
+        label,
+        system?.let { systemRate(it.downBytesPerSec) } ?: unknown,
+        known = system != null
+    )
 
 @Composable
 private fun HudCellView(cell: HudCell, transparent: Boolean, modifier: Modifier = Modifier) {

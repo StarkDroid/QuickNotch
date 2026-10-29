@@ -184,7 +184,7 @@ export const tour = {
 			id: 'gaming',
 			label: 'Gaming',
 			title: 'Game on. Numbers up.',
-			body: 'On Windows, a fullscreen game swaps the pill for FPS, CPU, GPU, ping and download. Nothing to launch.'
+			body: 'On Windows, a fullscreen game swaps the pill for FPS, CPU, GPU, ping and download — pick which numbers show in Settings. Nothing to launch.'
 		}
 	]
 } as const;
