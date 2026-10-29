@@ -226,8 +226,8 @@ from the AWT wheel listener and composition on the same thread — no locks.
   GPU = highest `Device Utilization %` (macOS) / summed 3D-engine utilization clamped
   to 100 (Windows) — no counter means no GPU tile (`gpuAvailable`). Throughput comes
   from cumulative counters, so **both directions must share one delta** and the first
-  sample is always null. `emit()` refuses a sample that lands after the switch-off, or
-  the settings row shows a frozen reading forever. Load metrics warm to `LoadHighTint`
+  sample is always null. `emit()` refuses a sample that lands after the switch-off, so
+  a switched-off page can never show a frozen reading forever. Load metrics warm to `LoadHighTint`
   ≥ 85; network rings use a log sweep (1 KB/s → 0 … 1 GB/s → 100) and the label carries
   the exact rate.
 - **Gaming** (`system/GameDetector.kt` + `FpsProbe.kt` + `datasource/MacGameWatch.kt`,
@@ -255,11 +255,6 @@ from the AWT wheel listener and composition on the same thread — no locks.
   switches live inside the System widget accordion, with the Windows-only
   exclusive-fullscreen note directly under the HUD switch (a true exclusive swap chain
   cannot be overlaid; borderless fullscreen is the supported case).
-  **TEMPORARY, remove before shipping:** `system/GamePreview.kt` publishes a synthetic
-  session and a randomised FPS on macOS so the HUD can be reviewed without Windows (the
-  real detector/PresentMon are Windows-only); it is inert on Windows and reverts by
-  deleting that file and its `GamePreview` references in `main.kt` /
-  `FloatingNotchOverlay.kt`.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`

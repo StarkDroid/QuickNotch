@@ -55,7 +55,6 @@ import com.starkdroid.quicknotch.media.SystemVolume
 import com.starkdroid.quicknotch.media.SystemBattery
 import com.starkdroid.quicknotch.model.FavoritesRepository
 import com.starkdroid.quicknotch.system.FpsProbe
-import com.starkdroid.quicknotch.system.GamePreview
 import com.starkdroid.quicknotch.system.GameDetector
 import com.starkdroid.quicknotch.system.SystemMetrics
 import com.starkdroid.quicknotch.theme.QuickNotchTheme
@@ -155,12 +154,7 @@ fun main(args: Array<String>) {
         // it is up. `gamingActive` (not the raw session) is the gate, so a user
         // who switches the HUD off pays nothing even though the detector still
         // knows a game is running.
-        // TEMPORARY macOS preview: on a Mac there is no fullscreen-game signal
-        // to wait for and no PresentMon, so GamePreview substitutes a synthetic
-        // session (and a fake frame rate in the overlay). On Windows it is inert.
-        val detectedGame by GameDetector.game.collectAsState()
-        val previewGame by GamePreview.session.collectAsState()
-        val gameSession = previewGame ?: detectedGame
+        val gameSession by GameDetector.game.collectAsState()
         val gamingActive = gameSession != null && config.widgets.showGameHud
 
         // One system-wide media feed for the whole app: the tray, the overlay
@@ -177,8 +171,6 @@ fun main(args: Array<String>) {
             // long-lived PowerShell watcher (see GameDetector).
             GameDetector.start()
             GameDetector.logAvailability()
-            // TEMPORARY: fake frame clock for the macOS HUD preview.
-            GamePreview.start()
             NotificationCount.start()
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
@@ -194,7 +186,6 @@ fun main(args: Array<String>) {
                 SystemBattery.stop()
                 SystemMetrics.stop()
                 GameDetector.stop()
-                GamePreview.stop()
                 NotificationCount.stop()
                 Weather.stop()
             }
@@ -427,11 +418,7 @@ private fun NotchOverlayWindow(
     // The gaming HUD claims the same width the overlay draws it at. Collected
     // here too because the native window must already be wide enough the
     // instant a game starts — resizing the window then would flash on macOS.
-    // TEMPORARY macOS preview: the overlay must reserve the HUD's width when
-    // the preview is up, exactly as it would for a real game.
-    val detectedGame by GameDetector.game.collectAsState()
-    val previewGame by GamePreview.session.collectAsState()
-    val game = previewGame ?: detectedGame
+    val game by GameDetector.game.collectAsState()
     val gameHudActive = game != null && config.widgets.showGameHud
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,

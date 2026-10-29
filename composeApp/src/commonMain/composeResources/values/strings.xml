@@ -151,9 +151,6 @@
     <string name="system_reading">%1$s: %2$s</string>
     <string name="system_reading_unknown">%1$s: unavailable</string>
     <string name="system_unknown">—</string>
-    <string name="system_waiting">Collecting the first sample…</string>
-    <string name="system_disabled">Switched off — the page stays hidden and nothing is polled.</string>
-    <string name="system_preview">CPU %1$s · Memory %2$s · %3$s down</string>
 
     <!-- Gaming quickview: the performance HUD that replaces the pill while a
          fullscreen game is on screen. -->
