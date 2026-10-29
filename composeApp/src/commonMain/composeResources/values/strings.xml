@@ -165,6 +165,11 @@
     <string name="game_hud_unknown">—</string>
     <string name="game_hud_ping_value">%1$d ms</string>
     <string name="game_hud_summary">Gaming performance in %1$s: %2$s</string>
+    <string name="game_hud_toggle_title">Gaming Performance HUD</string>
+    <string name="game_hud_toggle_hint">Swap the collapsed pill for live FPS, CPU, GPU, latency and download rate while a fullscreen game is on screen. Hover still opens the dock. Works even when the System page is off.</string>
+    <string name="game_transparent_title">Transparent in Games</string>
+    <string name="game_transparent_hint">While the gaming HUD is showing, drop the notch body and outline it with a thin dark rim and soft shadow, so it stays legible over game scenery. Every other surface is untouched.</string>
+    <string name="game_hud_fullscreen_note">Windows can't draw the HUD over exclusive fullscreen. If it doesn't appear over a game, switch the game to borderless fullscreen.</string>
 
     <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>
@@ -216,10 +221,6 @@ Add apps from the list on the right.</string>
     <string name="autostart_title_windows">Start on Windows Boot</string>
     <string name="always_on_top_title">Always on Top</string>
     <string name="collapse_on_launch_title">Collapse on Launch</string>
-    <string name="game_hud_toggle_title">Gaming Performance HUD</string>
-    <string name="game_hud_toggle_hint">Swap the collapsed pill for live FPS, CPU, GPU, latency and download rate while a fullscreen game is on screen. Hover still opens the dock.</string>
-    <string name="game_transparent_title">Transparent in Games</string>
-    <string name="game_transparent_hint">While the gaming HUD is showing, drop the notch body and outline it with a thin dark rim and soft shadow, so it stays legible over game scenery. Every other surface is untouched.</string>
 
     <!-- About dialog -->
     <string name="about_header">About QuickNotch</string>

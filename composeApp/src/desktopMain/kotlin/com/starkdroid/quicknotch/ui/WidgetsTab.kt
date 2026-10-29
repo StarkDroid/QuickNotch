@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,8 +42,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.game_hud_fullscreen_note
+import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_hint
+import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_title
+import com.starkdroid.quicknotch.generated.resources.game_transparent_hint
+import com.starkdroid.quicknotch.generated.resources.game_transparent_title
 import com.starkdroid.quicknotch.generated.resources.progress_border_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_section_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_style_title
@@ -369,38 +377,100 @@ internal fun WidgetsTab(
             // network tick.
             val systemState by SystemMetrics.state.collectAsState()
             TabEntrance(index = 4) {
-                WidgetAccordion(
-                    icon = Icons.Default.Memory,
-                    title = stringResource(Res.string.system_section_title),
-                    enabled = config.widgets.showSystem,
-                    onToggleEnabled = { enabled ->
-                        onUpdate { it.copy(widgets = it.widgets.copy(showSystem = enabled)) }
-                    }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .padding(bottom = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                Column {
+                    WidgetAccordion(
+                        icon = Icons.Default.Memory,
+                        title = stringResource(Res.string.system_section_title),
+                        enabled = config.widgets.showSystem,
+                        onToggleEnabled = { enabled ->
+                            onUpdate { it.copy(widgets = it.widgets.copy(showSystem = enabled)) }
+                        }
                     ) {
-                        SystemStatusRow(
-                            snapshot = systemState,
-                            enabled = config.widgets.showSystem
-                        )
-                        Text(
-                            text = stringResource(Res.string.system_hint),
-                            style = AppTypography.bodySmall,
-                            color = TextSecondary,
-                            fontSize = 11.5.sp,
-                            lineHeight = 16.sp
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp)
+                                .padding(bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            SystemStatusRow(
+                                snapshot = systemState,
+                                enabled = config.widgets.showSystem
+                            )
+                            Text(
+                                text = stringResource(Res.string.system_hint),
+                                style = AppTypography.bodySmall,
+                                color = TextSecondary,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp
+                            )
+
+                            // The gaming HUD is fed by the same poller (a game
+                            // force-enables it even when the System page is
+                            // off), so its switches live in this widget rather
+                            // than in the Behavior tab.
+                            GamingWidgetRows(config = config, onUpdate = onUpdate)
+                        }
                     }
                 }
             }
         }
 
     }
+}
+
+/**
+ * The gaming HUD switches, inside the System widget: the HUD is fed by the
+ * same poller the System page uses, so it belongs with the widget it reads.
+ * Both rows are behaviour, not appearance: the HUD is automatic (a fullscreen
+ * game is the trigger) and transparency is a repaint of that HUD only, never a
+ * fourth material. The Windows exclusive-fullscreen caveat sits directly under
+ * the HUD switch it qualifies, inside the same accordion.
+ */
+@Composable
+private fun GamingWidgetRows(
+    config: NotchConfig,
+    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit
+) {
+    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+    BehaviorSwitchRow(
+        icon = Icons.Default.SportsEsports,
+        title = stringResource(Res.string.game_hud_toggle_title),
+        subtitle = stringResource(Res.string.game_hud_toggle_hint),
+        checked = config.widgets.showGameHud,
+        onCheckedChange = { checked ->
+            onUpdate { it.copy(widgets = it.widgets.copy(showGameHud = checked)) }
+        }
+    )
+
+    // The one thing the HUD cannot do belongs directly under its switch: a
+    // true exclusive-fullscreen swap chain bypasses DWM, so no ordinary window
+    // can draw over it. Kept inside the accordion with the switch it qualifies.
+    if (HostPlatform.isWindows) {
+        Text(
+            text = stringResource(Res.string.game_hud_fullscreen_note),
+            style = AppTypography.bodySmall,
+            color = TextMuted,
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            // Align with the switch's title (8 dp row inset + 30 dp icon +
+            // 12 dp gap), so the caveat reads as part of the HUD row.
+            modifier = Modifier.padding(start = 50.dp, end = 8.dp)
+        )
+    }
+
+    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+    BehaviorSwitchRow(
+        icon = Icons.Default.Visibility,
+        title = stringResource(Res.string.game_transparent_title),
+        subtitle = stringResource(Res.string.game_transparent_hint),
+        checked = config.transparentInGame,
+        onCheckedChange = { checked ->
+            onUpdate { it.copy(transparentInGame = checked) }
+        }
+    )
 }
 
 /**

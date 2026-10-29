@@ -244,7 +244,7 @@ export const faq = [
 	{
 		question: 'Does QuickNotch show FPS while I game?',
 		answer:
-			'On Windows, yes: a fullscreen game turns the pill into a HUD with frame rate, CPU and GPU load, latency and download rate, via Intel PresentMon. macOS shows load and latency only — no supported API exposes another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
+			'On Windows, yes: a borderless-fullscreen game turns the pill into a HUD with frame rate, CPU and GPU load, latency and download rate, via Intel PresentMon. Exclusive fullscreen bypasses the desktop compositor, so the HUD can't overlay it — switch the game to borderless fullscreen. macOS shows load and latency only — no supported API exposes another app\u2019s frame rate. Turn the HUD off in Settings if you would rather keep the clock.'
 	},
 	{
 		question: 'Will the notch get in the way?',

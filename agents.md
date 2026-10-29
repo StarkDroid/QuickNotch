@@ -250,7 +250,10 @@ from the AWT wheel listener and composition on the same thread — no locks.
   `SystemSnapshot.pingMs`: one TCP handshake to `1.1.1.1:443` every other system tick
   (4 s macOS / 8 s Windows, 1 s timeout, fail-soft), kept off the System page. A game
   also force-enables `SystemMetrics` (`showSystem || gamingActive`) because the HUD needs
-  CPU/GPU — the System *page* stays off the wheel when its toggle is off.
+  CPU/GPU — the System *page* stays off the wheel when its toggle is off. Both gaming
+  switches live inside the System widget accordion, with the Windows-only
+  exclusive-fullscreen note directly under the HUD switch (a true exclusive swap chain
+  cannot be overlaid; borderless fullscreen is the supported case).
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`
