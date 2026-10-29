@@ -70,6 +70,7 @@ import com.starkdroid.quicknotch.model.NotchStyle
 import com.starkdroid.quicknotch.model.NotchSurface
 import com.starkdroid.quicknotch.model.WaveformTint
 import com.starkdroid.quicknotch.system.FpsProbe
+import com.starkdroid.quicknotch.system.GamePreview
 import com.starkdroid.quicknotch.system.GameDetector
 import com.starkdroid.quicknotch.system.SystemMetrics
 import com.starkdroid.quicknotch.weather.Weather
@@ -179,8 +180,15 @@ internal fun FloatingNotchOverlay(
     // the HUD takes the pill's place while it lasts. FPS comes from a separate
     // probe because a PresentMon capture takes seconds — it must never delay a
     // system sample.
-    val game by GameDetector.game.collectAsState()
-    val fps by FpsProbe.fps.collectAsState()
+    // TEMPORARY macOS preview: the synthetic session from GamePreview stands in
+    // for a detected game and its fake FPS for PresentMon. Both are inert on
+    // Windows, where the real detector and probe supply the values.
+    val detectedGame by GameDetector.game.collectAsState()
+    val previewGame by GamePreview.session.collectAsState()
+    val game = previewGame ?: detectedGame
+    val realFps by FpsProbe.fps.collectAsState()
+    val previewFps by GamePreview.fps.collectAsState()
+    val fps = previewFps ?: realFps
     val gameHudVisible = game != null && config.widgets.showGameHud
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
