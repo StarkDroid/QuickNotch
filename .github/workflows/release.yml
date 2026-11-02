@@ -1,129 +1,234 @@
-name: Release & Package Build
+name: Release
 
+# One release per merged pull request.
+#
+# `plan` turns the PR into a version number, a sanitised changelog entry and the
+# cumulative `changelog.json` the app fetches. `build` produces the installers
+# on three runners, and `publish` attaches them together with a checksum file.
+#
+# PRs that touch only the site, the docs or CI still merge normally — they just
+# do not produce a build. `workflow_dispatch` exists for a re-run, a forced
+# rebuild, or a fork PR (whose token cannot publish a release).
 on:
+  pull_request:
+    types: [closed]
   workflow_dispatch:
     inputs:
-      bump_type:
-        description: "Version Bump Type"
-        required: true
-        default: "patch"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-          - custom
-      custom_version:
-        description: "Custom Version (if bump_type is custom, e.g. 1.0.0)"
+      pr_number:
+        description: "Pull request to release (blank = most recent merged)"
         required: false
         default: ""
-  push:
-    tags:
-      - "v*"
+      bump:
+        description: "Version bump (auto follows labels)"
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - minor
+          - major
+          - patch
+      force:
+        description: "Rebuild even if the PR is already in the changelog"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  pull-requests: read
+
+concurrency:
+  # One release at a time, globally. Two PRs merged back-to-back would
+  # otherwise both read the same changelog and compute the same next version.
+  group: release
+  cancel-in-progress: false
+
+env:
+  RELEASE_BUMP: ${{ inputs.bump || 'auto' }}
+  RELEASE_FORCE: ${{ inputs.force || false }}
 
 jobs:
-  build-and-release:
-    name: Build Windows Distribution & Release
-    runs-on: windows-latest
-
+  plan:
+    name: Plan release
+    # A forks' pull_request token is read-only; a maintainer re-runs the
+    # workflow by hand after merging, which releases the default branch.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      pr: ${{ steps.plan.outputs.pr }}
+      reason: ${{ steps.plan.outputs.reason }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          # On `pull_request` closed the merge ref may already be gone; the
+          # merge commit SHA is the commit that actually landed on the base.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: "temurin"
+          node-version: 20
+
+      - name: Work out the next version
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          BUMP: ${{ env.RELEASE_BUMP }}
+          FORCE: ${{ env.RELEASE_FORCE }}
+        run: node .github/scripts/changelog.mjs
+
+      - name: Keep the release notes
+        if: steps.plan.outputs.release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-summary
+          path: build/release/
+          retention-days: 30
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-latest
+            platform: windows
+            artifact: QuickNotch-windows
+          - name: macOS (Apple silicon)
+            runner: macos-latest
+            platform: macos
+            arch: arm64
+            artifact: QuickNotch-macos-arm64
+          - name: macOS (Intel)
+            runner: macos-15-intel
+            platform: macos
+            arch: x64
+            artifact: QuickNotch-macos-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
           java-version: "17"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v4
 
-      - name: Determine & Increment Version
-        id: versioning
+      - name: Build installer (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./gradlew.bat :composeApp:packageDistributionForCurrentOS "-PappVersion=${{ needs.plan.outputs.version }}"
+
+      - name: Build installer (macOS)
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: ./gradlew :composeApp:packageDistributionForCurrentOS "-PappVersion=${{ needs.plan.outputs.version }}"
+
+      - name: Collect installers (Windows)
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $buildGradlePath = "composeApp/build.gradle.kts"
-          $content = Get-Content $buildGradlePath -Raw
-          if ($content -match 'version\s*=\s*"([^"]+)"') {
-              $currentVersion = $matches[1]
-          } else {
-              $currentVersion = "1.0.0"
-          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item composeApp/build/compose/binaries/main/msi/*.msi dist/ -ErrorAction Stop
+          Copy-Item composeApp/build/compose/binaries/main/exe/*.exe dist/ -ErrorAction SilentlyContinue
+          Get-ChildItem dist
 
-          $tagInput = "${{ github.ref_name }}"
-          $bumpType = "${{ github.event.inputs.bump_type }}"
-          $customVer = "${{ github.event.inputs.custom_version }}"
-
-          if ($tagInput -like "v*") {
-              $newVersion = $tagInput.TrimStart("v")
-          } elseif ($bumpType -eq "custom" -and $customVer -ne "") {
-              $newVersion = $customVer.TrimStart("v")
-          } else {
-              $parts = $currentVersion.Split('.')
-              $major = [int]$parts[0]
-              $minor = if ($parts.Length -gt 1) { [int]$parts[1] } else { 0 }
-              $patch = if ($parts.Length -gt 2) { [int]$parts[2] } else { 0 }
-
-              switch ($bumpType) {
-                  "major" { $major++; $minor = 0; $patch = 0 }
-                  "minor" { $minor++; $patch = 0 }
-                  default { $patch++ }
-              }
-              $newVersion = "$major.$minor.$patch"
-          }
-
-          Write-Host "New Target Version: $newVersion"
-          "NEW_VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "TAG_NAME=v$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-          (Get-Content $buildGradlePath) -replace 'version\s*=\s*"[^"]+"', "version = `"$newVersion`"" | Set-Content $buildGradlePath
-
-      - name: Build Windows Installers (.msi & .exe)
-        run: ./gradlew packageDistributionForCurrentOS --no-daemon
-
-      - name: Generate Checksums & Release Notes
-        id: changelog
-        shell: pwsh
+      - name: Collect installer (macOS)
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          $newVer = $env:NEW_VERSION
-          $msiPath = Get-ChildItem -Path "composeApp/build/compose/binaries/main/msi" -Filter "*.msi" | Select-Object -First 1
-          $exePath = Get-ChildItem -Path "composeApp/build/compose/binaries/main/exe" -Filter "*.exe" | Select-Object -First 1
+          mkdir -p dist
+          # One DMG per arch, named so the in-app updater can pick the right one.
+          dmg=$(find composeApp/build/compose/binaries/main/dmg -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          mv "$dmg" "dist/QuickNotch-${VERSION}-${{ matrix.arch }}.dmg"
+          ls -la dist
 
-          $msiHash = if ($msiPath) { (Get-FileHash -Path $msiPath.FullName -Algorithm SHA256).Hash } else { "N/A" }
-          $exeHash = if ($exePath) { (Get-FileHash -Path $exePath.FullName -Algorithm SHA256).Hash } else { "N/A" }
-
-          $body = @"
-          # QuickNotch v$newVer
-
-          A sleek, ultra-responsive floating notch and dock app launcher for Windows and macOS.
-
-          ### 📦 Installation Packages & Checksums (SHA-256)
-
-          | Package | Format | SHA-256 Checksum |
-          | :--- | :--- | :--- |
-          | **$($msiPath.Name)** | Windows Installer (`.msi`) | ``$msiHash`` |
-          | **$($exePath.Name)** | Executable Installer (`.exe`) | ``$exeHash`` |
-
-          ---
-          *Built automatically with GitHub Actions.*
-          "@
-
-          $body | Out-File -FilePath "RELEASE_NOTES.md" -Encoding utf8
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: "v${{ env.NEW_VERSION }}"
-          body_path: RELEASE_NOTES.md
-          files: |
-            composeApp/build/compose/binaries/main/msi/*.msi
-            composeApp/build/compose/binaries/main/exe/*.exe
-          draft: false
-          prerelease: false
+          name: ${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          # Only the installers: the plan artifact is fetched separately, and
+          # must not leak into the release's asset list.
+          pattern: QuickNotch-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-summary
+          path: build/release
+
+      - name: Checksums
+        shell: bash
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          ls -la
+          # `QuickNotch-*` is the jpackage naming for every platform; the file
+          # is written last so it never hashes itself.
+          files=(QuickNotch-*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No installers were produced" >&2
+            exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          TARGET: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          cp build/release/changelog.json dist/changelog.json
+          cp build/release/notes.md release-notes.md
+          # `--latest` is not cosmetic: the repository still has a pre-changelog
+          # v3.1.2 tag, which sorts above every 2.x release. Without it, GitHub's
+          # `releases/latest` keeps pointing at that old build and the app's
+          # changelog URL 404s.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --title "QuickNotch $VERSION" --notes-file release-notes.md --latest
+          elif gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            # A previous run created the tag but died before the release.
+            gh release create "$TAG" dist/* \
+              --title "QuickNotch $VERSION" \
+              --notes-file release-notes.md \
+              --latest
+          else
+            gh release create "$TAG" dist/* \
+              --target "$TARGET" \
+              --title "QuickNotch $VERSION" \
+              --notes-file release-notes.md \
+              --latest
+          fi

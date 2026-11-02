@@ -27,7 +27,41 @@ detekt {
     )
 }
 
-version = "3.0.0"
+// The release workflow owns the real number: it passes `-PappVersion=x.y.z`
+// computed from the published changelog, so CI never mutates a tracked file.
+// A local build falls back to the 2.0.0 series so the settings window and the
+// updater compare against something meaningful.
+val appVersion = providers.gradleProperty("appVersion").getOrElse("2.0.0")
+
+version = appVersion
+
+// `AppVersion.VERSION` is generated rather than hardcoded in a string resource:
+// the updater has to compare the running version with a release tag, and a
+// hand-edited string drifts from what the installer was actually built as.
+val generateAppVersion by tasks.registering {
+    val outputDir = layout.buildDirectory.dir("generated/appVersion")
+    val current = appVersion
+    inputs.property("version", current)
+    outputs.dir(outputDir)
+    doLast {
+        val packageDir = outputDir.get().asFile.resolve("com/starkdroid/quicknotch")
+        packageDir.mkdirs()
+        packageDir.resolve("AppVersion.kt").writeText(
+            """
+            package com.starkdroid.quicknotch
+
+            /**
+             * The version this binary was built as. Injected by the
+             * `generateAppVersion` Gradle task from `project.version`; never
+             * edit by hand.
+             */
+            internal object AppVersion {
+                const val VERSION: String = "$current"
+            }
+            """.trimIndent() + "\n"
+        )
+    }
+}
 
 // Host platform, used to gate platform-only JVM opens and launch flags (the
 // bridge tasks below derive their own copies inside onlyIf for the same check).
@@ -77,6 +111,13 @@ kotlin {
             runtimeOnly(libs.slf4j.nop)
         }
     }
+}
+
+// Generated version source: registered after the KMP block so the
+// `desktopMain` source set exists, and wired into every Kotlin compile.
+kotlin.sourceSets.getByName("desktopMain").kotlin.srcDir(layout.buildDirectory.dir("generated/appVersion"))
+tasks.matching { it.name.startsWith("compileKotlin") }.configureEach {
+    dependsOn(generateAppVersion)
 }
 
 // The media ("now playing") feature ships a small native helper per platform.
@@ -296,10 +337,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
             packageName = "QuickNotch"
-            vendor = "StarkDroid"
+            vendor = "VelocityApps"
             packageVersion = project.version.toString()
             description = "Floating notch and dock app launcher for Windows and macOS"
-            copyright = "© 2025 StarkDroid. All rights reserved."
+            copyright = "© 2026 VelocityApps. All rights reserved."
             windows {
                 iconFile.set(project.file("quicknotch.ico"))
                 upgradeUuid = "8e97f012-3a5c-4f8e-9d22-b2d99d3e8e1a"

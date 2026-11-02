@@ -69,8 +69,21 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
 ./gradlew :composeApp:run                   # launch (overlay + tray); NOT java -jar (no manifest)
 ./gradlew :composeApp:detekt                # must be green before commit
 ./gradlew :composeApp:packageDistributionForCurrentOS  # .msi/.exe or .dmg
+./gradlew :composeApp:packageDistributionForCurrentOS -PappVersion=2.1.0  # release build
 SKIKO_RENDER_API=SOFTWARE ./gradlew :composeApp:run    # one-off rasterizer A/B
 ```
+
+Release builds take the version from CI: `-PappVersion=x.y.z` generates
+`AppVersion.VERSION` (under `build/generated/appVersion`) and becomes the
+jpackage version. A local build falls back to `2.0.0`; the tracked source never
+holds the released number.
+
+Releases run on a merged PR (`.github/workflows/release.yml`): `plan` executes
+`.github/scripts/changelog.mjs` (label-driven bump, sanitised entry, cumulative
+`changelog.json`), `build` packages Windows + macOS arm64/x64 with
+`-PappVersion`, `publish` attaches the installers, `SHA256SUMS.txt` and
+`changelog.json` and marks the release latest. A PR touching only `web/`, docs
+or CI skips the build.
 
 Bridge tasks (`composeApp/build.gradle.kts`, auto-run by jar/run): `syncWindowsBridge`
 (`native/windows/*` → resources; edit source, never the copy),
@@ -259,6 +272,20 @@ from the AWT wheel listener and composition on the same thread — no locks.
   never an empty strip.
   The macOS detection path (`MacGameWatch.kt` + `gamewatch-bridge.dylib`) is kept in the
   tree but no longer started — dormant until a macOS HUD exists.
+- **Changelog & self-update** (`datasource/Changelog.kt`, `ReleaseApi.kt`,
+  `AppUpdates.kt`, `AppInstaller.kt`, `FileDigest.kt`, `ui/ChangelogDialog.kt`):
+  the settings entry is Changelog, not About. The feed comes from the release's
+  `changelog.json` (cached in `changelog.json`, never bundled), and the dialog
+  renders only versions `<= AppVersion.VERSION`; anything newer becomes an update
+  banner rather than fake history. `ReleaseApi` lists releases and takes the
+  newest carrying `changelog.json` — not `/releases/latest`, because the old
+  pre-changelog `v3.1.2` tag sorts above 2.x. `AppUpdates` polls every 6 h,
+  downloads the MSI (preferred) or the arch-matching DMG, verifies
+  `SHA256SUMS.txt`, and waits for "Restart & update" before quitting. The swap is
+  a detached script: macOS waits on the PID then `rsync`s the DMG's bundle;
+  Windows waits then runs `msiexec /i /qn` (3010 tolerated) under the same
+  upgrade UUID. No `jpackage.app-path` (a Gradle run) → the button opens the
+  release page instead.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`
@@ -408,6 +435,16 @@ scope-creep (new notch positions, Android/iOS) unless asked.
 - Detekt 1.23.8 gates new code (`UnusedImports` on); old findings in `baseline.xml`,
   re-cut with `detektBaseline` only after deliberate fixes; tunings: `MagicNumber` off,
   `@Composable` exempt from `FunctionNaming`.
+- Releases: GitHub's `/releases/latest` is semver-ordered, so the old `v3.1.2`
+  wins over every 2.x. `publish` must pass `gh release ... --latest`, and the app
+  must find the newest release whose assets include `changelog.json` instead of
+  trusting `/latest`. That asset is also the gate that keeps the old release from
+  looking like an update. macOS ships `-arm64` and `-x64` DMGs; `assetFor` picks
+  by `os.arch`.
+- Self-update only exists in an installed build: `jpackage.app-path` is absent
+  under `./gradlew run`. The detached script waits for the JVM PID, so the app
+  must quit *after* starting it; macOS uses `rsync -a` (never `cp -R`/`ditto`),
+  Windows tolerates MSI exit 3010.
 - `git status` before any `stash` (shared branch); never push (user pushes); signed commits.
 
 ## 8. Git workflow & scope

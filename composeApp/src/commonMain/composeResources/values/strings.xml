@@ -2,15 +2,16 @@
     <!-- App / header -->
     <string name="app_name">QuickNotch</string>
     <string name="settings_tagline">Notch &amp; Floating Dock Customizer</string>
-    <string name="about">About</string>
+    <string name="changelog">Changelog</string>
     <string name="close">Close</string>
     <string name="clear">Clear</string>
 
     <!-- Tray menu -->
     <string name="menu_settings">Settings</string>
+    <string name="menu_update_available">Update available · v%1$s</string>
     <string name="onboarding_window_title">Welcome to QuickNotch</string>
     <string name="onboarding_welcome_title">Meet QuickNotch</string>
-    <string name="onboarding_welcome_subtitle">A notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later.</string>
+    <string name="onboarding_welcome_subtitle">A notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later, and new versions install themselves.</string>
     <string name="onboarding_feature_apps">Launch your pinned apps with a click</string>
     <string name="onboarding_feature_media">See what is playing and control it</string>
     <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
@@ -220,15 +221,27 @@ Add apps from the list on the right.</string>
     <string name="always_on_top_title">Always on Top</string>
     <string name="collapse_on_launch_title">Collapse on Launch</string>
 
-    <!-- About dialog -->
-    <string name="about_header">About QuickNotch</string>
+    <!-- Changelog dialog -->
+    <string name="changelog_header">Changelog</string>
     <string name="about_product_name">QuickNotch Desktop</string>
     <string name="about_version">Version %1$s</string>
-    <string name="app_version">1.0.0</string>
-    <string name="about_description">Floating notch &amp; dock app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.</string>
-    <string name="about_tag_kotlin">Kotlin</string>
-    <string name="about_tag_compose">Compose Desktop</string>
-    <string name="about_tag_macos">macOS</string>
-    <string name="about_tag_windows">Win32 JNA</string>
-    <string name="about_copyright">© 2025 StarkDroid. All rights reserved.</string>
+    <string name="about_description">Your apps, calendar, weather, music and live system stats — one flick away in a notch that never blocks the view, on Windows and macOS. It updates itself and keeps getting better: there’s plenty more in the pipeline.</string>
+    <string name="changelog_empty">No release notes published yet.</string>
+    <string name="changelog_loading">Fetching the latest notes from GitHub…</string>
+    <string name="changelog_error">Couldn’t reach GitHub. Check your connection and try again.</string>
+    <string name="changelog_retry">Try again</string>
+    <string name="changelog_source_note">Fetched from GitHub — never bundled with the build.</string>
+    <string name="changelog_update_available">Version %1$s is available.</string>
+    <string name="changelog_update_ready">Version %1$s is downloaded and ready.</string>
+    <string name="changelog_update_now">Update now</string>
+    <string name="changelog_restart_update">Restart &amp; update</string>
+    <string name="changelog_updating">Installing version %1$s…</string>
+    <string name="changelog_downloading">Downloading %1$s…</string>
+    <string name="changelog_up_to_date">You’re on the latest version.</string>
+    <string name="changelog_update_hint">Updates install in place — no installers to hunt down.</string>
+    <string name="changelog_update_manual">This build can’t update itself. Download the latest version from GitHub.</string>
+    <string name="changelog_view_release">View release</string>
+    <string name="changelog_update_failed">Update failed: %1$s</string>
+    <string name="changelog_no_asset">A newer version is on GitHub — open the release page to download it.</string>
+    <string name="about_copyright">© 2026 VelocityApps. All rights reserved.</string>
 </resources>

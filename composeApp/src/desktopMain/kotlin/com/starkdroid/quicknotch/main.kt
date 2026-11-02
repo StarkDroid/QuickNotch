@@ -27,8 +27,10 @@ import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppPaths
+import com.starkdroid.quicknotch.datasource.AppUpdates
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
+import com.starkdroid.quicknotch.datasource.UpdateState
 import com.starkdroid.quicknotch.datasource.MacDockPresence
 import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
@@ -41,6 +43,7 @@ import com.starkdroid.quicknotch.generated.resources.menu_hide_notch
 import com.starkdroid.quicknotch.generated.resources.menu_quit
 import com.starkdroid.quicknotch.generated.resources.menu_settings
 import com.starkdroid.quicknotch.generated.resources.menu_show_notch
+import com.starkdroid.quicknotch.generated.resources.menu_update_available
 import com.starkdroid.quicknotch.generated.resources.onboarding_window_title
 import com.starkdroid.quicknotch.generated.resources.reset_defaults
 import com.starkdroid.quicknotch.generated.resources.settings_window_title
@@ -188,6 +191,10 @@ fun main(args: Array<String>) {
             // cold start paints the last known forecast on the first frame.
             // A manual place from settings seeds the position instead.
             Weather.start(repository.config.value.widgets.weatherPlace)
+            // Update checks and the remote changelog are background work: the
+            // app is fully usable offline, and a check that lands after the
+            // user quit is harmless.
+            AppUpdates.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
@@ -209,6 +216,13 @@ fun main(args: Array<String>) {
         var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
+
+        // The installer script waits for this PID to vanish before it replaces
+        // the app, so quitting is part of the update, not an afterthought.
+        val quittingForUpdate by AppUpdates.quitting.collectAsState()
+        LaunchedEffect(quittingForUpdate) {
+            if (quittingForUpdate) exitApplication()
+        }
 
         // Flip the Dock/app presence in-step with the Settings window: the
         // first Settings open forces activation (an accessory agent can't bring
@@ -270,6 +284,16 @@ fun main(args: Array<String>) {
             tooltip = stringResource(Res.string.app_name),
             menu = {
                 Item(stringResource(Res.string.menu_settings), onClick = { showSettings = true })
+                // Collected inside the menu so a download's progress ticks only
+                // touch the tray menu, never the overlay window tree.
+                val update = AppUpdates.state.collectAsState().value
+                val available = update as? UpdateState.Available
+                if (available != null) {
+                    Item(
+                        stringResource(Res.string.menu_update_available, available.version),
+                        onClick = { showSettings = true }
+                    )
+                }
                 Item(
                     if (isNotchVisible) stringResource(Res.string.menu_hide_notch)
                     else stringResource(Res.string.menu_show_notch),
