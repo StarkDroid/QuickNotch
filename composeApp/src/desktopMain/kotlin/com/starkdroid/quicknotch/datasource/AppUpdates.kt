@@ -8,9 +8,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
-import java.awt.Desktop
 import java.io.File
-import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import com.starkdroid.quicknotch.AppVersion
 import kotlinx.coroutines.CancellationException
@@ -146,8 +144,7 @@ object AppUpdates {
     fun openReleasePage() {
         val url = (_state.value as? UpdateState.Available)?.releaseUrl
             ?: ReleaseApi.RELEASES_PAGE
-        runCatching { Desktop.getDesktop().browse(URI(url)) }
-            .onFailure { AppLog.line("update: could not open browser: ${it.message}") }
+        ProjectLinks.open(url)
     }
 
     private suspend fun refresh() {

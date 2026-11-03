@@ -45,7 +45,7 @@ object ReleaseApi {
 
     const val OWNER = "StarkDroid"
     const val REPO = "QuickNotch"
-    const val RELEASES_PAGE = "https://github.com/$OWNER/$REPO/releases/latest"
+    const val RELEASES_PAGE = ProjectLinks.RELEASES
 
     private const val RELEASES_URL = "https://api.github.com/repos/$OWNER/$REPO/releases?per_page=20"
     private const val CHECKSUMS = "SHA256SUMS.txt"

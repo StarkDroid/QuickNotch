@@ -33,6 +33,7 @@ import com.starkdroid.quicknotch.datasource.StartupManager
 import com.starkdroid.quicknotch.datasource.UpdateState
 import com.starkdroid.quicknotch.datasource.MacDockPresence
 import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
+import com.starkdroid.quicknotch.datasource.ProjectLinks
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
 import com.starkdroid.quicknotch.datasource.WindowsOverlayWindowPolicy
 import com.starkdroid.quicknotch.generated.resources.Res
@@ -42,6 +43,7 @@ import com.starkdroid.quicknotch.generated.resources.menu_always_on_top_checked
 import com.starkdroid.quicknotch.generated.resources.menu_hide_notch
 import com.starkdroid.quicknotch.generated.resources.menu_quit
 import com.starkdroid.quicknotch.generated.resources.menu_settings
+import com.starkdroid.quicknotch.generated.resources.menu_support
 import com.starkdroid.quicknotch.generated.resources.menu_show_notch
 import com.starkdroid.quicknotch.generated.resources.menu_update_available
 import com.starkdroid.quicknotch.generated.resources.onboarding_window_title
@@ -309,6 +311,10 @@ fun main(args: Array<String>) {
                 Separator()
                 Item(stringResource(Res.string.reset_defaults), onClick = { repository.resetToDefaults() })
                 Separator()
+                Item(
+                    stringResource(Res.string.menu_support),
+                    onClick = { ProjectLinks.open(ProjectLinks.KOFI) }
+                )
                 Item(stringResource(Res.string.menu_quit), onClick = ::exitApplication)
             }
         )
@@ -375,8 +381,7 @@ fun main(args: Array<String>) {
                         if (done) {
                             SettingsScreen(
                                 repository = repository,
-                                media = media,
-                                onClose = { showSettings = false }
+                                media = media
                             )
                         } else {
                             OnboardingScreen(repository = repository)

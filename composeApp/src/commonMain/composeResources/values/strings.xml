@@ -243,5 +243,8 @@ Add apps from the list on the right.</string>
     <string name="changelog_view_release">View release</string>
     <string name="changelog_update_failed">Update failed: %1$s</string>
     <string name="changelog_no_asset">A newer version is on GitHub — open the release page to download it.</string>
-    <string name="about_copyright">© 2026 VelocityApps. All rights reserved.</string>
+    <string name="view_source">Source on GitHub</string>
+    <string name="support_kofi">Support on Ko-fi</string>
+    <string name="menu_support">Support QuickNotch</string>
+    <string name="about_copyright">© 2026 VelocityApps · MIT licensed</string>
 </resources>

@@ -109,6 +109,21 @@ internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier = this.click
     onClick = onClick
 )
 
+/** Inline accent link for dialog footers (source, support). */
+@Composable
+internal fun SettingsTextLink(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = AppTypography.labelSmall,
+        color = AccentSolid,
+        fontSize = 11.sp,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .plainClickable(onClick)
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+    )
+}
+
 /** Spring dip on press, optional lift on hover. One tuning for all controls. */
 @Composable
 internal fun hoverPressScale(

@@ -53,10 +53,13 @@ import com.starkdroid.quicknotch.datasource.Changelog
 import com.starkdroid.quicknotch.datasource.ChangelogChange
 import com.starkdroid.quicknotch.datasource.ChangelogRelease
 import com.starkdroid.quicknotch.datasource.ChangelogStatus
+import com.starkdroid.quicknotch.datasource.ProjectLinks
 import com.starkdroid.quicknotch.datasource.UpdateState
 import com.starkdroid.quicknotch.datasource.AppInstaller
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.about_copyright
+import com.starkdroid.quicknotch.generated.resources.support_kofi
+import com.starkdroid.quicknotch.generated.resources.view_source
 import com.starkdroid.quicknotch.generated.resources.about_description
 import com.starkdroid.quicknotch.generated.resources.about_product_name
 import com.starkdroid.quicknotch.generated.resources.about_version
@@ -208,13 +211,27 @@ private fun ChangelogCardBody(
             color = TextMuted,
             fontSize = 10.sp
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(Res.string.about_copyright),
-            style = AppTypography.labelSmall,
-            color = TextMuted,
-            fontSize = 11.sp
-        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(Res.string.about_copyright),
+                style = AppTypography.labelSmall,
+                color = TextMuted,
+                fontSize = 11.sp
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SettingsTextLink(stringResource(Res.string.view_source)) {
+                    ProjectLinks.open(ProjectLinks.REPOSITORY)
+                }
+                SettingsTextLink(stringResource(Res.string.support_kofi)) {
+                    ProjectLinks.open(ProjectLinks.KOFI)
+                }
+            }
+        }
     }
 }
 
