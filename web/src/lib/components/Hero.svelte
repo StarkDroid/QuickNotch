@@ -2,7 +2,7 @@
 	import Icon from './Icon.svelte';
 	import NotchPanel from './NotchPanel.svelte';
 	import ScreenFrame from './ScreenFrame.svelte';
-	import { buyCta, hero, site } from '$data/site';
+	import { downloadCta, hero, site } from '$data/site';
 	import { loadMotion, prefersReducedMotion } from '$lib/motion/gsap';
 	import { magnetic } from '$lib/actions/magnetic';
 	import { scrollToId } from '$lib/motion/smoothScroll';
@@ -124,15 +124,9 @@
 			<p class="lead hero__lead" data-hero-extra>{hero.sub}</p>
 
 			<div class="hero__cta" data-hero-extra>
-				<a
-					class="btn btn--primary btn--lg"
-					href={site.purchaseUrl}
-					use:magnetic
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					<Icon name="cart" size={18} />
-					{buyCta}
+				<a class="btn btn--primary btn--lg" href={site.downloadPath} use:magnetic>
+					<Icon name="download" size={18} />
+					{downloadCta}
 				</a>
 				<button class="btn btn--ghost btn--lg" type="button" onclick={() => scrollToId('tour')}>
 					{hero.secondaryCta}

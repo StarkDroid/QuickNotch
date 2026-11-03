@@ -7,32 +7,25 @@
 export const site = {
 	name: 'QuickNotch',
 	url: 'https://quicknotch.app',
-	/**
-	 * Where the installers live, for people who already own a licence. This is
-	 * the one place to configure the download destination — nothing else on the
-	 * site links off to a code host, so that it never implies the product's
-	 * source is available.
-	 *
-	 * TODO before launch: publish this page. Absolute rather than a relative
-	 * `/download` so the prerenderer does not try to crawl it and fail the build.
-	 */
-	downloadUrl: 'https://quicknotch.app/download',
-	/**
-	 * Checkout. Every "buy" button on the site points here, and the price below
-	 * is the single source of truth for what it costs, so the button, the card
-	 * and the structured data can never disagree.
-	 *
-	 * TODO before launch: point this at the live checkout (a hosted cart page or
-	 * a payment processor's checkout link).
-	 */
-	purchaseUrl: 'https://quicknotch.app/buy',
-	version: '2.0.0',
+	license: 'MIT',
 	tagline: 'One tiny notch. Apps, system, weather and more.',
 	description:
-		'QuickNotch is a floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. On Windows, start a fullscreen game and the notch turns into a live performance HUD. Style it as an AMOLED notch, a floating pill or a slim drag handle, and let it update itself as new widgets land.',
+		'QuickNotch is a free, open-source floating notch and app launcher for Windows and macOS. Pin your apps, watch CPU, GPU, memory, storage and network as live rings, check the weather and the day ahead, and control your music — all at a glance. On Windows, start a fullscreen game and the notch turns into a live performance HUD. Style it as an AMOLED notch, a floating pill or a slim drag handle, and let it update itself as new widgets land.',
 	shortDescription:
-		'A floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS, and keeps improving with self-installing updates.',
+		'A free, open-source floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS.',
 	author: 'VelocityApps',
+	/**
+	 * Public addresses. The app carries the repository and Ko-fi links in
+	 * `ProjectLinks.kt`; everything else on this site is derived from here.
+	 */
+	repository: 'https://github.com/StarkDroid/QuickNotch',
+	releasesUrl: 'https://github.com/StarkDroid/QuickNotch/releases',
+	issuesUrl: 'https://github.com/StarkDroid/QuickNotch/issues',
+	kofi: 'https://ko-fi.com/trishiraj',
+	/** Absolute routes, for the schema graph and for links inside the copy. */
+	downloadPath: '/download',
+	changelogPath: '/changelog',
+	downloadUrl: 'https://quicknotch.app/download',
 	keywords: [
 		'app launcher',
 		'floating dock',
@@ -45,6 +38,8 @@ export const site = {
 		'notch app launcher',
 		'quick launcher',
 		'app dock',
+		'open source app launcher',
+		'free app launcher',
 		'widgets',
 		'weather widget',
 		'system monitor',
@@ -62,64 +57,85 @@ export const site = {
 } as const;
 
 /**
- * Commerce. One payment, both installers, every widget — the whole site reads
- * the price from here, including the structured data in `Seo.svelte`.
+ * The download band. There is no price to state: QuickNotch is free and
+ * MIT-licensed, so the band sells the download rather than a purchase, and the
+ * structured data in `Seo.svelte` reads the zero from here.
  */
-export const pricing = {
-	/** Kept separate from the display label for schema.org's numeric field. */
-	amount: '9',
-	label: '$9',
-	currency: 'USD',
-	unit: 'one-time',
-	eyebrow: 'The price',
-	title: 'One tiny notch. One small price.',
-	body: 'Pay once and the notch is yours on both platforms: every widget page, all three looks, and the updates that follow. No subscription, no in-app purchases, no account.',
-	/** What the payment actually buys — rendered beside the price. */
+export const offer = {
+	eyebrow: 'The download',
+	title: 'Free. Open source. Yours.',
+	body: 'Two installers, every widget, the whole source. No licence key, no account, no trial that expires — QuickNotch is MIT licensed, so you can read it, fork it and build your own.',
+	price: { amount: '0', label: 'Free', currency: 'USD', unit: 'forever' },
+	/** What the download actually contains — rendered beside the price. */
 	includes: [
-		'Windows and macOS installers on one licence',
+		'Windows and macOS installers, one per platform',
 		'Quick launch, system, weather, calendar and live media',
 		'All three notch styles and every surface finish',
-		'Updates included for as long as the app ships'
+		'Self-updating releases — new widgets land for free',
+		'MIT licensed source: fork it, patch it, ship it'
 	],
-	/** Receipt-footer line under the buy button. */
-	finePrint: 'Instant download · Both platforms · No subscription'
+	finePrint: 'Free forever · No account · No telemetry · MIT licence',
+	secondary: 'Read the source'
 } as const;
 
-/** One label for every buy button, so the price is written exactly once. */
-export const buyCta = `Buy now — ${pricing.label}` as const;
+/** One label for every download button on the site. */
+export const downloadCta = 'Download QuickNotch' as const;
+
+/** Copy for `/download`: the platform cards, install notes and the tip jar. */
+export const download = {
+	eyebrow: 'Get QuickNotch',
+	title: 'Pick your machine.',
+	lead: 'Every release ships one Windows installer and two macOS disk images — Apple silicon and Intel. The buttons below always point at the newest release on GitHub.',
+	versionLabel: 'Latest release',
+	allReleases: 'All releases on GitHub',
+	unsigned:
+		'The installers are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask once. On Windows: More info → Run anyway. On macOS: right-click QuickNotch → Open.',
+	support: {
+		eyebrow: 'One more thing',
+		title: 'It is free. It stays free.',
+		body: 'QuickNotch is a nights-and-weekends project with no ads, no telemetry and nothing to upsell. If it earned a place on your screen, a coffee keeps the updates coming — entirely optional, and it unlocks nothing.',
+		cta: 'Buy me a coffee',
+		dismiss: 'No thanks'
+	}
+} as const;
 
 export const platforms = [
 	{
 		id: 'windows',
 		name: 'Windows',
 		requirement: 'Windows 10 & 11 · x64',
-		note: '.msi or .exe installer',
-		icon: 'windows'
+		note: 'Installer (.msi), or the .exe if you prefer',
+		icon: 'windows',
+		blurb:
+			'Installs for every user on the machine, adds QuickNotch to the Start menu and lets it update itself in place.'
 	},
 	{
 		id: 'macos',
 		name: 'macOS',
-		requirement: 'macOS 12+ · Apple Silicon & Intel',
-		note: '.dmg disk image',
-		icon: 'apple'
+		requirement: 'macOS 12+ · Apple silicon & Intel',
+		note: 'Disk image (.dmg), one per architecture',
+		icon: 'apple',
+		blurb:
+			'Open the .dmg and drag QuickNotch to Applications. Grab the build that matches your Mac — the app updates itself from there.'
 	}
 ] as const;
 
 export const hero = {
 	// Sticker ribbon that sits on top of the headline.
-	badge: 'a notchful of good stuff · pay once',
+	badge: 'a notchful of good stuff · free & open source',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
 	sub: 'Pin your apps, watch the machine, check the sky and your day, and boss your music around — from one slim notch at the top of the screen. No windows to arrange, no tab to find.',
 	secondaryCta: 'Take the tour',
-	trust: ['One-time purchase', 'No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
+	trust: ['Free & open source', 'No account', 'No telemetry', 'Runs offline', 'Windows & macOS']
 } as const;
 
 /** Indexable facts. Not rendered: the tour and the look band already say them. */
 export const facts = [
 	{ label: 'Widget pages', value: '5' },
 	{ label: 'Notch styles', value: '3' },
-	{ label: 'Platforms on one licence', value: '2' }
+	{ label: 'Platforms', value: '2' },
+	{ label: 'Licence', value: 'MIT' }
 ] as const;
 
 /**
@@ -222,14 +238,19 @@ export const look = {
 
 export const faq = [
 	{
-		question: 'How much does QuickNotch cost?',
+		question: 'Is QuickNotch really free?',
 		answer:
-			`${pricing.label}, once. No subscription, no in-app purchases, no account. The one payment covers Windows and macOS, and updates are included.`
+			'Yes — free and MIT licensed. No price, no account, no trial, no in-app purchases, and no ads. If it earns a place on your screen you can buy me a coffee, but nothing in the app ever asks you to.'
 	},
 	{
 		question: 'Does QuickNotch work on Windows and macOS?',
 		answer:
-			'Yes — Windows 10 & 11 and macOS 12 or newer, on Apple silicon and Intel. The same app, the same notch, on both, on one licence.'
+			'Yes — Windows 10 & 11 and macOS 12 or newer, on Apple silicon and Intel. The same app, the same notch, on both.'
+	},
+	{
+		question: 'Can I read or build the source?',
+		answer:
+			'It is all on GitHub under the MIT licence. The app is Kotlin with Compose Multiplatform for the desktop: clone the repository, run ./gradlew :composeApp:run to launch it, or packageDistributionForCurrentOS to build the installer for your machine.'
 	},
 	{
 		question: 'Does QuickNotch collect or send my data?',
@@ -259,7 +280,7 @@ export const faq = [
 	{
 		question: 'How do updates work?',
 		answer:
-			'QuickNotch checks GitHub in the background, downloads the installer for your machine, and swaps it in after you press "Restart & update" — no download hunt, no uninstall step. Settings → Changelog lists what changed in every version up to the one you are running, and new widgets arrive with each update.'
+			'QuickNotch checks GitHub in the background, downloads the installer for your machine, and swaps it in after you press "Restart & update" — no download hunt, no uninstall step. Settings → Changelog lists what changed in every version up to the one you are running, and the same history is published on this site.'
 	}
 ] as const;
 

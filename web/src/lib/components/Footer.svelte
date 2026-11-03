@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { pricing, site } from '$data/site';
+	import { latest } from '$data/releases';
+	import { site } from '$data/site';
 
 	// Prerendered at build time; the constant is a defensive fallback so a missing
 	// or unusable Date can never crash the render.
@@ -18,14 +19,16 @@
 		<p class="footer__tagline">{site.tagline}</p>
 
 		<nav class="footer__links" aria-label="More">
-			<a href={site.purchaseUrl} target="_blank" rel="noopener noreferrer">
-				Buy — {pricing.label}
-			</a>
+			<a href={site.downloadPath}>Download</a>
+			<a href={site.changelogPath}>Changelog</a>
+			<a href={site.repository} target="_blank" rel="noopener noreferrer">Source</a>
+			<a href={site.issuesUrl} target="_blank" rel="noopener noreferrer">Issues</a>
+			<a href={site.kofi} target="_blank" rel="noopener noreferrer">Ko-fi</a>
 			<a href="{site.url}">Back to top</a>
 		</nav>
 
 		<p class="footer__bar">
-			<span>© {year} {site.author} · v{site.version}</span>
+			<span>© {year} {site.author} · {site.license} licensed · v{latest}</span>
 			<span aria-hidden="true">· printed on cream, obviously</span>
 		</p>
 	</div>

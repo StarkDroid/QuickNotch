@@ -49,7 +49,11 @@
 		| 'next'
 		| 'bell'
 		| 'volume'
-		| 'battery';
+		| 'battery'
+		| 'github'
+		| 'coffee'
+		| 'heart'
+		| 'list';
 
 	interface Props {
 		name: IconName;
@@ -113,7 +117,14 @@
 		volume:
 			'<path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
 		battery:
-			'<rect x="2.5" y="8" width="17" height="8" rx="2.5"/><path d="M22 11v2"/><rect x="5" y="10.5" width="8.5" height="3" rx="1" fill="currentColor" stroke="none"/>'
+			'<rect x="2.5" y="8" width="17" height="8" rx="2.5"/><path d="M22 11v2"/><rect x="5" y="10.5" width="8.5" height="3" rx="1" fill="currentColor" stroke="none"/>',
+		github:
+			'<path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.34c.85 0 1.71.12 2.5.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.03 10.03 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/>',
+		coffee:
+			'<path d="M4 9h12v6.5a4.5 4.5 0 0 1-4.5 4.5h-3A4.5 4.5 0 0 1 4 15.5z"/><path d="M16 10h1.6a2.4 2.4 0 0 1 0 4.8H16"/><path d="M7.5 3.5v2M11.5 3.5v2"/>',
+		heart:
+			'<path d="M12 20.4S4.5 15.9 4.5 10.9a4.3 4.3 0 0 1 7.5-2.9 4.3 4.3 0 0 1 7.5 2.9c0 5-7.5 9.5-7.5 9.5z"/>',
+		list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/>'
 	};
 
 	const html = $derived(strokeIcons[name] ?? '');
@@ -124,7 +135,8 @@
 			name === 'bolt' ||
 			name === 'play' ||
 			name === 'pause' ||
-			name === 'next'
+			name === 'next' ||
+			name === 'github'
 	);
 </script>
 

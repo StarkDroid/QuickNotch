@@ -9,7 +9,8 @@ const config = {
 		// (crawlable + fast LCP) and then hydrated into an SPA in the browser.
 		adapter: adapter({ pages: 'build', assets: 'build', precompress: true, strict: true }),
 		prerender: {
-			entries: ['*'],
+			// Explicit so a page is never dropped silently if a link to it moves.
+			entries: ['/', '/download', '/changelog', '/connect', '/oauth/callback'],
 			handleHttpError: 'fail'
 		},
 		inlineStyleThreshold: 20480,

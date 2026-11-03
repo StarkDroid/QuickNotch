@@ -1,61 +1,66 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { buyCta, pricing, site } from '$data/site';
+	import { downloadCta, offer, site } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
-	 * The price, as a printed ticket.
+	 * The download, as a printed ticket.
 	 *
-	 * One payment, one ticket: the price and the buy button sit on the left stub,
-	 * what the purchase covers reads on the right, and a perforated rule with two
-	 * punch marks runs between them. Every number and string comes from the
-	 * content module, so the card, the buttons and the structured data can never
-	 * disagree about what the app costs.
+	 * The stub carries the price (free), the reason it is free (MIT), and the
+	 * button to `/download`; the right-hand side lists what the download
+	 * contains. A perforated rule with two punch marks runs between them. Every
+	 * string comes from the content module, so the ticket, the buttons and the
+	 * structured data in `Seo.svelte` can never disagree.
 	 */
 </script>
 
-<section class="section" id="pricing">
+<section class="section" id="download">
 	<div class="container">
 		<header
 			class="section-head section-head--center"
 			use:reveal={{ from: 'up' }}
 			data-reveal="up"
 		>
-			<p class="eyebrow">{pricing.eyebrow}</p>
-			<h2 class="display h2">{pricing.title}</h2>
-			<p class="lead">{pricing.body}</p>
+			<p class="eyebrow">{offer.eyebrow}</p>
+			<h2 class="display h2">{offer.title}</h2>
+			<p class="lead">{offer.body}</p>
 		</header>
 
 		<div class="ticket" use:reveal={{ from: 'scale', delay: 0.08 }} data-reveal="scale">
 			<span class="ticket__sticker sticker sticker--blue" aria-hidden="true">
-				pay once ★ keep forever
+				free forever ★ MIT licensed
 			</span>
 
 			<div class="ticket__stub">
-				<p class="mono ticket__kicker">Lifetime licence · Windows + macOS</p>
+				<p class="mono ticket__kicker">Free · MIT licence · Windows + macOS</p>
 
 				<p class="ticket__price">
-					<span class="ticket__amount">{pricing.label}</span>
-					<span class="ticket__unit">{pricing.unit}</span>
+					<span class="ticket__amount">{offer.price.label}</span>
+					<span class="ticket__unit">{offer.price.unit}</span>
 				</p>
 
 				<p class="ticket__lede">
-					One payment. Every widget, both installers, and the updates that follow.
+					Download it, read the source, keep it. No licence key, no account, no
+					trial that runs out.
 				</p>
 
 				<div class="ticket__cta">
+					<a class="btn btn--primary btn--lg" href={site.downloadPath}>
+						<Icon name="download" size={18} />
+						{downloadCta}
+					</a>
 					<a
-						class="btn btn--primary btn--lg"
-						href={site.purchaseUrl}
+						class="btn btn--ghost btn--lg"
+						href={site.repository}
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						<Icon name="cart" size={18} />
-						{buyCta}
+						{offer.secondary}
+						<Icon name="github" size={18} />
 					</a>
 				</div>
 
-				<p class="mono ticket__fine">{pricing.finePrint}</p>
+				<p class="mono ticket__fine">{offer.finePrint}</p>
 			</div>
 
 			<div class="ticket__perf" aria-hidden="true">
@@ -66,12 +71,15 @@
 			<div class="ticket__includes">
 				<p class="mono ticket__kicker">In the box</p>
 				<ul use:stagger={{ step: 0.07 }} data-stagger>
-					{#each pricing.includes as item (item)}
+					{#each offer.includes as item (item)}
 						<li><Icon name="check" size={15} /><span>{item}</span></li>
 					{/each}
 				</ul>
-				<p class="mono ticket__serial" aria-hidden="true">
-					no. 0001 · printed on cream · {pricing.currency}
+				<p class="mono ticket__serial">
+					<span>no. 0001 · built in the open · MIT</span>
+					<a class="ticket__kofi" href={site.kofi} target="_blank" rel="noopener noreferrer">
+						<Icon name="coffee" size={13} /> buy me a coffee
+					</a>
 				</p>
 			</div>
 		</div>
@@ -109,7 +117,7 @@
 		position: absolute;
 		top: -1.05rem;
 		right: clamp(1rem, 4vw, 2.5rem);
-		rotate: 1.5deg;
+		rotate: -1.5deg;
 		z-index: 2;
 	}
 
@@ -223,6 +231,11 @@
 	}
 
 	.ticket__serial {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
 		margin-top: auto;
 		padding-top: 0.9rem;
 		border-top: 2px dashed var(--line);
@@ -230,6 +243,21 @@
 		letter-spacing: 0.1em;
 		color: var(--text-3);
 		opacity: 0.75;
+	}
+
+	.ticket__kofi {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		text-decoration: underline;
+		text-decoration-color: var(--line-strong);
+		text-underline-offset: 3px;
+	}
+
+	.ticket__kofi:hover {
+		color: var(--accent-text);
+		text-decoration-color: var(--accent);
+		opacity: 1;
 	}
 
 	/* ---- Layout ----------------------------------------------------------- */

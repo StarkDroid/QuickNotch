@@ -25,9 +25,10 @@ const staticDir = join(root, 'static');
 const FONT = "'Inter','Helvetica Neue',Helvetica,Arial,sans-serif";
 const DISPLAY = "'Fraunces','Georgia','Times New Roman',serif";
 
-// Keep the card's price line in step with `pricing.label` in src/lib/data/site.ts
-// (this script is plain Node and cannot import the TypeScript content module).
-const PRICE_LABEL = '$9';
+// The card's footer line. QuickNotch is free and MIT licensed; this mirrors
+// `offer.finePrint` in src/lib/data/site.ts (this script is plain Node and
+// cannot import the TypeScript content module).
+const FOOTER_LABEL = 'Free · open source · MIT';
 
 const escape = (value) =>
 	value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -73,7 +74,7 @@ const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"
 
 	<rect x="60" y="556" width="1080" height="3" fill="#211c13" fill-opacity="0.12"/>
 	<text x="60" y="600" font-family="${FONT}" font-size="17" font-weight="700" fill="#211c13" letter-spacing="0.2">QuickNotch — app dock, notch, widgets</text>
-	<text x="1140" y="600" text-anchor="end" font-family="${FONT}" font-size="17" font-weight="500" fill="#4c4437">${escape(PRICE_LABEL)} · Windows &amp; macOS</text>
+	<text x="1140" y="600" text-anchor="end" font-family="${FONT}" font-size="17" font-weight="500" fill="#4c4437">${escape(FOOTER_LABEL)} · Windows &amp; macOS</text>
 </svg>`;
 
 async function writePng(name, buffer, width) {

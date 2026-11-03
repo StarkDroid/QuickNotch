@@ -1,19 +1,21 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { buyCta, site } from '$data/site';
+	import { latest } from '$data/releases';
+	import { site } from '$data/site';
 
 	/**
 	 * The header is the notch: a dark capsule pinned to the top of the page with
-	 * the mark, the wordmark and the buy button. At the top of the page it rests
-	 * compact, hugging its content; scrolling opens it into a full-width bar and
-	 * scrolling back up closes it again. There are no section links — the tour
-	 * and the FAQ are found by scrolling, and the only destinations are the buy
-	 * page and the top of this one.
+	 * the mark, the wordmark and the download button. At the top of the page it
+	 * rests compact, hugging its content; scrolling opens it into a full-width
+	 * bar and scrolling back up closes it again. There are no section links — the
+	 * tour and the FAQ are found by scrolling, and the destinations are the
+	 * download page, the changelog (the version chip) and the source.
 	 *
-	 * Only two pieces of state exist, both driven by one rAF-batched scroll
-	 * listener: `scrolled` (which the CSS transition animates) and the progress
-	 * line. Everything visual is a CSS transition, so both directions are smooth
-	 * and nothing re-renders per frame.
+	 * The scroll state is two pieces driven by one rAF-batched listener:
+	 * `scrolled` (which the CSS transition animates) and the progress line.
+	 * Everything visual is a CSS transition, so both directions are smooth and
+	 * nothing re-renders per frame. The version chip reads the committed release
+	 * feed, so the header and `/changelog` always name the same build.
 	 */
 	let scrolled = $state(false);
 	let progress = $state(0);
@@ -51,15 +53,17 @@
 			<span class="brand__name">{site.name}</span>
 		</a>
 
-		<a
-			class="buy"
-			href={site.purchaseUrl}
-			target="_blank"
-			rel="noopener noreferrer"
-		>
-			<Icon name="cart" size={15} />
-			<span>{buyCta}</span>
-		</a>
+		<div class="nav__links">
+			<a class="nav__kofi" href={site.kofi} target="_blank" rel="noopener noreferrer">
+				<Icon name="coffee" size={15} />
+				<span class="sr-only">Support QuickNotch on Ko-fi</span>
+			</a>
+			<a class="nav__version mono" href={site.changelogPath}>v{latest}</a>
+			<a class="buy" href={site.downloadPath}>
+				<Icon name="download" size={15} />
+				<span>Download</span>
+			</a>
+		</div>
 
 		<span class="nav__progress" style:transform="scaleX({progress})" aria-hidden="true"></span>
 	</div>
@@ -144,11 +148,45 @@
 			inset 0 -1px 0 rgb(0 0 0 / 0.25);
 	}
 
+	.nav__links {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-left: auto;
+	}
+
+	.nav__kofi,
+	.nav__version {
+		display: inline-flex;
+		align-items: center;
+		color: rgb(255 255 255 / 0.62);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		padding: 0.25rem 0.35rem;
+		border-radius: 999px;
+	}
+
+	.nav__kofi:hover,
+	.nav__version:hover {
+		color: #fff;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	.buy {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.45rem;
-		margin-left: auto;
 		padding: 0.58rem 0.95rem;
 		border-radius: 999px;
 		border: 1px solid rgb(0 0 0 / 0.5);
@@ -216,6 +254,10 @@
 		.buy {
 			padding: 0.55rem 0.8rem;
 			font-size: 0.84rem;
+		}
+
+		.nav__version {
+			display: none;
 		}
 	}
 

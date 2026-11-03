@@ -4,7 +4,7 @@
 	import Hero from '$components/Hero.svelte';
 	import TourSection from '$components/TourSection.svelte';
 	import LookSection from '$components/LookSection.svelte';
-	import PricingSection from '$components/PricingSection.svelte';
+	import OfferSection from '$components/OfferSection.svelte';
 	import FaqSection from '$components/FaqSection.svelte';
 	import Footer from '$components/Footer.svelte';
 
@@ -13,7 +13,7 @@
 	 * a launch section.
 	 *
 	 * The page now reads: the promise, the whole product in one scroll, the two
-	 * knobs you can turn, the price, then the questions. Everything a widget does
+	 * knobs you can turn, the download, then the questions. Everything a widget does
 	 * is explained once, where it is animated, so there is no second pass to
 	 * skim — and the FAQ is the last word, not a download detour.
 	 */
@@ -30,7 +30,7 @@
 
 	<LookSection />
 
-	<PricingSection />
+	<OfferSection />
 
 	<FaqSection />
 

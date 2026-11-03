@@ -442,6 +442,13 @@ p {
 	color: var(--accent-text);
 }
 
+/* Versions keep their lowercase `v`, even inside an uppercase mono label. */
+.chip--version,
+.version {
+	text-transform: none;
+	letter-spacing: 0.02em;
+}
+
 /* Rotating sticker badge — a little piece of tape-and-ink flair. */
 .sticker {
 	display: inline-flex;

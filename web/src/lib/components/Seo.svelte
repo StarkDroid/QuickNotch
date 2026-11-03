@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { facts, faq, platforms, pricing, site, themes, tour } from '$data/site';
+	import { latest } from '$data/releases';
+	import { facts, faq, offer, platforms, site, themes, tour } from '$data/site';
 
 	/**
 	 * All document-level SEO in one place.
@@ -24,21 +25,22 @@
 		applicationCategory: 'UtilitiesApplication',
 		applicationSubCategory: 'Application Launcher',
 		operatingSystem: osList,
-		softwareVersion: site.version,
+		softwareVersion: latest,
 		downloadUrl: site.downloadUrl,
 		installUrl: site.downloadUrl,
 		fileFormat: 'application/octet-stream',
-		sameAs: [canonical],
-		isAccessibleForFree: false,
+		license: 'https://opensource.org/license/mit',
+		sameAs: [canonical, site.repository],
+		isAccessibleForFree: true,
 		description: site.description,
 		inLanguage: 'en',
 		keywords: site.keywords.join(', '),
 		offers: {
 			'@type': 'Offer',
-			price: pricing.amount,
-			priceCurrency: pricing.currency,
+			price: offer.price.amount,
+			priceCurrency: offer.price.currency,
 			availability: 'https://schema.org/InStock',
-			url: site.purchaseUrl
+			url: site.downloadUrl
 		},
 		author: {
 			'@type': 'Organization',
@@ -57,14 +59,15 @@
 			'Quick-launch apps, live system rings, weather, calendar and now-playing controls',
 			'System page: CPU, GPU, memory, storage, download and upload rings',
 			'Windows-only gaming HUD: FPS, CPU, GPU, latency and download rate while a fullscreen game runs',
-			'Transparent in games: the notch body drops away, leaving a thin rim and soft shadow',
+			'Transparent in games: the island body and rim drop away, leaving only the metrics',
 			'Three notch styles: AMOLED notch, floating pill or drag handle',
 			'Solid ink or frosted glass, with the desktop blurring through the island',
 			'Pin any installed app or browse for one on disk',
 			'Launch from anywhere with always-on-top overlay',
 			'Start at login automatically',
 			'Runs offline with no account and no telemetry',
-			'One licence covers Windows and macOS'
+			'Free and open source under the MIT licence',
+			'Windows and macOS from one download page'
 		],
 		// Interesting, indexable facts rather than generic marketing filler.
 		additionalProperty: facts.map((fact) => ({
