@@ -100,8 +100,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun SettingsScreen(
     repository: FavoritesRepository,
-    media: MediaController,
-    onClose: () -> Unit
+    media: MediaController
 ) {
     // Deliberately NO screen-level config/favorites/session collects here: the
     // settings window used to recompose end-to-end on every media heartbeat

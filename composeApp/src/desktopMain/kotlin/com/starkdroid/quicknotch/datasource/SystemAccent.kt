@@ -28,13 +28,6 @@ object SystemAccent {
     /** Live accent colour; [refresh] publishes new OS values as they are read. */
     val accent: StateFlow<Color?> = _accent.asStateFlow()
 
-    /** Latest known accent colour, or null when the OS didn't report one. Never throws. */
-    fun current(): Color? {
-        _accent.value?.let { return it }
-        refresh()
-        return _accent.value
-    }
-
     /**
      * Re-reads the OS accent and publishes it. A failed probe keeps the
      * previous value (the indicator only ever shows real data), matching the
@@ -43,11 +36,6 @@ object SystemAccent {
     fun refresh() {
         val fresh = if (HostPlatform.isMac) readFromMacOS() else readFromWindows()
         if (fresh != null) _accent.value = fresh
-    }
-
-    /** Drop the read state so the next [current]/[refresh] re-reads the OS. */
-    fun invalidate() {
-        _accent.value = null
     }
 
     private fun readFromMacOS(): Color? {

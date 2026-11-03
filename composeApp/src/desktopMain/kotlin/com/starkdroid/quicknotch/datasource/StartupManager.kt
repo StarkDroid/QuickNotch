@@ -9,14 +9,6 @@ object StartupManager {
      */
     const val LAUNCHED_AT_LOGIN_ARG = "--quicknotch-launched-at-login"
 
-    fun isAutoStartEnabled(): Boolean {
-        return if (HostPlatform.isMac) {
-            MacStartupManager.isAutoStartEnabled()
-        } else {
-            WindowsStartupManager.isAutoStartEnabled()
-        }
-    }
-
     fun setAutoStartEnabled(enabled: Boolean): Boolean {
         return if (HostPlatform.isMac) {
             MacStartupManager.setAutoStartEnabled(enabled)

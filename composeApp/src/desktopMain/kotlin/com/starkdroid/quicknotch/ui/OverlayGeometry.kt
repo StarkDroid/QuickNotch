@@ -119,10 +119,6 @@ internal object DockLayout {
  */
 @Immutable
 data class NotchMetrics(
-    /** Native window footprint when collapsed. */
-    val collapsed: DpSize,
-    /** Native window footprint when expanded. */
-    val expanded: DpSize,
     /** Visible island when expanded. */
     val island: DpSize,
     /** Visible island when collapsed. */
@@ -143,7 +139,6 @@ data class NotchMetrics(
      */
     val edgeGapDp: Int = 0
 ) {
-    fun sizeFor(isExpanded: Boolean): DpSize = if (isExpanded) expanded else collapsed
     fun islandFor(isExpanded: Boolean): DpSize = if (isExpanded) island else islandCollapsed
 }
 
@@ -214,8 +209,6 @@ fun computeNotchMetrics(
     val window = DpSize(maxOf(alongExpanded, DockLayout.GameHudWidth), islandDepth)
 
     return NotchMetrics(
-        collapsed = islandCollapsed,
-        expanded = dockArea,
         island = islandExpanded,
         islandCollapsed = islandCollapsed,
         dockArea = dockArea,

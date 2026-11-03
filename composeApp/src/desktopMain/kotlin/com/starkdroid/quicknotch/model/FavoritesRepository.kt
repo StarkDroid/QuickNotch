@@ -67,7 +67,8 @@ class FavoritesRepository(
 
     init {
         scope.launch {
-            for (wakeSignal in persistWake) {
+            while (true) {
+                persistWake.receive()
                 val configToSave = synchronized(persistLock) {
                     pendingConfig.also { pendingConfig = null }
                 }

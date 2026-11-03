@@ -11,8 +11,6 @@ object MacStartupManager {
             "Library/LaunchAgents/$LABEL.plist"
         )
 
-    fun isAutoStartEnabled(): Boolean = plistFile.isFile
-
     fun setAutoStartEnabled(enabled: Boolean): Boolean {
         return try {
             if (enabled) {

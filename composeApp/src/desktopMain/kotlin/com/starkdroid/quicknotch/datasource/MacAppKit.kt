@@ -42,8 +42,6 @@ internal object MacAppKit {
     /** NSStatusWindowLevel: the band the menu bar occupies — above every normal
      *  app window and the menu bar itself, still below alert/modal levels. */
     const val LEVEL_STATUS_BAR = 25
-    /** NSFloatingWindowLevel (what AWT's alwaysOnTop reaches). */
-    const val LEVEL_FLOATING = 3
 
     /** canJoinAllSpaces | stationary | fullScreenAuxiliary | ignoresCycle. */
     const val COLLECTION_NOTCH: Long =
@@ -77,10 +75,6 @@ internal object MacAppKit {
     fun setIgnoresMouseEvents(ptr: Long, ignore: Boolean) {
         call("quicknotch_set_ignores_mouse_events", ptr, if (ignore) 1 else 0)
     }
-
-    /** Live `ignoresMouseEvents` read-back (diagnostics). */
-    fun ignoresMouseEvents(ptr: Long): Boolean =
-        (fn("quicknotch_get_ignores_mouse_events")?.invokeInt(arrayOf(ptr)) ?: -1) == 1
 
     fun setWindowLevel(ptr: Long, level: Int) {
         call("quicknotch_set_window_level", ptr, level)

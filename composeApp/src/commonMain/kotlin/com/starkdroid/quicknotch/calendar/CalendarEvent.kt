@@ -5,7 +5,6 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
-import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 import kotlinx.datetime.toLocalDateTime
 
@@ -76,15 +75,6 @@ data class CalendarDateGroup(
     val isToday: Boolean
 )
 
-/** How many of these events fall on today. */
-fun List<CalendarEvent>.todayCount(
-    timeZone: TimeZone = TimeZone.currentSystemDefault(),
-    today: LocalDate = Clock.System.todayIn(timeZone)
-): Int = count { event ->
-    Instant.fromEpochMilliseconds(event.startMillis)
-        .toLocalDateTime(timeZone).date == today
-}
-
 /**
  * Today's events that are still upcoming -- running counts, ended does not.
  * This is the pill badge's number, and it matches the count Google Calendar
@@ -98,15 +88,6 @@ fun List<CalendarEvent>.todayUpcomingCount(
     Instant.fromEpochMilliseconds(event.startMillis)
         .toLocalDateTime(timeZone).date == today && event.endMillis >= nowMillis
 }
-
-/**
- * How many of these events are still upcoming -- running right now counts, one
- * that ended does not. This is the number the pill badge shows, so a calendar
- * whose today is empty still gets its icon and count on the notch.
- */
-fun List<CalendarEvent>.upcomingCount(
-    nowMillis: Long = Clock.System.now().toEpochMilliseconds()
-): Int = count { it.endMillis >= nowMillis }
 
 /**
  * The next [maxDates] dates with an event coming, soonest first -- four, one

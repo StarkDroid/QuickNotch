@@ -9,14 +9,6 @@ object WindowsStartupManager {
     private val REGISTRY_RUN_KEY = listOf("Software", "Microsoft", "Windows", "CurrentVersion", "Run").joinToString(File.separator)
     private const val APP_KEY_NAME = "QuickNotch"
 
-    fun isAutoStartEnabled(): Boolean {
-        return try {
-            Advapi32Util.registryValueExists(WinReg.HKEY_CURRENT_USER, REGISTRY_RUN_KEY, APP_KEY_NAME)
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     fun setAutoStartEnabled(enabled: Boolean): Boolean {
         return try {
             if (enabled) {

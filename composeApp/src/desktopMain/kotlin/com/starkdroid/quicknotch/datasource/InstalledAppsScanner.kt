@@ -29,8 +29,4 @@ object InstalledAppsScanner {
             }
         }
     }
-
-    fun invalidateCache() {
-        cached = null
-    }
 }

@@ -50,7 +50,7 @@
     <ID>LongMethod:SettingsComponents.kt$@OptIn(ExperimentalComposeUiApi::class) @Composable internal fun SidebarNavItem( icon: ImageVector, label: String, selected: Boolean, onClick: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:SettingsComponents.kt$@OptIn(ExperimentalComposeUiApi::class) @Composable internal fun WidgetAccordion( icon: ImageVector, title: String, enabled: Boolean, onToggleEnabled: (Boolean) -&gt; Unit, content: @Composable () -&gt; Unit )</ID>
     <ID>LongMethod:SettingsComponents.kt$@OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class) @Composable internal fun &lt;T&gt; AppearanceDropdown( label: String, options: List&lt;T&gt;, selected: T, optionLabel: @Composable (T) -&gt; String, onSelect: (T) -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:SettingsScreen.kt$@Composable fun SettingsScreen( repository: FavoritesRepository, media: MediaController, onClose: () -&gt; Unit )</ID>
+    <ID>LongMethod:SettingsScreen.kt$@Composable fun SettingsScreen( repository: FavoritesRepository, media: MediaController )</ID>
     <ID>LongMethod:SettingsScreen.kt$@Composable private fun AboutDialog( onDismiss: () -&gt; Unit )</ID>
     <ID>LongMethod:WeatherWidget.kt$@Composable private fun WeatherCurrentBlock(data: WeatherData, fahrenheit: Boolean)</ID>
     <ID>LongMethod:WidgetsTab.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun WidgetsTab( repository: FavoritesRepository, media: MediaController, scannedApps: List&lt;AppItem&gt;, searchQuery: String, isScanning: Boolean, onSearchQueryChange: (String) -&gt; Unit, calendarState: CalendarState, calendarRefreshing: Boolean, onConnectCalendar: () -&gt; Unit, onCancelCalendar: () -&gt; Unit, onDisconnectCalendar: () -&gt; Unit, onRefreshCalendar: () -&gt; Unit )</ID>
@@ -177,8 +177,6 @@
     <ID>TooManyFunctions:MediaWidgets.kt$com.starkdroid.quicknotch.ui.MediaWidgets.kt</ID>
     <ID>TooManyFunctions:SettingsComponents.kt$com.starkdroid.quicknotch.ui.SettingsComponents.kt</ID>
     <ID>TooManyFunctions:WeatherWidget.kt$com.starkdroid.quicknotch.ui.WeatherWidget.kt</ID>
-    <ID>UnusedParameter:SettingsScreen.kt$onClose: () -&gt; Unit</ID>
-    <ID>UnusedPrivateProperty:FavoritesRepository.kt$FavoritesRepository$wakeSignal</ID>
     <ID>UnusedPrivateProperty:GoogleCalendar.kt$GoogleCalendar$private const val PRODUCTION_WEB_BASE = "https://quicknotch.app"</ID>
   </CurrentIssues>
 </SmellBaseline>
