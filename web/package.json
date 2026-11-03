@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-		"dev:oauth": "vite dev --port 5173 --strictPort",
+    "dev:oauth": "vite dev --port 5173 --strictPort",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "verify": "node scripts/verify-render.mjs",
-    "og": "node scripts/generate-og.mjs"
+    "og": "node scripts/generate-og.mjs",
+    "banner": "node scripts/generate-banner.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.8",
