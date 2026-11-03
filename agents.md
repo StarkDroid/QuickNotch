@@ -85,6 +85,14 @@ Releases run on a merged PR (`.github/workflows/release.yml`): `plan` executes
 `changelog.json` and marks the release latest. A PR touching only `web/`, docs
 or CI skips the build.
 
+The same script runs on every push to an open PR
+(`.github/workflows/changelog-preview.yml`, `MODE=preview` then `MODE=splice`):
+it rewrites one marker-fenced block at the bottom of the description — the
+version that will ship, the bump, and the exact user-facing lines — and leaves
+the author's prose alone. It checks out the **base** commit, so a branch under
+review never executes its own copy of the planner with a write token. A fork PR
+is skipped (read-only token), same as the release.
+
 Bridge tasks (`composeApp/build.gradle.kts`, auto-run by jar/run): `syncWindowsBridge`
 (`native/windows/*` → resources; edit source, never the copy),
 `compileMacNowPlayingBridge` / `compileMacBtWatchBridge` / `compileMacPassthroughBridge`
@@ -441,6 +449,11 @@ scope-creep (new notch positions, Android/iOS) unless asked.
   trusting `/latest`. That asset is also the gate that keeps the old release from
   looking like an update. macOS ships `-arm64` and `-x64` DMGs; `assetFor` picks
   by `os.arch`.
+- The PR preview block is not input: `withoutPreview` strips it before the body
+  is parsed, or a bullet the author deleted keeps resurfacing from the previous
+  run and the changelog slowly eats its own output. The splice is also a no-op
+  when the rendered block is identical, so a push that changes nothing a user
+  would read leaves the description (and its timeline) alone.
 - Self-update only exists in an installed build: `jpackage.app-path` is absent
   under `./gradlew run`. The detached script waits for the JVM PID, so the app
   must quit *after* starting it; macOS uses `rsync -a` (never `cp -R`/`ditto`),

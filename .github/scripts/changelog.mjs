@@ -16,11 +16,21 @@
  *    written for humans already.
  *
  * Runs with plain `node` (20+) and the repository's `GITHUB_TOKEN`; no
- * dependencies. Writes everything to `build/release/`:
+ * dependencies. `MODE` picks the job:
+ *
+ *   release (default)  plan the merged pull request and write the release
+ *   preview            render the entry for an open pull request, no release
+ *   splice             replace the generated block in a PR description
+ *
+ * The last two are the `Changelog preview` workflow: the copy that will ship is
+ * reviewed next to the code, instead of being discovered after the merge.
+ *
+ * Writes everything to `build/release/`:
  *
  *   plan.json       what was decided and why (kept as a CI artifact)
  *   notes.md        the GitHub release body
  *   changelog.json  the cumulative feed, with this release at the top
+ *   preview.md      the PR-description block (preview mode)
  *
  * Exit codes: 0 for both "release" and "nothing to release"; 1 for a real
  * failure (bad token, unreachable API, malformed previous feed), because a
@@ -35,16 +45,27 @@ const TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 const REPO = process.env.GITHUB_REPOSITORY || "StarkDroid/QuickNotch";
 const OUT = process.env.OUT_DIR || "build/release";
 const FORCE = /^(1|true|yes)$/i.test(process.env.FORCE || "");
+const MODE = (process.env.MODE || "release").toLowerCase();
 const REQUESTED_BUMP = (process.env.BUMP || "auto").toLowerCase();
 const CHANGELOG_ASSET = "changelog.json";
 const MAX_CHANGES = 6;
 const FIRST_VERSION = "2.0.0";
 
-// Imported by the local self-test below; running the file executes the planner.
+/**
+ * The generated block in a pull request description lives between these two
+ * markers. Everything outside them is the author's, and is never rewritten.
+ */
+const PREVIEW_START = "<!-- quicknotch-changelog:start -->";
+const PREVIEW_END = "<!-- quicknotch-changelog:end -->";
+
+const HEADINGS = { new: "New", improved: "Improved", fixed: "Fixed" };
+
+// Imported by the local self-test; running the file executes one mode.
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  main().catch((error) => {
-    console.error(`release planner failed: ${error.stack || error.message}`);
+  const run = MODE === "preview" ? preview : MODE === "splice" ? splice : main;
+  run().catch((error) => {
+    console.error(`changelog ${MODE} failed: ${error.stack || error.message}`);
     process.exit(1);
   });
 }
@@ -112,6 +133,181 @@ async function main() {
   output("bump", bump);
 
   console.log(`planned v${version} from #${pull.number} (${bump} bump, ${appFiles.length} app files)`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Pull-request preview                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Render what this pull request will publish, without publishing it.
+ *
+ * The preview deliberately runs the same `bumpFor` / `nextVersion` /
+ * `buildEntry` path as the release, so a description that reads correctly is
+ * the description that ships. It only ever *shows* the entry: nothing is
+ * written to a release or to `changelog.json`.
+ */
+async function preview() {
+  mkdirSync(OUT, { recursive: true });
+  const pull = await resolvePull();
+  const files = await pullFiles(pull.number);
+  const appFiles = files.filter(isAppFile);
+  const previous = await previousFeed();
+  const released = previous.releases.find((release) => release.pr === pull.number);
+  const bump = released ? "none" : bumpFor(pull);
+  const version = released ? released.version : nextVersion(previous.latest, bump);
+
+  // A PR with no app files never reaches `buildEntry`: it will not publish, and
+  // the block says so instead of previewing a release that cannot happen. A PR
+  // that is already released has a fixed number, so there is nothing to build.
+  const entry = !released && appFiles.length > 0 ? await buildEntry(pull, version) : null;
+  const block = previewBlock({ entry, version, bump, previous, released });
+
+  writeFileSync(join(OUT, "preview.md"), `${block}\n`);
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (summary) appendFileSync(summary, `${block}\n\n`);
+
+  output("preview", "true");
+  output("version", version);
+  output("bump", bump);
+  output("app", appFiles.length > 0 ? "true" : "false");
+
+  console.log(`preview v${version} for #${pull.number} (${bump} bump, ${appFiles.length} app files)`);
+}
+
+function previewBlock({ entry, version, bump, previous, released }) {
+  const lines = [PREVIEW_START, "", "### Changelog preview", ""];
+
+  if (released) {
+    lines.push(
+      `This pull request is already published as **v${released.version}**.` +
+        " Merging again publishes nothing; re-running the release rebuilds that entry.",
+      ""
+    );
+  } else if (!entry) {
+    lines.push(
+      "This pull request does not touch the app (`composeApp/`, `gradle/` or a build file)," +
+        " so merging publishes no build and no changelog entry.",
+      ""
+    );
+  } else {
+    const from = previous.latest
+      ? ` — a ${bump} bump from v${previous.latest}`
+      : " — the first release";
+    lines.push(`Merging publishes **QuickNotch ${version}**${from}.`, "");
+    if (previous.latest) {
+      lines.push("<sub>If another pull request merges first, this becomes the next number after it.</sub>", "");
+    }
+    lines.push(`> ${entry.title}`, "");
+    for (const kind of ["new", "improved", "fixed"]) {
+      const changes = entry.changes.filter((change) => change.kind === kind);
+      if (changes.length === 0) continue;
+      lines.push(`**${HEADINGS[kind]}**`, "");
+      for (const change of changes) lines.push(`- ${change.text}`);
+      lines.push("");
+    }
+  }
+
+  // The bump guidance only makes sense when there is a bump to steer.
+  lines.push(
+    `<sub>${previewGuidance(entry, released, previous)}</sub>`,
+    "",
+    "<sub>This block is rewritten on every push — the text above it is yours.</sub>",
+    "",
+    PREVIEW_END
+  );
+
+  return lines.join("\n");
+}
+
+function previewGuidance(entry, released, previous) {
+  if (released || !entry) return "Nothing to publish from this description.";
+  if (!previous.latest) {
+    return "The first release is always 2.0.0 — labels steer the bump from the next one.";
+  }
+  return (
+    "Bump: `release:major` (or `breaking`) for a major, `release:patch` (or `fix`, `bug`) for a patch," +
+    " anything else for a minor."
+  );
+}
+
+/**
+ * Write `preview.md` into the pull request description.
+ *
+ * The body is re-read from the API rather than taken from the event: the two
+ * run as separate steps, and an author may have edited the description in
+ * between. Identical output is not written, so the description keeps its
+ * timeline quiet on a push that changes nothing a user would read.
+ */
+async function splice() {
+  mkdirSync(OUT, { recursive: true });
+  const block = readFileSync(join(OUT, "preview.md"), "utf8").trim();
+  const number = Number.parseInt(process.env.PR_NUMBER || "", 10) || (await resolvePull()).number;
+  const current = await pull(number);
+  const before = current.body || "";
+  const after = mergePreview(before, block);
+
+  if (after === before) {
+    output("changed", "false");
+    console.log(`description of #${current.number} is already up to date`);
+    return;
+  }
+
+  try {
+    await api(`/repos/${REPO}/pulls/${current.number}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: after })
+    });
+  } catch (failure) {
+    // A description over GitHub's 65 536-character limit, or a token without
+    // write access, must not turn a green pull request red: the preview is a
+    // convenience. The annotation stays visible in the run, so a broken setup
+    // is still noticeable.
+    console.log(`::warning::could not update the description: ${failure.message}`);
+    output("changed", "false");
+    return;
+  }
+
+  output("changed", "true");
+  console.log(`description of #${current.number} updated`);
+}
+
+/**
+ * Replace the managed block, or append one.
+ *
+ * Markers rather than a fixed heading: an author is free to write their own
+ * "Changelog" section, and this must not eat it. A body with a start marker and
+ * no end (someone deleted half of it) is truncated at the marker instead of
+ * nesting a second block inside the first.
+ */
+function mergePreview(current, block) {
+  const body = String(current || "");
+  const start = body.indexOf(PREVIEW_START);
+  const end = body.indexOf(PREVIEW_END, Math.max(start, 0));
+
+  if (start !== -1 && end > start) {
+    const existing = body.slice(start, end + PREVIEW_END.length);
+    if (existing.trim() === block.trim()) return body;
+    return body.slice(0, start) + block + body.slice(end + PREVIEW_END.length);
+  }
+
+  const head = (start === -1 ? body : body.slice(0, start)).trimEnd();
+  return head.length === 0 ? block : `${head}\n\n${block}`;
+}
+
+/**
+ * The generated block is not part of the author's prose. Feeding it back into
+ * `collectChanges` would keep a bullet alive after the author deleted it, and
+ * make every run re-read the previous run's output.
+ */
+function withoutPreview(body) {
+  const text = String(body || "");
+  const start = text.indexOf(PREVIEW_START);
+  if (start === -1) return text;
+  const end = text.indexOf(PREVIEW_END, start);
+  if (end === -1) return text.slice(0, start).trim();
+  return `${text.slice(0, start)}${text.slice(end + PREVIEW_END.length)}`.trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -293,7 +489,9 @@ function mergeEntry(previous, entry) {
 
 async function buildEntry(entry, version) {
   const title = cleanTitle(entry.title) || `QuickNotch ${version}`;
-  const changes = (await collectChanges(entry)).map((text) => ({ kind: kindFor(text), text }));
+  // Never parse the block this script itself wrote into the description.
+  const source = { ...entry, body: withoutPreview(entry.body) };
+  const changes = (await collectChanges(source)).map((text) => ({ kind: kindFor(text), text }));
   if (changes.length === 0) {
     changes.push({ kind: kindFor(title), text: title });
   }
@@ -491,12 +689,11 @@ function renderNotes(entry, pull) {
     (groups[change.kind] || groups.improved).push(change.text);
   }
 
-  const headings = { new: "New", improved: "Improved", fixed: "Fixed" };
   const lines = [`## ${entry.title}`, ""];
 
   for (const kind of ["new", "improved", "fixed"]) {
     if (groups[kind].length === 0) continue;
-    lines.push(`### ${headings[kind]}`, "");
+    lines.push(`### ${HEADINGS[kind]}`, "");
     for (const text of groups[kind]) lines.push(`- ${text}`);
     lines.push("");
   }
@@ -514,14 +711,16 @@ function renderNotes(entry, pull) {
 /* Plumbing                                                            */
 /* ------------------------------------------------------------------ */
 
-async function api(path) {
+async function api(path, init = {}) {
   if (!TOKEN) throw new Error("GITHUB_TOKEN is not set");
   const response = await fetch(`https://api.github.com${path}`, {
+    ...init,
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${TOKEN}`,
       "User-Agent": "QuickNotch release planner",
-      "X-GitHub-Api-Version": "2022-11-28"
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(init.headers || {})
     }
   });
   if (!response.ok) {
@@ -559,7 +758,7 @@ function output(key, value) {
   console.log(`::notice::${key}=${value}`);
 }
 
-// Exported for the local self-test below; CI only executes the file.
+// Exported for the local self-test; CI only executes the file.
 export {
   bumpFor,
   cleanTitle,
@@ -567,5 +766,8 @@ export {
   humanise,
   isAppFile,
   mergeEntry,
-  nextVersion
+  mergePreview,
+  nextVersion,
+  previewBlock,
+  withoutPreview
 };

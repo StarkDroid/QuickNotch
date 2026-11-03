@@ -157,6 +157,13 @@ The local build defaults to `2.0.0`; CI passes the published number with
 `-PappVersion=x.y.z`, and the running binary reports it in **Settings →
 Changelog**.
 
+While the PR is still open, `.github/workflows/changelog-preview.yml` runs the
+same planner and rewrites a fenced **Changelog preview** block at the bottom of
+the description — the version that will ship, the bump, and the exact sentences
+users will read. Relabel the PR or edit its body and the block follows; the
+author's own description is never touched, and the preview says plainly when a PR
+does not touch the app and therefore ships nothing.
+
 The app updates itself: it downloads the package for the current platform in the
 background, then a detached script waits for the JVM to exit after **Restart &
 update**, installs the MSI (same upgrade UUID, higher version) or rsyncs the
