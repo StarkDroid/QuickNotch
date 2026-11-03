@@ -49,6 +49,13 @@ npm run dev        # http://localhost:5173
 
 Node 20+ is recommended (developed on Node 24).
 
+`npm audit` reports no high-severity findings. Six low-severity advisories
+remain in the build toolchain (`@sveltejs/kit` 2.x, `cookie`, `deepmerge`);
+clearing them needs SvelteKit 3, which moves the config into `vite.config.ts`,
+drops `$lib` and requires Vite 8 — a separate migration. None is reachable in
+what ships: the output is prerendered HTML with no server, no cookies and no
+form actions.
+
 ---
 
 ## Layout
