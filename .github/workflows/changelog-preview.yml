@@ -40,10 +40,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The *base*, not the PR head: the planner reads the diff through the
-          # API, so there is no reason to execute code from the branch being
-          # reviewed with a write token on the pull request.
-          ref: ${{ github.event.pull_request.base.sha }}
+          # The branch's own copy, because the planner has to exist where the
+          # preview runs: on `main` it does not until this workflow lands, and a
+          # base checkout would fail with MODULE_NOT_FOUND on the very PR that
+          # introduces it. Same-repo branches are already trusted (it takes
+          # write access to open one), and a fork PR never reaches this job, so
+          # the token here stays read-only for anyone who did not already have
+          # push rights.
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-node@v4
         with:
