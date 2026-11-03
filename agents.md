@@ -29,8 +29,12 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
   taskbar/Alt+Tab/focus steal). Dock icon + activation appear **only while the
   Settings window is open**. Manual launch opens Settings; `--quicknotch-launched-at-login`
   boot stays tray-quiet.
-- `web/` is a separate static SvelteKit marketing site (also hosts
-  `/connect` + `/oauth/callback` for Calendar OAuth). Ignore unless asked.
+- `web/` is a separate static SvelteKit site (also hosts `/connect` +
+  `/oauth/callback` for Calendar OAuth). Ignore unless asked. It serves
+  quicknotch.app from Cloudflare Pages: landing page, `/download` (platform
+  cards + optional Ko-fi after a click) and `/changelog` (the same feed the app
+  reads, committed to `web/src/lib/data/changelog.json` by the release workflow
+  and imported at build time so the version and history are prerendered).
 
 ## 2. Stack & KMP integration (`gradle/libs.versions.toml`)
 
@@ -281,7 +285,9 @@ from the AWT wheel listener and composition on the same thread — no locks.
   The macOS detection path (`MacGameWatch.kt` + `gamewatch-bridge.dylib`) is kept in the
   tree but no longer started — dormant until a macOS HUD exists.
 - **Changelog & self-update** (`datasource/Changelog.kt`, `ReleaseApi.kt`,
-  `AppUpdates.kt`, `AppInstaller.kt`, `FileDigest.kt`, `ui/ChangelogDialog.kt`):
+  `AppUpdates.kt`, `AppInstaller.kt`, `FileDigest.kt`, `ui/ChangelogDialog.kt`,
+  `datasource/ProjectLinks.kt` — the repository and Ko-fi addresses, the only
+  place they are written, used by the tray and the changelog footer):
   the settings entry is Changelog, not About. The feed comes from the release's
   `changelog.json` (cached in `changelog.json`, never bundled), and the dialog
   renders only versions `<= AppVersion.VERSION`; anything newer becomes an update
@@ -381,8 +387,12 @@ demo cannot drift from the app's geometry. The laptop arrives skewed and lands
 frontal as the lid opens; its base is a solid front-elevation body at the hinge
 with the machine's real thickness — never a deck, so no angle ever shows keys.
 The page keeps exactly one tour, one
-look band, pricing and FAQ; do not reintroduce per-widget sections, a download
-section or a second demo.
+look band, the download ticket and the FAQ; do not reintroduce per-widget
+sections, a second download band or a second demo. QuickNotch is free and MIT
+licensed: copy, badges, schema (`isAccessibleForFree`, price 0), the README and
+the in-app copyright all say so, and Ko-fi (`ko-fi.com/trishiraj`) is the only
+thing ever asked for — from the site, the README, the tray and the changelog
+footer, never gating a download or a feature.
 
 DON'T: force SOFTWARE renderer; set `skiko.renderApi` unconditionally; edit
 `resources/windows/*.ps1` (edit `native/windows/`); `java -jar` the plain jar; resize the

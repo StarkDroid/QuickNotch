@@ -1,8 +1,10 @@
 # QuickNotch — marketing site
 
-The landing page for QuickNotch: a bold, light, scroll-driven single page that
-explains the glanceable notch and its widgets in one tour, shows the two looks,
-and links to the installers.
+The site for QuickNotch: a bold, light, scroll-driven landing page that explains
+the glanceable notch and its widgets in one tour, shows the two looks, and hands
+over an installer — plus `/download` and `/changelog`, which read the release
+feed the app itself uses. Free and open source, so the copy, the schema and the
+installers all say the same thing.
 
 It lives in the same repository as the Kotlin desktop app but is a completely
 separate workspace — the app's Gradle build and the site's Node build never
@@ -43,6 +45,7 @@ npm run dev        # http://localhost:5173
 | `npm run check` | `svelte-check` — types plus Svelte and a11y diagnostics. |
 | `npm run verify` | Runtime smoke test against a running preview server (see [Verification](#verification)). |
 | `npm run og` | Regenerates `static/og.png` and the PNG icons from SVG. Run only when those change; the output is committed. |
+| `npm run banner` | Rasterises `../docs/banner.svg` into `../docs/banner.png` for the README. |
 
 Node 20+ is recommended (developed on Node 24).
 
@@ -60,6 +63,7 @@ web/
 │   │   │   ├── reveal.ts         # scroll-reveal + cascade actions (IntersectionObserver → GSAP)
 │   │   │   └── magnetic.ts       # magnetic hover for primary buttons
 │   │   ├── data/site.ts          # ALL copy, links and not-a-token values
+│   │   ├── data/releases.ts      # changelog feed + installer file names
 │   │   ├── motion/
 │   │   │   ├── gsap.ts           # lazy GSAP + ScrollTrigger loader
 │   │   │   └── smoothScroll.ts   # Lenis, wired into the GSAP ticker
@@ -72,26 +76,33 @@ web/
 │   └── routes/
 │       ├── +layout.ts            # `prerender = true`
 │       ├── +layout.svelte        # fonts, styles, smooth-scroll, backdrop layers
-│       └── +page.svelte          # page composition (section order)
+│       ├── +page.svelte          # page composition (section order)
+│       ├── download/+page.svelte # platform cards, install notes, optional tip jar
+│       ├── changelog/+page.svelte# the published release history
+│       ├── connect/+page.svelte  # Calendar consent (app-invoked, unlinked)
+│       └── oauth/callback/+page.svelte  # hands the code back to the app
 ├── static/                       # favicon, icons, og.png, robots.txt, sitemap.xml, manifest, _headers
+├── wrangler.toml                 # Cloudflare Pages project config
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
+    ├── generate-banner.mjs       # docs/banner.svg → the README banner
     └── verify-render.mjs         # runtime smoke test over the DevTools Protocol
 ```
 
 ### Page order
 
 `Hero` (`#top`) → `TourSection` (`#tour`) → `LookSection` (`#look`) →
-`PricingSection` (`#pricing`) → `FaqSection` (`#faq`) → `Footer`.
+`OfferSection` (`#download`) → `FaqSection` (`#faq`) → `Footer`.
 
 The header is a notch, not a menu: a dark bar flush with the top edge — square
 upper corners, only the two facing the page rounded, exactly the app's base
-notch — carrying the mark, the wordmark and the buy button. It rests compact at
-the top of the page and opens to full width as you scroll, closing again when
-you return to the top; the progress hairline runs along its lower edge. There are
-no section links at all — the tour, the look and the price are found by
-scrolling. The FAQ is the last section; there is no separate download section,
-because the buy button in pricing is the one call to action.
+notch — carrying the mark, the wordmark, the version (linking to the changelog),
+the Ko-fi link and the download button. It rests compact at the top of the page
+and opens to full width as you scroll, closing again when you return to the top;
+the progress hairline runs along its lower edge. There are no section links at
+all — the tour, the look and the download are found by scrolling. The FAQ is the
+last section; the ticket in `OfferSection` is the one call to action, and it
+points at `/download` rather than shipping its own second demo.
 
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
 opens and its screen walks through the seven states — quickview, dock, system,
@@ -228,54 +239,89 @@ Other deliberate choices:
 
 ---
 
+## Download page and changelog
+
+`/download` and `/changelog` are the only two pages besides the landing page, and
+they share one data source: `src/lib/data/changelog.json`, the cumulative feed the
+release workflow generates. `src/lib/data/releases.ts` imports it and builds the
+installer URLs from the version it names.
+
+The feed is committed rather than fetched from GitHub for a concrete reason:
+release assets are served without CORS headers, so a browser cannot read
+`changelog.json` from the release itself, and going through the API would spend
+a rate limit on a file the release already deploys. Importing it at build time
+also means the version chip, the history and `softwareVersion` in the structured
+data are in the prerendered HTML — nothing appears after hydration. The release
+workflow copies the new feed to `web/src/lib/data/changelog.json` after it
+publishes, which also triggers the Pages rebuild.
+
+Installer names are stable, so no site change is needed per release:
+
+| Platform | Asset |
+| :--- | :--- |
+| Windows | `QuickNotch-<version>.msi` (and `.exe`) |
+| macOS, Apple silicon | `QuickNotch-<version>-arm64.dmg` |
+| macOS, Intel | `QuickNotch-<version>-x64.dmg` |
+
+Clicking any download reveals an optional Ko-fi card once. It never gates the
+download, never blocks the file, and can be dismissed — the tip jar is the only
+thing the site asks for, and it asks after the installer is on its way.
+
+---
+
 ## SEO
 
 - Titles, description, canonical, robots directives, Open Graph and Twitter card
   tags, plus three JSON-LD graphs (`SoftwareApplication`, `WebSite`,
-  `Organization`) rendered in the prerendered HTML.
-- `static/sitemap.xml` and `static/robots.txt`.
+  `Organization`) rendered in the prerendered HTML. The software graph declares
+  `isAccessibleForFree`, a zero price and the MIT licence, and names the
+  repository in `sameAs`.
+- `/download` and `/changelog` carry their own title, description, canonical and
+  Open Graph tags through `PageSeo.svelte`.
+- `static/sitemap.xml` lists all three public routes; `/connect` and `/oauth/*`
+  stay out of it and out of `robots.txt`.
 - One `<h1>` and one `<h2>` per section, with `h3`s beneath.
 - Descriptive anchor text on every link, and `alt`/`aria-label` coverage.
-- The visible CTAs all point at `site.purchaseUrl`; `site.downloadUrl` survives
-  only in the `SoftwareApplication` schema. There is no code-host, licence or
-  issue-tracker reference anywhere in the markup, the copy, the structured data
-  or the generated Open Graph image.
+- Every public link (site, download, changelog, source, issues, Ko-fi) comes from
+  `site` in `src/lib/data/site.ts`, so the markup, the schema and the footer
+  cannot point at different places.
 
-### Before deploying
+---
 
-1. **Set the purchase destination.** Every visible CTA reads `site.purchaseUrl`
-   in `src/lib/data/site.ts` (`https://quicknotch.app/buy` as a placeholder).
-   `site.downloadUrl` is schema-only now; point it at the installer or drop the
-   property.
-2. **Confirm the domain.** `site.url` drives the canonical URL, the Open Graph
-   image URL, the sitemap and the JSON-LD. Update it alongside
-   `static/sitemap.xml` and `static/robots.txt`.
+## Hosting on Cloudflare Pages (quicknotch.app)
 
-### Hosting on Cloudflare (prepared, not yet live)
+The build is Pages-shaped: `adapter-static` emits plain files to `build/`, all
+asset URLs are relative, and there is no server code — no SSR, no edge functions,
+no environment variables, no secrets.
 
-The build is already Cloudflare-Pages-shaped: `adapter-static` emits plain
-files to `build/`, all asset URLs are relative, and there is no server code —
-no SSR, no edge functions, no environment variables. To go live:
+Two ways to deploy, both supported:
 
-1. In Cloudflare Pages, create a project from this repo with build command
-   `npm run build` (working directory `web/`) and output directory `build`.
-2. Add the custom domain `quicknotch.app` (apex) in the Pages project. Approve
-   the automatic DNS handling, then confirm Cloudflare owns DNS for the apex —
-   proxy (orange cloud) on, **Always Use HTTPS** on, **Automatic HTTPS Rewrites**
-   on.
-3. Add a `www` → apex redirect (a single Redirect Rule: `www.quicknotch.app/*`
-   → `https://quicknotch.app/$1`, 301). The site's canonical, sitemap and
-   structured data all name the apex, so there must be exactly one.
-4. In the Google OAuth client, register the production redirect URI
-   `https://quicknotch.app/oauth/callback` alongside the local preview URIs.
-   The desktop reads the loopback port out of `state`, so no app change is
-   needed — but consent fails as `redirect_uri_mismatch` until the URI is
-   registered, and new URIs can take time to propagate.
-5. After the first deploy, check: `https://quicknotch.app/` loads with HSTS,
-   `/_headers` took effect (DevTools → response headers shows `content-security-policy`),
-   `/robots.txt` serves the flow disallows, `/sitemap.xml` lists only `/`,
-   and `/connect?standby=1` renders the standby card with a `noindex` robots
-   meta (view source — it must never be reachable from any link on `/`).
+1. **Git integration** — Pages builds `web/` on every push to `main`
+   (`npm run build`, output `build`, root directory `web`).
+2. **GitHub Actions** — `.github/workflows/deploy-web.yml` builds, type-checks and
+   runs `wrangler pages deploy build` using `web/wrangler.toml`. It needs two
+   repository secrets, `CLOUDFLARE_API_TOKEN` (Pages: Edit) and
+   `CLOUDFLARE_ACCOUNT_ID`; without them it still builds and warns instead of
+   failing.
+
+Then, once, in Cloudflare:
+
+1. Attach the custom domain `quicknotch.app` to the Pages project and let
+   Cloudflare manage the apex record. Proxy on, **Always Use HTTPS** on,
+   **Automatic HTTPS Rewrites** on.
+2. Add a `www` → apex redirect (one Redirect Rule: `www.quicknotch.app/*` →
+   `https://quicknotch.app/$1`, 301). The canonical, sitemap and structured data
+   all name the apex, so there must be exactly one host.
+3. In the Google OAuth client, register the production redirect URI
+   `https://quicknotch.app/oauth/callback` alongside the local preview URIs. The
+   desktop reads the loopback port out of `state`, so no app change is needed —
+   but consent fails as `redirect_uri_mismatch` until the URI is registered, and
+   new URIs can take a while to propagate.
+4. After the first deploy, check: `/` loads over HSTS, `_headers` took effect
+   (DevTools → response headers shows `content-security-policy`), `/download`
+   resolves without `.html`, `/changelog` shows the published version in its HTML,
+   `/robots.txt` serves the
+   flow disallows, and `/sitemap.xml` lists only the three public routes.
 
 Security posture, all in-repo rather than in-dashboard:
 
@@ -329,11 +375,12 @@ It drives headless Chrome over the DevTools Protocol (no extra dependencies)
 and reports, in order: **page health** (uncaught errors and console errors,
 reported first so a hydration crash is obvious), whether the reveal actions fire,
 whether the **spotlight tracks the scroll and lands within a few pixels of the
-pricing CTA**, whether the **tour advances its step and opens the lid**,
+download CTA**, whether the **tour advances its step and opens the lid**,
 whether the hero entrance completes with each headline line at rest inside its
-mask, **whether any element renders a painted gradient** (must be 0) and whether
-the grain texture generated, any horizontal overflow at 1440 px and 390 px, and
-finally any console errors raised during interaction.
+mask, **whether any element renders a painted gradient** (must be 0), whether the
+grain texture generated, any horizontal overflow at 1440 px and 390 px, and
+finally any console errors raised during interaction. The spotlight probe follows
+the scroll to the download ticket's CTA.
 
 Each probe is isolated, so one failing probe cannot abort the report.
 

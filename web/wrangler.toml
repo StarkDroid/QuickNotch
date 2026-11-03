@@ -1,0 +1,10 @@
+# Cloudflare Pages project for quicknotch.app.
+#
+# The site is fully static: `npm run build` writes prerendered HTML and assets to
+# `build/`, and Pages serves them from the edge. Deploys come either from the
+# Pages git integration (build command `npm run build`, output `build`, root
+# directory `web`) or from `.github/workflows/deploy-web.yml`, which runs
+# `wrangler pages deploy build`.
+name = "quicknotch"
+pages_build_output_dir = "./build"
+compatibility_date = "2026-11-01"
