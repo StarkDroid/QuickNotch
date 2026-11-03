@@ -132,6 +132,47 @@ On newer macOS releases, Skiko's Metal backend can crash when creating transpare
 
 ---
 
+## Releases and updates
+
+Every merged pull request that touches the app becomes a release. The workflow
+in `.github/workflows/release.yml` plans the next version with
+`.github/scripts/changelog.mjs`, builds the Windows installers and two macOS
+DMGs (Apple silicon + Intel), and publishes them together with:
+
+- **`changelog.json`** — the cumulative, user-facing history the app reads from
+  GitHub and shows in **Settings → Changelog**. It is fetched at runtime and
+  cached locally, never bundled into a build.
+- **`SHA256SUMS.txt`** — checked by the in-app updater before it installs.
+
+Versioning starts at **2.0.0** and is driven by labels on the merged PR:
+
+| Labels | Bump |
+| :--- | :--- |
+| `release:major`, `major`, `breaking` | major |
+| `release:patch`, `patch`, `fix`, `bug` | patch |
+| anything else, or no label | minor |
+
+A PR that changes only `web/`, the docs or CI merges without producing a build.
+The local build defaults to `2.0.0`; CI passes the published number with
+`-PappVersion=x.y.z`, and the running binary reports it in **Settings →
+Changelog**.
+
+While the PR is still open, `.github/workflows/changelog-preview.yml` runs the
+same planner and rewrites a fenced **Changelog preview** block at the bottom of
+the description — the version that will ship, the bump, and the exact sentences
+users will read. Relabel the PR or edit its body and the block follows; the
+author's own description is never touched, and the preview says plainly when a PR
+does not touch the app and therefore ships nothing.
+
+The app updates itself: it downloads the package for the current platform in the
+background, then a detached script waits for the JVM to exit after **Restart &
+update**, installs the MSI (same upgrade UUID, higher version) or rsyncs the
+DMG's bundle into place, and relaunches. A build started with `./gradlew run`
+has no `jpackage.app-path`, so self-update is unavailable there and the button
+opens the GitHub release page instead.
+
+---
+
 ## Marketing site
 
 The landing page lives in `web/` as a separate SvelteKit workspace. It is built

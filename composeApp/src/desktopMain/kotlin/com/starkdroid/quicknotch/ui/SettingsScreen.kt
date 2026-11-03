@@ -1,8 +1,6 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,7 +10,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,15 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,29 +40,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starkdroid.quicknotch.AppVersion
 import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.datasource.AppIconLoader
+import com.starkdroid.quicknotch.datasource.AppUpdates
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.InstalledAppsScanner
+import com.starkdroid.quicknotch.datasource.UpdateState
 import com.starkdroid.quicknotch.generated.resources.Res
-import com.starkdroid.quicknotch.generated.resources.about
-import com.starkdroid.quicknotch.generated.resources.about_copyright
-import com.starkdroid.quicknotch.generated.resources.about_description
-import com.starkdroid.quicknotch.generated.resources.about_header
-import com.starkdroid.quicknotch.generated.resources.about_product_name
-import com.starkdroid.quicknotch.generated.resources.about_tag_compose
-import com.starkdroid.quicknotch.generated.resources.about_tag_kotlin
-import com.starkdroid.quicknotch.generated.resources.about_tag_macos
-import com.starkdroid.quicknotch.generated.resources.about_tag_windows
 import com.starkdroid.quicknotch.generated.resources.about_version
 import com.starkdroid.quicknotch.generated.resources.app_name
-import com.starkdroid.quicknotch.generated.resources.app_version
-import com.starkdroid.quicknotch.generated.resources.close
+import com.starkdroid.quicknotch.generated.resources.changelog
 import com.starkdroid.quicknotch.generated.resources.quicknotch_icon
 import com.starkdroid.quicknotch.generated.resources.reset_defaults
 import com.starkdroid.quicknotch.generated.resources.settings_appearance_desc
@@ -104,7 +89,6 @@ import com.starkdroid.quicknotch.theme.SettingsBg
 import com.starkdroid.quicknotch.theme.SettingsBorder
 import com.starkdroid.quicknotch.theme.SettingsCard
 import com.starkdroid.quicknotch.theme.SettingsCardHover
-import com.starkdroid.quicknotch.theme.SettingsElevated
 import com.starkdroid.quicknotch.theme.SettingsSidebar
 import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
@@ -138,7 +122,7 @@ fun SettingsScreen(
         stringResource(Res.string.settings_behavior_desc)
     )
 
-    var showAboutDialog by remember { mutableStateOf(false) }
+    var showChangelogDialog by remember { mutableStateOf(false) }
 
     // The calendar connection is a process-wide, file-backed thing (tokens on
     // disk), not a screen concern: the widget reads its state, the notch reads
@@ -266,7 +250,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = stringResource(Res.string.about_version, stringResource(Res.string.app_version)),
+                            text = stringResource(Res.string.about_version, AppVersion.VERSION),
                             style = AppTypography.labelSmall,
                             color = TextSecondary,
                             fontSize = 11.sp
@@ -274,12 +258,7 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                SidebarNavItem(
-                    icon = Icons.Default.Info,
-                    label = stringResource(Res.string.about),
-                    selected = false,
-                    onClick = { showAboutDialog = true }
-                )
+                ChangelogNavItem(onClick = { showChangelogDialog = true })
             }
 
             // Hairline sidebar divider — solid, no gradient.
@@ -359,8 +338,8 @@ fun SettingsScreen(
             }
         }
 
-        if (showAboutDialog) {
-            AboutDialog(onDismiss = { showAboutDialog = false })
+        if (showChangelogDialog) {
+            ChangelogDialog(onDismiss = { showChangelogDialog = false })
         }
     }
 }
@@ -434,152 +413,38 @@ internal fun VisualiserStyle.label(): String = stringResource(
     }
 )
 
+/**
+ * The Changelog entry owns its own update subscription: the badge flips only
+ * when the updater's coarse state changes, so a download's progress ticks never
+ * recompose the settings screen around it.
+ */
 @Composable
-private fun AboutDialog(
-    onDismiss: () -> Unit
-) {
-    // Entrance: fade the scrim, spring the card from 96% scale.
-    var entered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { entered = true }
-    val cardScale by animateFloatAsState(
-        targetValue = if (entered) 1f else 0.96f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 420f),
-        label = "aboutScale"
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .plainClickable(onClick = onDismiss),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier
-                .width(440.dp)
-                .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
-                .plainClickable(onClick = {}),
-            colors = CardDefaults.cardColors(containerColor = SettingsCard),
-            border = androidx.compose.foundation.BorderStroke(1.dp, SettingsBorder),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(26.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(Res.string.about_header),
-                        style = AppTypography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = TextPrimary
-                    )
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(Res.string.close),
-                            tint = TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Image(
-                    painter = painterResource(Res.drawable.quicknotch_icon),
-                    contentDescription = stringResource(Res.string.app_name),
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = stringResource(Res.string.about_product_name),
-                    style = AppTypography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(AccentSolid.copy(alpha = 0.14f))
-                        .border(1.dp, AccentSolid.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = stringResource(Res.string.about_version, stringResource(Res.string.app_version)),
-                        style = AppTypography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = AccentSolid,
-                        fontSize = 11.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = stringResource(Res.string.about_description),
-                    style = AppTypography.bodySmall,
-                    fontSize = 12.5.sp,
-                    color = TextSecondary,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    lineHeight = 18.sp
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(vertical = 4.dp)
-                ) {
-                    val tags = if (HostPlatform.isMac) {
-                        listOf(
-                            stringResource(Res.string.about_tag_kotlin),
-                            stringResource(Res.string.about_tag_compose),
-                            stringResource(Res.string.about_tag_macos)
-                        )
-                    } else {
-                        listOf(
-                            stringResource(Res.string.about_tag_kotlin),
-                            stringResource(Res.string.about_tag_compose),
-                            stringResource(Res.string.about_tag_windows)
-                        )
-                    }
-                    tags.forEach { tag ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(SettingsElevated)
-                                .border(1.dp, SettingsBorder, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(tag, style = AppTypography.labelSmall, color = TextMuted, fontSize = 10.5.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Text(
-                    text = stringResource(Res.string.about_copyright),
-                    style = AppTypography.labelSmall,
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            }
+private fun ChangelogNavItem(onClick: () -> Unit) {
+    val update by AppUpdates.state.collectAsState()
+    val hasNews = when (update) {
+        is UpdateState.Available,
+        is UpdateState.Downloading,
+        is UpdateState.Ready -> true
+        else -> false
+    }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        SidebarNavItem(
+            icon = Icons.Default.NewReleases,
+            label = stringResource(Res.string.changelog),
+            selected = false,
+            onClick = onClick
+        )
+        // Overlaid rather than added to SidebarNavItem: keeping that signature
+        // stable keeps its long-standing detekt baseline entry valid.
+        if (hasNews) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+                    .size(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(AccentSolid)
+            )
         }
     }
 }

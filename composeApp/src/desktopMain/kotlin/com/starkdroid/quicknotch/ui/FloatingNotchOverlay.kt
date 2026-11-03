@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
@@ -181,7 +180,8 @@ internal fun FloatingNotchOverlay(
     // system sample.
     val game by GameDetector.game.collectAsState()
     val fps by FpsProbe.fps.collectAsState()
-    val gameHudVisible = game != null && config.widgets.showGameHud
+    // Windows-only, matching the HUD's switches (hidden elsewhere).
+    val gameHudVisible = HostPlatform.isWindows && game != null && config.gameHudEnabled
     val favorites by repository.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -658,18 +658,6 @@ internal fun FloatingNotchOverlay(
                         islandCoordinates = coords
                         publishTouchTarget(coords)
                     }
-                    // Transparent-in-games has no body to read against, so the
-                    // island carries its own soft drop shadow: drawn outside
-                    // the clip (clip = false) and before it, it lifts the
-                    // floating readout off busy scenery. Every other surface
-                    // already delimits itself and skips this.
-                    .then(
-                        if (gameTransparent) {
-                            Modifier.shadow(GameHudShadowElevation, shape, clip = false)
-                        } else {
-                            Modifier
-                        }
-                    )
                     .clip(shape)
                     // Windows frost replaces the painted body: the captured
                     // backdrop is drawn by the leaf below and the scrim rides
@@ -744,8 +732,8 @@ internal fun FloatingNotchOverlay(
                             game = activeGame,
                             system = systemState,
                             fps = fps,
-                            transparent = gameTransparent,
-                            modifier = Modifier.fillMaxSize()
+                            metrics = config.widgets.gameMetrics,
+                            transparent = gameTransparent
                         )
                     } else {
                         val collapsedScope = this
@@ -1017,11 +1005,3 @@ private const val SystemAccentPollMs = 3000L
  */
 private val OutlinePad = 2.dp
 
-/**
- * Drop shadow carried by the island in transparent-in-games mode. Compose draws
- * it as a blurred copy of the island shape outside the clip, which is what makes
- * a body-less HUD read as a layer over the game instead of numbers smeared on
- * the scenery. Sized to the island's slim cross-section: enough to separate,
- * small enough not to halo.
- */
-private val GameHudShadowElevation = 12.dp

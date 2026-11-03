@@ -1,0 +1,68 @@
+name: Changelog preview
+
+# Keeps a generated release-note block at the bottom of every open pull
+# request's description.
+#
+# The release workflow already derives the entry from the PR at merge time, but
+# by then nobody reads the copy. Running the same planner on every push means
+# the sentences that will reach users are reviewed next to the code, and the
+# author can fix a vague line with an edit instead of a follow-up release.
+#
+# The block is fenced by `<!-- quicknotch-changelog:start/end -->`, so the
+# author's own description is never rewritten — only that region is replaced.
+# Both modes live in `.github/scripts/changelog.mjs` (`preview`, `splice`).
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  # Editing a description is a write on the pull request, not on the repository.
+  pull-requests: write
+
+concurrency:
+  group: changelog-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Preview the changelog
+    # Two exclusions:
+    #  • a fork's token is read-only, so the description cannot be edited there
+    #    (the release has the same restriction) — the merge still publishes.
+    #  • the bot's own edit must not re-trigger the workflow. `GITHUB_TOKEN`
+    #    edits are already ignored by GitHub; this keeps the guard explicit.
+    if: |
+      github.event.pull_request.state == 'open' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The branch's own copy, because the planner has to exist where the
+          # preview runs: on `main` it does not until this workflow lands, and a
+          # base checkout would fail with MODULE_NOT_FOUND on the very PR that
+          # introduces it. Same-repo branches are already trusted (it takes
+          # write access to open one), and a fork PR never reaches this job, so
+          # the token here stays read-only for anyone who did not already have
+          # push rights.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build the entry
+        id: preview
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: preview
+        run: node .github/scripts/changelog.mjs
+
+      - name: Write it into the description
+        if: steps.preview.outputs.preview == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: splice
+        run: node .github/scripts/changelog.mjs

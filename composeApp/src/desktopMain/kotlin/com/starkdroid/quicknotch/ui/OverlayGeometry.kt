@@ -95,14 +95,14 @@ internal object DockLayout {
      * starting a game never resizes the native window; only the drawn island
      * grows.
      */
-    val GameHudWidth: Dp = 320.dp
+    val GameHudWidth: Dp = 264.dp
 
     /**
      * Minimum collapsed depth while the HUD shows: value over caption needs a
      * touch more than the 30dp pill, and a user-shrunk quickview must not clip
      * the second line.
      */
-    val GameHudHeight: Dp = 34.dp
+    val GameHudHeight: Dp = 30.dp
 
     /**
      * Extra quickview length per indicator shown in the idle pill (22dp ring or
@@ -201,9 +201,10 @@ fun computeNotchMetrics(
     val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
     // The HUD stacks a value over a caption, so it keeps a floor of its own
     // even when the quickview has been shrunk to a slim pill.
-    val collapsedDepth =
-        if (gameActive) maxOf(islandCollapsedDepth, DockLayout.GameHudHeight)
-        else islandCollapsedDepth
+    // The HUD is its own, slimmer strip: it may sit shallower than the pill
+    // rather than inheriting the quickview's depth. Its two lines of 11/6sp
+    // type still fit inside 30dp.
+    val collapsedDepth = if (gameActive) DockLayout.GameHudHeight else islandCollapsedDepth
 
     val islandExpanded = DpSize(alongExpanded, islandDepth)
     val islandCollapsed = DpSize(alongCollapsed, collapsedDepth)

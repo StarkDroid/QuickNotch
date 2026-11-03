@@ -2,20 +2,21 @@
     <!-- App / header -->
     <string name="app_name">QuickNotch</string>
     <string name="settings_tagline">Notch &amp; Floating Dock Customizer</string>
-    <string name="about">About</string>
+    <string name="changelog">Changelog</string>
     <string name="close">Close</string>
     <string name="clear">Clear</string>
 
     <!-- Tray menu -->
     <string name="menu_settings">Settings</string>
+    <string name="menu_update_available">Update available · v%1$s</string>
     <string name="onboarding_window_title">Welcome to QuickNotch</string>
     <string name="onboarding_welcome_title">Meet QuickNotch</string>
-    <string name="onboarding_welcome_subtitle">A notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later.</string>
+    <string name="onboarding_welcome_subtitle">A notch that lives at the top of your screen. Here is what it can do. Everything can be fine-tuned in Settings later, and new versions install themselves.</string>
     <string name="onboarding_feature_apps">Launch your pinned apps with a click</string>
     <string name="onboarding_feature_media">See what is playing and control it</string>
     <string name="onboarding_feature_calendar">Your day at a glance, with a live event ticker</string>
     <string name="onboarding_feature_quiet">Stays out of the way until you hover</string>
-    <string name="onboarding_feature_gaming">Gaming HUD — FPS, CPU, GPU, ping and download, live while a fullscreen game runs.</string>
+    <string name="onboarding_feature_gaming">Windows only — FPS, CPU, GPU, ping and download while a fullscreen game runs; pick which show in Settings.</string>
     <string name="onboarding_back">Back</string>
     <string name="onboarding_skip">Skip for now</string>
     <string name="onboarding_continue">Continue</string>
@@ -151,9 +152,6 @@
     <string name="system_reading">%1$s: %2$s</string>
     <string name="system_reading_unknown">%1$s: unavailable</string>
     <string name="system_unknown">—</string>
-    <string name="system_waiting">Collecting the first sample…</string>
-    <string name="system_disabled">Switched off — the page stays hidden and nothing is polled.</string>
-    <string name="system_preview">CPU %1$s · Memory %2$s · %3$s down</string>
 
     <!-- Gaming quickview: the performance HUD that replaces the pill while a
          fullscreen game is on screen. -->
@@ -165,6 +163,12 @@
     <string name="game_hud_unknown">—</string>
     <string name="game_hud_ping_value">%1$d ms</string>
     <string name="game_hud_summary">Gaming performance in %1$s: %2$s</string>
+    <string name="game_hud_toggle_title">Gaming Performance HUD</string>
+    <string name="game_hud_toggle_hint">Swap the collapsed pill for live FPS, CPU, GPU, latency and download rate while a fullscreen game is on screen. Hover still opens the dock. Works even when the System page is off.</string>
+    <string name="game_transparent_title">Transparent in Games</string>
+    <string name="game_transparent_hint">While the gaming HUD is showing, drop the notch body, its dividers and its shadow, leaving only the numbers over the game. The solid HUD keeps its body. Every other surface is untouched.</string>
+    <string name="game_metrics_title">Metrics shown</string>
+    <string name="game_hud_fullscreen_note">Windows can't draw the HUD over exclusive fullscreen. If it doesn't appear over a game, switch the game to borderless fullscreen.</string>
 
     <!-- Idle clock in the quickview -->
     <string name="clock_title">Idle Clock</string>
@@ -216,20 +220,28 @@ Add apps from the list on the right.</string>
     <string name="autostart_title_windows">Start on Windows Boot</string>
     <string name="always_on_top_title">Always on Top</string>
     <string name="collapse_on_launch_title">Collapse on Launch</string>
-    <string name="game_hud_toggle_title">Gaming Performance HUD</string>
-    <string name="game_hud_toggle_hint">Swap the collapsed pill for live FPS, CPU, GPU, latency and download rate while a fullscreen game is on screen. Hover still opens the dock.</string>
-    <string name="game_transparent_title">Transparent in Games</string>
-    <string name="game_transparent_hint">While the gaming HUD is showing, drop the notch body and outline it with a thin dark rim and soft shadow, so it stays legible over game scenery. Every other surface is untouched.</string>
 
-    <!-- About dialog -->
-    <string name="about_header">About QuickNotch</string>
+    <!-- Changelog dialog -->
+    <string name="changelog_header">Changelog</string>
     <string name="about_product_name">QuickNotch Desktop</string>
     <string name="about_version">Version %1$s</string>
-    <string name="app_version">1.0.0</string>
-    <string name="about_description">Floating notch &amp; dock app launcher for Windows and macOS, built with Kotlin Multiplatform and Jetpack Compose Desktop.</string>
-    <string name="about_tag_kotlin">Kotlin</string>
-    <string name="about_tag_compose">Compose Desktop</string>
-    <string name="about_tag_macos">macOS</string>
-    <string name="about_tag_windows">Win32 JNA</string>
-    <string name="about_copyright">© 2025 StarkDroid. All rights reserved.</string>
+    <string name="about_description">Your apps, calendar, weather, music and live system stats — one flick away in a notch that never blocks the view, on Windows and macOS. It updates itself and keeps getting better: there’s plenty more in the pipeline.</string>
+    <string name="changelog_empty">No release notes published yet.</string>
+    <string name="changelog_loading">Fetching the latest notes from GitHub…</string>
+    <string name="changelog_error">Couldn’t reach GitHub. Check your connection and try again.</string>
+    <string name="changelog_retry">Try again</string>
+    <string name="changelog_source_note">Fetched from GitHub — never bundled with the build.</string>
+    <string name="changelog_update_available">Version %1$s is available.</string>
+    <string name="changelog_update_ready">Version %1$s is downloaded and ready.</string>
+    <string name="changelog_update_now">Update now</string>
+    <string name="changelog_restart_update">Restart &amp; update</string>
+    <string name="changelog_updating">Installing version %1$s…</string>
+    <string name="changelog_downloading">Downloading %1$s…</string>
+    <string name="changelog_up_to_date">You’re on the latest version.</string>
+    <string name="changelog_update_hint">Updates install in place — no installers to hunt down.</string>
+    <string name="changelog_update_manual">This build can’t update itself. Download the latest version from GitHub.</string>
+    <string name="changelog_view_release">View release</string>
+    <string name="changelog_update_failed">Update failed: %1$s</string>
+    <string name="changelog_no_asset">A newer version is on GitHub — open the release page to download it.</string>
+    <string name="about_copyright">© 2026 VelocityApps. All rights reserved.</string>
 </resources>

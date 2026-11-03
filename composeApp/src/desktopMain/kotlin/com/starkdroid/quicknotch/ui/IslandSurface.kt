@@ -120,20 +120,18 @@ internal object IslandSurface {
     @Volatile private var accentedFor: Color? = null
 
     /**
-     * Gaming-only transparency: no body at all, so the game shows straight
-     * through the island, plus a thin dark rim to give the HUD a boundary.
-     * The soft drop shadow that lifts it off busy scenery is applied by the
-     * caller as a layer effect (a Compose shadow needs the shape, which this
-     * style does not carry) — see `FloatingNotchOverlay`. Deliberately not a
-     * [NotchSurface] entry: it is never a user-picked material, only the
-     * gaming quickview's own state, so Solid/Blurred/System accent keep their
-     * meaning everywhere else.
+     * Gaming-only transparency: nothing but the HUD's own glyphs. No body, no
+     * rim and no island shadow — the metrics are the whole surface (see
+     * `GameHud`); the game behind shows through untouched. Deliberately not a
+     * [NotchSurface] entry: it is never a user-picked material, only the gaming
+     * quickview's own state, so Solid/Blurred/System accent keep their meaning
+     * everywhere else.
      */
     private val gameTransparent = Style(
         fill = SolidColor(Color.Transparent),
         sheen = null,
-        border = Color.Black.copy(alpha = 0.55f),
-        borderWidth = 1f
+        border = Color.Transparent,
+        borderWidth = 0f
     )
 
     fun styleFor(

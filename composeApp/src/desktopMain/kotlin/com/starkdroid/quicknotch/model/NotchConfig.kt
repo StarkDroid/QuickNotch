@@ -169,8 +169,35 @@ data class WidgetsConfig(
      * CPU, GPU, latency and download rate. Detection only runs while this is
      * on, so a user who never games pays no probe at all.
      */
-    val showGameHud: Boolean = true
+    val showGameHud: Boolean = true,
+    /**
+     * Which readouts the gaming HUD draws. Every cell can be switched off on
+     * its own; with all five off [NotchConfig.gameHudEnabled] is false and the
+     * notch keeps its ordinary pill rather than showing an empty strip. FPS is
+     * still dropped when PresentMon is absent and GPU when the OS reports no
+     * engine, exactly as before — a cell can only show a true number.
+     */
+    val gameMetrics: GameMetrics = GameMetrics()
 )
+
+/**
+ * The five cells of the gaming HUD, each independently toggleable from the
+ * System widget. Defaults keep every cell on, so existing configs load and
+ * render exactly as they did.
+ */
+@Immutable
+@Serializable
+data class GameMetrics(
+    val fps: Boolean = true,
+    val cpu: Boolean = true,
+    val gpu: Boolean = true,
+    val ping: Boolean = true,
+    val net: Boolean = true
+) {
+    /** At least one cell requested; false means there is nothing to draw. */
+    val any: Boolean
+        get() = fps || cpu || gpu || ping || net
+}
 
 /**
  * Date layouts for the idle clock shown in the quickview (while nothing
@@ -215,10 +242,10 @@ data class NotchConfig(
     val surface: NotchSurface = NotchSurface.SOLID,
     /**
      * Gaming-only transparency: while the gaming HUD is showing, the island
-     * drops its body entirely and keeps a thin dark rim plus a soft shadow, so
-     * the readout stays legible over whatever the game is drawing. Deliberately
-     * separate from [surface]: Solid / Blurred / System accent are untouched,
-     * and this only ever applies while a game is detected.
+     * drops its body, rim, dividers and shadow entirely, so only the readout's
+     * glyphs sit over the game. Deliberately separate from [surface]: Solid /
+     * Blurred / System accent are untouched, and this only ever applies while a
+     * game is detected.
      */
     val transparentInGame: Boolean = false,
     /**
@@ -249,4 +276,14 @@ data class NotchConfig(
     val clock24Hour: Boolean = false,
     val clockDateFormat: ClockDateFormat = ClockDateFormat.DD_MMM,
     val themeDark: Boolean = true
-)
+) {
+    /**
+     * True when the gaming HUD has a body to draw: its switch is on and at
+     * least one metric is selected. Every consumer (the overlay, the window
+     * sizer, the system poller and the detector) gates on this rather than the
+     * raw switch, so switching the last metric off returns the pill instead of
+     * leaving an empty island.
+     */
+    val gameHudEnabled: Boolean
+        get() = widgets.showGameHud && widgets.gameMetrics.any
+}

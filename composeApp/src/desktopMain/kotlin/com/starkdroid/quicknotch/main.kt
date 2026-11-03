@@ -27,11 +27,14 @@ import com.starkdroid.quicknotch.calendar.GoogleCalendar
 import com.starkdroid.quicknotch.calendar.CalendarState
 import com.starkdroid.quicknotch.calendar.calendarUpcomingCount
 import com.starkdroid.quicknotch.datasource.AppPaths
+import com.starkdroid.quicknotch.datasource.AppUpdates
 import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.datasource.StartupManager
+import com.starkdroid.quicknotch.datasource.UpdateState
 import com.starkdroid.quicknotch.datasource.MacDockPresence
 import com.starkdroid.quicknotch.datasource.MacOverlayWindowPolicy
 import com.starkdroid.quicknotch.datasource.WindowPassthrough
+import com.starkdroid.quicknotch.datasource.WindowsOverlayWindowPolicy
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.app_name
 import com.starkdroid.quicknotch.generated.resources.menu_always_on_top
@@ -40,6 +43,7 @@ import com.starkdroid.quicknotch.generated.resources.menu_hide_notch
 import com.starkdroid.quicknotch.generated.resources.menu_quit
 import com.starkdroid.quicknotch.generated.resources.menu_settings
 import com.starkdroid.quicknotch.generated.resources.menu_show_notch
+import com.starkdroid.quicknotch.generated.resources.menu_update_available
 import com.starkdroid.quicknotch.generated.resources.onboarding_window_title
 import com.starkdroid.quicknotch.generated.resources.reset_defaults
 import com.starkdroid.quicknotch.generated.resources.settings_window_title
@@ -154,7 +158,12 @@ fun main(args: Array<String>) {
         // who switches the HUD off pays nothing even though the detector still
         // knows a game is running.
         val gameSession by GameDetector.game.collectAsState()
-        val gamingActive = gameSession != null && config.widgets.showGameHud
+        // Windows-only: the HUD's frame rate comes from PresentMon and the
+        // switches are hidden everywhere else, so a macOS session must never
+        // light up a feature the user cannot see or turn off.
+        val gamingActive = HostPlatform.isWindows &&
+            gameSession != null &&
+            config.gameHudEnabled
 
         // One system-wide media feed for the whole app: the tray, the overlay
         // and the settings window all observe the same session.
@@ -168,8 +177,12 @@ fun main(args: Array<String>) {
             // The gaming detector is started once and gated by its toggle: on
             // macOS it is an in-process CoreGraphics call, on Windows one
             // long-lived PowerShell watcher (see GameDetector).
-            GameDetector.start()
-            GameDetector.logAvailability()
+            // Gaming is a Windows feature end to end; starting the detector on a
+            // Mac would only probe for a HUD that is gated off below.
+            if (HostPlatform.isWindows) {
+                GameDetector.start()
+                GameDetector.logAvailability()
+            }
             NotificationCount.start()
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
@@ -178,6 +191,10 @@ fun main(args: Array<String>) {
             // cold start paints the last known forecast on the first frame.
             // A manual place from settings seeds the position instead.
             Weather.start(repository.config.value.widgets.weatherPlace)
+            // Update checks and the remote changelog are background work: the
+            // app is fully usable offline, and a check that lands after the
+            // user quit is harmless.
+            AppUpdates.start()
             onDispose {
                 media.stop()
                 SystemVolume.stop()
@@ -199,6 +216,13 @@ fun main(args: Array<String>) {
         var showSettings by remember { mutableStateOf(!loginItemLaunch) }
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
+
+        // The installer script waits for this PID to vanish before it replaces
+        // the app, so quitting is part of the update, not an afterthought.
+        val quittingForUpdate by AppUpdates.quitting.collectAsState()
+        LaunchedEffect(quittingForUpdate) {
+            if (quittingForUpdate) exitApplication()
+        }
 
         // Flip the Dock/app presence in-step with the Settings window: the
         // first Settings open forces activation (an accessory agent can't bring
@@ -228,10 +252,11 @@ fun main(args: Array<String>) {
             SystemMetrics.setEnabled(config.widgets.showSystem || gamingActive)
         }
 
-        // Detection only runs while something consumes it: the HUD, or the
-        // transparent-in-games repaint. Switched off means no probe at all.
-        LaunchedEffect(config.widgets.showGameHud, config.transparentInGame) {
-            GameDetector.setEnabled(config.widgets.showGameHud || config.transparentInGame)
+        // Detection only runs while the HUD can actually draw: its switch is on
+        // and at least one metric is selected. Switching the last metric off
+        // stops the probe just like switching the HUD off does.
+        LaunchedEffect(config.gameHudEnabled) {
+            GameDetector.setEnabled(config.gameHudEnabled)
         }
 
         // FPS follows the detected game. A PresentMon capture takes ~2 s, so it
@@ -259,6 +284,16 @@ fun main(args: Array<String>) {
             tooltip = stringResource(Res.string.app_name),
             menu = {
                 Item(stringResource(Res.string.menu_settings), onClick = { showSettings = true })
+                // Collected inside the menu so a download's progress ticks only
+                // touch the tray menu, never the overlay window tree.
+                val update = AppUpdates.state.collectAsState().value
+                val available = update as? UpdateState.Available
+                if (available != null) {
+                    Item(
+                        stringResource(Res.string.menu_update_available, available.version),
+                        onClick = { showSettings = true }
+                    )
+                }
                 Item(
                     if (isNotchVisible) stringResource(Res.string.menu_hide_notch)
                     else stringResource(Res.string.menu_show_notch),
@@ -418,7 +453,7 @@ private fun NotchOverlayWindow(
     // here too because the native window must already be wide enough the
     // instant a game starts — resizing the window then would flash on macOS.
     val game by GameDetector.game.collectAsState()
-    val gameHudActive = game != null && config.widgets.showGameHud
+    val gameHudActive = HostPlatform.isWindows && game != null && config.gameHudEnabled
     val indicatorSlots = quickViewIndicatorSlots(
         config, musicLive, battery, deviceBattery, notificationCount, calendarEventCount,
         weatherVisible = weatherData != null
@@ -491,6 +526,21 @@ private fun NotchOverlayWindow(
         }
         DisposableEffect(awtWindow) {
             onDispose { macPolicy?.close() }
+        }
+
+        // Windows z-order keeper: AWT sets WS_EX_TOPMOST once, but a fullscreen
+        // game re-raises its own window into the same band and ends up above
+        // the notch — the HUD then only surfaces after an alt-tab re-shuffles
+        // the z-order. Re-assert topmost on a slow tick (fast while a game is
+        // detected) without activating or moving the window. Off-Windows it
+        // installs nothing; a true exclusive-fullscreen swap chain still cannot
+        // be overlaid, but borderless fullscreen (the common case) can.
+        val windowsPolicy = remember(awtWindow) { WindowsOverlayWindowPolicy.install(awtWindow) }
+        LaunchedEffect(config.alwaysOnTop, game != null) {
+            windowsPolicy?.update(config.alwaysOnTop, game != null)
+        }
+        DisposableEffect(awtWindow) {
+            onDispose { windowsPolicy?.close() }
         }
 
         // Shared widget-pager state; on Windows the wheel listener below drives

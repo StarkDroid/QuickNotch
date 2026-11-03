@@ -1,6 +1,8 @@
 package com.starkdroid.quicknotch.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +26,9 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,16 +36,31 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.starkdroid.quicknotch.calendar.CalendarState
+import com.starkdroid.quicknotch.datasource.HostPlatform
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.calendar_section_title
+import com.starkdroid.quicknotch.generated.resources.game_hud_cpu
+import com.starkdroid.quicknotch.generated.resources.game_hud_fps
+import com.starkdroid.quicknotch.generated.resources.game_hud_gpu
+import com.starkdroid.quicknotch.generated.resources.game_hud_net
+import com.starkdroid.quicknotch.generated.resources.game_hud_ping
+import com.starkdroid.quicknotch.generated.resources.game_metrics_title
+import com.starkdroid.quicknotch.generated.resources.game_hud_fullscreen_note
+import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_hint
+import com.starkdroid.quicknotch.generated.resources.game_hud_toggle_title
+import com.starkdroid.quicknotch.generated.resources.game_transparent_hint
+import com.starkdroid.quicknotch.generated.resources.game_transparent_title
 import com.starkdroid.quicknotch.generated.resources.progress_border_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_section_title
 import com.starkdroid.quicknotch.generated.resources.visualiser_style_title
@@ -49,12 +68,8 @@ import com.starkdroid.quicknotch.generated.resources.waveform_hide_title
 import com.starkdroid.quicknotch.generated.resources.waveform_tint_title
 import com.starkdroid.quicknotch.generated.resources.weather_section_title
 import com.starkdroid.quicknotch.generated.resources.show_labels_title
-import com.starkdroid.quicknotch.generated.resources.system_disabled
 import com.starkdroid.quicknotch.generated.resources.system_hint
-import com.starkdroid.quicknotch.generated.resources.system_preview
 import com.starkdroid.quicknotch.generated.resources.system_section_title
-import com.starkdroid.quicknotch.generated.resources.system_unknown
-import com.starkdroid.quicknotch.generated.resources.system_waiting
 import com.starkdroid.quicknotch.generated.resources.widget_apps_title
 import com.starkdroid.quicknotch.generated.resources.widget_music_title
 import com.starkdroid.quicknotch.generated.resources.widget_no_session
@@ -65,12 +80,12 @@ import com.starkdroid.quicknotch.generated.resources.widget_unknown_artist
 import com.starkdroid.quicknotch.media.MediaController
 import com.starkdroid.quicknotch.model.AppItem
 import com.starkdroid.quicknotch.model.FavoritesRepository
+import com.starkdroid.quicknotch.model.GameMetrics
 import com.starkdroid.quicknotch.model.NotchConfig
 import com.starkdroid.quicknotch.model.VisualiserStyle
 import com.starkdroid.quicknotch.model.WaveformTint
-import com.starkdroid.quicknotch.system.SystemMetrics
-import com.starkdroid.quicknotch.system.SystemSnapshot
 import com.starkdroid.quicknotch.theme.AccentGreen
+import com.starkdroid.quicknotch.theme.AccentSolid
 import com.starkdroid.quicknotch.theme.AppTypography
 import com.starkdroid.quicknotch.theme.NotchBorder
 import com.starkdroid.quicknotch.theme.NotchDeepBlack
@@ -364,42 +379,183 @@ internal fun WidgetsTab(
             }
         }
         item(key = "system") {
-            // Same ownership rule: this accordion collects the readings itself,
-            // so the settings screen and the other tabs never recompose for a
-            // network tick.
-            val systemState by SystemMetrics.state.collectAsState()
+            // No live readout here on purpose: the readings belong to the notch
+            // page, not to the settings card. A settings tab that ticked with
+            // every sample also re-wrote itself for data it cannot act on.
             TabEntrance(index = 4) {
-                WidgetAccordion(
-                    icon = Icons.Default.Memory,
-                    title = stringResource(Res.string.system_section_title),
-                    enabled = config.widgets.showSystem,
-                    onToggleEnabled = { enabled ->
-                        onUpdate { it.copy(widgets = it.widgets.copy(showSystem = enabled)) }
-                    }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .padding(bottom = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                Column {
+                    WidgetAccordion(
+                        icon = Icons.Default.Memory,
+                        title = stringResource(Res.string.system_section_title),
+                        enabled = config.widgets.showSystem,
+                        onToggleEnabled = { enabled ->
+                            onUpdate { it.copy(widgets = it.widgets.copy(showSystem = enabled)) }
+                        }
                     ) {
-                        SystemStatusRow(
-                            snapshot = systemState,
-                            enabled = config.widgets.showSystem
-                        )
-                        Text(
-                            text = stringResource(Res.string.system_hint),
-                            style = AppTypography.bodySmall,
-                            color = TextSecondary,
-                            fontSize = 11.5.sp,
-                            lineHeight = 16.sp
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp)
+                                .padding(bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.system_hint),
+                                style = AppTypography.bodySmall,
+                                color = TextSecondary,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp
+                            )
+
+                            // The gaming HUD is fed by the same poller (a game
+                            // force-enables it even when the System page is
+                            // off), so its switches live in this widget rather
+                            // than in the Behavior tab. Windows only: the
+                            // detector and PresentMon have no macOS twin.
+                            if (HostPlatform.isWindows) {
+                                GamingWidgetRows(config = config, onUpdate = onUpdate)
+                            }
+                        }
                     }
                 }
             }
         }
 
+    }
+}
+
+/**
+ * The gaming HUD switches, inside the System widget: the HUD is fed by the
+ * same poller the System page uses, so it belongs with the widget it reads.
+ * Both rows are behaviour, not appearance: the HUD is automatic (a fullscreen
+ * game is the trigger) and transparency is a repaint of that HUD only, never a
+ * fourth material. The Windows exclusive-fullscreen caveat sits directly under
+ * the HUD switch it qualifies, inside the same accordion.
+ */
+@Composable
+private fun GamingWidgetRows(
+    config: NotchConfig,
+    onUpdate: ((NotchConfig) -> NotchConfig) -> Unit
+) {
+    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+    BehaviorSwitchRow(
+        icon = Icons.Default.SportsEsports,
+        title = stringResource(Res.string.game_hud_toggle_title),
+        subtitle = stringResource(Res.string.game_hud_toggle_hint),
+        checked = config.widgets.showGameHud,
+        onCheckedChange = { checked ->
+            onUpdate { it.copy(widgets = it.widgets.copy(showGameHud = checked)) }
+        }
+    )
+
+    // The one thing the HUD cannot do belongs directly under its switch: a
+    // true exclusive-fullscreen swap chain bypasses DWM, so no ordinary window
+    // can draw over it. Kept inside the accordion with the switch it qualifies.
+    Text(
+        text = stringResource(Res.string.game_hud_fullscreen_note),
+        style = AppTypography.bodySmall,
+        color = TextMuted,
+        fontSize = 11.5.sp,
+        lineHeight = 16.sp,
+        // Align with the switch's title (8 dp row inset + 30 dp icon +
+        // 12 dp gap), so the caveat reads as part of the HUD row.
+        modifier = Modifier.padding(start = 50.dp, end = 8.dp)
+    )
+
+    if (config.widgets.showGameHud) {
+        GameMetricRow(config = config, onUpdate = onUpdate)
+    }
+
+    HorizontalDivider(color = SettingsBorder.copy(alpha = 0.7f))
+
+    BehaviorSwitchRow(
+        icon = Icons.Default.Visibility,
+        title = stringResource(Res.string.game_transparent_title),
+        subtitle = stringResource(Res.string.game_transparent_hint),
+        checked = config.transparentInGame,
+        onCheckedChange = { checked ->
+            onUpdate { it.copy(transparentInGame = checked) }
+        }
+    )
+}
+
+/**
+ * The per-cell switch row: a caption plus five compact chips. Extracted from
+ * [GamingWidgetRows] so each stays one readable screenful.
+ */
+@Composable
+private fun GameMetricRow(config: NotchConfig, onUpdate: ((NotchConfig) -> NotchConfig) -> Unit) {
+    val metrics = config.widgets.gameMetrics
+    val setMetric: ((GameMetrics) -> GameMetrics) -> Unit = { update ->
+        onUpdate {
+            it.copy(widgets = it.widgets.copy(gameMetrics = update(it.widgets.gameMetrics)))
+        }
+    }
+
+    Text(
+        text = stringResource(Res.string.game_metrics_title),
+        style = AppTypography.labelSmall,
+        color = TextMuted,
+        fontSize = 10.5.sp,
+        modifier = Modifier.padding(start = 50.dp, end = 8.dp)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 50.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        GameMetricChip(stringResource(Res.string.game_hud_fps), metrics.fps) { on ->
+            setMetric { it.copy(fps = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_cpu), metrics.cpu) { on ->
+            setMetric { it.copy(cpu = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_gpu), metrics.gpu) { on ->
+            setMetric { it.copy(gpu = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_ping), metrics.ping) { on ->
+            setMetric { it.copy(ping = on) }
+        }
+        GameMetricChip(stringResource(Res.string.game_hud_net), metrics.net) { on ->
+            setMetric { it.copy(net = on) }
+        }
+    }
+}
+
+/**
+ * One metric in the HUD's per-cell switch row: a compact chip that reads as a
+ * checkbox (selected = accent fill and border), so five of them fit on one line
+ * instead of five full switch rows.
+ */
+@Composable
+private fun GameMetricChip(label: String, selected: Boolean, onToggle: (Boolean) -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) AccentSolid.copy(alpha = 0.18f) else SettingsElevated)
+            .border(
+                1.dp,
+                if (selected) AccentSolid.copy(alpha = 0.85f) else SettingsBorder,
+                RoundedCornerShape(8.dp)
+            )
+            .toggleable(
+                value = selected,
+                onValueChange = onToggle,
+                role = Role.Checkbox,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            style = AppTypography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            color = if (selected) TextPrimary else TextMuted
+        )
     }
 }
 
@@ -458,49 +614,4 @@ internal fun NowPlayingStatus(
     }
 }
 
-/**
- * Live readout for the System widget accordion: the exact numbers the notch
- * page is drawing right now (CPU, memory, download). A switched-off widget has
- * no reading at all (the poller is stopped, not idling), and a fresh one has an
- * honest "collecting the first sample" line, so the row never implies data it
- * does not have. Same pill chrome as the Now Playing status above it.
- */
-@Composable
-internal fun SystemStatusRow(snapshot: SystemSnapshot?, enabled: Boolean) {
-    val unknown = stringResource(Res.string.system_unknown)
-    val live = enabled && snapshot != null
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(SettingsElevated)
-            .border(1.dp, SettingsBorder, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(if (live) AccentGreen else TextMuted.copy(alpha = 0.4f))
-        )
-        Spacer(modifier = Modifier.width(9.dp))
-        Text(
-            text = when {
-                !enabled -> stringResource(Res.string.system_disabled)
-                snapshot == null -> stringResource(Res.string.system_waiting)
-                else -> stringResource(
-                    Res.string.system_preview,
-                    snapshot.cpuPercent?.let { "$it%" } ?: unknown,
-                    snapshot.ramPercent?.let { "$it%" } ?: unknown,
-                    systemRate(snapshot.downBytesPerSec)
-                )
-            },
-            style = AppTypography.bodySmall,
-            color = if (live) TextPrimary else TextSecondary,
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
+

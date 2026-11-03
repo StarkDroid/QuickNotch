@@ -13,8 +13,8 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
 - **Collapsed pill (QuickView):** live-media branch (vinyl disc, marquee title,
   optional waveform analyser, volume + device-battery rings), idle-clock branch
   (date/time + weather chip + laptop-battery ring + notification bell), idle dots,
-  drag-handle style, **gaming branch** (a fullscreen game replaces the pill with a
-  live FPS/CPU/GPU/ping/download strip). Content-hugging: clock/dots shrink to
+  drag-handle style, **gaming branch** (Windows only: a fullscreen game replaces the
+  pill with a live FPS/CPU/GPU/ping/download strip). Content-hugging: clock/dots shrink to
   measured width; live media and the gaming HUD fill the configured width.
 - **Expanded pages (wheel order):** Music (when live) → Apps → System (when on) →
   Weather → Calendar. Music page: vinyl + title/artist—album + progress + transport
@@ -69,15 +69,36 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
 ./gradlew :composeApp:run                   # launch (overlay + tray); NOT java -jar (no manifest)
 ./gradlew :composeApp:detekt                # must be green before commit
 ./gradlew :composeApp:packageDistributionForCurrentOS  # .msi/.exe or .dmg
+./gradlew :composeApp:packageDistributionForCurrentOS -PappVersion=2.1.0  # release build
 SKIKO_RENDER_API=SOFTWARE ./gradlew :composeApp:run    # one-off rasterizer A/B
 ```
+
+Release builds take the version from CI: `-PappVersion=x.y.z` generates
+`AppVersion.VERSION` (under `build/generated/appVersion`) and becomes the
+jpackage version. A local build falls back to `2.0.0`; the tracked source never
+holds the released number.
+
+Releases run on a merged PR (`.github/workflows/release.yml`): `plan` executes
+`.github/scripts/changelog.mjs` (label-driven bump, sanitised entry, cumulative
+`changelog.json`), `build` packages Windows + macOS arm64/x64 with
+`-PappVersion`, `publish` attaches the installers, `SHA256SUMS.txt` and
+`changelog.json` and marks the release latest. A PR touching only `web/`, docs
+or CI skips the build.
+
+The same script runs on every push to an open PR
+(`.github/workflows/changelog-preview.yml`, `MODE=preview` then `MODE=splice`):
+it rewrites one marker-fenced block at the bottom of the description — the
+version that will ship, the bump, and the exact user-facing lines — and leaves
+the author's prose alone. It checks out the **base** commit, so a branch under
+review never executes its own copy of the planner with a write token. A fork PR
+is skipped (read-only token), same as the release.
 
 Bridge tasks (`composeApp/build.gradle.kts`, auto-run by jar/run): `syncWindowsBridge`
 (`native/windows/*` → resources; edit source, never the copy),
 `compileMacNowPlayingBridge` / `compileMacBtWatchBridge` / `compileMacPassthroughBridge`
-/ `compileMacArtworkBridge` / `compileMacGameWatchBridge` + `syncMacArtworkDriver`
-(macOS hosts only; absent resource = controller stays silent by design). Kill a run via
-the `MainKt|quicknotch` java process.
+/ `compileMacArtworkBridge` + `syncMacArtworkDriver` (macOS hosts only; absent resource =
+controller stays silent by design). `compileMacGameWatchBridge` still builds the dormant
+macOS game probe. Kill a run via the `MainKt|quicknotch` java process.
 Install a DMG with `rsync -a` (`cp -R`/`ditto` leave empty bundles).
 
 ## 4. Architecture
@@ -113,6 +134,14 @@ from the AWT wheel listener and composition on the same thread — no locks.
   `dispatch_sync` at 33 Hz deadlocks) + delayed synthetic MOUSE_MOVED re-arm. Fail-soft:
   handle/bridge missing → fully interactive. Native handle via reflected AWT peer +
   `--add-opens` (`java.awt`, `sun.lwawt[.macosx]` / `sun.awt.windows`, host-gated).
+- **Windows z-order** (`WindowsOverlayWindowPolicy`): AWT sets `WS_EX_TOPMOST` once;
+  a fullscreen game re-raises its own window into the band, leaving the HUD underneath
+  until an alt-tab re-shuffles it. Re-assert `SetWindowPos(HWND_TOPMOST)` on a 1.5 s
+  reconcile tick (250 ms while `GameDetector` has a session) with
+  `SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE|SWP_ASYNCWINDOWPOS`. `HWND_TOPMOST` must be a
+  real `Pointer(-1L)` — `Pointer.createConstant(-1)` reaches the call as an invalid
+  handle (1400). True exclusive-fullscreen swap chains still cannot be overlaid;
+  borderless fullscreen (and Windows' fullscreen optimizations) is covered.
 
 ### 4.2 Overlay: geometry, hover, pager, morph
 
@@ -150,12 +179,13 @@ from the AWT wheel listener and composition on the same thread — no locks.
   expands the dock). The HUD is a fill branch, so it disables width hugging
   (`hugVisible`) and the playback outline (`showOutline`) it has no content for.
   `transparentInGame` applies **only** while collapsed and only to the HUD
-  (`gameTransparent`): the body drops (`IslandSurface.gameTransparent`, a transparent
-  fill + 1dp black rim — never a `NotchSurface` entry), the island carries
-  `Modifier.shadow(12dp, clip = false)` and the glyphs get their own shadow, and both
-  blur carriers are switched **off** rather than hidden (`blurActive`/`frostActive`) —
-  otherwise the macOS helper panel / Windows frost would repaint the body we just
-  removed. Opening the dock over a game always uses the user's real material.
+  (`gameTransparent`): the body, the cell hairlines, the rim and the island shadow are
+  all dropped (`IslandSurface.gameTransparent` = transparent fill, transparent border,
+  width 0 — never a `NotchSurface` entry), leaving only the metric glyphs with their own
+  text shadow; the solid mode keeps the body and its dividers. Both blur carriers are
+  switched **off** rather than hidden (`blurActive`/`frostActive`) — otherwise the
+  macOS helper panel / Windows frost would repaint the body we just removed. Opening
+  the dock over a game always uses the user's real material.
 - Inactive pages must not compose pointer modifiers at all (`.then(if (interactive) …)` /
   `onClick = null`); `enabled = false` is still hit-testable and blocks pages beneath.
 
@@ -217,32 +247,53 @@ from the AWT wheel listener and composition on the same thread — no locks.
   GPU = highest `Device Utilization %` (macOS) / summed 3D-engine utilization clamped
   to 100 (Windows) — no counter means no GPU tile (`gpuAvailable`). Throughput comes
   from cumulative counters, so **both directions must share one delta** and the first
-  sample is always null. `emit()` refuses a sample that lands after the switch-off, or
-  the settings row shows a frozen reading forever. Load metrics warm to `LoadHighTint`
+  sample is always null. `emit()` refuses a sample that lands after the switch-off, so
+  a switched-off page can never show a frozen reading forever. Load metrics warm to `LoadHighTint`
   ≥ 85; network rings use a log sweep (1 KB/s → 0 … 1 GB/s → 100) and the label carries
   the exact rate.
-- **Gaming** (`system/GameDetector.kt` + `FpsProbe.kt` + `datasource/MacGameWatch.kt`,
+- **Gaming (Windows only)** (`system/GameDetector.kt` + `FpsProbe.kt`,
   `WidgetsConfig.showGameHud` default on, `NotchConfig.transparentInGame` default off):
-  one `StateFlow<GameSession?>` is the entire trigger. Detector runs only while
+  one `StateFlow<GameSession?>` is the entire trigger. `gamingActive` / `gameHudVisible`
+  gate on `HostPlatform.isWindows`, the detector is only *started* on Windows, and both
+  Settings switches live in the System widget accordion only on Windows — a Mac never
+  probes for, or offers, a HUD it cannot show. Detector runs only while
   `showGameHud || transparentInGame` (`GameDetector.setEnabled`), and a session needs
   `MissingProbesBeforeIdle` = 2 consecutive misses (~3 s) to clear, so a loading screen
-  or alt-tab cannot blink the HUD. macOS = `MacGameWatch.fullscreenOwner()` every 1.5 s,
-  an in-process JNA call into `gamewatch-bridge.dylib` (`CGWindowListCopyWindowInfo`:
-  layer-0 window within 2 pt of the display bounds, owner not a system shell or us —
-  owner names/bounds need no Screen Recording consent, titles do). Windows = **one
-  long-lived** `game-detect.ps1` printing `1|name|pid` / `0||` per 1.5 s tick
-  (foreground rect vs `MonitorFromWindow` rect, or
-  `SHQueryUserNotificationState == QUNS_RUNNING_D3D_FULL_SCREEN`; shell classes and
-  explorer excluded; exits when its parent JVM disappears). **Never spawn it per probe**
-  — its `Add-Type` costs ~1 s in PS 5.1. FPS = `FpsProbe` on Windows only: one PresentMon
-  capture per 6 s (`--timed 2`, mean of `msBetweenPresents` → `1000/mean`), its own
-  coroutine so a 2 s capture never delays a system sample; it tries `--` then `-` option
-  spelling once and remembers the winner. Every failure — no binary, refused ETW,
-  macOS — yields **no FPS cell**, never a fabricated number. Latency is
+  or alt-tab cannot blink the HUD. Windows = **one long-lived** `game-detect.ps1`
+  printing `1|name|pid` / `0||` per 1.5 s tick (foreground rect vs `MonitorFromWindow`
+  rect, or `SHQueryUserNotificationState == QUNS_RUNNING_D3D_FULL_SCREEN`; shell
+  classes and explorer excluded; exits when its parent JVM disappears). **Never spawn
+  it per probe** — its `Add-Type` costs ~1 s in PS 5.1. FPS = `FpsProbe` on Windows
+  only: one PresentMon capture per 6 s (`--timed 2`, mean of `msBetweenPresents` →
+  `1000/mean`), its own coroutine so a 2 s capture never delays a system sample; it
+  tries `--` then `-` option spelling once and remembers the winner. Every failure —
+  no binary, refused ETW — yields **no FPS cell**, never a fabricated number. Latency is
   `SystemSnapshot.pingMs`: one TCP handshake to `1.1.1.1:443` every other system tick
   (4 s macOS / 8 s Windows, 1 s timeout, fail-soft), kept off the System page. A game
   also force-enables `SystemMetrics` (`showSystem || gamingActive`) because the HUD needs
-  CPU/GPU — the System *page* stays off the wheel when its toggle is off.
+  CPU/GPU — the System *page* stays off the wheel when its toggle is off. The one thing
+  the HUD cannot do is written directly under its switch: a true exclusive-fullscreen
+  swap chain cannot be overlaid (borderless fullscreen is the supported case). Each of
+  the five cells has its own switch (`WidgetsConfig.gameMetrics`, chips under the HUD
+  row); with every cell off `NotchConfig.gameHudEnabled` is false and the overlay, the
+  window sizer, the system poller and the detector all fall back to the ordinary pill —
+  never an empty strip.
+  The macOS detection path (`MacGameWatch.kt` + `gamewatch-bridge.dylib`) is kept in the
+  tree but no longer started — dormant until a macOS HUD exists.
+- **Changelog & self-update** (`datasource/Changelog.kt`, `ReleaseApi.kt`,
+  `AppUpdates.kt`, `AppInstaller.kt`, `FileDigest.kt`, `ui/ChangelogDialog.kt`):
+  the settings entry is Changelog, not About. The feed comes from the release's
+  `changelog.json` (cached in `changelog.json`, never bundled), and the dialog
+  renders only versions `<= AppVersion.VERSION`; anything newer becomes an update
+  banner rather than fake history. `ReleaseApi` lists releases and takes the
+  newest carrying `changelog.json` — not `/releases/latest`, because the old
+  pre-changelog `v3.1.2` tag sorts above 2.x. `AppUpdates` polls every 6 h,
+  downloads the MSI (preferred) or the arch-matching DMG, verifies
+  `SHA256SUMS.txt`, and waits for "Restart & update" before quitting. The swap is
+  a detached script: macOS waits on the PID then `rsync`s the DMG's bundle;
+  Windows waits then runs `msiexec /i /qn` (3010 tolerated) under the same
+  upgrade UUID. No `jpackage.app-path` (a Gradle run) → the button opens the
+  release page instead.
 - **Persistence:** `config.json` + `favorites.json` (+ `calendar.json`, `weather.json`)
   in `%APPDATA%/QuickNotch` / `~/Library/Application Support/QuickNotch`.
   `@Serializable` defaults (old files load); coalesced single-writer; `resetToDefaults`
@@ -366,6 +417,11 @@ scope-creep (new notch positions, Android/iOS) unless asked.
   32bpp BI_RGB alpha is undefined — force opaque.
 - Progress outline straddles the island edge from a padded wrapper sibling
   (the island clip would cut its outer half); pad is 0 when the ring is off.
+- Windows z-order: AWT's one-shot `alwaysOnTop` loses the topmost band to a
+  fullscreen game's own `SetWindowPos`; `WindowsOverlayWindowPolicy` re-asserts
+  `HWND_TOPMOST` with `SWP_NOACTIVATE`. Pass `Pointer(-1L)`, not
+  `Pointer.createConstant(-1)` — the latter arrives as an invalid handle (1400)
+  and the call silently no-ops. Exclusive fullscreen still cannot be overlaid.
 - Pipe: small output read-after-`waitFor`; multi-100KB base64 drained concurrently.
 - System monitor (macOS probe): `netstat` **must** be `-n` (without it every interface
   address resolves through DNS and the probe blocked ~5 s); `netstat -ib` repeats a row
@@ -387,6 +443,21 @@ scope-creep (new notch positions, Android/iOS) unless asked.
 - Detekt 1.23.8 gates new code (`UnusedImports` on); old findings in `baseline.xml`,
   re-cut with `detektBaseline` only after deliberate fixes; tunings: `MagicNumber` off,
   `@Composable` exempt from `FunctionNaming`.
+- Releases: GitHub's `/releases/latest` is semver-ordered, so the old `v3.1.2`
+  wins over every 2.x. `publish` must pass `gh release ... --latest`, and the app
+  must find the newest release whose assets include `changelog.json` instead of
+  trusting `/latest`. That asset is also the gate that keeps the old release from
+  looking like an update. macOS ships `-arm64` and `-x64` DMGs; `assetFor` picks
+  by `os.arch`.
+- The PR preview block is not input: `withoutPreview` strips it before the body
+  is parsed, or a bullet the author deleted keeps resurfacing from the previous
+  run and the changelog slowly eats its own output. The splice is also a no-op
+  when the rendered block is identical, so a push that changes nothing a user
+  would read leaves the description (and its timeline) alone.
+- Self-update only exists in an installed build: `jpackage.app-path` is absent
+  under `./gradlew run`. The detached script waits for the JVM PID, so the app
+  must quit *after* starting it; macOS uses `rsync -a` (never `cp -R`/`ditto`),
+  Windows tolerates MSI exit 3010.
 - `git status` before any `stash` (shared branch); never push (user pushes); signed commits.
 
 ## 8. Git workflow & scope
