@@ -78,17 +78,18 @@ web/
 │   │       ├── TourSection.svelte # the sticky scroll tour (state machine)
 │   │       ├── TourDevice.svelte  # the CSS-3D laptop chassis
 │   │       ├── NotchPanel.svelte  # one notch state, drawn to the app's geometry
+│   │       ├── KofiButton.svelte  # Ko-fi's own button artwork, used unchanged
 │   │       ├── Spotlight.svelte  # scroll-driven glow (flat colour + blur)
 │   │       └── Grain.svelte      # generated film-grain background layer
 │   └── routes/
 │       ├── +layout.ts            # `prerender = true`
 │       ├── +layout.svelte        # fonts, styles, smooth-scroll, backdrop layers
 │       ├── +page.svelte          # page composition (section order)
-│       ├── download/+page.svelte # platform cards, install notes, optional tip jar
+│       ├── download/+page.svelte # platform cards, install notes, thank-you modal
 │       ├── changelog/+page.svelte# the published release history
 │       ├── connect/+page.svelte  # Calendar consent (app-invoked, unlinked)
 │       └── oauth/callback/+page.svelte  # hands the code back to the app
-├── static/                       # favicon, icons, og.png, robots.txt, sitemap.xml, manifest, _headers
+├── static/                       # favicon, icons, og.png, kofi-button.png, robots.txt, sitemap.xml, manifest, _headers
 ├── wrangler.toml                 # Cloudflare Pages project config
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
@@ -104,7 +105,7 @@ web/
 The header is a notch, not a menu: a dark bar flush with the top edge — square
 upper corners, only the two facing the page rounded, exactly the app's base
 notch — carrying the mark, the wordmark, the version (linking to the changelog),
-the Ko-fi link and the download button. It rests compact at the top of the page
+the Ko-fi pill and the download button. It rests compact at the top of the page
 and opens to full width as you scroll, closing again when you return to the top;
 the progress hairline runs along its lower edge. There are no section links at
 all — the tour, the look and the download are found by scrolling. The FAQ is the
@@ -275,8 +276,12 @@ Installer names are stable, so no site change is needed per release:
 | macOS, Apple silicon | `QuickNotch-<version>-arm64.dmg` |
 | macOS, Intel | `QuickNotch-<version>-x64.dmg` |
 
-Clicking any download reveals an optional Ko-fi card once. It never gates the
-download, never blocks the file, and can be dismissed — the tip jar is the only
+Clicking any download opens a thank-you dialog once the file has started. It is a
+native `<dialog>`, so focus is trapped, Escape dismisses it and the page behind is
+inert without any of that being hand-rolled; it never intercepts the link, which
+is already navigating by the time the card appears. The card carries Ko-fi's own
+button artwork (`static/kofi-button.png`, committed rather than hot-linked) and a
+"Maybe later" button. Nothing there gates the download — the tip jar is the only
 thing the site asks for, and it asks after the installer is on its way.
 
 ---

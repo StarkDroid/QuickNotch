@@ -91,12 +91,15 @@ export const download = {
 	allReleases: 'All releases on GitHub',
 	unsigned:
 		'The installers are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask once. On Windows: More info → Run anyway. On macOS: right-click QuickNotch → Open.',
-	support: {
-		eyebrow: 'One more thing',
-		title: 'It is free. It stays free.',
-		body: 'QuickNotch is a nights-and-weekends project with no ads, no telemetry and nothing to upsell. If it earned a place on your screen, a coffee keeps the updates coming — entirely optional, and it unlocks nothing.',
-		cta: 'Buy me a coffee',
-		dismiss: 'No thanks'
+	/**
+	 * Shown once a download has started. The file is already on its way, so this
+	 * asks for a coffee but cannot gate anything.
+	 */
+	thanks: {
+		eyebrow: 'Downloading',
+		title: 'Thanks for picking QuickNotch.',
+		body: 'The installer is on its way. QuickNotch is free, MIT licensed, and there is nothing to sign up for. If it earns a place on your screen, a coffee keeps the updates coming.',
+		dismiss: 'Maybe later'
 	}
 } as const;
 

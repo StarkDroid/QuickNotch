@@ -32,7 +32,8 @@ a small pill pinned top-centre. Hover → expands into a dock of pinned apps
 - `web/` is a separate static SvelteKit site (also hosts `/connect` +
   `/oauth/callback` for Calendar OAuth). Ignore unless asked. It serves
   quicknotch.app from Cloudflare Pages: landing page, `/download` (platform
-  cards + optional Ko-fi after a click) and `/changelog` (the same feed the app
+  cards + a thank-you dialog that offers Ko-fi once the file starts) and
+  `/changelog` (the same feed the app
   reads, committed to `web/src/lib/data/changelog.json` by the release workflow
   and imported at build time so the version and history are prerendered).
 

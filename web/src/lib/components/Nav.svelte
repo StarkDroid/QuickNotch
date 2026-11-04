@@ -54,9 +54,15 @@
 		</a>
 
 		<div class="nav__links">
-			<a class="nav__kofi" href={site.kofi} target="_blank" rel="noopener noreferrer">
-				<Icon name="coffee" size={15} />
-				<span class="sr-only">Support QuickNotch on Ko-fi</span>
+			<a
+				class="nav__kofi"
+				href={site.kofi}
+				target="_blank"
+				rel="noopener noreferrer"
+				aria-label="Support QuickNotch on Ko-fi"
+			>
+				<Icon name="coffee" size={14} />
+				<span>Ko-fi</span>
 			</a>
 			<a class="nav__version mono" href={site.changelogPath}>v{latest}</a>
 			<a class="buy" href={site.downloadPath}>
@@ -90,7 +96,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.7rem;
-		width: min(92%, 22.5rem);
+		width: min(94%, 27.5rem);
 		height: 3.05rem;
 		margin-inline: auto;
 		padding: 0 0.4rem 0 0.8rem;
@@ -155,7 +161,6 @@
 		margin-left: auto;
 	}
 
-	.nav__kofi,
 	.nav__version {
 		display: inline-flex;
 		align-items: center;
@@ -166,21 +171,39 @@
 		border-radius: 999px;
 	}
 
-	.nav__kofi:hover,
-	.nav__version:hover {
-		color: #fff;
+	/* Support reads as its own button, not as one more muted glyph: cream fill
+	   on the black capsule, the same warm tone as Ko-fi's own button. */
+	.nav__kofi {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.34rem;
+		padding: 0.4rem 0.62rem 0.4rem 0.5rem;
+		border-radius: var(--r-pill);
+		background: var(--paper);
+		color: var(--ink);
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		font-weight: 700;
+		line-height: 1;
+		letter-spacing: -0.01em;
+		white-space: nowrap;
+		box-shadow: inset 0 -1px 0 rgb(33 28 19 / 0.18);
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
 	}
 
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
-		border: 0;
+	.nav__kofi:hover {
+		background: var(--paper-deep);
+		transform: translateY(-1px);
+	}
+
+	.nav__kofi:active {
+		transform: translateY(1px);
+	}
+
+	.nav__version:hover {
+		color: #fff;
 	}
 
 	.buy {
@@ -232,7 +255,7 @@
 		.nav__pill {
 			/* Leave a visible step between rest and open on a phone: a
 			   content-wide notch that grows to the full width. */
-			width: min(88%, 22.5rem);
+			width: min(94%, 24rem);
 			padding-left: 0.6rem;
 		}
 
@@ -258,6 +281,34 @@
 
 		.nav__version {
 			display: none;
+		}
+	}
+
+	/* Under 380px the brand name plus three items no longer fit inside the
+	   resting capsule. The mark still names the product and the link keeps its
+	   accessible label, so the wordmark is what goes. */
+	@media (max-width: 380px) {
+		.nav__pill {
+			width: 96%;
+			gap: 0.45rem;
+			padding-right: 0.3rem;
+		}
+
+		.brand__name {
+			display: none;
+		}
+
+		.nav__links {
+			gap: 0.35rem;
+		}
+
+		.nav__kofi {
+			padding: 0.4rem 0.5rem 0.4rem 0.42rem;
+		}
+
+		.buy {
+			padding: 0.55rem 0.62rem;
+			font-size: 0.8rem;
 		}
 	}
 

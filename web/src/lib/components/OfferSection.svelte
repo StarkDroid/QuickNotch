@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import KofiButton from './KofiButton.svelte';
 	import { downloadCta, offer, site } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
@@ -77,9 +78,7 @@
 				</ul>
 				<p class="mono ticket__serial">
 					<span>no. 0001 · built in the open · MIT</span>
-					<a class="ticket__kofi" href={site.kofi} target="_blank" rel="noopener noreferrer">
-						<Icon name="coffee" size={13} /> buy me a coffee
-					</a>
+					<KofiButton compact />
 				</p>
 			</div>
 		</div>
@@ -242,22 +241,6 @@
 		font-size: var(--fs-micro);
 		letter-spacing: 0.1em;
 		color: var(--text-3);
-		opacity: 0.75;
-	}
-
-	.ticket__kofi {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		text-decoration: underline;
-		text-decoration-color: var(--line-strong);
-		text-underline-offset: 3px;
-	}
-
-	.ticket__kofi:hover {
-		color: var(--accent-text);
-		text-decoration-color: var(--accent);
-		opacity: 1;
 	}
 
 	/* ---- Layout ----------------------------------------------------------- */

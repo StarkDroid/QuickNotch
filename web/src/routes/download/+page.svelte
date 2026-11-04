@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import Footer from '$components/Footer.svelte';
 	import Icon from '$components/Icon.svelte';
+	import KofiButton from '$components/KofiButton.svelte';
 	import Nav from '$components/Nav.svelte';
 	import PageSeo from '$components/PageSeo.svelte';
 	import { download, platforms, site } from '$data/site';
@@ -19,16 +19,26 @@
 	 *
 	 * The version comes from the changelog feed the release workflow commits, so
 	 * the asset URLs are built from the newest published release and never need a
-	 * site change. Picking a download reveals the tip jar once — the only place
-	 * the site asks for anything, and it asks after the file is already on its
-	 * way.
+	 * site change. Starting a download opens the thank-you modal: a native
+	 * `<dialog>`, which traps focus, answers Escape and makes the page behind
+	 * inert without any of that being hand-rolled. The link is never
+	 * intercepted — it is already navigating when the modal appears.
 	 */
 	let visitor = $state<'windows' | 'macos' | null>(null);
-	let picked = $state(false);
+	let thanks = $state<HTMLDialogElement | null>(null);
 
 	onMount(() => {
 		visitor = platformOf(navigator.userAgent);
 	});
+
+	function thank() {
+		thanks?.showModal();
+	}
+
+	/** A click on the backdrop dismisses; inside the card it never does. */
+	function closeFromBackdrop(event: MouseEvent) {
+		if (event.target === thanks) thanks?.close();
+	}
 </script>
 
 <PageSeo
@@ -87,7 +97,7 @@
 									<a
 										class="btn btn--primary"
 										href={releaseAsset(latest, installer.file(latest))}
-										onclick={() => (picked = true)}
+										onclick={thank}
 									>
 										<Icon name="download" size={17} />
 										<span class="platform__label">
@@ -99,7 +109,7 @@
 									<a
 										class="platform__alt"
 										href={releaseAsset(latest, installer.file(latest))}
-										onclick={() => (picked = true)}
+										onclick={thank}
 									>
 										{installer.label}
 										<span class="platform__alt-detail">· {installer.detail}</span>
@@ -124,30 +134,6 @@
 				</p>
 			</div>
 
-			{#if picked}
-				<aside class="support" transition:fly={{ y: 12, duration: 240 }} aria-live="polite">
-					<div class="support__copy">
-						<p class="eyebrow">{download.support.eyebrow}</p>
-						<h2 class="support__title">{download.support.title}</h2>
-						<p class="support__body">{download.support.body}</p>
-					</div>
-					<div class="support__actions">
-						<a
-							class="btn btn--primary"
-							href={site.kofi}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							<Icon name="coffee" size={17} />
-							{download.support.cta}
-						</a>
-						<button class="btn btn--ghost btn--sm" type="button" onclick={() => (picked = false)}>
-							{download.support.dismiss}
-						</button>
-					</div>
-				</aside>
-			{/if}
-
 			<p class="download__source mono">
 				Source: <a href={site.repository} target="_blank" rel="noopener noreferrer">
 					github.com/StarkDroid/QuickNotch
@@ -156,6 +142,26 @@
 		</div>
 	</section>
 </main>
+
+<dialog
+	class="thanks"
+	bind:this={thanks}
+	aria-labelledby="thanks-title"
+	aria-describedby="thanks-body"
+	onclick={closeFromBackdrop}
+>
+	<div class="thanks__card">
+		<p class="eyebrow">{download.thanks.eyebrow}</p>
+		<h2 class="thanks__title" id="thanks-title">{download.thanks.title}</h2>
+		<p class="thanks__body" id="thanks-body">{download.thanks.body}</p>
+		<div class="thanks__actions">
+			<KofiButton />
+			<button class="btn btn--ghost btn--sm" type="button" onclick={() => thanks?.close()}>
+				{download.thanks.dismiss}
+			</button>
+		</div>
+	</div>
+</dialog>
 
 <Footer />
 
@@ -364,43 +370,77 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Optional tip jar ------------------------------------------------- */
-	.support {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 1.25rem 2rem;
-		margin-top: 1.5rem;
-		padding: clamp(1.4rem, 3vw, 1.9rem);
+	/* ---- Thank-you modal -------------------------------------------------- */
+	/* A poster card on a dimmed page, offset with the same hard sticker shadow
+	   as the platform cards. */
+	.thanks {
+		width: min(92vw, 26rem);
+		max-width: none;
+		max-height: calc(100vh - 2rem);
+		margin: auto;
+		padding: 0;
 		border: 2px solid var(--ink);
 		border-radius: var(--r-lg);
 		background: var(--paper-lift);
-		box-shadow: var(--shadow-2);
+		color: var(--text);
+		box-shadow: var(--shadow-3);
 	}
 
-	.support__copy {
-		flex: 1 1 24rem;
+	.thanks::backdrop {
+		background: rgb(33 28 19 / 0.5);
 	}
 
-	.support__title {
-		margin-top: 0.35rem;
+	.thanks__card {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.7rem;
+		padding: clamp(1.4rem, 4vw, 1.9rem);
+	}
+
+	.thanks__title {
+		margin-top: 0.15rem;
 		font-family: var(--font-display);
-		font-size: clamp(1.3rem, 2.6vw, 1.65rem);
+		font-size: clamp(1.4rem, 3vw, 1.75rem);
 		font-weight: 700;
+		line-height: 1.12;
 		letter-spacing: -0.02em;
 	}
 
-	.support__body {
-		margin-top: 0.45rem;
+	.thanks__body {
 		font-size: var(--fs-small);
 		color: var(--text-2);
 	}
 
-	.support__actions {
+	.thanks__actions {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.7rem;
+		gap: 0.85rem;
+		margin-top: 0.55rem;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.thanks[open] {
+			animation: thanks-in var(--dur) var(--ease-out) both;
+		}
+
+		.thanks[open]::backdrop {
+			animation: thanks-fade var(--dur-fast) var(--ease-out) both;
+		}
+	}
+
+	@keyframes thanks-in {
+		from {
+			opacity: 0;
+			transform: translateY(10px) scale(0.97);
+		}
+	}
+
+	@keyframes thanks-fade {
+		from {
+			opacity: 0;
+		}
 	}
 
 	.download__source {

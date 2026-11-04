@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import KofiButton from './KofiButton.svelte';
 	import { latest } from '$data/releases';
 	import { site } from '$data/site';
 
@@ -18,13 +19,14 @@
 
 		<p class="footer__tagline">{site.tagline}</p>
 
+		<KofiButton />
+
 		<nav class="footer__links" aria-label="More">
 			<a href={site.homePath}>Home</a>
 			<a href={site.downloadPath}>Download</a>
 			<a href={site.changelogPath}>Changelog</a>
 			<a href={site.repository} target="_blank" rel="noopener noreferrer">Source</a>
 			<a href={site.issuesUrl} target="_blank" rel="noopener noreferrer">Issues</a>
-			<a href={site.kofi} target="_blank" rel="noopener noreferrer">Ko-fi</a>
 			<a href="#top">Back to top</a>
 		</nav>
 
