@@ -135,7 +135,7 @@ export const offer = {
 	price: { amount: '0', label: 'Free', currency: 'USD', unit: 'forever' },
 	/** What the download actually contains, rendered beside the price. */
 	includes: [
-		'Windows and macOS installers, one per platform',
+		'Windows and macOS installers in every release',
 		'Quick launch, system, weather, calendar and live media',
 		'All three notch styles and every surface finish',
 		'Self-updating releases, so new widgets land for free',
@@ -162,11 +162,11 @@ export const download = {
 	seo: {
 		title: 'Download QuickNotch',
 		description:
-			'Download QuickNotch for Windows 10 & 11 or macOS 12+, free and open source. One installer per platform, self-updating, MIT licensed.'
+			'Download QuickNotch for Windows 10 & 11 or macOS 12+, free and open source. Installers for both platforms, self-updating, MIT licensed.'
 	},
 	eyebrow: 'Get QuickNotch',
 	title: 'Pick your machine.',
-	lead: 'Every release ships one Windows installer and two macOS disk images, one for Apple silicon and one for Intel. The buttons below always point at the newest release on GitHub.',
+	lead: 'Every release ships two Windows installers and two macOS disk images, one per Mac architecture. The buttons below always point at the newest release on GitHub.',
 	versionLabel: 'Latest release',
 	releaseNotes: 'release notes',
 	changelogLink: 'changelog',
@@ -192,7 +192,7 @@ export const platforms = [
 		id: 'windows',
 		name: 'Windows',
 		requirement: 'Windows 10 & 11 · x64',
-		note: 'Installer (.msi). The release page also carries the plain .exe.',
+		note: 'Same app either way: the .msi suits managed machines and silent installs, the .exe is the click-through setup.',
 		icon: 'windows',
 		blurb:
 			'Installs for every user on the machine, adds QuickNotch to the Start menu and lets it update itself in place.'

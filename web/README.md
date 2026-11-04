@@ -286,14 +286,16 @@ Installer names are stable, so no site change is needed per release:
 
 | Platform | Asset |
 | :--- | :--- |
-| Windows | `QuickNotch-<version>.msi` |
+| Windows | `QuickNotch-<version>.msi` and `QuickNotch-<version>.exe` |
 | macOS, Apple silicon | `QuickNotch-<version>-arm64.dmg` |
 | macOS, Intel | `QuickNotch-<version>-x64.dmg` |
 
-The workflow also builds a plain `.exe`, and the Windows card says so in its
-note, but the page gives it no button: one installer per card, with the second
-file left on the release page, is the choice the app actually offers. Nothing
-under a primary button is clickable, on either platform.
+Both Windows files install the same app and both self-update: the updater
+prefers the `.msi` and falls back to the `.exe`, and its script branches on the
+extension. The card therefore offers them as two peer buttons, the way macOS
+offers two disk images, and its note says what the difference is: the `.msi`
+suits managed machines and silent installs, the `.exe` is the click-through
+setup. Nothing under a button is clickable, on either card.
 
 Clicking any download opens a thank-you dialog once the file has started. It is a
 native `<dialog>`, so focus is trapped, Escape dismisses it and the page behind is

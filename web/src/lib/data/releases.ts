@@ -45,7 +45,7 @@ export function releasePage(version: string): string {
 	return `https://github.com/StarkDroid/QuickNotch/releases/tag/v${version}`;
 }
 
-export type InstallerId = 'windows-msi' | 'mac-arm64' | 'mac-intel';
+export type InstallerId = 'windows-msi' | 'windows-exe' | 'mac-arm64' | 'mac-intel';
 
 export type Installer = {
 	id: InstallerId;
@@ -59,19 +59,25 @@ export type Installer = {
  * The file names the release workflow produces. They are derived from the
  * version in the changelog feed, so a new release never needs a site change.
  *
- * One installer per platform card except macOS, which needs a build per
- * architecture. The plain `.exe` the workflow also publishes is mentioned in
- * the Windows card's note and left on the release page rather than given a
- * second button: two links under one heading read as a choice the app does not
- * actually ask for.
+ * Two per platform: Windows ships the same app as a managed `.msi` and a
+ * click-through `.exe`, macOS needs a disk image per architecture. The app's
+ * updater takes the `.msi` and falls back to the `.exe`, so both installs can
+ * update themselves.
  */
 export const installers: Installer[] = [
 	{
 		id: 'windows-msi',
 		platform: 'windows',
-		label: 'Download for Windows',
+		label: 'MSI installer',
 		detail: '.msi · x64',
 		file: (version) => `QuickNotch-${version}.msi`
+	},
+	{
+		id: 'windows-exe',
+		platform: 'windows',
+		label: 'EXE installer',
+		detail: '.exe · x64',
+		file: (version) => `QuickNotch-${version}.exe`
 	},
 	{
 		id: 'mac-arm64',
