@@ -114,8 +114,12 @@ object Changelog {
      */
     suspend fun refresh(feedUrl: String? = null): Boolean = withContext(Dispatchers.IO) {
         _status.value = ChangelogStatus.Loading
+        // Named in the failure log: a bare "HTTP 404" says nothing about whether
+        // the API was rate-limited, the repository is still private, or the
+        // release genuinely has no feed.
+        val url = feedUrl ?: FEED_URL
         val result = runCatching {
-            val response = client.get(feedUrl ?: FEED_URL) {
+            val response = client.get(url) {
                 header("Accept", "application/json")
                 header("User-Agent", "QuickNotch/${AppVersion.VERSION}")
             }
@@ -136,7 +140,7 @@ object Changelog {
                 }
             }
         }.onFailure { failure ->
-            AppLog.line("changelog refresh failed: ${failure.message}")
+            AppLog.line("changelog refresh failed for $url: ${failure.message}")
             _status.value = if (_feed.value.releases.isEmpty()) {
                 ChangelogStatus.Offline
             } else {
