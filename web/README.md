@@ -111,6 +111,11 @@ all — the tour, the look and the download are found by scrolling. The FAQ is t
 last section; the ticket in `OfferSection` is the one call to action, and it
 points at `/download` rather than shipping its own second demo.
 
+`/download` and `/changelog` are the only subpages, and both open the same way:
+a `← QuickNotch` back link above the eyebrow. The header mark, the footer mark
+and the footer's `Home` also resolve to `/`, so leaving a page never depends on
+guessing that the logo is a link.
+
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
 opens and its screen walks through the seven states — quickview, dock, system,
 weather, calendar, music, gaming — with one caption each. It replaced four

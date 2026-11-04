@@ -392,6 +392,26 @@ p {
 	margin-inline: auto;
 }
 
+/* The way home, on every page that is not the home page. The header's logo does
+   this too, but a reader who arrived from the version chip should not have to
+   know that. */
+.back {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	align-self: flex-start;
+	font-family: var(--font-mono);
+	font-size: var(--fs-micro);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-3);
+	transition: color var(--dur-fast) var(--ease-out);
+}
+
+.back:hover {
+	color: var(--accent-text);
+}
+
 /* ---------- 5. Eyebrow / chips / stickers ---------- */
 .eyebrow {
 	display: inline-flex;

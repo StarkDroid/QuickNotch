@@ -11,7 +11,7 @@
 
 <footer class="footer">
 	<div class="container footer__inner">
-		<a class="brand" href="#top" aria-label="{site.name}, back to top">
+		<a class="brand" href={site.homePath} aria-label="{site.name}, home">
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			{site.name}
 		</a>
@@ -19,12 +19,13 @@
 		<p class="footer__tagline">{site.tagline}</p>
 
 		<nav class="footer__links" aria-label="More">
+			<a href={site.homePath}>Home</a>
 			<a href={site.downloadPath}>Download</a>
 			<a href={site.changelogPath}>Changelog</a>
 			<a href={site.repository} target="_blank" rel="noopener noreferrer">Source</a>
 			<a href={site.issuesUrl} target="_blank" rel="noopener noreferrer">Issues</a>
 			<a href={site.kofi} target="_blank" rel="noopener noreferrer">Ko-fi</a>
-			<a href="{site.url}">Back to top</a>
+			<a href="#top">Back to top</a>
 		</nav>
 
 		<p class="footer__bar">

@@ -52,6 +52,10 @@
 	<section class="section changelog" id="top">
 		<div class="container container-narrow">
 			<header class="section-head">
+				<a class="back" href={site.homePath}>
+					<Icon name="arrow-left" size={13} />
+					QuickNotch
+				</a>
 				<p class="eyebrow">The changelog</p>
 				<h1 class="display h2">Every release, in public.</h1>
 				<p class="lead">

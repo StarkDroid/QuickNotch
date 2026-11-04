@@ -43,6 +43,10 @@
 	<section class="section download" id="top">
 		<div class="container">
 			<header class="section-head download__head">
+				<a class="back" href={site.homePath}>
+					<Icon name="arrow-left" size={13} />
+					QuickNotch
+				</a>
 				<p class="eyebrow">{download.eyebrow}</p>
 				<h1 class="display h2">{download.title}</h1>
 				<p class="lead">{download.lead}</p>

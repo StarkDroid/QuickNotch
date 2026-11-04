@@ -23,6 +23,7 @@ export const site = {
 	issuesUrl: 'https://github.com/StarkDroid/QuickNotch/issues',
 	kofi: 'https://ko-fi.com/trishiraj',
 	/** Absolute routes, for the schema graph and for links inside the copy. */
+	homePath: '/',
 	downloadPath: '/download',
 	changelogPath: '/changelog',
 	downloadUrl: 'https://quicknotch.app/download',

@@ -48,7 +48,7 @@
 
 <header class="nav" class:scrolled>
 	<div class="nav__pill">
-		<a class="brand" href="#top" aria-label="{site.name}, back to top">
+		<a class="brand" href={site.homePath} aria-label="{site.name}, home">
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			<span class="brand__name">{site.name}</span>
 		</a>
