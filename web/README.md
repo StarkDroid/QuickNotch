@@ -337,22 +337,29 @@ no environment variables, no secrets.
 
 Two ways to deploy, both supported:
 
-1. **Git integration** — Pages builds `web/` on every push to `main`
-   (`npm run build`, output `build`, root directory `web`).
+1. **Git integration** — Pages builds `web/` on every push to `main`. In the
+   Pages wizard pick the **None** framework preset (the SvelteKit preset expects
+   `adapter-cloudflare`), set the root directory to `web`, the build command to
+   `npm run build`, the output directory to `build`, and add `NODE_VERSION=22`
+   under environment variables. Name the project `quicknotch`, which is what
+   `wrangler.toml` and the workflow expect.
 2. **GitHub Actions** — `.github/workflows/deploy-web.yml` builds, type-checks and
    runs `wrangler pages deploy build` using `web/wrangler.toml`. It needs two
    repository secrets, `CLOUDFLARE_API_TOKEN` (Pages: Edit) and
    `CLOUDFLARE_ACCOUNT_ID`; without them it still builds and warns instead of
-   failing.
+   failing. Create the Pages project once before the first run (`wrangler pages
+   project create quicknotch`), because `pages deploy` cannot create it from CI.
 
 Then, once, in Cloudflare:
 
 1. Attach the custom domain `quicknotch.app` to the Pages project and let
    Cloudflare manage the apex record. Proxy on, **Always Use HTTPS** on,
    **Automatic HTTPS Rewrites** on.
-2. Add a `www` → apex redirect (one Redirect Rule: `www.quicknotch.app/*` →
-   `https://quicknotch.app/$1`, 301). The canonical, sitemap and structured data
-   all name the apex, so there must be exactly one host.
+2. Add `www.quicknotch.app` as a second custom domain on the same project, so a
+   proxied record exists for it, then add one Redirect Rule:
+   `www.quicknotch.app/*` → `https://quicknotch.app/$1`, 301, preserve the query
+   string. The canonical, sitemap and structured data all name the apex, so there
+   must be exactly one host.
 3. In the Google OAuth client, register the production redirect URI
    `https://quicknotch.app/oauth/callback` alongside the local preview URIs. The
    desktop reads the loopback port out of `state`, so no app change is needed —
@@ -363,6 +370,11 @@ Then, once, in Cloudflare:
    resolves without `.html`, `/changelog` shows the published version in its HTML,
    `/robots.txt` serves the
    flow disallows, and `/sitemap.xml` lists only the three public routes.
+
+The site itself can be hosted while the repository is private, but its download
+buttons cannot work: GitHub serves no release assets to anonymous clients on a
+private repository. Make the repository public before pointing anyone at
+`quicknotch.app`.
 
 Security posture, all in-repo rather than in-dashboard:
 
