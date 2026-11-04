@@ -53,7 +53,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,19 +111,39 @@ internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier = this.click
     onClick = onClick
 )
 
-/** Inline accent link for dialog footers (source, support). */
+/**
+ * Footer link shaped like [GhostButton]: same padding, hover wash and press
+ * feedback, with the accent kept on the label so it still reads as a link
+ * rather than a second Cancel. A bare 11sp label was too small a target, and
+ * with no hover state of its own it looked inert.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-internal fun SettingsTextLink(label: String, onClick: () -> Unit) {
-    Text(
-        text = label,
-        style = AppTypography.labelSmall,
-        color = AccentSolid,
-        fontSize = 11.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .plainClickable(onClick)
-            .padding(horizontal = 2.dp, vertical = 2.dp)
+internal fun SettingsLinkButton(label: String, onClick: () -> Unit) {
+    val hoverPress = rememberHoverPressState()
+    val bg by animateColorAsState(
+        targetValue = if (hoverPress.hovered) SettingsCardHover else Color.Transparent,
+        animationSpec = tween(120),
+        label = "linkBg"
     )
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .trackHoverPress(hoverPress)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .plainClickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = AppTypography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = AccentSolid,
+            fontSize = 11.sp
+        )
+    }
 }
 
 /** Spring dip on press, optional lift on hover. One tuning for all controls. */

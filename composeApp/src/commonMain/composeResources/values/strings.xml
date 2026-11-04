@@ -225,12 +225,11 @@ Add apps from the list on the right.</string>
     <string name="changelog_header">Changelog</string>
     <string name="about_product_name">QuickNotch Desktop</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_description">Your apps, calendar, weather, music and live system stats — one flick away in a notch that never blocks the view, on Windows and macOS. It updates itself and keeps getting better: there’s plenty more in the pipeline.</string>
+    <string name="about_description">Your apps, calendar, weather, music and system stats, in one small notch that stays out of the way.</string>
     <string name="changelog_empty">No release notes published yet.</string>
     <string name="changelog_loading">Fetching the latest notes from GitHub…</string>
     <string name="changelog_error">Couldn’t reach GitHub. Check your connection and try again.</string>
     <string name="changelog_retry">Try again</string>
-    <string name="changelog_source_note">Fetched from GitHub — never bundled with the build.</string>
     <string name="changelog_update_available">Version %1$s is available.</string>
     <string name="changelog_update_ready">Version %1$s is downloaded and ready.</string>
     <string name="changelog_update_now">Update now</string>
@@ -238,11 +237,11 @@ Add apps from the list on the right.</string>
     <string name="changelog_updating">Installing version %1$s…</string>
     <string name="changelog_downloading">Downloading %1$s…</string>
     <string name="changelog_up_to_date">You’re on the latest version.</string>
-    <string name="changelog_update_hint">Updates install in place — no installers to hunt down.</string>
+    <string name="changelog_update_hint">Updates install in place. No installer to download.</string>
     <string name="changelog_update_manual">This build can’t update itself. Download the latest version from GitHub.</string>
     <string name="changelog_view_release">View release</string>
     <string name="changelog_update_failed">Update failed: %1$s</string>
-    <string name="changelog_no_asset">A newer version is on GitHub — open the release page to download it.</string>
+    <string name="changelog_no_asset">A newer version is on GitHub. Open the release page to download it.</string>
     <string name="view_source">Source on GitHub</string>
     <string name="support_kofi">Support on Ko-fi</string>
     <string name="menu_support">Support QuickNotch</string>

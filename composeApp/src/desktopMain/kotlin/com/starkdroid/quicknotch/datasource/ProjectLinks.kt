@@ -1,7 +1,9 @@
 package com.starkdroid.quicknotch.datasource
 
-import java.awt.Desktop
-import java.net.URI
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * The project's public addresses, in one place so the tray, the changelog and
@@ -13,9 +15,16 @@ object ProjectLinks {
     const val RELEASES = "$REPOSITORY/releases/latest"
     const val KOFI = "https://ko-fi.com/trishiraj"
 
-    /** Opens [url] in the system browser; a headless host just stays quiet. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Hands [url] to the OS browser through [AppLauncher.browse], the same path
+     * the calendar consent screen uses. That call waits on the child process, so
+     * it runs off the render thread; `Desktop.browse` was the tidier-looking
+     * call but on macOS it returns without a browser having opened, which is
+     * exactly how a working button reads as a dead one.
+     */
     fun open(url: String) {
-        runCatching { Desktop.getDesktop().browse(URI(url)) }
-            .onFailure { AppLog.line("links: could not open $url: ${it.message}") }
+        scope.launch { AppLauncher.browse(url) }
     }
 }
