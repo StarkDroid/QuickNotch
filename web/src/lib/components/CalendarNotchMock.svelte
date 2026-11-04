@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import { calendarDemo } from '$data/site';
 
 	/**
 	 * The desktop calendar page, drawn with the site's on-dark tokens: the dark
@@ -22,38 +23,35 @@
 	let { expanded = true, connected = true, theme = 'pill' }: Props = $props();
 
 	const highlightClass = $derived(`cn-hl cn-hl--${theme}`);
-
-	const days = ['Thu', 'Fri', 'Sat', 'Sun'];
-	const times = ['9:30', '13:00', '16:45', '19:15'];
 </script>
 
 <div class="cn" class:cn--expanded={expanded}>
 	<!-- The fat schedule page -->
 	<div class="cn-island" class:cn--dim={!connected}>
 		<div class="cn-today">
-			<span class="cn-today__dow mono">{connected ? 'Thursday' : 'Connecting'}</span>
-			<span class="cn-today__num">26</span>
+			<span class="cn-today__dow mono">{connected ? calendarDemo.weekday : calendarDemo.connecting}</span>
+			<span class="cn-today__num">{calendarDemo.day}</span>
 		</div>
 
 		<div class="cn-days" aria-hidden="true">
-			{#each days as day, i (day)}
+			{#each calendarDemo.days as day, i (day)}
 				<div class="cn-day" class:cn-day--now={i === 0 && connected}>
 					<span class="cn-day__name">{day}</span>
-					<span class="cn-day__count">{times[i]}</span>
+					<span class="cn-day__count">{calendarDemo.times[i]}</span>
 				</div>
 			{/each}
 		</div>
 
 		<div class="cn-ticker" class:cn-ticker--on={connected}>
 			<span class="cn-ticker__dot"></span>
-			<span>{connected ? 'Stand-up with the team · in 12 min' : 'Awaiting the code…'}</span>
+			<span>{connected ? calendarDemo.event : calendarDemo.waiting}</span>
 		</div>
 	</div>
 
 	<!-- The collapsed pill, badged -->
 	<div class="cn-pill" class:cn--dim={!connected}>
 		<span class="cn-pill__glyph"><span class={highlightClass}></span></span>
-		<span class="cn-pill__count">{connected ? '2' : '·'}</span>
+		<span class="cn-pill__count">{connected ? calendarDemo.count : calendarDemo.idle}</span>
 	</div>
 </div>
 

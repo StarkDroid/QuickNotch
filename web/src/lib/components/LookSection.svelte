@@ -25,7 +25,7 @@
 			{#each themes as theme, index (theme.id)}
 				<li class="look__item">
 					<span class="look__swatch look__swatch--screen" aria-hidden="true">
-						<span class="look__ref mono">shape {index + 1}</span>
+						<span class="look__ref mono">{look.shapeRef} {index + 1}</span>
 						<span class="look__notch" data-style={theme.id}></span>
 					</span>
 					<span class="look__text">
@@ -38,7 +38,7 @@
 			{#each surfaces as surface (surface.id)}
 				<li class="look__item">
 					<span class="look__swatch look__swatch--paper" aria-hidden="true">
-						<span class="look__ref mono">finish</span>
+						<span class="look__ref mono">{look.finishRef}</span>
 						<span class="look__pill" data-surface={surface.id}></span>
 					</span>
 					<span class="look__text">

@@ -3,22 +3,18 @@
 	import Icon from '$components/Icon.svelte';
 	import Nav from '$components/Nav.svelte';
 	import PageSeo from '$components/PageSeo.svelte';
-	import { site } from '$data/site';
+	import { changelogPage, chrome, site, sourceNote } from '$data/site';
 	import { changelog, releasePage, type ChangelogRelease } from '$data/releases';
 
 	/**
 	 * The published history, newest first.
 	 *
 	 * The feed is the same `changelog.json` the release workflow attaches to the
-	 * release and the desktop app reads under Settings → Changelog — committed to
+	 * release and the desktop app reads under Settings → Changelog: committed to
 	 * the site and imported at build time, so this page is real prerendered text
 	 * rather than something that appears after hydration.
 	 */
-	const kinds = [
-		{ id: 'new', label: 'New' },
-		{ id: 'improved', label: 'Improved' },
-		{ id: 'fixed', label: 'Fixed' }
-	] as const;
+	const kinds = changelogPage.kinds;
 
 	function groups(release: ChangelogRelease) {
 		const source =
@@ -41,8 +37,8 @@
 </script>
 
 <PageSeo
-	title="Changelog"
-	description="Every QuickNotch release, newest first: new widgets, fixes and improvements for the Windows and macOS notch, straight from the published release feed."
+	title={changelogPage.seo.title}
+	description={changelogPage.seo.description}
 	path={site.changelogPath}
 />
 
@@ -52,21 +48,18 @@
 	<section class="section changelog" id="top">
 		<div class="container container-narrow">
 			<header class="section-head">
-				<a class="back" href={site.homePath}>
+				<a class="back" href={site.homePath} aria-label={site.homeLabel}>
 					<Icon name="arrow-left" size={13} />
-					QuickNotch
+					{chrome.home}
 				</a>
-				<p class="eyebrow">The changelog</p>
-				<h1 class="display h2">Every release, in public.</h1>
-				<p class="lead">
-					The same feed the app shows under Settings → Changelog. Newest first, written for
-					people rather than for a diff.
-				</p>
+				<p class="eyebrow">{changelogPage.eyebrow}</p>
+				<h1 class="display h2">{changelogPage.title}</h1>
+				<p class="lead">{changelogPage.lead}</p>
 			</header>
 
 			{#if changelog.releases.length === 0}
 				<div class="changelog__state">
-					<p>The first public release is still being published.</p>
+					<p>{changelogPage.empty}</p>
 					<a
 						class="btn btn--ghost btn--sm"
 						href={site.releasesUrl}
@@ -74,16 +67,16 @@
 						rel="noopener noreferrer"
 					>
 						<Icon name="github" size={16} />
-						Read it on GitHub
+						{changelogPage.emptyCta}
 					</a>
 				</div>
 			{:else}
 				{#if changelog.latest}
 					<p class="changelog__current mono">
-						Latest release <strong class="version">v{changelog.latest}</strong>
+						{changelogPage.current} <strong class="version">v{changelog.latest}</strong>
 						{#if changelog.updatedAt}
 							<span aria-hidden="true">·</span>
-							<span>updated {formatDate(changelog.updatedAt)}</span>
+							<span>{changelogPage.updated} {formatDate(changelog.updatedAt)}</span>
 						{/if}
 					</p>
 				{/if}
@@ -100,7 +93,7 @@
 									target="_blank"
 									rel="noopener noreferrer"
 								>
-									release page
+									{changelogPage.releaseLink}
 									<Icon name="arrow-up-right" size={13} />
 								</a>
 							</header>
@@ -125,9 +118,10 @@
 			{/if}
 
 			<p class="changelog__source mono">
-				Source: <a href={site.repository} target="_blank" rel="noopener noreferrer">
-					github.com/StarkDroid/QuickNotch
-				</a> · {site.license} licensed
+				{sourceNote.label}:
+				<a href={site.repository} target="_blank" rel="noopener noreferrer">
+					{site.repositoryLabel}
+				</a> · {sourceNote.licensed}
 			</p>
 		</div>
 	</section>

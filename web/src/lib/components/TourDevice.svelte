@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import NotchPanel from './NotchPanel.svelte';
-	import type { TourStepId } from '$data/site';
+	import { desktopChrome, site, type TourStepId } from '$data/site';
 
 	/**
 	 * The laptop the tour happens on.
@@ -55,9 +55,11 @@
 
 						<div class="screen__menu">
 							<span class="screen__brand"><Icon name="logo" size={11} /></span>
-							<span>File</span><span>Edit</span><span>View</span>
+							{#each desktopChrome.menuShort as item (item)}
+								<span>{item}</span>
+							{/each}
 							<span class="screen__spacer"></span>
-							<span class="screen__clock">2:52 pm</span>
+							<span class="screen__clock">{desktopChrome.tourClock}</span>
 							<Icon name="battery" size={11} />
 						</div>
 
@@ -71,7 +73,7 @@
 
 			<div class="lid__face lid__face--back">
 				<span class="lid__logo"><Icon name="logo" size={26} /></span>
-				<span class="lid__word mono">quicknotch</span>
+				<span class="lid__word mono">{site.name.toLowerCase()}</span>
 			</div>
 		</div>
 

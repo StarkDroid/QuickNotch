@@ -5,7 +5,7 @@
 	import KofiButton from '$components/KofiButton.svelte';
 	import Nav from '$components/Nav.svelte';
 	import PageSeo from '$components/PageSeo.svelte';
-	import { download, platforms, site } from '$data/site';
+	import { chrome, download, platforms, site, sourceNote } from '$data/site';
 	import {
 		installersFor,
 		latest,
@@ -42,8 +42,8 @@
 </script>
 
 <PageSeo
-	title="Download QuickNotch"
-	description="Download QuickNotch for Windows 10 & 11 or macOS 12+, free and open source. One installer per platform, self-updating, MIT licensed."
+	title={download.seo.title}
+	description={download.seo.description}
 	path={site.downloadPath}
 />
 
@@ -53,9 +53,9 @@
 	<section class="section download" id="top">
 		<div class="container">
 			<header class="section-head download__head">
-				<a class="back" href={site.homePath}>
+				<a class="back" href={site.homePath} aria-label={site.homeLabel}>
 					<Icon name="arrow-left" size={13} />
-					QuickNotch
+					{chrome.home}
 				</a>
 				<p class="eyebrow">{download.eyebrow}</p>
 				<h1 class="display h2">{download.title}</h1>
@@ -65,8 +65,10 @@
 					<span class="chip chip--accent chip--version">
 						{download.versionLabel} <span class="version">v{latest}</span>
 					</span>
-					<a href={releasePage(latest)} target="_blank" rel="noopener noreferrer">release notes</a>
-					<a href={site.changelogPath}>changelog</a>
+					<a href={releasePage(latest)} target="_blank" rel="noopener noreferrer">
+						{download.releaseNotes}
+					</a>
+					<a href={site.changelogPath}>{download.changelogLink}</a>
 					<a href={site.releasesUrl} target="_blank" rel="noopener noreferrer">
 						{download.allReleases}
 					</a>
@@ -83,7 +85,7 @@
 								<p class="mono platform__requirement">
 									{platform.requirement}
 									{#if visitor === platform.id}
-										<span class="platform__picked">· your platform</span>
+										<span class="platform__picked">· {download.yourPlatform}</span>
 									{/if}
 								</p>
 							</div>
@@ -93,28 +95,17 @@
 
 						<div class="platform__actions">
 							{#each installersFor(platform.id) as installer (installer.id)}
-								{#if installer.primary}
-									<a
-										class="btn btn--primary"
-										href={releaseAsset(latest, installer.file(latest))}
-										onclick={thank}
-									>
-										<Icon name="download" size={17} />
-										<span class="platform__label">
-											{installer.label}
-											<span class="platform__detail mono">{installer.detail}</span>
-										</span>
-									</a>
-								{:else}
-									<a
-										class="platform__alt"
-										href={releaseAsset(latest, installer.file(latest))}
-										onclick={thank}
-									>
+								<a
+									class="btn btn--primary"
+									href={releaseAsset(latest, installer.file(latest))}
+									onclick={thank}
+								>
+									<Icon name="download" size={17} />
+									<span class="platform__label">
 										{installer.label}
-										<span class="platform__alt-detail">· {installer.detail}</span>
-									</a>
-								{/if}
+										<span class="platform__detail mono">{installer.detail}</span>
+									</span>
+								</a>
 							{/each}
 						</div>
 
@@ -130,14 +121,15 @@
 				</p>
 				<p class="notes__item notes__item--quiet mono">
 					<Icon name="layers" size={15} />
-					<span>Every file is published as a GitHub release, with SHA256SUMS.txt beside it.</span>
+					<span>{download.checksums}</span>
 				</p>
 			</div>
 
 			<p class="download__source mono">
-				Source: <a href={site.repository} target="_blank" rel="noopener noreferrer">
-					github.com/StarkDroid/QuickNotch
-				</a> · {site.license} licensed
+				{sourceNote.label}:
+				<a href={site.repository} target="_blank" rel="noopener noreferrer">
+					{site.repositoryLabel}
+				</a> · {sourceNote.licensed}
 			</p>
 		</div>
 	</section>
@@ -311,25 +303,6 @@
 		font-size: 0.62rem;
 		letter-spacing: 0.08em;
 		opacity: 0.75;
-	}
-
-	.platform__alt {
-		font-size: var(--fs-small);
-		color: var(--text-3);
-		text-decoration: underline;
-		text-decoration-color: var(--line-strong);
-		text-underline-offset: 3px;
-	}
-
-	.platform__alt-detail {
-		margin-left: 0.35rem;
-		color: var(--text-3);
-		opacity: 0.8;
-	}
-
-	.platform__alt:hover {
-		color: var(--accent-text);
-		text-decoration-color: var(--accent);
 	}
 
 	.platform__note {

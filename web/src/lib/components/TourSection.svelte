@@ -195,7 +195,7 @@
 							<li class:active={index === step} class:past={index < step}></li>
 						{/each}
 					</ol>
-					<p class="mono tour__hint">scroll — the lid follows</p>
+					<p class="mono tour__hint">{tour.hint}</p>
 				</div>
 			</div>
 		</div>

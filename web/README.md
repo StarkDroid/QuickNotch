@@ -121,8 +121,8 @@ and steps aside when the footer is on screen, which already carries the same
 button. On a phone it is the cup alone.
 
 `/download` and `/changelog` are the only subpages, and both open the same way:
-a `← QuickNotch` back link above the eyebrow. The header mark, the footer mark
-and the footer's `Home` also resolve to `/`, so leaving a page never depends on
+a `← Home` back link above the eyebrow. The header mark, the footer mark and
+the footer's `Home` also resolve to `/`, so leaving a page never depends on
 guessing that the logo is a link.
 
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
@@ -140,6 +140,12 @@ from it rather than hardcoding copy, which keeps the page copy and the JSON-LD
 structured data in `Seo.svelte` provably in sync — the most common cause of
 rich-result validation failures is structured data that has drifted from the
 visible text.
+
+That includes the page titles and descriptions, the OAuth status copy and the
+values the mock notch draws. If a sentence appears on screen it is in this file;
+components own markup, layout and punctuation between two values. User-facing
+copy avoids em dashes: a colon, a full stop or a comma does the same job and
+reads like a person wrote it.
 
 ---
 
@@ -280,9 +286,14 @@ Installer names are stable, so no site change is needed per release:
 
 | Platform | Asset |
 | :--- | :--- |
-| Windows | `QuickNotch-<version>.msi` (and `.exe`) |
+| Windows | `QuickNotch-<version>.msi` |
 | macOS, Apple silicon | `QuickNotch-<version>-arm64.dmg` |
 | macOS, Intel | `QuickNotch-<version>-x64.dmg` |
+
+The workflow also builds a plain `.exe`, and the Windows card says so in its
+note, but the page gives it no button: one installer per card, with the second
+file left on the release page, is the choice the app actually offers. Nothing
+under a primary button is clickable, on either platform.
 
 Clicking any download opens a thank-you dialog once the file has started. It is a
 native `<dialog>`, so focus is trapped, Escape dismisses it and the page behind is

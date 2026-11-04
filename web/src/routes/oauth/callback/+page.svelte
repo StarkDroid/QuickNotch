@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Footer from '$components/Footer.svelte';
 	import Icon from '$components/Icon.svelte';
+	import { oauthPage } from '$data/site';
 	import { onMount, onDestroy } from 'svelte';
 
 	/**
@@ -79,8 +80,7 @@
 		}
 
 		if (err) {
-			const desc = errDesc ? ` (${errDesc})` : '';
-			error = `Google returned "${err}"${desc}.`;
+			error = oauthPage.errors.refused(err, errDesc ?? '');
 			if (!hasPort) {
 				// Nowhere to hand the failure back to, so the page has to be the
 				// whole answer.
@@ -92,17 +92,17 @@
 			return;
 		}
 		if (!code) {
-			error = 'Google did not send an authorization code back.';
+			error = oauthPage.errors.noCode;
 			status = 'error';
 			return;
 		}
 		if (!state) {
-			error = 'The callback is missing the state parameter.';
+			error = oauthPage.errors.noState;
 			status = 'error';
 			return;
 		}
 		if (!hasPort) {
-			error = 'The state does not tell QuickNotch which port to connect to.';
+			error = oauthPage.errors.noPort;
 			status = 'error';
 			return;
 		}
@@ -117,8 +117,8 @@
 </script>
 
 <svelte:head>
-	<title>Returning to QuickNotch</title>
-	<meta name="description" content="Google sent you back; this page hands the sign-in to the QuickNotch app. Opened by the OAuth flow, not linked from the site." />
+	<title>{oauthPage.title}</title>
+	<meta name="description" content={oauthPage.description} />
 	<!-- Second half of the app-invoked OAuth flow. Never indexed — see _headers. -->
 	<meta name="robots" content="noindex, nofollow, noarchive" />
 	<meta name="referrer" content="strict-origin-when-cross-origin" />
@@ -132,44 +132,32 @@
 				{#if status === 'idle' || status === 'jumping' || status === 'done'}
 					<div class="cluster">
 						<span class="dot dot--pulse"></span>
-						<h1 class="h4">Returning to QuickNotch…</h1>
+						<h1 class="h4">{oauthPage.returning}</h1>
 					</div>
-					<p class="text-muted">
-						Google gave QuickNotch permission. We're sending you back to the app
-						so it can finish signing you in. You can close this tab once
-						QuickNotch says it's connected.
-					</p>
+					<p class="text-muted">{oauthPage.returningBody}</p>
 					{#if target}
 						<code class="mono text-muted jump">{target}</code>
 					{/if}
 {:else if status === 'refused'}
-					<span class="eyebrow">Sign-in didn't complete</span>
+					<span class="eyebrow">{oauthPage.refusedEyebrow}</span>
 					<h1 class="h4">{error}</h1>
-					<p class="text-muted">
-						No permissions were changed. Taking you back to QuickNotch, which
-						knows what this refusal means, since a cancelled consent and an
-						unverified one look identical from here.
-					</p>
+					<p class="text-muted">{oauthPage.refusedBody}</p>
 					<button class="btn" type="button" onclick={returnToApp}>
 
 						<Icon name="arrow-left" size={16} />
 
-						Back to QuickNotch now
+						{oauthPage.backNow}
 					</button>
 
 				{:else if status === 'error'}
-					<span class="eyebrow">Could not return to QuickNotch</span>
+					<span class="eyebrow">{oauthPage.errorEyebrow}</span>
 					<h1 class="h4">{error}</h1>
-					<p class="text-muted">
-						Try connecting again from QuickNotch → Settings → Google Calendar.
-						If this keeps happening, the state from the desktop app might have
-						expired or the browser blocked the loopback jump.
-					</p>
+					<p class="text-muted">{oauthPage.errorBody}</p>
 					<a class="btn btn--ghost" href="/connect" data-sveltekit-reload>
 
 						<Icon name="arrow-left" size={16} />
 
-						Start again
+						{oauthPage.startAgain}
 					</a>
 
 				{/if}

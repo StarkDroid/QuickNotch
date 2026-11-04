@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { site } from '$data/site';
+	import { site, support } from '$data/site';
 
 	/**
 	 * Ko-fi's published button artwork, used unchanged.
@@ -27,7 +27,7 @@
 >
 	<img
 		src="/kofi-button.png"
-		alt="Buy me a coffee on Ko-fi"
+		alt={support.kofiAlt}
 		width="580"
 		height="146"
 		decoding="async"

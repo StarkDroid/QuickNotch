@@ -2,7 +2,7 @@
 	import Icon from './Icon.svelte';
 	import KofiButton from './KofiButton.svelte';
 	import { latest } from '$data/releases';
-	import { site } from '$data/site';
+	import { footer, site } from '$data/site';
 
 	// Prerendered at build time; the constant is a defensive fallback so a missing
 	// or unusable Date can never crash the render.
@@ -12,7 +12,7 @@
 
 <footer class="footer">
 	<div class="container footer__inner">
-		<a class="brand" href={site.homePath} aria-label="{site.name}, home">
+		<a class="brand" href={site.homePath} aria-label={site.homeLabel}>
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			{site.name}
 		</a>
@@ -21,18 +21,21 @@
 
 		<KofiButton />
 
-		<nav class="footer__links" aria-label="More">
-			<a href={site.homePath}>Home</a>
-			<a href={site.downloadPath}>Download</a>
-			<a href={site.changelogPath}>Changelog</a>
-			<a href={site.repository} target="_blank" rel="noopener noreferrer">Source</a>
-			<a href={site.issuesUrl} target="_blank" rel="noopener noreferrer">Issues</a>
-			<a href="#top">Back to top</a>
+		<nav class="footer__links" aria-label={footer.linksLabel}>
+			{#each footer.links as link (link.label)}
+				<a
+					href={link.href}
+					target={link.external ? '_blank' : undefined}
+					rel={link.external ? 'noopener noreferrer' : undefined}
+				>
+					{link.label}
+				</a>
+			{/each}
 		</nav>
 
 		<p class="footer__bar">
-			<span>© {year} {site.author} · {site.license} licensed · v{latest}</span>
-			<span aria-hidden="true">· printed on cream, obviously</span>
+			<span>{footer.copyright(year, latest)}</span>
+			<span aria-hidden="true">· {footer.note}</span>
 		</p>
 	</div>
 </footer>

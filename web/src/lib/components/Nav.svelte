@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import { latest } from '$data/releases';
-	import { site } from '$data/site';
+	import { chrome, site } from '$data/site';
 
 	/**
 	 * The header is the notch: a dark capsule pinned to the top of the page with
@@ -44,11 +44,11 @@
 	});
 </script>
 
-<a class="skip-link" href="#main">Skip to content</a>
+<a class="skip-link" href="#main">{chrome.skip}</a>
 
 <header class="nav" class:scrolled>
 	<div class="nav__pill">
-		<a class="brand" href={site.homePath} aria-label="{site.name}, home">
+		<a class="brand" href={site.homePath} aria-label={site.homeLabel}>
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			<span class="brand__name">{site.name}</span>
 		</a>
@@ -57,7 +57,7 @@
 			<a class="nav__version mono" href={site.changelogPath}>v{latest}</a>
 			<a class="buy" href={site.downloadPath}>
 				<Icon name="download" size={15} />
-				<span>Download</span>
+				<span>{chrome.download}</span>
 			</a>
 		</div>
 

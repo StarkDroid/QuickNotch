@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Glyph from './Glyph.svelte';
 	import Icon from './Icon.svelte';
-	import { dockTiles, type TourStepId } from '$data/site';
+	import { dockTiles, notchDemo, type TourStepId } from '$data/site';
 
 	/**
 	 * One state of the notch, drawn to the app's own geometry.
@@ -37,39 +37,10 @@
 
 	const expanded = $derived(state !== 'quickview' && state !== 'gaming');
 
-	const gauges = [
-		{ icon: 'cpu' as const, name: 'CPU', value: '34%', percent: 34 },
-		{ icon: 'gpu' as const, name: 'GPU', value: '12%', percent: 12 },
-		{ icon: 'ram' as const, name: 'Memory', value: '61%', percent: 61 },
-		{ icon: 'storage' as const, name: 'Storage', value: '48%', percent: 48 },
-		{ icon: 'download' as const, name: 'Download', value: '1.2M/s', percent: 26 },
-		{ icon: 'upload' as const, name: 'Upload', value: '8K/s', percent: 6 }
-	];
-
-	const forecast: { dow: string; today?: boolean; icon: 'sun' | 'cloud' | 'partly' | 'rain'; high: string; low: string }[] = [
-		{ dow: 'Today', today: true, icon: 'sun', high: '23°', low: '16°' },
-		{ dow: 'Tue', icon: 'partly', high: '21°', low: '15°' },
-		{ dow: 'Wed', icon: 'cloud', high: '19°', low: '14°' },
-		{ dow: 'Thu', icon: 'rain', high: '17°', low: '12°' },
-		{ dow: 'Fri', icon: 'sun', high: '20°', low: '13°' },
-		{ dow: 'Sat', icon: 'partly', high: '22°', low: '15°' },
-		{ dow: 'Sun', icon: 'cloud', high: '18°', low: '13°' }
-	];
-
-	const dates = [
-		{ label: '24 Oct', count: 2 },
-		{ label: '27 Oct', count: 1 },
-		{ label: '29 Oct', count: 3 },
-		{ label: '31 Oct', count: 1 }
-	];
-
-	const hud = [
-		{ label: 'FPS', value: '144' },
-		{ label: 'CPU', value: '38%' },
-		{ label: 'GPU', value: '91%' },
-		{ label: 'PING', value: '12 ms' },
-		{ label: 'NET', value: '1.4M/s' }
-	];
+	const gauges = notchDemo.gauges;
+	const forecast = notchDemo.forecast;
+	const dates = notchDemo.dates;
+	const hud = notchDemo.hud;
 
 	const tiles = dockTiles.slice(0, 6);
 </script>
@@ -86,9 +57,9 @@
 		{#if state === 'quickview'}
 			<div class="pill">
 				<span class="pill__logo"><Icon name="logo" size="100%" /></span>
-				<span class="pill__time">2:52</span>
-				<span class="pill__date">25 Oct</span>
-				<span class="pill__weather"><Icon name="sun" size="100%" /><b>23°</b></span>
+				<span class="pill__time">{notchDemo.time}</span>
+				<span class="pill__date">{notchDemo.date}</span>
+				<span class="pill__weather"><Icon name="sun" size="100%" /><b>{notchDemo.temp}</b></span>
 				<span class="ring ring--battery">
 					<svg viewBox="0 0 40 40">
 						<g transform="rotate(126 20 20)">
@@ -99,7 +70,7 @@
 				</span>
 				<span class="pill__bell">
 					<Icon name="bell" size="100%" />
-					<b>3</b>
+					<b>{notchDemo.notifications}</b>
 				</span>
 			</div>
 		{:else if state === 'gaming'}
@@ -147,11 +118,11 @@
 				<div class="wx__now">
 					<span class="wx__top">
 						<span class="wx__glyph"><Icon name="sun" size="100%" /></span>
-						<strong>23°C</strong>
+						<strong>{notchDemo.weather.now}</strong>
 					</span>
-					<span class="wx__place">Berlin</span>
-					<span class="wx__hilow">H 23° · L 16°</span>
-					<span class="wx__extra">20% precip · UV 3</span>
+					<span class="wx__place">{notchDemo.weather.place}</span>
+					<span class="wx__hilow">{notchDemo.weather.highLow}</span>
+					<span class="wx__extra">{notchDemo.weather.detail}</span>
 				</div>
 				<span class="page__divider"></span>
 				{#each forecast as day (day.dow)}
@@ -166,10 +137,10 @@
 		{:else if state === 'calendar'}
 			<div class="page page--calendar">
 				<span class="cal__today">
-					<strong>23</strong>
+					<strong>{notchDemo.calendar.day}</strong>
 					<span class="cal__meta">
-						<b>Fri</b>
-						<span>Oct</span>
+						<b>{notchDemo.calendar.weekday}</b>
+						<span>{notchDemo.calendar.month}</span>
 					</span>
 				</span>
 				<span class="page__divider"></span>
@@ -185,8 +156,8 @@
 			<div class="page page--music">
 				<span class="vinyl"><span class="vinyl__label"></span></span>
 				<span class="music__meta">
-					<strong>Midnight City</strong>
-					<span>M83 · Hurry Up, We&rsquo;re Dreaming</span>
+					<strong>{notchDemo.music.title}</strong>
+					<span>{notchDemo.music.artist}</span>
 					<span class="track"><i></i></span>
 					<span class="music__controls">
 						<span class="transport"><Icon name="next" size="100%" class="flip" /></span>

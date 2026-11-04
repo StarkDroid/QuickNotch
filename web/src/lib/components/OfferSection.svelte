@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import KofiButton from './KofiButton.svelte';
-	import { downloadCta, offer, site } from '$data/site';
+	import { downloadCta, offer, site, ticket } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
@@ -29,11 +29,11 @@
 
 		<div class="ticket" use:reveal={{ from: 'scale', delay: 0.08 }} data-reveal="scale">
 			<span class="ticket__sticker sticker sticker--blue" aria-hidden="true">
-				free forever ★ MIT licensed
+				{ticket.sticker}
 			</span>
 
 			<div class="ticket__stub">
-				<p class="mono ticket__kicker">Free · MIT licence · Windows + macOS</p>
+				<p class="mono ticket__kicker">{ticket.kicker}</p>
 
 				<p class="ticket__price">
 					<span class="ticket__amount">{offer.price.label}</span>
@@ -41,8 +41,7 @@
 				</p>
 
 				<p class="ticket__lede">
-					Download it, read the source, keep it. No licence key, no account, no
-					trial that runs out.
+					{ticket.lede}
 				</p>
 
 				<div class="ticket__cta">
@@ -70,14 +69,14 @@
 			</div>
 
 			<div class="ticket__includes">
-				<p class="mono ticket__kicker">In the box</p>
+				<p class="mono ticket__kicker">{ticket.includesLabel}</p>
 				<ul use:stagger={{ step: 0.07 }} data-stagger>
 					{#each offer.includes as item (item)}
 						<li><Icon name="check" size={15} /><span>{item}</span></li>
 					{/each}
 				</ul>
 				<p class="mono ticket__serial">
-					<span>no. 0001 · built in the open · MIT</span>
+					<span>{ticket.serial}</span>
 					<KofiButton compact />
 				</p>
 			</div>

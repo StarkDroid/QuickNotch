@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import Icon from './Icon.svelte';
-	import { site } from '$data/site';
+	import { site, support } from '$data/site';
 
 	/**
 	 * The support ask, parked in the bottom-right corner.
@@ -76,7 +76,7 @@
 		tabindex={shown ? 0 : -1}
 	>
 		<Icon name="coffee" size={16} />
-		<span class="support-fab__label">Support me</span>
+		<span class="support-fab__label">{support.fabLabel}</span>
 	</a>
 {/if}
 

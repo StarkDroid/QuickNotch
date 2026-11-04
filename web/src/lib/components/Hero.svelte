@@ -141,7 +141,7 @@
 			</ul>
 
 			<div class="hero__scrollhint mono" data-hero-extra aria-hidden="true">
-				<span>one scroll, the whole tour</span>
+				<span>{hero.scrollHint}</span>
 				<svg viewBox="0 0 16 24" width="12" height="18" aria-hidden="true">
 					<path d="M8 2 v14 M8 16 l-5 -5 M8 16 l5 -5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 				</svg>
@@ -155,7 +155,7 @@
 				{/snippet}
 			</ScreenFrame>
 
-			<span class="sticker hero__screen-note" aria-hidden="true">hover it — there is the dock</span>
+			<span class="sticker hero__screen-note" aria-hidden="true">{hero.screenNote}</span>
 		</div>
 	</div>
 </section>

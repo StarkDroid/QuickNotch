@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { faq } from '$data/site';
+	import { faq, faqHead } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
@@ -33,8 +33,8 @@
 <section class="section faq" id="faq" aria-labelledby="faq-heading">
 	<div class="container container-narrow">
 		<header class="section-head section-head--center" use:reveal={{ from: 'up' }} data-reveal="up">
-			<h2 class="display h2" id="faq-heading">FAQ</h2>
-			<p class="lead">Straight answers about the things people ask us most.</p>
+			<h2 class="display h2" id="faq-heading">{faqHead.title}</h2>
+			<p class="lead">{faqHead.lead}</p>
 		</header>
 
 		<div class="faq__list" use:stagger={{ step: 0.06 }} data-stagger>
