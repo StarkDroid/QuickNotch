@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import KofiButton from './KofiButton.svelte';
 	import { latest } from '$data/releases';
 	import { footer, site } from '$data/site';
 
@@ -18,8 +17,6 @@
 		</a>
 
 		<p class="footer__tagline">{site.tagline}</p>
-
-		<KofiButton />
 
 		<nav class="footer__links" aria-label={footer.linksLabel}>
 			{#each footer.links as link (link.label)}

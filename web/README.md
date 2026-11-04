@@ -120,6 +120,10 @@ CDN until it is clicked. It is fixed and always visible, on every page,
 including `/connect` and the OAuth callback: there is no scroll threshold to
 cross and no footer to step aside for. On a phone it is the cup alone.
 
+It is the page's only standing ask. The footer carries links and the
+copyright, not a second support button; Ko-fi's own artwork still appears where
+it belongs to the moment, on the download ticket and in the thank-you dialog.
+
 `/download` and `/changelog` are the only subpages, and both open the same way:
 a `← Home` back link above the eyebrow. The header mark, the footer mark and
 the footer's `Home` also resolve to `/`, so leaving a page never depends on
