@@ -10,7 +10,6 @@ telemetry.
 [![Latest release](https://img.shields.io/github/v/release/StarkDroid/QuickNotch?label=latest&sort=semver&color=E8481C)](https://github.com/StarkDroid/QuickNotch/releases)
 [![Downloads](https://img.shields.io/github/downloads/StarkDroid/QuickNotch/total?color=1F4FD8)](https://github.com/StarkDroid/QuickNotch/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1C8F4C)](LICENSE)
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/trishiraj)
 
 [![Windows 10 & 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](#install)
 [![macOS 12+](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)](#install)
@@ -21,8 +20,9 @@ telemetry.
 [Website](https://quicknotch.app) ·
 [Changelog](https://quicknotch.app/changelog) ·
 [Releases](https://github.com/StarkDroid/QuickNotch/releases) ·
-[Report a bug](https://github.com/StarkDroid/QuickNotch/issues) ·
-[Support on Ko-fi](https://ko-fi.com/trishiraj)
+[Report a bug](https://github.com/StarkDroid/QuickNotch/issues)
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I41TRI2M)
 
 ---
 

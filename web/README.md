@@ -79,6 +79,7 @@ web/
 │   │       ├── TourDevice.svelte  # the CSS-3D laptop chassis
 │   │       ├── NotchPanel.svelte  # one notch state, drawn to the app's geometry
 │   │       ├── KofiButton.svelte  # Ko-fi's own button artwork, used unchanged
+│   │       ├── SupportFab.svelte  # the floating support pill (all pages but /connect)
 │   │       ├── Spotlight.svelte  # scroll-driven glow (flat colour + blur)
 │   │       └── Grain.svelte      # generated film-grain background layer
 │   └── routes/
@@ -104,13 +105,20 @@ web/
 
 The header is a notch, not a menu: a dark bar flush with the top edge — square
 upper corners, only the two facing the page rounded, exactly the app's base
-notch — carrying the mark, the wordmark, the version (linking to the changelog),
-the Ko-fi pill and the download button. It rests compact at the top of the page
-and opens to full width as you scroll, closing again when you return to the top;
-the progress hairline runs along its lower edge. There are no section links at
-all — the tour, the look and the download are found by scrolling. The FAQ is the
-last section; the ticket in `OfferSection` is the one call to action, and it
-points at `/download` rather than shipping its own second demo.
+notch — carrying the mark, the wordmark, the version (linking to the changelog)
+and the download button. It rests compact at the top of the page and opens to
+full width as you scroll, closing again when you return to the top; the progress
+hairline runs along its lower edge. There are no section links at all — the
+tour, the look and the download are found by scrolling. The FAQ is the last
+section; the ticket in `OfferSection` is the one call to action, and it points
+at `/download` rather than shipping its own second demo.
+
+The support ask is a floating pill in the bottom-right corner (`SupportFab`),
+drawn in the same cream-and-ink as the rest of the page rather than borrowed
+from Ko-fi's overlay widget: no third-party script, nothing loaded from their
+CDN until it is clicked. It waits until the reader has scrolled past the hero
+and steps aside when the footer is on screen, which already carries the same
+button. On a phone it is the cup alone.
 
 `/download` and `/changelog` are the only subpages, and both open the same way:
 a `← QuickNotch` back link above the eyebrow. The header mark, the footer mark

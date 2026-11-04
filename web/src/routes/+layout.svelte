@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import Grain from '$components/Grain.svelte';
 	import Spotlight from '$components/Spotlight.svelte';
+	import SupportFab from '$components/SupportFab.svelte';
 	import { initSmoothScroll } from '$lib/motion/smoothScroll';
 
 	// Hashed font URLs, so the display face can be preloaded for a faster LCP.
@@ -47,3 +48,4 @@
 -->
 <Spotlight />
 <Grain />
+<SupportFab />
