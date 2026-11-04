@@ -79,7 +79,7 @@ web/
 │   │       ├── TourDevice.svelte  # the CSS-3D laptop chassis
 │   │       ├── NotchPanel.svelte  # one notch state, drawn to the app's geometry
 │   │       ├── KofiButton.svelte  # Ko-fi's own button artwork, used unchanged
-│   │       ├── SupportFab.svelte  # the floating support pill (all pages but /connect)
+│   │       ├── SupportFab.svelte  # the floating support pill (every page)
 │   │       ├── Spotlight.svelte  # scroll-driven glow (flat colour + blur)
 │   │       └── Grain.svelte      # generated film-grain background layer
 │   └── routes/
@@ -116,9 +116,9 @@ at `/download` rather than shipping its own second demo.
 The support ask is a floating pill in the bottom-right corner (`SupportFab`),
 drawn in the same cream-and-ink as the rest of the page rather than borrowed
 from Ko-fi's overlay widget: no third-party script, nothing loaded from their
-CDN until it is clicked. It waits until the reader has scrolled past the hero
-and steps aside when the footer is on screen, which already carries the same
-button. On a phone it is the cup alone.
+CDN until it is clicked. It is fixed and always visible, on every page,
+including `/connect` and the OAuth callback: there is no scroll threshold to
+cross and no footer to step aside for. On a phone it is the cup alone.
 
 `/download` and `/changelog` are the only subpages, and both open the same way:
 a `← Home` back link above the eyebrow. The header mark, the footer mark and
@@ -293,9 +293,8 @@ Installer names are stable, so no site change is needed per release:
 Both Windows files install the same app and both self-update: the updater
 prefers the `.msi` and falls back to the `.exe`, and its script branches on the
 extension. The card therefore offers them as two peer buttons, the way macOS
-offers two disk images, and its note says what the difference is: the `.msi`
-suits managed machines and silent installs, the `.exe` is the click-through
-setup. Nothing under a button is clickable, on either card.
+offers two disk images, and the button labels carry the file type. Nothing sits
+under the buttons on either card: the cards end where the choice ends.
 
 Clicking any download opens a thank-you dialog once the file has started. It is a
 native `<dialog>`, so focus is trapped, Escape dismisses it and the page behind is

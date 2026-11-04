@@ -49,6 +49,15 @@
 		padding-block: clamp(2.5rem, 5vw, 3.5rem);
 	}
 
+	/* The support pill is fixed to the bottom-right corner on every page. Below
+	   a wide desktop the copyright line can run under it, so the footer keeps a
+	   lane clear at the bottom instead of letting the last line be covered. */
+	@media (max-width: 900px) {
+		.footer {
+			padding-bottom: calc(clamp(2.5rem, 5vw, 3.5rem) + 3.5rem);
+		}
+	}
+
 	.footer__inner {
 		display: flex;
 		flex-direction: column;

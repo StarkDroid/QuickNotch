@@ -192,7 +192,6 @@ export const platforms = [
 		id: 'windows',
 		name: 'Windows',
 		requirement: 'Windows 10 & 11 · x64',
-		note: 'Same app either way: the .msi suits managed machines and silent installs, the .exe is the click-through setup.',
 		icon: 'windows',
 		blurb:
 			'Installs for every user on the machine, adds QuickNotch to the Start menu and lets it update itself in place.'
@@ -201,7 +200,6 @@ export const platforms = [
 		id: 'macos',
 		name: 'macOS',
 		requirement: 'macOS 12+ · Apple silicon & Intel',
-		note: 'Disk image (.dmg), one per architecture',
 		icon: 'apple',
 		blurb:
 			'Open the .dmg and drag QuickNotch to Applications. Grab the build that matches your Mac. The app updates itself from there.'

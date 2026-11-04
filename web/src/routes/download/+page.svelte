@@ -108,8 +108,6 @@
 								</a>
 							{/each}
 						</div>
-
-						<p class="mono platform__note">{platform.note}</p>
 					</article>
 				{/each}
 			</div>
@@ -303,12 +301,6 @@
 		font-size: 0.62rem;
 		letter-spacing: 0.08em;
 		opacity: 0.75;
-	}
-
-	.platform__note {
-		font-size: var(--fs-micro);
-		letter-spacing: 0.06em;
-		color: var(--text-3);
 	}
 
 	/* ---- Install notes ---------------------------------------------------- */
