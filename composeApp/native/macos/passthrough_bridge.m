@@ -96,38 +96,30 @@ void quicknotch_set_frame_top_gap(void *nsWindow, double topGap) {
         NSScreen *screen = window.screen ?: NSScreen.mainScreen;
         NSRect s = screen.frame;
         NSRect f = window.frame;
-        // Cocoa origin is bottom-left; the top edge of the screen is at
-        // (s.origin.y + s.size.height). topGap == 0 parks the top at the very
-        // top edge; a positive gap floats the body off it (capsule styles).
         double topCocoaY = s.origin.y + s.size.height - topGap;
         NSRect target = NSMakeRect(
             s.origin.x + (s.size.width - f.size.width) / 2.0,
             topCocoaY - f.size.height,
             f.size.width,
             f.size.height);
-        if (!NSEqualRects(f, target)) {
-            [window setFrame:target display:NO];
+        if (NSEqualRects(f, target)) {
+            return;
         }
+        // AppKit clamps a *move* of a level-0 window to the visible frame, so
+        // the notch could not be parked at the true top with "always on top"
+        // switched off. Raise it for one main-queue turn, move it, then put the
+        // level back. The requested off level is -1, which AppKit leaves alone,
+        // so the frame survives the restore and every app window still covers
+        // the island.
+        NSInteger restore = window.level;
+        if (restore < NSStatusWindowLevel) {
+            window.level = NSStatusWindowLevel;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [window setFrame:target display:NO];
+            window.level = restore;
+        });
     });
-}
-
-// Height (points) of the menu-bar strip on the window's screen. Measured as
-// the distance between the top of the full frame and the top of the visible
-// frame: the visible frame also shrinks for a Dock at the bottom, and the
-// total difference would park the island below that reserved band instead of
-// below the menu bar.
-double quicknotch_get_menu_bar_height(void *nsWindow) {
-    __block double height = 0.0;
-    NSWindow *window = (__bridge NSWindow *)nsWindow;
-    runOnMainSync(^{
-        NSScreen *screen = window.screen ?: NSScreen.mainScreen;
-        NSRect frame = screen.frame;
-        NSRect visible = screen.visibleFrame;
-        double frameTop = frame.origin.y + frame.size.height;
-        double visibleTop = visible.origin.y + visible.size.height;
-        height = MAX(0.0, frameTop - visibleTop);
-    });
-    return height;
 }
 
 // The window's top-left in CG screen coordinates (top-left origin, in points),

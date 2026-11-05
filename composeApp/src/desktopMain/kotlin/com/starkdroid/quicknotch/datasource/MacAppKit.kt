@@ -37,8 +37,9 @@ internal object MacAppKit {
     /** Accessory agent: the notch's resting state. */
     const val ACTIVATION_ACCESSORY = 1
 
-    /** NSNormalWindowLevel. */
-    const val LEVEL_NORMAL = 0
+    /** One step below normal: every app window covers it, and unlike level 0
+     *  the menu bar does not clamp it back below its own strip. */
+    const val LEVEL_BELOW_NORMAL = -1
     /** NSStatusWindowLevel: the band the menu bar occupies — above every normal
      *  app window and the menu bar itself, still below alert/modal levels. */
     const val LEVEL_STATUS_BAR = 25
@@ -90,14 +91,6 @@ internal object MacAppKit {
 
     fun setFrameTopGap(ptr: Long, topGap: Double) {
         call("quicknotch_set_frame_top_gap", ptr, topGap)
-    }
-
-    fun menuBarHeight(ptr: Long): Double {
-        return try {
-            fn("quicknotch_get_menu_bar_height")?.invokeDouble(arrayOf(ptr)) ?: 0.0
-        } catch (_: Throwable) {
-            0.0
-        }
     }
 
     /**
@@ -178,15 +171,15 @@ internal object MacAppKit {
  * joining every Space and surviving full-screen apps.
  *
  * AWT's z-order bookkeeping resets window levels whenever it reorders sibling
- * windows, and each ComPOse placement re-parks the window 30pt low, so the
+ * windows, and each Compose placement re-parks the window 30pt low, so the
  * policy keeps a slow reconcile loop that re-asserts level + frame every tick.
- * The "always on top" toggle maps to level AND the parked vertical gap:
+ * The "always on top" toggle maps to level and collection behaviour only; the
+ * frame never changes:
  *
- *  • on  — NSStatusWindowLevel (25, above the menu bar), island flush at the
- *          very top (floating styles keep their edge gap).
- *  • off — NSNormalWindowLevel (0), island parked just below the menu bar so
- *          regular windows can cover it again, and it stops joining the
- *          full-screen band.
+ *  • on  — NSStatusWindowLevel (25, above the menu bar), joining every Space
+ *          and surviving full-screen apps.
+ *  • off — one level below normal (-1), the same frame, no full-screen band,
+ *          so regular windows can cover the island again.
  */
 internal class MacOverlayWindowPolicy private constructor(
     private val window: Window
@@ -235,15 +228,13 @@ internal class MacOverlayWindowPolicy private constructor(
         )
         MacAppKit.setWindowLevel(
             ptr,
-            if (onTop) MacAppKit.LEVEL_STATUS_BAR else MacAppKit.LEVEL_NORMAL
+            if (onTop) MacAppKit.LEVEL_STATUS_BAR else MacAppKit.LEVEL_BELOW_NORMAL
         )
-        // The island stays at the top in both states; only the level changes.
-        // With the toggle off it parks directly under the menu bar, the
-        // closest a normal-level window can get, so foreground apps can cover
-        // it again. The menu bar is the only vertical offset: the Dock is at
-        // the bottom and must never leak into this gap.
-        val menuBar = if (onTop) 0.0 else MacAppKit.menuBarHeight(ptr)
-        MacAppKit.setFrameTopGap(ptr, menuBar + wantedEdgeGapDp)
+        // The frame is identical in both states: the toggle changes stacking,
+        // never position. Level -1 sits under every app window but is not
+        // clamped by the menu bar the way level 0 is, so the notch keeps its
+        // top-edge home while a foreground window can cover it.
+        MacAppKit.setFrameTopGap(ptr, wantedEdgeGapDp.toDouble())
     }
 
     override fun close() {
