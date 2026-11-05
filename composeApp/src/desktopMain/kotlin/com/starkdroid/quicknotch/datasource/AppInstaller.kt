@@ -110,7 +110,7 @@ object AppInstaller {
             exit 1
         fi
         # rsync, not cp -R/ditto: those leave an empty bundle behind on this
-        # exact layout (agents.md), which reads as "the update ate my app".
+        # exact layout, which reads as "the update ate my app".
         if ! rsync -a "${'$'}app/Contents/" "${'$'}target/Contents/"; then
             open "${'$'}pkg"
             exit 1

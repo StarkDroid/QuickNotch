@@ -96,8 +96,10 @@ docs/           banner sources for the README
 config/         detekt configuration and baseline
 ```
 
-`agents.md` is the deep architecture reference: process and window model, per-platform
-probes, the blur pipelines, and the rules that keep the overlay smooth. Read it before
+The app is documented where it lives: `main.kt` for the process and window model,
+`system/` for the per-platform probes, `FloatingNotchOverlay` for the overlay
+choreography, and the media, calendar and weather packages for the rest. The
+comments carry the reasons, including the traps that cost a day. Read those before
 changing anything under `ui/` or `system/`.
 
 ## How releases work
@@ -123,7 +125,7 @@ report `2.0.0` unless CI passes the published number with `-PappVersion=x.y.z`.
 2. `./gradlew :composeApp:compileKotlinDesktop :composeApp:detekt` must pass; run
    `:composeApp:run` and check the notch before you open the PR.
 3. A feature ships on three surfaces — the overlay, the onboarding walkthrough and
-   `web/` — in the same pull request. `agents.md` explains what that means.
+   `web/` — in the same pull request, all telling the same story.
 4. Nothing is pushed for you: open the PR from your own fork or branch.
 
 Issues and ideas are welcome at

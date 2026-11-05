@@ -329,10 +329,10 @@ compose.desktop {
 
         // Renderer selection is handled in `main()`: an explicit
         // -Dskiko.renderApi or SKIKO_RENDER_API wins, then the
-        // `software-render` marker file, then METAL — the ~20x-faster default
-        // (agents.md pitfall 28). Never set skiko.renderApi here: an
-        // unconditional assignment shadows both the env var and the marker
-        // and silently parks the settings window on the CPU rasterizer.
+        // `software-render` marker file, then METAL — the ~20x-faster default.
+        // Never set skiko.renderApi here: an unconditional assignment shadows
+        // both the env var and the marker and silently parks the settings
+        // window on the CPU rasterizer.
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
@@ -364,7 +364,8 @@ compose.desktop {
 }
 
 // Skiko is pinned to a version whose macOS Metal backend actually works (see
-// the `skiko` entry in gradle/libs.versions.toml and pitfall 28 in agents.md).
+// the `skiko` entry in gradle/libs.versions.toml and the renderer notes in
+// `main.kt`).
 // Every artifact in the group has to move together: skiko, skiko-awt and the
 // platform runtime jar the Compose plugin pulls in, otherwise the JNI layer
 // and the native half disagree.

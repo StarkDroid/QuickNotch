@@ -125,7 +125,7 @@ fun main(args: Array<String>) {
         // METAL. The old comment here claimed Metal crashed on the transparent
         // overlay window; that was skiko 0.8.18's MetalRedrawer running on the
         // AWT EDT and tripping the macOS 26/27 main-thread assertion, fixed in
-        // the pinned skiko (agents.md pitfall 28).
+        // the pinned skiko.
         //
         // Precedence: an explicit -Dskiko.renderApi / SKIKO_RENDER_API wins, then
         // the `software-render` marker file, then METAL. The marker exists
