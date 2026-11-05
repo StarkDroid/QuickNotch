@@ -111,16 +111,21 @@ void quicknotch_set_frame_top_gap(void *nsWindow, double topGap) {
     });
 }
 
-// Height (points) of the menu-bar strip on the window's screen: the gap between
-// the full frame and the visible frame. Used when the "always on top" toggle is
-// OFF to park the island back below the menu bar instead of leaving it shifted
-// up by a previous ON state.
+// Height (points) of the menu-bar strip on the window's screen. Measured as
+// the distance between the top of the full frame and the top of the visible
+// frame: the visible frame also shrinks for a Dock at the bottom, and the
+// total difference would park the island below that reserved band instead of
+// below the menu bar.
 double quicknotch_get_menu_bar_height(void *nsWindow) {
     __block double height = 0.0;
     NSWindow *window = (__bridge NSWindow *)nsWindow;
     runOnMainSync(^{
         NSScreen *screen = window.screen ?: NSScreen.mainScreen;
-        height = screen.frame.size.height - screen.visibleFrame.size.height;
+        NSRect frame = screen.frame;
+        NSRect visible = screen.visibleFrame;
+        double frameTop = frame.origin.y + frame.size.height;
+        double visibleTop = visible.origin.y + visible.size.height;
+        height = MAX(0.0, frameTop - visibleTop);
     });
     return height;
 }

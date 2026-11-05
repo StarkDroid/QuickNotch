@@ -43,9 +43,13 @@ internal object MacAppKit {
      *  app window and the menu bar itself, still below alert/modal levels. */
     const val LEVEL_STATUS_BAR = 25
 
-    /** canJoinAllSpaces | stationary | fullScreenAuxiliary | ignoresCycle. */
+    /** canJoinAllSpaces | stationary | ignoresCycle. */
+    const val COLLECTION_DESKTOP: Long =
+        (1L shl 0) or (1L shl 4) or (1L shl 12)
+
+    /** [COLLECTION_DESKTOP] plus fullScreenAuxiliary: rides over full-screen apps. */
     const val COLLECTION_NOTCH: Long =
-        (1L shl 0) or (1L shl 4) or (1L shl 8) or (1L shl 12)
+        COLLECTION_DESKTOP or (1L shl 8)
 
     private val bridge: NativeLibrary? by lazy {
         runCatching {
@@ -181,7 +185,8 @@ internal object MacAppKit {
  *  • on  — NSStatusWindowLevel (25, above the menu bar), island flush at the
  *          very top (floating styles keep their edge gap).
  *  • off — NSNormalWindowLevel (0), island parked just below the menu bar so
- *          regular windows can cover it again.
+ *          regular windows can cover it again, and it stops joining the
+ *          full-screen band.
  */
 internal class MacOverlayWindowPolicy private constructor(
     private val window: Window
@@ -220,11 +225,24 @@ internal class MacOverlayWindowPolicy private constructor(
     private fun apply() {
         val ptr = nsWindowPtr
         if (ptr == 0L) return
-        MacAppKit.setCollectionBehavior(ptr, MacAppKit.COLLECTION_NOTCH)
-        MacAppKit.setWindowLevel(ptr, if (wantedAlwaysOnTop) MacAppKit.LEVEL_STATUS_BAR else MacAppKit.LEVEL_NORMAL)
-        // Off-state parks the island below the menu bar (AWT's default spot);
-        // on-state starts the gap at the true top of the screen.
-        val menuBar = if (wantedAlwaysOnTop) 0.0 else MacAppKit.menuBarHeight(ptr)
+        val onTop = wantedAlwaysOnTop
+        // Off gives up the full-screen band as well as the level: an ordinary
+        // window should not keep riding above a game or a full-screen video,
+        // which is what fullScreenAuxiliary is for.
+        MacAppKit.setCollectionBehavior(
+            ptr,
+            if (onTop) MacAppKit.COLLECTION_NOTCH else MacAppKit.COLLECTION_DESKTOP
+        )
+        MacAppKit.setWindowLevel(
+            ptr,
+            if (onTop) MacAppKit.LEVEL_STATUS_BAR else MacAppKit.LEVEL_NORMAL
+        )
+        // The island stays at the top in both states; only the level changes.
+        // With the toggle off it parks directly under the menu bar, the
+        // closest a normal-level window can get, so foreground apps can cover
+        // it again. The menu bar is the only vertical offset: the Dock is at
+        // the bottom and must never leak into this gap.
+        val menuBar = if (onTop) 0.0 else MacAppKit.menuBarHeight(ptr)
         MacAppKit.setFrameTopGap(ptr, menuBar + wantedEdgeGapDp)
     }
 
