@@ -411,13 +411,13 @@ Security posture, all in-repo rather than in-dashboard:
   disallows. They are also unlinked: no nav, footer, sitemap or copy points at
   them. The only in-repo `/connect` reference is the OAuth error page's
   "Start again" link, which is itself inside the unindexed flow.
-- No secrets in the repo: the OAuth `client_id` is a public identifier by
-  design; the `client_secret` is injected into the desktop build at compile time
-  and appears nowhere in this repository. There is no token endpoint and no
-  cookie. The one third-party script is Cloudflare's Web Analytics beacon:
-  cookieless, no identifier that follows anyone between sites, and the
-  `Content-Security-Policy` allows exactly its origin — so there is nothing to
-  leak and nothing to consent to.
+- No secrets in the repo: the Google OAuth client id and its secret are both
+  injected into the desktop build at compile time and appear nowhere in this
+  repository; the connect page names no client, because the desktop sends its
+  own. There is no token endpoint and no cookie. The one third-party script is
+  Cloudflare's Web Analytics beacon: cookieless, no identifier that follows
+  anyone between sites, and the `Content-Security-Policy` allows exactly its
+  origin — so there is nothing to leak and nothing to consent to.
 
 ---
 

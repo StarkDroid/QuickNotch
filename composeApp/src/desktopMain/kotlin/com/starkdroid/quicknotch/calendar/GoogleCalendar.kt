@@ -83,8 +83,9 @@ sealed interface CalendarState {
  *   [CalendarState.Connected.staleError].
  */
 object GoogleCalendar {
-    // **Web application** client id from Google Cloud (APIs & Services →
-    // Credentials → OAuth client ID → Web application). The type is forced, not
+    // **Web application** client, injected at build time by `generateOAuthConfig`
+    // along with its secret: the id is public in OAuth's model, but it names this
+    // project's client, so it is not committed either. The type is forced, not
     // preferred: a *Desktop app* client cannot register an https redirect URI at
     // all (the console does not render the field for that type), and the loopback
     // flow it does support is exactly what this app stopped doing in favour of the
@@ -105,6 +106,10 @@ object GoogleCalendar {
      * nothing alone: every token still needs a real user's interactive consent.
      */
     private const val CLIENT_SECRET = OAuthConfig.CLIENT_SECRET
+
+    /** Both halves are injected; a build missing either cannot complete a flow. */
+    private val hasClient: Boolean
+        get() = CLIENT_ID.isNotBlank() && CLIENT_SECRET.isNotBlank()
 
     /**
      * The website owns the consent UI (it has its own editorial voice, and
@@ -338,12 +343,12 @@ object GoogleCalendar {
      *  site to bounce the code back to the loopback landing strip. */
     fun connect() {
         if (_state.value is CalendarState.Connecting) return
-        if (CLIENT_SECRET.isBlank()) {
-            // A build made without the injected secret, not a user mistake: say
+        if (!hasClient) {
+            // A build made without the injected client, not a user mistake: say
             // what is missing before opening a browser that could never finish.
             connectFailure = REASON_NOT_CONFIGURED
             _state.value = CalendarState.Error(REASON_NOT_CONFIGURED)
-            AppLog.line("Google sign-in skipped: this build has no client secret")
+            AppLog.line("Google sign-in skipped: this build has no Google client")
             return
         }
         cancelledByUser = false
@@ -640,7 +645,7 @@ object GoogleCalendar {
     private suspend fun refreshed(previous: Tokens): Tokens? {
         // Nothing to send without the build's secret; `revoked()` turns that into
         // the "no client configured" message and keeps the stored grant.
-        val refresh = previous.refreshToken?.takeIf { CLIENT_SECRET.isNotBlank() } ?: return null
+        val refresh = previous.refreshToken?.takeIf { hasClient } ?: return null
         return when (val result = api.refresh(refresh)) {
             is OAuthResult.Tokens -> previous.copy(
                 accessToken = result.accessToken,
@@ -787,7 +792,7 @@ object GoogleCalendar {
 
     /** Google withdrew access (refresh token dead): forget it so the UI can re-prompt. */
     private fun revoked() {
-        if (CLIENT_SECRET.isBlank()) {
+        if (!hasClient) {
             // Not a revoked grant: this build cannot renew at all, so keep the
             // stored tokens for a build that can.
             _state.value = CalendarState.Error(REASON_NOT_CONFIGURED)
@@ -875,7 +880,7 @@ object GoogleCalendar {
             (refusal.error == "invalid_client" && description.contains("secret"))
         return when {
             !wantsASecret -> REASON_AUTH
-            CLIENT_SECRET.isBlank() -> REASON_NOT_CONFIGURED
+            !hasClient -> REASON_NOT_CONFIGURED
             else -> REASON_CLIENT_CREDENTIALS
         }
     }

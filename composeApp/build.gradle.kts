@@ -34,30 +34,29 @@ detekt {
 // updater compare against something meaningful.
 val appVersion = providers.gradleProperty("appVersion").getOrElse("2.0.0")
 
-// The Google OAuth client secret is not part of this repository, and never has
-// been in a build that ships from here. It is read from the environment (what
-// CI uses: `QUICKNOTCH_GOOGLE_CLIENT_SECRET`) or from a maintainer's ignored
-// `local.properties` (`googleClientSecret`), then written into a generated
-// source file. A build without it compiles and runs; Calendar then says the
-// build has no client rather than opening a consent screen it cannot finish.
+// Neither half of the Google OAuth client is in this repository. Both are read
+// from the environment (what CI uses) or from a maintainer's ignored
+// `local.properties`, then written into a generated source file. A build
+// without them compiles and runs; Calendar then says the build has no client
+// rather than opening a consent screen it cannot finish.
 //
-// The client id is public and stays in the tree: it names the app, it does not
-// authenticate it.
-val googleClientId: String = providers.gradleProperty("googleClientId").orNull
-    ?: providers.environmentVariable("QUICKNOTCH_GOOGLE_CLIENT_ID").orNull
-    ?: "317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com"
-
-val googleClientSecret: String = run {
-    val local = Properties().apply {
-        val file = rootProject.file("local.properties")
-        if (file.isFile) file.inputStream().use { load(it) }
-    }
-    (providers.gradleProperty("googleClientSecret").orNull
-        ?: providers.environmentVariable("QUICKNOTCH_GOOGLE_CLIENT_SECRET").orNull
-        ?: local.getProperty("googleClientSecret"))
-        ?.trim()
-        .orEmpty()
+// The client id is public in OAuth's model (it travels in every consent URL),
+// but it names this project's client, so it is injected too: a fork should
+// bring its own rather than inherit one it cannot use.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
 }
+
+fun oauthSetting(property: String, environment: String): String =
+    (providers.gradleProperty(property).orNull
+        ?: providers.environmentVariable(environment).orNull
+        ?: localProperties.getProperty(property))
+        .orEmpty()
+        .trim()
+
+val googleClientId: String = oauthSetting("googleClientId", "QUICKNOTCH_GOOGLE_CLIENT_ID")
+val googleClientSecret: String = oauthSetting("googleClientSecret", "QUICKNOTCH_GOOGLE_CLIENT_SECRET")
 
 version = appVersion
 

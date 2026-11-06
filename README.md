@@ -84,17 +84,21 @@ On Windows use `gradlew.bat`. Installers land in
 Run the app with `:composeApp:run`, not `java -jar` — the plain jar has no manifest and
 the bridges are synced by the build.
 
-Calendar sign-in is the one thing a fresh clone cannot do out of the box: Google
-asks for a client secret at the token endpoint, and this repository does not
-carry one. Official installers get it from CI. For a local build, put it in the
-ignored `local.properties`:
+Calendar sign-in needs a Google OAuth client, and this repository carries
+neither half of it: the client id names this project's client, the secret
+authenticates it. Official installers get both from CI. For a local build, put
+them in the ignored `local.properties`:
 
 ```properties
+googleClientId=...apps.googleusercontent.com
 googleClientSecret=GOCSPX-...
 ```
 
-or export `QUICKNOTCH_GOOGLE_CLIENT_SECRET` before building. Everything else
-works without it; Calendar then reports that the build has no Google client.
+or export `QUICKNOTCH_GOOGLE_CLIENT_ID` and
+`QUICKNOTCH_GOOGLE_CLIENT_SECRET` before building. Everything else works
+without them; Calendar then reports that the build has no Google client. If you
+are forking, create your own client in the Google Cloud console and use its
+values.
 
 ## Project layout
 

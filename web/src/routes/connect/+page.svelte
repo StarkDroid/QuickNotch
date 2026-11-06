@@ -27,7 +27,12 @@
 			const prompt = params.get('prompt');
 			const codeChallenge = params.get('code_challenge');
 			const codeChallengeMethod = params.get('code_challenge_method');
-			if (!state || !codeChallenge) {
+			// The client id arrives from the desktop rather than living here: the
+			// site is public, the app is the only thing that needs to name its own
+			// Google client, and a copy of it in this page would only be one more
+			// value to keep in step.
+			const clientId = params.get('client_id');
+			if (!state || !codeChallenge || !clientId) {
 				error = 'The desktop app sent an incomplete sign-in request.';
 				status = 'error';
 				return;
@@ -40,7 +45,6 @@
 			// preview`, whatever in production. Echoing the wrong one would fail as a
 			// redirect_uri_mismatch, or worse, quietly authorise against a URI the
 			// app is not going to exchange against.
-			const clientId = params.get('client_id') ?? calendarAuth.clientId;
 			const redirectUri = params.get('redirect_uri') ?? (location.origin + '/oauth/callback');
 
 			// Note the loopback `port` the desktop also sends is deliberately not

@@ -623,16 +623,18 @@ export const dockTiles: Tile[] = [
  * `state` (which carries the loopback port), the connect page sends the user to
  * Google with that exact `state`, Google bounces the browser back to
  * `callbackUrl`, and that page performs a plain top-level navigation to the
- * app's `http://127.0.0.1:<port>/oauth?...`, where the code is exchanged. Both
- * `callbackUrl` and the connect page's client id must be present in the Google
- * OAuth client's authorized redirect URIs.
+ * app's `http://127.0.0.1:<port>/oauth?...`, where the code is exchanged.
+ * `callbackUrl` is the only registered redirect URI; the connect page is entry
+ * point only, and it takes the client id from the desktop.
  */
 export const calendarAuth = {
 	authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-	// Web application client (not Desktop: that type cannot register an https
-	// redirect URI at all). Must stay in step with CLIENT_ID in
-	// GoogleCalendar.kt; the two are the same credential described twice.
-	clientId: '317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com',
+	// No client id here: the desktop sends its own to the connect page, so this
+	// public site names no Google client and has no credential to keep in step.
+	// The client is a **Web application** one (a Desktop client cannot register
+	// an https redirect URI at all); its id and secret are injected into the
+	// desktop build, not committed.
+	//
 	// Not used to build the authorize URL: the connect page prefers the
 	// redirect_uri the desktop sends it, falling back to its own origin. That is
 	// what makes the flow testable before the site is deployed, since Google's
