@@ -93,12 +93,15 @@ web/
 │       └── 404/+page.svelte      # rendered to 404.html at the root of the build
 ├── static/                       # favicon, icons, og.png, kofi-button.png, robots.txt, sitemap.xml, manifest, _headers
 ├── worker/site.js                # www and http → the apex, then the assets
-├── wrangler.toml                 # Cloudflare Worker config (assets, 404 handling)
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
     ├── generate-banner.mjs       # docs/banner.svg → the README banner
     └── verify-render.mjs         # runtime smoke test over the DevTools Protocol
 ```
+
+The Worker config is one level up, at the repository root (`wrangler.toml`), next
+to the `package.json` whose `build` script drives this directory — see
+[Hosting on Cloudflare](#hosting-on-cloudflare-quicknotchapp).
 
 ### Page order
 
@@ -348,16 +351,17 @@ The `quicknotch` Worker builds on every push to `main`:
 
 | Setting | Value |
 | :--- | :--- |
-| Root directory | `web` |
+| Root directory | empty (the repository root) |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 | Environment variable | `NODE_VERSION=22` |
 
-The root directory is the one that bites: the repository root has no
-`package.json`, so a build started there stops with
-`ENOENT ... /package.json`. Everything else about the deploy is in
-`wrangler.toml` — the asset directory, the binding the script fetches from, the
-404 page — rather than in the dashboard.
+Nothing else about the deploy lives in the dashboard. The repository root has a
+`package.json` whose `build` script hands off to `web/` (install, then Vite), and
+a `wrangler.toml` that names `web/build` as the asset directory and
+`web/worker/site.js` as the script. Running the two commands above from a clean
+clone is exactly what the Cloudflare build does, which is also the reason the
+root directory must stay empty: pointing it at `web` would hide both files.
 
 Page counts come from Cloudflare Web Analytics: the beacon is rendered from
 `+layout.svelte` with the token that lives in `site.ts`, and `_headers` allows

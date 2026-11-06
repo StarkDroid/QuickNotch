@@ -1,11 +1,12 @@
 name: Deploy site
 
-# Type-checks and builds web/, then deploys it to the `quicknotch` Worker on
+# Type-checks and builds the site, then deploys it to the `quicknotch` Worker on
 # Cloudflare (quicknotch.app).
 #
 # The repository's own Cloudflare build is the primary path: it runs on every
-# push to `main` with root directory `web`, build command `npm run build` and
-# deploy command `npx wrangler deploy`. This job is the fallback for when that
+# push to `main` from the repository root, with build command `npm run build`
+# (which delegates to `web/`) and deploy command `npx wrangler deploy` (which
+# reads the root `wrangler.toml`). This job is the fallback for when that
 # integration is unavailable, so it deploys only when run by hand.
 #
 # Two secrets are required for the deploy step:
@@ -18,6 +19,8 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "package.json"
+      - "wrangler.toml"
       - ".github/workflows/deploy-web.yml"
   workflow_dispatch:
 
@@ -76,5 +79,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: web
           command: deploy

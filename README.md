@@ -100,6 +100,11 @@ without them; Calendar then reports that the build has no Google client. If you
 are forking, create your own client in the Google Cloud console and use its
 values.
 
+The website has its own build entry at the repository root: `npm run build`
+installs and builds `web/`, and `npx wrangler deploy` publishes it to
+`quicknotch.app`. Those are the same two commands Cloudflare runs, so see
+`web/README.md` before changing either.
+
 ## Project layout
 
 ```
