@@ -4,9 +4,11 @@
 	import '@fontsource-variable/inter';
 
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Grain from '$components/Grain.svelte';
 	import Spotlight from '$components/Spotlight.svelte';
 	import SupportFab from '$components/SupportFab.svelte';
+	import { analytics } from '$data/site';
 	import { initSmoothScroll } from '$lib/motion/smoothScroll';
 
 	// Hashed font URLs, so the display face can be preloaded for a faster LCP.
@@ -16,6 +18,16 @@
 	import bodyFont from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
 
 	let { children } = $props();
+
+	/**
+	 * The OAuth pages are the app's hand-off, not the site's pages: the callback
+	 * URL carries a one-time authorisation code in its query string, and that
+	 * code must never leave the browser for an analytics endpoint. Both pages are
+	 * unindexed anyway, so nothing is lost by leaving them uncounted.
+	 */
+	const countsVisits = $derived(
+		page.url.pathname !== '/connect' && !page.url.pathname.startsWith('/oauth')
+	);
 
 	onMount(() => {
 		let dispose: (() => void) | undefined;
@@ -36,6 +48,19 @@
 <svelte:head>
 	<link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin="anonymous" />
 	<link rel="preload" href={bodyFont} as="font" type="font/woff2" crossorigin="anonymous" />
+
+	<!--
+		Cloudflare Web Analytics: cookieless page counts, no banner needed. It is
+		the only third-party script on the site, and `_headers` allows exactly this
+		origin so nothing else can load.
+	-->
+	{#if countsVisits}
+		<script
+			type="module"
+			src={analytics.src}
+			data-cf-beacon={JSON.stringify({ token: analytics.token })}
+		></script>
+	{/if}
 </svelte:head>
 
 {@render children()}

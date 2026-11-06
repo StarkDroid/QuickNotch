@@ -63,6 +63,17 @@ export const site = {
 	]
 } as const;
 
+/**
+ * Cloudflare Web Analytics: page counts without cookies, without a
+ * cross-site identifier and without following anyone between sites. It is the
+ * only analytics on the site, and the desktop app has none at all. The token is
+ * a public site identifier, not a secret, which is why it can live in here.
+ */
+export const analytics = {
+	src: 'https://static.cloudflareinsights.com/beacon.min.js',
+	token: '4465c698879e4120b4c3058ad5f56c71'
+} as const;
+
 /** Document-level SEO copy that is not already a page heading. */
 export const seo = {
 	title: 'QuickNotch: the desktop notch, app launcher and widgets for Windows and macOS',
@@ -370,7 +381,7 @@ export const faq = [
 	{
 		question: 'Does QuickNotch collect or send my data?',
 		answer:
-			'No telemetry, no analytics, no cloud. It runs offline and never phones home; your pinned apps and settings stay in a local file.'
+			'The app has no telemetry, no analytics and no cloud: it runs offline and never phones home, and your pinned apps and settings stay in a local file. This site counts visits with Cloudflare Web Analytics, which is cookieless and does not follow you between sites.'
 	},
 	{
 		question: 'Can I pin any app?',

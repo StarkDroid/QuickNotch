@@ -117,8 +117,8 @@ at `/download` rather than shipping its own second demo.
 
 The support ask is a floating pill in the bottom-right corner (`SupportFab`),
 drawn in the same cream-and-ink as the rest of the page rather than borrowed
-from Ko-fi's overlay widget: no third-party script, nothing loaded from their
-CDN until it is clicked. It is fixed and always visible, on every page,
+from Ko-fi's overlay widget: nothing is loaded from their CDN, and nothing at
+all until it is clicked. It is fixed and always visible, on every page,
 including `/connect` and the OAuth callback: there is no scroll threshold to
 cross and no footer to step aside for. On a phone it is the cup alone.
 
@@ -359,6 +359,15 @@ The root directory is the one that bites: the repository root has no
 `wrangler.toml` — the asset directory, the binding the script fetches from, the
 404 page — rather than in the dashboard.
 
+Page counts come from Cloudflare Web Analytics: the beacon is rendered from
+`+layout.svelte` with the token that lives in `site.ts`, and `_headers` allows
+`static.cloudflareinsights.com` in `script-src` and `cloudflareinsights.com` in
+`connect-src`, so nothing else third-party can load. It is cookieless, which is
+why there is no consent banner; the desktop app itself still has no analytics at
+all. `/connect` and `/oauth/*` are deliberately left uncounted: the callback URL
+carries a one-time authorisation code in its query string, and that must never
+reach an analytics endpoint.
+
 `.github/workflows/deploy-web.yml` is the manual fallback: the same build, then
 `wrangler deploy`. It needs two repository secrets, `CLOUDFLARE_API_TOKEN`
 (Workers Scripts: Edit) and `CLOUDFLARE_ACCOUNT_ID`; without them it
@@ -404,8 +413,10 @@ Security posture, all in-repo rather than in-dashboard:
   "Start again" link, which is itself inside the unindexed flow.
 - No secrets in the repo: the OAuth `client_id` is a public identifier by
   design; the `client_secret` never leaves the desktop app and appears nowhere
-  in `web/`. There is no token endpoint, no cookie, no analytics, no third-party
-  script — so there is nothing to leak and nothing to consent to.
+  in `web/`. There is no token endpoint and no cookie. The one third-party
+  script is Cloudflare's Web Analytics beacon: cookieless, no identifier that
+  follows anyone between sites, and the `Content-Security-Policy` allows
+  exactly its origin — so there is nothing to leak and nothing to consent to.
 
 ---
 
