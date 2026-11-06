@@ -242,7 +242,7 @@ jobs:
           set -euo pipefail
           # The site imports the feed at build time, so the version and the
           # history are prerendered. Commit the same JSON into the site source;
-          # the push redeploys Cloudflare Pages.
+          # the push redeploys the site on Cloudflare.
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site
           cp dist/changelog.json site/web/src/lib/data/changelog.json
           cd site

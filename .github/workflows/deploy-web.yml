@@ -1,13 +1,18 @@
 name: Deploy site
 
-# Publishes web/ to Cloudflare Pages (quicknotch.app).
+# Type-checks and builds web/, then deploys it to the `quicknotch` Worker on
+# Cloudflare (quicknotch.app).
 #
-# Two secrets are required for this job to deploy:
-#   CLOUDFLARE_API_TOKEN   Pages: Edit permission
+# The repository's own Cloudflare build is the primary path: it runs on every
+# push to `main` with root directory `web`, build command `npm run build` and
+# deploy command `npx wrangler deploy`. This job is the fallback for when that
+# integration is unavailable, so it deploys only when run by hand.
+#
+# Two secrets are required for the deploy step:
+#   CLOUDFLARE_API_TOKEN   Workers Scripts: Edit permission
 #   CLOUDFLARE_ACCOUNT_ID  the account that owns the zone
 # Without them the build still runs (so a broken site fails CI) and the deploy
-# step is skipped with a warning. The Pages git integration can deploy instead;
-# see web/README.md.
+# step is skipped with a warning.
 on:
   push:
     branches: [main]
@@ -55,18 +60,21 @@ jobs:
         id: credentials
         shell: bash
         run: |
-          if [ -n "${CLOUDFLARE_API_TOKEN}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Push builds only validate the site; the Cloudflare build deploys it."
+          elif [ -n "${CLOUDFLARE_API_TOKEN}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID}" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Cloudflare secrets are missing; the built site was not deployed."
           fi
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare
         if: steps.credentials.outputs.ready == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: web
-          command: pages deploy build --project-name=quicknotch
+          command: deploy

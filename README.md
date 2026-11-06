@@ -91,7 +91,7 @@ composeApp/     Kotlin + Compose Multiplatform desktop app
   src/commonMain     pure Kotlin: calendar + weather APIs, strings, glyphs
   src/desktopMain    overlay, dock, widgets, media, system probes, settings
   native/            Win32 PowerShell bridges and macOS Objective-C bridges
-web/            SvelteKit marketing site (static, prerendered, Cloudflare Pages)
+web/            SvelteKit marketing site (static, prerendered, Cloudflare Workers)
 docs/           banner sources for the README
 config/         detekt configuration and baseline
 ```

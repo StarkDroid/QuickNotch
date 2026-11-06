@@ -31,3 +31,6 @@ replay_pid*
 # ships the app, the site and the release pipeline, not the 6 MB of stills and
 # the rendered MP4 that live beside them.
 /video/
+
+# Wrangler login state and local build cache. Machine-specific, never shared.
+/.wrangler/

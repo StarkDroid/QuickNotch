@@ -89,9 +89,11 @@ web/
 │       ├── download/+page.svelte # platform cards, install notes, thank-you modal
 │       ├── changelog/+page.svelte# the published release history
 │       ├── connect/+page.svelte  # Calendar consent (app-invoked, unlinked)
-│       └── oauth/callback/+page.svelte  # hands the code back to the app
+│       ├── oauth/callback/+page.svelte  # hands the code back to the app
+│       └── 404/+page.svelte      # rendered to 404.html at the root of the build
 ├── static/                       # favicon, icons, og.png, kofi-button.png, robots.txt, sitemap.xml, manifest, _headers
-├── wrangler.toml                 # Cloudflare Pages project config
+├── worker/site.js                # www and http → the apex, then the assets
+├── wrangler.toml                 # Cloudflare Worker config (assets, 404 handling)
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
     ├── generate-banner.mjs       # docs/banner.svg → the README banner
@@ -124,10 +126,10 @@ It is the page's only standing ask. The footer carries links and the
 copyright, not a second support button; Ko-fi's own artwork still appears where
 it belongs to the moment, on the download ticket and in the thank-you dialog.
 
-`/download` and `/changelog` are the only subpages, and both open the same way:
-a `← Home` back link above the eyebrow. The header mark, the footer mark and
-the footer's `Home` also resolve to `/`, so leaving a page never depends on
-guessing that the logo is a link.
+`/download` and `/changelog` are the only subpages anyone navigates to, and both
+open the same way: a `← Home` back link above the eyebrow. The header mark, the
+footer mark and the footer's `Home` also resolve to `/`, so leaving a page never
+depends on guessing that the logo is a link.
 
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
 opens and its screen walks through the seven states — quickview, dock, system,
@@ -272,8 +274,8 @@ Other deliberate choices:
 
 ## Download page and changelog
 
-`/download` and `/changelog` are the only two pages besides the landing page, and
-they share one data source: `src/lib/data/changelog.json`, the cumulative feed the
+`/download` and `/changelog` are the only two subpages, and they share one data
+source: `src/lib/data/changelog.json`, the cumulative feed the
 release workflow generates. `src/lib/data/releases.ts` imports it and builds the
 installer URLs from the version it names.
 
@@ -284,7 +286,7 @@ a rate limit on a file the release already deploys. Importing it at build time
 also means the version chip, the history and `softwareVersion` in the structured
 data are in the prerendered HTML — nothing appears after hydration. The release
 workflow copies the new feed to `web/src/lib/data/changelog.json` after it
-publishes, which also triggers the Pages rebuild.
+publishes, which also triggers the Cloudflare build.
 
 Installer names are stable, so no site change is needed per release:
 
@@ -329,47 +331,55 @@ thing the site asks for, and it asks after the installer is on its way.
 
 ---
 
-## Hosting on Cloudflare Pages (quicknotch.app)
+## Hosting on Cloudflare (quicknotch.app)
 
-The build is Pages-shaped: `adapter-static` emits plain files to `build/`, all
-asset URLs are relative, and there is no server code — no SSR, no edge functions,
-no environment variables, no secrets.
+`adapter-static` emits plain files to `build/`, all asset URLs are relative, and
+there is no server rendering, no database and no secret anywhere in `web/`.
+Cloudflare serves that directory as the static assets of a Worker, which is what
+the repository's Cloudflare build deploys.
 
-Two ways to deploy, both supported:
+The Worker script (`worker/site.js`) exists for two reasons: a custom domain can
+only be attached to a Worker, and the site should answer on one address.
+`www.quicknotch.app` and plain `http` both redirect with a 301 to
+`https://quicknotch.app`, same path, query string intact. Every other request is
+handed straight to the assets binding.
 
-1. **Git integration** — Pages builds `web/` on every push to `main`. In the
-   Pages wizard pick the **None** framework preset (the SvelteKit preset expects
-   `adapter-cloudflare`), set the root directory to `web`, the build command to
-   `npm run build`, the output directory to `build`, and add `NODE_VERSION=22`
-   under environment variables. Name the project `quicknotch`, which is what
-   `wrangler.toml` and the workflow expect.
-2. **GitHub Actions** — `.github/workflows/deploy-web.yml` builds, type-checks and
-   runs `wrangler pages deploy build` using `web/wrangler.toml`. It needs two
-   repository secrets, `CLOUDFLARE_API_TOKEN` (Pages: Edit) and
-   `CLOUDFLARE_ACCOUNT_ID`; without them it still builds and warns instead of
-   failing. Create the Pages project once before the first run (`wrangler pages
-   project create quicknotch`), because `pages deploy` cannot create it from CI.
+The `quicknotch` Worker builds on every push to `main`:
+
+| Setting | Value |
+| :--- | :--- |
+| Root directory | `web` |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Environment variable | `NODE_VERSION=22` |
+
+The root directory is the one that bites: the repository root has no
+`package.json`, so a build started there stops with
+`ENOENT ... /package.json`. Everything else about the deploy is in
+`wrangler.toml` — the asset directory, the binding the script fetches from, the
+404 page — rather than in the dashboard.
+
+`.github/workflows/deploy-web.yml` is the manual fallback: the same build, then
+`wrangler deploy`. It needs two repository secrets, `CLOUDFLARE_API_TOKEN`
+(Workers Scripts: Edit) and `CLOUDFLARE_ACCOUNT_ID`; without them it
+type-checks and builds, then skips the deploy with a warning.
 
 Then, once, in Cloudflare:
 
-1. Attach the custom domain `quicknotch.app` to the Pages project and let
-   Cloudflare manage the apex record. Proxy on, **Always Use HTTPS** on,
-   **Automatic HTTPS Rewrites** on.
-2. Add `www.quicknotch.app` as a second custom domain on the same project, so a
-   proxied record exists for it, then add one Redirect Rule:
-   `www.quicknotch.app/*` → `https://quicknotch.app/$1`, 301, preserve the query
-   string. The canonical, sitemap and structured data all name the apex, so there
-   must be exactly one host.
-3. In the Google OAuth client, register the production redirect URI
+1. Attach the custom domains `quicknotch.app` and `www.quicknotch.app` to the
+   Worker. The zone is in the same account, so both records and their
+   certificates are provisioned for you; proxy stays on.
+2. In the Google OAuth client, register the production redirect URI
    `https://quicknotch.app/oauth/callback` alongside the local preview URIs. The
    desktop reads the loopback port out of `state`, so no app change is needed —
    but consent fails as `redirect_uri_mismatch` until the URI is registered, and
    new URIs can take a while to propagate.
-4. After the first deploy, check: `/` loads over HSTS, `_headers` took effect
+3. After the first deploy, check: `/` loads over HSTS, `_headers` took effect
    (DevTools → response headers shows `content-security-policy`), `/download`
-   resolves without `.html`, `/changelog` shows the published version in its HTML,
-   `/robots.txt` serves the
-   flow disallows, and `/sitemap.xml` lists only the three public routes.
+   resolves without `.html`, `/changelog` shows the published version in its
+   HTML, `/robots.txt` serves the flow disallows, `/sitemap.xml` lists only the
+   three public routes, and a mistyped address returns a real 404 with the
+   "this page never made it into the dock" page.
 
 The site itself can be hosted while the repository is private, but its download
 buttons cannot work: GitHub serves no release assets to anonymous clients on a

@@ -1,4 +1,4 @@
-# Cloudflare Pages reads this file from the publish directory (build/_headers).
+# Cloudflare reads this file from the asset directory (build/_headers).
 # Security baseline for a static prerendered site: no server, no cookies, no
 # framing, top-level OAuth navigations only (no popups, no iframes).
 
