@@ -97,7 +97,8 @@
     <string name="calendar_error_auth">Sign-in didn&#39;t finish. Try connecting again.</string>
     <string name="calendar_error_network">Couldn&#39;t reach Google. Showing the last known day.</string>
     <string name="calendar_error_api_disabled">The Google Calendar API is not enabled for this project yet. Enable it in the Google Cloud console (APIs &amp; Services &#8594; Library), then press Refresh.</string>
-    <string name="calendar_error_client_type">This Google client is set up as a web app. Create a Desktop app client in the Google Cloud console and use its client ID instead.</string>
+    <string name="calendar_error_client_credentials">Google rejected this build&#39;s client credentials. The Google client secret is missing, rotated, or has not reached this machine yet; rebuild with the current one.</string>
+    <string name="calendar_error_not_configured">This build was compiled without a Google client secret, so Calendar cannot connect. See the build notes in the README.</string>
     <string name="calendar_error_not_verified">Google has not released this app yet. Add your Google account as a test user on the OAuth consent screen, then try again.</string>
     <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
     <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>

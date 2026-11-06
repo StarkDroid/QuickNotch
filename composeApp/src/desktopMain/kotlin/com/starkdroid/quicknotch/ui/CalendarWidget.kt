@@ -56,7 +56,8 @@ import com.starkdroid.quicknotch.generated.resources.calendar_disconnect
 import com.starkdroid.quicknotch.generated.resources.calendar_error_api_disabled
 import com.starkdroid.quicknotch.generated.resources.calendar_error_auth
 import com.starkdroid.quicknotch.generated.resources.calendar_error_cancelled
-import com.starkdroid.quicknotch.generated.resources.calendar_error_client_type
+import com.starkdroid.quicknotch.generated.resources.calendar_error_client_credentials
+import com.starkdroid.quicknotch.generated.resources.calendar_error_not_configured
 import com.starkdroid.quicknotch.generated.resources.calendar_error_not_verified
 import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
@@ -176,7 +177,8 @@ private fun CalendarConnectRow(
                     error != null -> stringResource(
                         when (error.reason) {
                             GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
-                            GoogleCalendar.REASON_CLIENT_TYPE -> Res.string.calendar_error_client_type
+                            GoogleCalendar.REASON_CLIENT_CREDENTIALS -> Res.string.calendar_error_client_credentials
+                            GoogleCalendar.REASON_NOT_CONFIGURED -> Res.string.calendar_error_not_configured
                             GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
                             GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
                             GoogleCalendar.REASON_REVOKED -> Res.string.calendar_error_revoked
@@ -281,7 +283,8 @@ private fun relativeTime(millis: Long): String {
 private fun String.localized(): StringResource = when (this) {
     GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
     GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
-    GoogleCalendar.REASON_CLIENT_TYPE -> Res.string.calendar_error_client_type
+    GoogleCalendar.REASON_CLIENT_CREDENTIALS -> Res.string.calendar_error_client_credentials
+    GoogleCalendar.REASON_NOT_CONFIGURED -> Res.string.calendar_error_not_configured
     GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
     GoogleCalendar.REASON_API_DISABLED -> Res.string.calendar_error_api_disabled
     else -> Res.string.calendar_error_auth

@@ -1,5 +1,6 @@
 package com.starkdroid.quicknotch.calendar
 
+import com.starkdroid.quicknotch.OAuthConfig
 import com.starkdroid.quicknotch.datasource.AppLauncher
 import com.starkdroid.quicknotch.datasource.AppLog
 import com.starkdroid.quicknotch.datasource.AppPaths
@@ -87,18 +88,23 @@ object GoogleCalendar {
     // preferred: a *Desktop app* client cannot register an https redirect URI at
     // all (the console does not render the field for that type), and the loopback
     // flow it does support is exactly what this app stopped doing in favour of the
-    // hosted consent page. Web clients are confidential, which is why the secret
-    // below is required rather than merely tolerated.
-    private const val CLIENT_ID = "317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com"
+    // hosted consent page. Google also asks for a client secret on the token
+    // endpoint for every client type now, Desktop clients included, so switching
+    // type would not buy freedom from one.
+    private const val CLIENT_ID = OAuthConfig.CLIENT_ID
 
     /**
-     * Required because the client is a Web application (pitfall 36). It is
-     * extractable from any shipped binary, which is inherent to desktop OAuth —
-     * the same reason gcloud ships its own. It authorizes nothing alone: every
-     * token still needs a real user's interactive consent. Rotate it in the
-     * Cloud console if it ever leaks wider than this repo.
+     * Injected at build time by `generateOAuthConfig`, from CI's
+     * `QUICKNOTCH_GOOGLE_CLIENT_SECRET` or a maintainer's ignored
+     * `local.properties`. Empty when a build was made without either: such a
+     * build says it has no Google client instead of starting a consent screen it
+     * cannot finish.
+     *
+     * A shipped binary can be made to give it up, which is inherent to
+     * installed-app OAuth — the same reason gcloud ships its own. It authorizes
+     * nothing alone: every token still needs a real user's interactive consent.
      */
-    private const val CLIENT_SECRET = "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"
+    private const val CLIENT_SECRET = OAuthConfig.CLIENT_SECRET
 
     /**
      * The website owns the consent UI (it has its own editorial voice, and
@@ -176,14 +182,19 @@ object GoogleCalendar {
      */
     const val REASON_NOT_VERIFIED = "not_verified"
     /**
-     * Google refused the token exchange over the client secret. The client is a
-     * Web application and does send one, so this is nearly always a secret that
-     * was rotated, mistyped, or has not propagated yet -- not a client-type
-     * mistake the way it was before the move to a Web client. Kept as its own
-     * reason because "everything visible worked, only the exchange was
+     * Google refused the token exchange over the client credential. Almost always
+     * a build whose secret is missing, rotated, or has not propagated yet. Kept
+     * as its own reason because "everything visible worked, only the exchange was
      * rejected" is baffling without naming the stage that failed.
      */
-    const val REASON_CLIENT_TYPE = "client_type"
+    const val REASON_CLIENT_CREDENTIALS = "client_credentials"
+
+    /**
+     * This binary was built without a Google client secret, so no code can be
+     * exchanged. Official installers always carry one; an app built from source
+     * needs it supplied at build time (see the README).
+     */
+    const val REASON_NOT_CONFIGURED = "not_configured"
     /**
      * Tokens exist and work, but the Calendar API itself is not enabled for the
      * project, so every events read is denied with 403. The fix is the API
@@ -327,6 +338,14 @@ object GoogleCalendar {
      *  site to bounce the code back to the loopback landing strip. */
     fun connect() {
         if (_state.value is CalendarState.Connecting) return
+        if (CLIENT_SECRET.isBlank()) {
+            // A build made without the injected secret, not a user mistake: say
+            // what is missing before opening a browser that could never finish.
+            connectFailure = REASON_NOT_CONFIGURED
+            _state.value = CalendarState.Error(REASON_NOT_CONFIGURED)
+            AppLog.line("Google sign-in skipped: this build has no client secret")
+            return
+        }
         cancelledByUser = false
         // Each attempt starts from the generic reason. Without this the widget
         // reported whatever the *previous* failure was whenever a path returned
@@ -619,7 +638,9 @@ object GoogleCalendar {
      * revoked and prompts again.
      */
     private suspend fun refreshed(previous: Tokens): Tokens? {
-        val refresh = previous.refreshToken ?: return null
+        // Nothing to send without the build's secret; `revoked()` turns that into
+        // the "no client configured" message and keeps the stored grant.
+        val refresh = previous.refreshToken?.takeIf { CLIENT_SECRET.isNotBlank() } ?: return null
         return when (val result = api.refresh(refresh)) {
             is OAuthResult.Tokens -> previous.copy(
                 accessToken = result.accessToken,
@@ -766,6 +787,12 @@ object GoogleCalendar {
 
     /** Google withdrew access (refresh token dead): forget it so the UI can re-prompt. */
     private fun revoked() {
+        if (CLIENT_SECRET.isBlank()) {
+            // Not a revoked grant: this build cannot renew at all, so keep the
+            // stored tokens for a build that can.
+            _state.value = CalendarState.Error(REASON_NOT_CONFIGURED)
+            return
+        }
         cached = null
         runCatching { tokenFile.delete() }
         _state.value = CalendarState.Error(REASON_REVOKED)
@@ -846,7 +873,11 @@ object GoogleCalendar {
         val description = refusal.description?.lowercase().orEmpty()
         val wantsASecret = "client_secret" in description ||
             (refusal.error == "invalid_client" && description.contains("secret"))
-        return if (wantsASecret) REASON_CLIENT_TYPE else REASON_AUTH
+        return when {
+            !wantsASecret -> REASON_AUTH
+            CLIENT_SECRET.isBlank() -> REASON_NOT_CONFIGURED
+            else -> REASON_CLIENT_CREDENTIALS
+        }
     }
 
     /**

@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -33,6 +34,31 @@ detekt {
 // updater compare against something meaningful.
 val appVersion = providers.gradleProperty("appVersion").getOrElse("2.0.0")
 
+// The Google OAuth client secret is not part of this repository, and never has
+// been in a build that ships from here. It is read from the environment (what
+// CI uses: `QUICKNOTCH_GOOGLE_CLIENT_SECRET`) or from a maintainer's ignored
+// `local.properties` (`googleClientSecret`), then written into a generated
+// source file. A build without it compiles and runs; Calendar then says the
+// build has no client rather than opening a consent screen it cannot finish.
+//
+// The client id is public and stays in the tree: it names the app, it does not
+// authenticate it.
+val googleClientId: String = providers.gradleProperty("googleClientId").orNull
+    ?: providers.environmentVariable("QUICKNOTCH_GOOGLE_CLIENT_ID").orNull
+    ?: "317663226214-1cijquso00ocuj44pldu192bgg8jgqio.apps.googleusercontent.com"
+
+val googleClientSecret: String = run {
+    val local = Properties().apply {
+        val file = rootProject.file("local.properties")
+        if (file.isFile) file.inputStream().use { load(it) }
+    }
+    (providers.gradleProperty("googleClientSecret").orNull
+        ?: providers.environmentVariable("QUICKNOTCH_GOOGLE_CLIENT_SECRET").orNull
+        ?: local.getProperty("googleClientSecret"))
+        ?.trim()
+        .orEmpty()
+}
+
 version = appVersion
 
 // `AppVersion.VERSION` is generated rather than hardcoded in a string resource:
@@ -57,6 +83,46 @@ val generateAppVersion by tasks.registering {
              */
             internal object AppVersion {
                 const val VERSION: String = "$current"
+            }
+            """.trimIndent() + "\n"
+        )
+    }
+}
+
+// `OAuthConfig` holds the Google client the Calendar flow signs in with. The
+// secret is injected here from the build environment instead of being written
+// into a tracked file, so the repository can be public and the history shows no
+// credential.
+val generateOAuthConfig by tasks.registering {
+    val outputDir = layout.buildDirectory.dir("generated/oauthConfig")
+    val clientId = googleClientId
+    val clientSecret = googleClientSecret
+    inputs.property("clientId", clientId)
+    inputs.property("clientSecret", clientSecret)
+    outputs.dir(outputDir)
+    // The output carries a credential: keep it out of the build cache and any
+    // cache upload.
+    outputs.cacheIf { false }
+    doLast {
+        fun literal(value: String): String = value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("$", "\\$")
+        val packageDir = outputDir.get().asFile.resolve("com/starkdroid/quicknotch")
+        packageDir.mkdirs()
+        packageDir.resolve("OAuthConfig.kt").writeText(
+            """
+            package com.starkdroid.quicknotch
+
+            /**
+             * The Google OAuth client this binary signs in with. Injected by the
+             * `generateOAuthConfig` Gradle task; never edit by hand. The client id
+             * is public, the secret comes from the build environment and is not
+             * in the repository.
+             */
+            internal object OAuthConfig {
+                const val CLIENT_ID: String = "${literal(clientId)}"
+                const val CLIENT_SECRET: String = "${literal(clientSecret)}"
             }
             """.trimIndent() + "\n"
         )
@@ -116,8 +182,10 @@ kotlin {
 // Generated version source: registered after the KMP block so the
 // `desktopMain` source set exists, and wired into every Kotlin compile.
 kotlin.sourceSets.getByName("desktopMain").kotlin.srcDir(layout.buildDirectory.dir("generated/appVersion"))
+kotlin.sourceSets.getByName("desktopMain").kotlin.srcDir(layout.buildDirectory.dir("generated/oauthConfig"))
 tasks.matching { it.name.startsWith("compileKotlin") }.configureEach {
     dependsOn(generateAppVersion)
+    dependsOn(generateOAuthConfig)
 }
 
 // The media ("now playing") feature ships a small native helper per platform.

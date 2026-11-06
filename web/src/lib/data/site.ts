@@ -616,7 +616,8 @@ export const dockTiles: Tile[] = [
  * this theme, not a settings row. What follows is everything a page needs to
  * run the flow. The token exchange itself deliberately stays out of the site:
  * it is a static host, Google requires a client_secret from every client type,
- * and the secret ships inside the desktop app and never leaves it.
+ * and the secret is injected into the desktop build at compile time, never
+ * committed.
  *
  * The flow: the desktop opens `connectUrl` with the loopback intent baked into
  * `state` (which carries the loopback port), the connect page sends the user to

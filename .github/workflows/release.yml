@@ -116,6 +116,10 @@ jobs:
             artifact: QuickNotch-macos-x64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    # The Calendar flow needs a Google client secret, which is not in the
+    # repository. CI injects it; the Gradle task turns it into `OAuthConfig`.
+    env:
+      QUICKNOTCH_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,6 +131,13 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Google client
+        shell: bash
+        run: |
+          if [ -z "${QUICKNOTCH_GOOGLE_CLIENT_SECRET}" ]; then
+            echo "::warning::GOOGLE_OAUTH_CLIENT_SECRET is not set; installers will ship without Calendar sign-in."
+          fi
 
       - name: Build installer (Windows)
         if: matrix.platform == 'windows'
