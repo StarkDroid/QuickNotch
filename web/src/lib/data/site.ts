@@ -100,6 +100,19 @@ export const chrome = {
 	download: 'Download'
 } as const;
 
+/**
+ * The one page nobody links to. It is prerendered to `404.html` at the root of
+ * the build, which is the file Cloudflare answers an unknown address with, so a
+ * mistyped URL is a real 404 and not the homepage wearing a 200.
+ */
+export const notFound = {
+	eyebrow: '404',
+	title: 'This page never made it into the dock.',
+	lead: 'The address is wrong, or the page moved after it was linked. The tour, the download and the changelog are all exactly where they were.',
+	home: 'Back to the homepage',
+	download: 'Get the app'
+} as const;
+
 /** The floating support pill, and the artwork it never replaces. */
 export const support = {
 	fabLabel: 'Support me',

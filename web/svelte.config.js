@@ -10,7 +10,10 @@ const config = {
 		adapter: adapter({ pages: 'build', assets: 'build', precompress: true, strict: true }),
 		prerender: {
 			// Explicit so a page is never dropped silently if a link to it moves.
-			entries: ['/', '/download', '/changelog', '/connect', '/oauth/callback'],
+			// `/404` is not a destination: it is rendered so the adapter can write
+			// `404.html` at the root of the build, which the Worker serves for an
+			// address that matches no route.
+			entries: ['/', '/download', '/changelog', '/connect', '/oauth/callback', '/404'],
 			handleHttpError: 'fail'
 		},
 		inlineStyleThreshold: 20480,
