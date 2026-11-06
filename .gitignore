@@ -26,3 +26,8 @@ replay_pid*
 # this machine. They are useful here and noise in a public repository.
 /agents.md
 /launch.md
+
+# The launch film's project and captures. Production material: the repository
+# ships the app, the site and the release pipeline, not the 6 MB of stills and
+# the rendered MP4 that live beside them.
+/video/
