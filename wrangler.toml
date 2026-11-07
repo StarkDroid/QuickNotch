@@ -20,3 +20,8 @@ binding = "ASSETS"
 not_found_handling = "404-page"
 # The handler runs first so it can answer the www host before assets do.
 run_worker_first = true
+
+# Worker Previews needs this block for `wrangler preview`, which is what
+# Cloudflare runs for a non-production branch. The block can be empty: assets
+# and compatibility settings stay at the top level.
+[previews]
