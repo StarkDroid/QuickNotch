@@ -13,15 +13,11 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 object AppIconLoader {
-    // Cached bitmaps are capped to this edge length. Both the dock and the
-    // settings rows draw far smaller, and on the software renderer a row that
-    // samples a full-resolution (up to 1024px) icon pays that resample cost
-    // every single frame — the main cause of scroll jank once icons loaded.
+    // Cached bitmaps are capped here: on the software renderer a row sampling a full-res icon pays
+    // the resample cost every frame, which is the main cause of scroll jank.
     internal const val cachedIconMaxPx = 128
 
-    // Scanning a full installed-apps list fires one load per row at once; a
-    // little backpressure keeps dozens of native calls (or sips/quicklook
-    // processes) from piling up and timing out.
+    // Scan fires one load per row at once; cap the concurrent native calls so they do not pile up and time out.
     private val iconLoadGate = Semaphore(
         permits = minOf(8, maxOf(4, Runtime.getRuntime().availableProcessors() / 2))
     )
@@ -77,11 +73,7 @@ object AppIconLoader {
     }
 }
 
-/**
- * Shrinks a freshly decoded icon to at most [AppIconLoader.cachedIconMaxPx]
- * before it is cached and handed to the UI. Halving progressively keeps small
- * sizes sharp (a single jump from 1024px aliases badly).
- */
+/** Shrinks a decoded icon before it is cached; halving progressively keeps small sizes sharp. */
 internal fun ImageBitmap.downscaleForCache(): ImageBitmap {
     if (width <= AppIconLoader.cachedIconMaxPx && height <= AppIconLoader.cachedIconMaxPx) return this
 

@@ -15,14 +15,8 @@
 	} from '$data/releases';
 
 	/**
-	 * The one page that hands over an installer.
-	 *
-	 * The version comes from the changelog feed the release workflow commits, so
-	 * the asset URLs are built from the newest published release and never need a
-	 * site change. Starting a download opens the thank-you modal: a native
-	 * `<dialog>`, which traps focus, answers Escape and makes the page behind
-	 * inert without any of that being hand-rolled. The link is never
-	 * intercepted — it is already navigating when the modal appears.
+	 * Installer URLs come from the newest published release. Starting a
+	 * download opens a native dialog; the link itself is never intercepted.
 	 */
 	let visitor = $state<'windows' | 'macos' | null>(null);
 	let thanks = $state<HTMLDialogElement | null>(null);
@@ -187,7 +181,6 @@
 		text-decoration-color: var(--accent);
 	}
 
-	/* ---- Platform cards --------------------------------------------------- */
 	.platforms {
 		display: grid;
 		gap: 1.25rem;
@@ -303,7 +296,6 @@
 		opacity: 0.75;
 	}
 
-	/* ---- Install notes ---------------------------------------------------- */
 	.notes {
 		display: flex;
 		flex-direction: column;
@@ -335,7 +327,6 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Thank-you modal -------------------------------------------------- */
 	/* A poster card on a dimmed page, offset with the same hard sticker shadow
 	   as the platform cards. */
 	.thanks {

@@ -11,12 +11,9 @@
 	let consentUrl = $state('');
 
 	/**
-	 * The connect page owns the consent UI: it's editorial (retro poster), not a
-	 * system dialog. The desktop passes us the parameters it needs to assemble
-	 * Google's auth URL (`state` already contains the loopback port), and we
-	 * send the user there. Google's reply bounces the browser to `/oauth/callback`
-	 * on this site, which then jumps home to `http://127.0.0.1:<port>/...` where
-	 * the token exchange happens with the secret that never leaves the app.
+	 * Editorial consent page. The desktop sends state, client id and
+	 * redirect; Google returns to /oauth/callback, which forwards to the
+	 * loopback.
 	 */
 	onMount(() => {
 		try {
@@ -38,21 +35,12 @@
 				return;
 			}
 
-			// Prefer what the desktop sent, falling back to *this page's own origin*.
-			// Same-origin is the right fallback rather than a hardcoded constant
-			// because during local testing the correct URI is literally wherever this
-			// page was served from -- 5173 under `vite dev`, 4173 under `vite
-			// preview`, whatever in production. Echoing the wrong one would fail as a
-			// redirect_uri_mismatch, or worse, quietly authorise against a URI the
-			// app is not going to exchange against.
+			// Prefer the redirect_uri the desktop sent; this page's origin is the
+			// local-dev fallback. The wrong URI fails as redirect_uri_mismatch.
 			const redirectUri = params.get('redirect_uri') ?? (location.origin + '/oauth/callback');
 
-			// Note the loopback `port` the desktop also sends is deliberately not
-			// read here. It rides inside `state` instead, which is the only value
-			// Google's round-trip echoes back intact, so that is where
-			// /oauth/callback recovers it from. Reading the query param would look
-			// equivalent and quietly couple the handoff to the URL the user
-			// happened to reach this page through.
+			// The loopback port is not read from the query: it rides inside state,
+			// the only value Google echoes back intact.
 			const qs = new URLSearchParams({
 				client_id: clientId,
 				redirect_uri: redirectUri,

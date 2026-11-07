@@ -8,27 +8,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Windows now-playing via SMTC (System Media Transport Controls) — the OS
- * media session every well-behaved player registers with (Start-menu media
- * keys, volume flyout, notifications). Reaching WinRT from the JVM would mean
- * COM vtable plumbing, so we bridge through PowerShell's supported WinRT type
- * activation; the whole script is a plain text resource, no compilation step.
- * It runs under Windows PowerShell 5.1 (the engine we launch, whose WinRT
- * projection is the one that exposes System Media Transport Controls);
- * PowerShell 7 dropped that projection, so `pwsh` is not used.
- *
- * One-shot poll per second: the script prints a single JSON line, identical in
- * shape to the macOS nowplaying-bridge, so [MediaControllerBase] decodes both. Commands
- * run the same script with a verb. At 1 Hz the process cost is negligible and
- * never touches the UI thread.
- *
- * The status poll tells the script which track the app already holds art for,
- * so the thumbnail transfer happens once per track instead of once per second
- * (see `smtc.ps1`): steady-state polls carry metadata only, and the per-id art
- * cache in [MediaControllerBase] covers the omission. The gate is three-valued —
- * '1' art held, '2' a fetch already came back empty, '0' fetch wanted — so a
- * source that publishes no art (stub thumbnails, metadata-only players) is
- * asked exactly once instead of every second.
+ * Windows now playing from SMTC through Windows PowerShell 5.1. The
+ * status poll passes the held art id so a track's thumbnail is fetched
+ * once, and a three-valued gate stops artless sources being asked again.
  */
 internal class WindowsSmtcController : MediaControllerBase() {
 
@@ -74,10 +56,8 @@ internal class WindowsSmtcController : MediaControllerBase() {
     }
 
     /**
-     * What the next status poll may skip: the thumbnail when the session
-     * already shows art for this exact track ('1'), or when a fetch for it
-     * already came back empty ('2'). Passed as separate argv elements (never
-     * one joined string), so ids containing spaces arrive intact.
+     * The next poll's art gate: 1 held, 2 fetch came back empty, 0 wanted.
+     * Passed as separate argv.
      */
     private fun statusArguments(): List<String> =
         listOf("status", statusId, statusHaveArt)
@@ -92,14 +72,8 @@ internal class WindowsSmtcController : MediaControllerBase() {
     }
 
     /**
-     * One script spawn, bounded on every side. The stdout drain runs on
-     * [bridgeReader] so a wedge (WinRT stalls do happen) surfaces as a timeout
-     * here instead of a coroutine parked forever on a pipe read: after
-     * [BRIDGE_TIMEOUT_MS] the give-up path kills the process, which closes its
-     * pipe and frees the reader thread for the next poll. Draining *while*
-     * waiting is not optional — an art transfer pushes a few hundred KB of
-     * base64 through the pipe, well past the ~64 KB kernel buffer, so a
-     * "wait, then read" order would deadlock every illustrated track.
+     * One script spawn with a deadline and a concurrent stdout drain; art
+     * transfers exceed the pipe buffer, so wait-then-read would deadlock.
      */
     private fun invoke(arguments: List<String>): String? {
         val file = script ?: return null
@@ -133,10 +107,8 @@ internal class WindowsSmtcController : MediaControllerBase() {
         private const val BRIDGE_TIMEOUT_MS = 4_000L
 
         /**
-         * Single daemon thread shared by every spawn: it only ever drains a
-         * pipe to EOF, and the [WindowsSmtcController] poll loop plus transport
-         * commands are serialized behind it (a poll is at most one second
-         * apart, and a killed wedge frees the thread immediately).
+         * One daemon thread drains every spawn; a killed wedge frees it for the
+         * next poll.
          */
         private val reader = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "quicknotch-smtc-io").apply { isDaemon = true }

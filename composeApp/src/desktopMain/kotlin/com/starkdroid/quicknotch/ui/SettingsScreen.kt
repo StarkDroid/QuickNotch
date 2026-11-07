@@ -102,12 +102,8 @@ fun SettingsScreen(
     repository: FavoritesRepository,
     media: MediaController
 ) {
-    // Deliberately NO screen-level config/favorites/session collects here: the
-    // settings window used to recompose end-to-end on every media heartbeat
-    // (a new MediaSession object every ~2s) and on every slider-drag frame,
-    // which read as low-fps scrolling. Each tab collects exactly the state it
-    // renders (see the tab signatures), so a media tick only touches the tiny
-    // now-playing status row and a slider drag only touches its own card.
+    // No screen-level state collects: each tab collects only what it renders,
+    // so a media tick touches one row.
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(
         stringResource(Res.string.tab_dock_sizing),
@@ -181,7 +177,6 @@ fun SettingsScreen(
             .background(SettingsBg)
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            // ── Sidebar ──────────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .width(232.dp)
@@ -268,7 +263,6 @@ fun SettingsScreen(
                     .background(SettingsBorder.copy(alpha = 0.7f))
             )
 
-            // ── Content pane ─────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .weight(1f)

@@ -16,24 +16,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Every weather request the app makes, in one multiplatform place.
- *
- * Open-Meteo rather than any keyed provider for one reason that is not taste:
- * there is no key to provision, rotate, or leak out of a shipped binary — the
- * forecast endpoint answers anonymous GETs, so a fresh install shows weather
- * with zero setup, exactly like the notch itself needs no account. Ktor CIO
- * for the same jlink reason as the calendar API (only `java.base`-level
- * modules ship in the packaged runtime, so the transport must be ordinary
- * bytecode). This file has no `java.*` in it.
- *
- * Location is IP-based (ip-api, city granularity, also keyless): the notch
- * has no location-permission plumbing and must not ask for any. A VPN exit
- * simply reports its own city, which is honest enough for a glanceable pill.
- *
- * Every call is `suspend` and returns a result type instead of throwing — a
- * refusal, an unreachable network, and a malformed payload are three
- * different answers, and the controller keeps the last known day for all of
- * them rather than blanking the pill.
+ * Open-Meteo and ip-api, both keyless, over Ktor CIO for the jlink
+ * reason. Result types keep refusals, unreachable networks and bad
+ * payloads apart so the last known day can stand.
  */
 class WeatherApi(
     private val client: HttpClient = defaultClient()
@@ -41,7 +26,6 @@ class WeatherApi(
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    // ── location ─────────────────────────────────────────────────────────────
 
     /**
      * City-granularity position from the egress IP. Free tier is HTTP-only
@@ -60,13 +44,10 @@ class WeatherApi(
         return LocationResult.Found(latitude = lat, longitude = lon, city = city)
     }
 
-    // ── forecast ─────────────────────────────────────────────────────────────
 
     /**
-     * Current conditions plus a 7-day outlook for one position. `fahrenheit`
-     * switches the temperature unit; everything else (%, UV index) is
-     * unitless. `timezone=auto` makes day boundaries local to the position,
-     * so "today" on the page is the place's today, not the machine's.
+     * Current conditions plus a 7-day outlook; timezone=auto makes today the
+     * place's day.
      */
     suspend fun forecast(latitude: Double, longitude: Double, fahrenheit: Boolean): WeatherResult {
         val unit = if (fahrenheit) "&temperature_unit=fahrenheit" else ""
@@ -123,13 +104,9 @@ class WeatherApi(
         )
     }
 
-    // ── place search ─────────────────────────────────────────────────────────
 
     /**
-     * City/state search for the manual-location picker. Same keyless provider
-     * as the forecast (Open-Meteo geocoding), so picking another state needs
-     * no key either. `parameter()` does the URL-encoding; results carry a
-     * display label ("Austin, Texas, United States") plus coordinates.
+     * Keyless Open-Meteo geocoding for the manual-location picker.
      */
     suspend fun searchPlaces(query: String): GeocodeResult {
         if (query.isBlank()) return GeocodeResult.Ok(emptyList())

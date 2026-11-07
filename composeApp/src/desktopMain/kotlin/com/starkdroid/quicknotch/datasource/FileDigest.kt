@@ -6,17 +6,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 
-/**
- * File-level plumbing for the updater, kept out of [AppUpdates] so that class
- * stays a state machine rather than a download loop.
- */
+/** File-level plumbing for the updater, kept out of [AppUpdates]. */
 internal object FileDigest {
 
-    /**
-     * Verify a package against the release's `SHA256SUMS.txt`. A release
-     * without a checksum still installs (older releases, or a runner hiccup);
-     * a release *with* one that disagrees never does.
-     */
+    /** A release without a checksum still installs; a mismatched checksum never does. */
     fun verify(file: File, expected: String?) {
         if (expected.isNullOrBlank()) return
         val actual = sha256(file)
@@ -41,10 +34,7 @@ internal object FileDigest {
 
 /**
  * Stream a response to disk, reporting coarse progress.
- *
- * The read is one `while` over a fresh read at the bottom — no `break`/`continue`
- * — because both an EOF and a short read are normal here, and the progress
- * update belongs on the one line that knows how much landed.
+ * The loop re-reads at the bottom: EOF and a short read are both normal here.
  */
 internal suspend fun streamToFile(
     channel: ByteReadChannel,

@@ -65,18 +65,9 @@ private data class SystemTileSpec(
 )
 
 /**
- * The expanded notch's System page: one level ring per metric, the metric's
- * glyph in the middle and its live value under the ring — the same indicator
- * language as the pill's volume/battery rings, scaled up and captioned.
- *
- * CPU, GPU, memory and storage map straight onto the ring's 0-100 sweep and
- * warm to [LoadHighTint] as they saturate. The two network rings have no
- * natural ceiling, so their sweep is a logarithmic 0..100 across 1 KB/s to
- * 1 GB/s (see [systemRateLevel]) while the label carries the exact rate — the
- * ring reads as "moving a little / a lot", the number as "how much".
- *
- * The GPU tile only exists where the OS reports engine utilization, and the
- * caller keeps the whole page off the wheel until the first sample lands.
+ * One ring tile per metric. CPU, GPU, memory and storage map to 0-100;
+ * network uses a log sweep with the exact rate as the label. No GPU
+ * counter means no tile.
  */
 @Composable
 internal fun SystemNotchPage(
@@ -261,10 +252,8 @@ private fun systemRateBand(value: Double): String {
 }
 
 /**
- * Log sweep for the throughput rings: 1 KB/s → 0, 1 GB/s → 100, so idle
- * traffic barely lifts the arc while a busy link fills it. A real ceiling does
- * not exist (the link speed is not what is being measured), which is exactly
- * why the value, not the arc, is the source of truth here.
+ * 1 KB/s maps to 0 and 1 GB/s to 100, so idle traffic barely moves the arc;
+ * the label carries the rate.
  */
 internal fun systemRateLevel(bytesPerSec: Long): Int {
     val kb = bytesPerSec / 1024.0

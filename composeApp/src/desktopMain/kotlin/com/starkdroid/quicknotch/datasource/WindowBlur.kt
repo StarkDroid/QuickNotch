@@ -23,59 +23,9 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
- * Real backdrop blur behind the notch island, per platform.
- *
- * macOS shows a dedicated helper window (see the
- * `quicknotch_set_content_blur` export in `passthrough_bridge.m`), sized to
- * the island rect while it animates; the intensity slider drives both its
- * compositor blur radius and its effect view's opacity.
- *
- * Windows has no usable compositor route — every one was probed live on this
- * machine against a striped backdrop:
- *
- *  - `DwmEnableBlurBehindWindow` composites BEHIND the window, so an opaque
- *    helper just paints over it (the "black scrim" symptom), and on a
- *    layered/transparent window the call is ignored outright — the stripes
- *    stayed razor-sharp through it.
- *  - `DWMWA_SYSTEMBACKDROP_TYPE` acrylic draws a solid RECTANGLE, ignoring
- *    both transparency and the window region.
- *  - `SetWindowCompositionAttribute` acrylic likewise ignores `SetWindowRgn`
- *    (its frost painted straight over a region-clipped window).
- *  - `WDA_EXCLUDEFROMCAPTURE` excludes an OPAQUE probe window from capture
- *    cleanly, but on a per-pixel layered window (which is exactly what the
- *    overlay is) it blacks out the window's whole rect in every GDI capture —
- *    the black-hole failure mode again.
- *
- * So the honest "OS-level blur with our own corners" is a real screen
- * capture, blurred with a real Gaussian (3-pass box cascade, Skia-quality,
- * CPU, off the render thread) and drawn inside the overlay itself — which
- * also makes the intensity slider do something exact: it drives the blur
- * sigma.
- *
- * One native fact makes capture safe WITHOUT any exclusion flag (probed): a
- * plain BitBlt returns the true composited desktop everywhere the overlay is
- * transparent, and only the region where this window actually paints — the
- * island rect plus the thin outline ring straddling its edge. The engine
- * therefore REPLACES that self-drawn hole with the average of a horizontal
- * lerp between the flanking bands and a vertical blend between the rows
- * above and below (see [inpaintHole]); under a 4–24dp Gaussian the
- * reconstruction is invisible, and there is no feedback loop of the island
- * baking itself into its own backdrop. The capture is inflated three sigmas
- * past the island so the blur's whole sample window at the rim is real
- * backdrop. Side benefit of skipping the flag: the notch stays visible in
- * screenshots and screen sharing.
- *
- * The island sits flush at the screen top, so the wanted capture rect always
- * pokes above y=0 — BitBlt of a negative origin fails — the capture is
- * clamped to the virtual screen and the frost simply starts at the screen
- * edge (there is no backdrop above it to sample anyway).
- *
- * The engine runs a capture loop (~[CaptureFrameMs], daemon thread) while
- * enabled, publishes each island-cropped frame to [frame] (collected only by
- * the frost leaf in the overlay, so a frame tick recomposes nothing else),
- * and stops the moment the surface changes away from Blurred. Fail-soft
- * throughout: any native failure keeps the last frame (or none) and the
- * island renders the painted surface underneath.
+ * Backdrop blur: a macOS helper panel; on Windows a clamped screen capture,
+ * the island hole inpainted, blurred on the CPU. Missing bridge keeps the
+ * last frame or painted glass.
  */
 internal class WindowsBackdropBlur private constructor(
     private val overlayHwnd: WinDef.HWND,
@@ -120,11 +70,8 @@ internal class WindowsBackdropBlur private constructor(
     }
 
     /**
-     * Tracks the drawn island's rect (window-client physical px — the same
-     * feed the click-through region uses), so the captured strip expands,
-     * collapses and re-centres exactly with the notch. Rect changes arrive on
-     * every layout pass during the spring, which is precisely when the
-     * capture must follow.
+     * Tracks the island rect in window-client pixels so the capture follows
+     * every layout pass.
      */
     fun updateIsland(rect: Rectangle?) {
         lastRect = rect?.clone() as Rectangle?
@@ -135,11 +82,8 @@ internal class WindowsBackdropBlur private constructor(
     }
 
     /**
-     * ~30 fps capture while enabled (the notch's own animation budget —
-     * PillAnimationFps). Idle polling while disabled or unmeasured, so
-     * re-enabling picks up within one tick instead of waiting for an event.
-     * Native-only work happens on this daemon thread; the only crossing is
-     * publishing an immutable [ImageBitmap].
+     * ~30 fps while enabled, idle otherwise; the daemon publishes one
+     * immutable ImageBitmap.
      */
     private fun captureLoop() {
         val thread = Thread({
@@ -211,10 +155,8 @@ internal class WindowsBackdropBlur private constructor(
     }
 
     /**
-     * One screen strip → opaque ARGB pixels. BitBlt from the screen DC (whole
-     * virtual desktop, layered windows below us included), then GetDIBits
-     * top-down 32bpp. Any native failure returns null and the previous frame
-     * stays up; nothing here throws.
+     * BitBlt to top-down 32bpp ARGB. A native failure returns null and the
+     * previous frame stays.
      */
     private fun captureScreen(x: Int, y: Int, width: Int, height: Int): IntArray? =
         User32.INSTANCE.GetDC(null)?.let { screenDc ->
@@ -261,16 +203,8 @@ internal class WindowsBackdropBlur private constructor(
         }
 
     /**
-     * Replaces the self-drawn hole (this window's own scrim + content, which
-     * the screen capture composited over the real backdrop) with the average
-     * of two reconstructions: a per-row horizontal lerp between the real
-     * columns flanking the hole, and a per-column vertical blend between the
-     * real rows above and below it. Either alone fails on one axis — the lerp
-     * smears window edges and the vertical stripes behind a flush-top island
-     * into a monotonic ramp; the vertical fill smears horizontals. Averaged,
-     * each fixes the other's blind spot, and the remainder vanishes under the
-     * Gaussian applied right after. A hole clipped by the screen edge blends
-     * against whichever side is real.
+     * Replaces the self-drawn hole with the average of a row lerp and a
+     * column blend; under the Gaussian the seam disappears.
      */
     private fun inpaintHole(pixels: IntArray, cap: Rectangle, hole: Rectangle) {
         val x0 = hole.x.coerceIn(0, cap.width)
@@ -284,11 +218,8 @@ internal class WindowsBackdropBlur private constructor(
     }
 
     /**
-     * Real Gaussian approximation: three separable box passes per axis
-     * converge to a Gaussian (the same trick Skia's own blur uses), with
-     * clamp-to-edge sampling so the strip border repeats instead of fading —
-     * the island edges stay fully opaque because the capture is inflated past
-     * them on purpose.
+     * Three separable box passes with clamp-to-edge sampling; the capture is
+     * inflated past the island.
      */
     private fun blurArgb(pixels: IntArray, cap: Rectangle, sigmaPx: Float) {
         if (sigmaPx < 0.5f || cap.width < 3 || cap.height < 3) return
@@ -450,13 +381,10 @@ private fun lerpRows(pixels: IntArray, cap: Rectangle, bounds: Rectangle) {
     }
 }
 
-/** Vertical half of the hole reconstruction: each column becomes a blend
- *  between the real rows above and below the hole, then gets averaged with
- *  [lerpRows]'s result — each axis reconstructs what the other smeared. The
- *  flanking rows are real capture whenever the hole is inset; a hole flush
- *  with the capture top (the island sits at the screen edge, where there is
- *  no backdrop above to sample) falls back to the hole's own first row and
- *  still blends toward the real bottom row. */
+/**
+ * Blends each column between the real rows above and below, then averages
+ * with lerpRows.
+ */
 private fun blendColumns(pixels: IntArray, cap: Rectangle, bounds: Rectangle) {
     val x0 = bounds.x
     val x1 = bounds.x + bounds.width
@@ -509,10 +437,8 @@ private fun cropBuffer(pixels: IntArray, cap: Rectangle, crop: Rectangle): Buffe
 }
 
 /**
- * Blur radius in dp for the intensity slider: a soft haze at 0 (the frost
- * still reads, just gently) to deep acrylic-like diffusion at the max. This
- * is the Gaussian sigma the capture thread blurs with, and it caps the
- * capture inflation ([FrostInflateDp] must stay above this maximum).
+ * Gaussian sigma the capture thread blurs with; FrostInflateDp must stay
+ * above this maximum.
  */
 private const val FrostRadiusBaseDp = 4f
 private const val FrostRadiusPerStepDp = 0.5f
@@ -539,10 +465,7 @@ internal data class BlurFrame(
 )
 
 /**
- * macOS side of the backdrop blur: resolves the NSWindow once, then drives
- * the helper blur window (created, island-sized, torn down inside the
- * bridge). The frosted shape tracks the animated island, so it expands and
- * collapses exactly with the notch.
+ * Drives the bridge's helper blur window, which tracks the animated island.
  */
 internal class MacContentBlur(window: Window?) {
 

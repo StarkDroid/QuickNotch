@@ -20,14 +20,9 @@ import kotlinx.serialization.json.Json
 import kotlin.math.abs
 
 /**
- * The app-wide weather feed: one IP-geolocated position plus its Open-Meteo
- * forecast, polled on a half-hourly loop with a disk cache, observed by the
- * quickview chip, the expanded page, and the settings card.
- *
- * Failure semantics mirror every other poller in the app: a failed fetch
- * leaves the last known day in place (stale but real) and only a launch with
- * no cache at all reports [WeatherState.Failed]. Nothing here throws past the
- * scope — the loop survives any single bad round trip.
+ * One IP-located forecast on a half-hourly loop with a disk cache. A
+ * failed fetch keeps the last day; only a launch with no cache reports
+ * Failed.
  */
 sealed interface WeatherState {
     data object Loading : WeatherState
@@ -107,11 +102,8 @@ object Weather {
     }
 
     /**
-     * Apply a config-side place change at runtime. A pick replaces the
-     * position outright; clearing it (null) drops the fix so the next fetch
-     * re-locates over IP. Either way one immediate fetch follows, under the
-     * same mutex as the settings refresh. Re-emits of the same place are
-     * ignored — config flows re-emit on every unrelated write.
+     * Applies a place change at runtime; null returns to IP location. One
+     * immediate fetch follows under the mutex.
      */
     fun setManualPlace(place: WeatherPlace?) {
         if (place == lastManualPlace) return
@@ -179,7 +171,6 @@ object Weather {
         }
     }
 
-    // ── disk cache ───────────────────────────────────────────────────────────
 
     @Serializable
     private data class CachedWeather(

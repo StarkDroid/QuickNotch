@@ -11,26 +11,9 @@ import com.starkdroid.quicknotch.datasource.BlurRadiusMin
 import com.starkdroid.quicknotch.model.NotchSurface
 
 /**
- * The body material for the notch island. All entries resolve to brushes built
- * once and cached, so switching never reallocates and steady-state rendering
- * does no shader work beyond one or two flat paints — the island is repainted
- * by the software renderer every animation frame, so nothing here may depend
- * on size, time or per-pixel texture.
- *
- * [NotchSurface.TRANSLUCENT] and [NotchSurface.SYSTEM_ACCENT] are deliberately
- * texture-free: a mottled or grainy overlay reads as paper, not glass. They
- * instead compose two perfectly smooth gradients — a translucent tinted body
- * that lets the real desktop bleed through the transparent window, plus a soft
- * diagonal light sheen — which is what reads visually as glass. [NotchSurface.SYSTEM_ACCENT] is that same
- * glass with the desktop's accent colour blended into the body, rim and a
- * faint sheen glint. The accent is passed in by callers (see [SystemAccent]);
- * the accented style is rebuilt only when that colour changes, so switching the
- * desktop accent recolours the notch in place without a restart.
- *
- * A literal backdrop blur comes from the OS window, not from Compose: with
- * the Blurred surface active, the native bridge blurs the desktop behind the
- * island and the island itself draws only the dark scrim below for legibility.
- * Where the bridge is missing, Blurred falls back to the painted glass.
+ * Island materials, brushes cached and size-independent because the
+ * software renderer repaints every frame. TRANSLUCENT and SYSTEM_ACCENT
+ * are smooth gradients, never textures; real blur comes from the window.
  */
 internal object IslandSurface {
 
@@ -68,14 +51,8 @@ internal object IslandSurface {
     )
 
     /**
-     * Light dark scrim drawn over the natively blurred backdrop when the
-     * Blurred surface is active and the native bridge answered: the OS
-     * supplies the frosted texture, this supplies the contrast. Classic DWM
-     * blur (and the macOS panel) blur without adding light, so over a dark
-     * desktop the frost alone would read as flat black — the scrim stays
-     * deliberately light and a brighter-than-glass sheen lays the diagonal
-     * light play that sells the frost. The slider still drives depth:
-     * near-clear glass at 0, deep frost at the max.
+     * Dark scrim over the native blur for contrast, with the sheen that
+     * sells the frost; the slider drives its depth.
      */
     private fun blurScrimFor(level: Int): Style {
         val clamped = level.coerceIn(BlurRadiusMin, BlurRadiusMax)
@@ -99,11 +76,8 @@ internal object IslandSurface {
     private const val ScrimAlphaPerStep = 0.006f
 
     /**
-     * Brighter diagonal light play reserved for the blurred surface: over a
-     * dark desktop the frost alone has no luminosity to read by, and this is
-     * what keeps it glass instead of flat black. Stronger than [glassSheen]
-     * on purpose — the painted-glass styles carry their own bright body, the
-     * live frost does not.
+     * Brighter sheen for the blurred surface, which has no bright body of
+     * its own.
      */
     private val blurSheen = Brush.linearGradient(
         0f to Color.White.copy(alpha = 0.16f),
@@ -120,12 +94,8 @@ internal object IslandSurface {
     @Volatile private var accentedFor: Color? = null
 
     /**
-     * Gaming-only transparency: nothing but the HUD's own glyphs. No body, no
-     * rim and no island shadow — the metrics are the whole surface (see
-     * `GameHud`); the game behind shows through untouched. Deliberately not a
-     * [NotchSurface] entry: it is never a user-picked material, only the gaming
-     * quickview's own state, so Solid/Blurred/System accent keep their meaning
-     * everywhere else.
+     * Gaming transparency: no body, rim or shadow, only the HUD glyphs. Not
+     * a NotchSurface entry because it is not a user material.
      */
     private val gameTransparent = Style(
         fill = SolidColor(Color.Transparent),

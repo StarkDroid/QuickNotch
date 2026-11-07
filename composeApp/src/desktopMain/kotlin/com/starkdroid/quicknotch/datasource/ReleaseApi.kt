@@ -12,7 +12,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** One downloadable file attached to a release. */
 data class UpdateAsset(
     val name: String,
     val url: String,
@@ -30,16 +29,8 @@ data class LatestRelease(
 )
 
 /**
- * Everything that talks to the GitHub releases API.
- *
- * Kept separate from [AppUpdates] so the decision logic ("is this newer?",
- * "download/install") never doubles as an HTTP client, and so every request
- * has one place to carry the User-Agent GitHub requires.
- *
- * A release only counts as *managed* when it carries the cumulative
- * `changelog.json` asset. That is the marker the release workflow adds from
- * 2.0.0 onward; it also keeps an older, pre-changelog release from looking like
- * an update simply because its tag happens to sort higher.
+ * Everything that talks to the GitHub releases API, kept out of [AppUpdates].
+ * A release is managed only when it carries `changelog.json`, which stops the old v3.1.2 tag from looking newer.
  */
 object ReleaseApi {
 
@@ -70,18 +61,15 @@ object ReleaseApi {
         }
         if (!response.status.isSuccess()) return@runCatching null
 
-        // The list, not `/releases/latest`: this repository still carries a
-        // pre-changelog v3.1.2 whose tag sorts above every 2.x release, and
-        // `/latest` would keep returning it. The first *managed* release is
-        // the real newest one.
+        // The list, not `/releases/latest`: the pre-changelog v3.1.2 tag sorts
+        // above every 2.x, so take the first managed entry.
         val payload = json.decodeFromString<List<GitHubRelease>>(response.bodyAsText())
         payload.firstNotNullOfOrNull { it.toLatest() }
     }.getOrNull()
 
     private fun GitHubRelease.toLatest(): LatestRelease? {
         val mapped = assets.map { UpdateAsset(it.name, it.downloadUrl, it.size) }
-        // The changelog asset is the "this release is managed by the workflow"
-        // marker; see the class comment.
+        // The changelog asset is the "managed by the workflow" marker.
         val changelog = mapped.firstOrNull { it.name == CHANGELOG }
         return if (draft || prerelease || changelog == null) {
             null
@@ -103,10 +91,7 @@ object ReleaseApi {
             ?: release.assets.firstOrNull { it.name.endsWith(".exe", ignoreCase = true) }
     }
 
-    /**
-     * Two DMGs ship per release (`-arm64.dmg` / `-x64.dmg`). Pick the one this
-     * machine can run; an unlabelled DMG is treated as universal.
-     */
+    /** Two DMGs ship per release (`-arm64` / `-x64`); an unlabelled DMG counts as universal. */
     private fun macAsset(release: LatestRelease): UpdateAsset? {
         val images = release.assets.filter { it.name.endsWith(".dmg", ignoreCase = true) }
         if (images.isEmpty()) return null
@@ -124,10 +109,8 @@ object ReleaseApi {
     }
 
     /**
-     * Read the SHA-256 for [assetName] from the release's checksum file. A
-     * missing file is not fatal — the download still installs — but a present
-     * file is always checked, because a corrupted installer is worse than no
-     * installer.
+     * Reads the SHA-256 for [assetName] from the release's checksum file; a missing file is not fatal,
+     * a present one is always enforced.
      */
     suspend fun checksumFor(release: LatestRelease, assetName: String): String? = runCatching {
         val checksums = release.assets.firstOrNull { it.name == CHECKSUMS } ?: return@runCatching null
@@ -162,10 +145,8 @@ object ReleaseApi {
 }
 
 /**
- * Semver comparison for the versions the workflow can produce (x.y.z, with an
- * optional leading `v`). Deliberately tolerant: a malformed component counts as
- * zero rather than throwing, because the updater must never take the app down
- * over a tag it does not understand.
+ * Semver comparison for x.y.z tags; a malformed component counts as zero, since the updater must
+ * never take the app down over a tag it does not understand.
  */
 object AppVersions {
 

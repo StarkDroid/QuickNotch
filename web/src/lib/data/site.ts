@@ -1,11 +1,4 @@
-/**
- * Single source of truth for every string, link and structured-data value on
- * the site. Keeping content out of components makes the copy easy to audit for
- * SEO (crawlable text is prerendered from here) and trivial to update.
- *
- * If a page renders a sentence, it comes from this file. Components own layout
- * and punctuation around a value; they never own the words.
- */
+/** Single source of truth for every string, link and structured-data value on the site. */
 
 export const site = {
 	name: 'QuickNotch',
@@ -19,10 +12,7 @@ export const site = {
 	shortDescription:
 		'A free, open-source floating notch and app dock that shows your apps, system stats, weather, calendar and live controls at a glance on Windows and macOS.',
 	author: 'VelocityApps',
-	/**
-	 * Public addresses. The app carries the repository and Ko-fi links in
-	 * `ProjectLinks.kt`; everything else on this site is derived from here.
-	 */
+	/** Public addresses; the app mirrors the repo and Ko-fi links in `ProjectLinks.kt`. */
 	repository: 'https://github.com/StarkDroid/QuickNotch',
 	repositoryLabel: 'github.com/StarkDroid/QuickNotch',
 	releasesUrl: 'https://github.com/StarkDroid/QuickNotch/releases',
@@ -63,12 +53,7 @@ export const site = {
 	]
 } as const;
 
-/**
- * Cloudflare Web Analytics: page counts without cookies, without a
- * cross-site identifier and without following anyone between sites. It is the
- * only analytics on the site, and the desktop app has none at all. The token is
- * a public site identifier, not a secret, which is why it can live in here.
- */
+/** Cloudflare Web Analytics: cookieless, no cross-site identifier, and the token is public, not a secret. */
 export const analytics = {
 	src: 'https://static.cloudflareinsights.com/beacon.min.js',
 	token: '4465c698879e4120b4c3058ad5f56c71'
@@ -111,11 +96,7 @@ export const chrome = {
 	download: 'Download'
 } as const;
 
-/**
- * The one page nobody links to. It is prerendered to `404.html` at the root of
- * the build, which is the file Cloudflare answers an unknown address with, so a
- * mistyped URL is a real 404 and not the homepage wearing a 200.
- */
+/** Prerendered to `404.html`, which Cloudflare serves for unknown addresses, so a mistyped URL is a real 404. */
 export const notFound = {
 	eyebrow: '404',
 	title: 'This page never made it into the dock.',
@@ -147,11 +128,7 @@ export const footer = {
 	note: 'printed on cream, obviously'
 } as const;
 
-/**
- * The download band. There is no price to state: QuickNotch is free and
- * MIT-licensed, so the band sells the download rather than a purchase, and the
- * structured data in `Seo.svelte` reads the zero from here.
- */
+/** The download band sells a free download rather than a purchase; `Seo.svelte` reads the zero price from here. */
 export const offer = {
 	eyebrow: 'The download',
 	title: 'Free. Open source. Yours.',
@@ -199,10 +176,7 @@ export const download = {
 		'The installers are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask once. On Windows: More info → Run anyway. On macOS: right-click QuickNotch → Open.',
 	checksums: 'Every file is published as a GitHub release, with SHA256SUMS.txt beside it.',
 	yourPlatform: 'your platform',
-	/**
-	 * Shown once a download has started. The file is already on its way, so this
-	 * asks for a coffee but cannot gate anything.
-	 */
+	/** Shown once a download has started; asks for a coffee but gates nothing. */
 	thanks: {
 		eyebrow: 'Downloading',
 		title: 'Thanks for picking QuickNotch.',
@@ -256,14 +230,7 @@ export const facts = [
 	{ label: 'Licence', value: 'MIT' }
 ] as const;
 
-/**
- * The scroll tour: the one place every widget is explained.
- *
- * Seven states, in the order you meet them: the resting pill, then each page
- * of the wheel, then the gaming HUD that replaces the pill. Copy is deliberately
- * one line and one sentence: the animation carries the rest, and the whole thing
- * replaces what used to be four separate sections.
- */
+/** The scroll tour: the one place every widget is explained, seven states in the order you meet them. */
 export type TourStepId =
 	| 'quickview'
 	| 'apps'
@@ -348,7 +315,7 @@ export const surfaces: { id: SurfaceId; label: string; blurb: string }[] = [
 	}
 ];
 
-/** The compact "look" band that replaced the three theme cards. */
+/** The compact look band: shape and finish selectors. */
 export const look = {
 	eyebrow: 'The look',
 	title: 'Three shapes. Two finishes.',
@@ -410,12 +377,7 @@ export const faq = [
 	}
 ] as const;
 
-/**
- * The published history at `/changelog`.
- *
- * `kinds` also drives the ordering and labels of each release group, so the
- * feed and the page never disagree about what a change is called.
- */
+/** The published history at `/changelog`; `kinds` also drives release group order and labels. */
 export const changelogPage = {
 	seo: {
 		title: 'Changelog',
@@ -492,10 +454,7 @@ export const oauthPage = {
 	}
 } as const;
 
-/**
- * What the mock notch shows. Decorative by nature, but still copy: it lives
- * here so the demo and the app's screenshots never drift apart.
- */
+/** What the mock notch shows; it lives here so the demo and the app's screenshots never drift apart. */
 export type GaugeIcon = 'cpu' | 'gpu' | 'ram' | 'storage' | 'download' | 'upload';
 export type WeatherIcon = 'sun' | 'cloud' | 'partly' | 'rain';
 
@@ -612,36 +571,13 @@ export const dockTiles: Tile[] = [
 ];
 
 /**
- * Google Calendar auth lives on the website now: the consent UI is a page in
- * this theme, not a settings row. What follows is everything a page needs to
- * run the flow. The token exchange itself deliberately stays out of the site:
- * it is a static host, Google requires a client_secret from every client type,
- * and the secret is injected into the desktop build at compile time, never
- * committed.
- *
- * The flow: the desktop opens `connectUrl` with the loopback intent baked into
- * `state` (which carries the loopback port), the connect page sends the user to
- * Google with that exact `state`, Google bounces the browser back to
- * `callbackUrl`, and that page performs a plain top-level navigation to the
- * app's `http://127.0.0.1:<port>/oauth?...`, where the code is exchanged.
- * `callbackUrl` is the only registered redirect URI; the connect page is entry
- * point only, and it takes the client id from the desktop.
+ * Google Calendar auth: the token exchange stays in the desktop app because the site is a static host and Google requires a client_secret.
+ * `callbackUrl` is the only registered redirect URI; the connect page takes the client id from the desktop.
  */
 export const calendarAuth = {
 	authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-	// No client id here: the desktop sends its own to the connect page, so this
-	// public site names no Google client and has no credential to keep in step.
-	// The client is a **Web application** one (a Desktop client cannot register
-	// an https redirect URI at all); its id and secret are injected into the
-	// desktop build, not committed.
-	//
-	// Not used to build the authorize URL: the connect page prefers the
-	// redirect_uri the desktop sends it, falling back to its own origin. That is
-	// what makes the flow testable before the site is deployed, since Google's
-	// redirect_uri must be the exact URI the app will exchange against, and
-	// during local testing both are `vite dev`, not a constant that can live in
-	// two places and drift. Kept here for documentation of the production URI
-	// that must be registered on the client at go-live.
+	// No client id here: the desktop sends its own. The client is a Web application one (a Desktop client cannot register an https redirect URI); its secret is injected into the desktop build.
+	// The connect page uses the redirect_uri the desktop sends, so this constant only documents the production URI to register.
 	callbackUrl: 'https://quicknotch.app/oauth/callback',
 	scope:
 		'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email'

@@ -4,18 +4,8 @@
 	import { dockTiles, notchDemo, type TourStepId } from '$data/site';
 
 	/**
-	 * One state of the notch, drawn to the app's own geometry.
-	 *
-	 * This is the single mock every surface reuses: the hero's desktop, the
-	 * laptop screen in the scroll tour, and the compact step list that stands in
-	 * for the tour when motion is off. It is the reason the page can explain
-	 * every widget in one place and still never show a shape the app does not
-	 * draw.
-	 *
-	 * Everything is sized in `cqw`, against the stage it is dropped into, so the
-	 * same markup reads correctly on a 620px laptop screen and a 300px phone.
-	 * The panel is decorative — the caption beside it carries the meaning — so
-	 * it is hidden from assistive tech.
+	 * One state of the notch, drawn to the app's own geometry; every surface reuses this mock.
+	 * Everything is sized in `cqw`; the panel is decorative, so it is hidden from assistive tech.
 	 */
 
 	interface Props {
@@ -175,8 +165,7 @@
 </div>
 
 <style>
-	/* The stage is the size container: one panel unit is 1% of its width, so the
-	   same mock scales from a phone to a laptop without a second layout. */
+	/* The stage is the size container: one panel unit is 1% of its width, so the mock scales from phone to laptop. */
 	.notch-stage {
 		container-type: inline-size;
 		display: flex;
@@ -208,7 +197,7 @@
 			background-color 320ms var(--ease-out);
 	}
 
-	/* AMOLED: no rim, no sheen — the pill reads as a cut-out in the display. */
+	/* AMOLED: no rim, no sheen, the pill reads as a cut-out in the display. */
 	.notch[data-shape='amoled'] {
 		border-color: transparent;
 		background: #000;
@@ -259,7 +248,6 @@
 		display: none;
 	}
 
-	/* ---- Quickview ------------------------------------------------------- */
 	.pill {
 		display: flex;
 		align-items: center;
@@ -346,7 +334,6 @@
 		font-weight: 700;
 	}
 
-	/* ---- Rings ----------------------------------------------------------- */
 	.ring {
 		position: relative;
 		display: grid;
@@ -382,7 +369,6 @@
 		stroke: var(--on-dark-2);
 	}
 
-	/* ---- Gaming HUD ------------------------------------------------------ */
 	.hud {
 		display: flex;
 		align-items: center;
@@ -424,7 +410,6 @@
 		background: rgb(0 0 0 / 0.5);
 	}
 
-	/* ---- Dock ------------------------------------------------------------ */
 	.dock {
 		display: flex;
 		align-items: flex-end;
@@ -454,13 +439,11 @@
 		color: #fff;
 	}
 
-	/* A frozen fisheye beat: the two middle tiles sit magnified, exactly where
-	   the cursor would be resting. */
+	/* A frozen fisheye beat: the two middle tiles sit magnified where the cursor would rest. */
 	.dock__tile--lift {
 		transform: translateY(-0.5cqw) scale(1.14);
 	}
 
-	/* ---- Shared page chrome --------------------------------------------- */
 	.page {
 		display: flex;
 		width: 100%;
@@ -468,7 +451,6 @@
 		color: var(--on-dark);
 	}
 
-	/* ---- System page ----------------------------------------------------- */
 	.page--system {
 		align-items: center;
 		justify-content: space-between;
@@ -534,10 +516,7 @@
 		margin-inline: 0;
 	}
 
-	/* ---- Weather page ----------------------------------------------------
-	   Mirrors WeatherNotchPage: current conditions anchored left (glyph +
-	   temperature, place, high/low, precip · UV), then one tile per outlook day
-	   — weekday over glyph over high over low. */
+	/* Mirrors WeatherNotchPage: current conditions left, then one tile per outlook day. */
 	.page--weather {
 		align-items: center;
 		gap: 0.5cqw;
@@ -653,10 +632,7 @@
 		color: var(--on-dark-3);
 	}
 
-	/* ---- Calendar page ---------------------------------------------------
-	   Mirrors CalendarNotchPage: today anchored left (big date in accent with
-	   weekday + month beside it), then one tile per upcoming date — "24 Oct"
-	   over its red count badge. */
+	/* Mirrors CalendarNotchPage: today left, then one date tile per upcoming day. */
 	.page--calendar {
 		align-items: center;
 		gap: 0.6cqw;
@@ -735,7 +711,6 @@
 		line-height: 1;
 	}
 
-	/* ---- Music page ------------------------------------------------------ */
 	.page--music {
 		align-items: center;
 		gap: 2.2cqw;

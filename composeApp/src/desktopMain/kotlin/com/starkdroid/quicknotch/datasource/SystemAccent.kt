@@ -7,32 +7,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * Reads the OS accent colour so the notch glass can tint itself to match the
- * desktop — and keeps that tint live. macOS exposes the accent index via
- * `defaults read -g AppleAccentColor`; Windows keeps the DWM accent as an ABGR
- * DWORD in the registry, read through the packaged `accent.ps1` bridge
- * (mirroring the other PowerShell probes).
- *
- * A failed probe yields null rather than an error — the caller then falls back
- * to the accent-free translucent glass, so the notch never breaks because the
- * desktop colour was unreadable. The value is published through [accent] as a
- * [StateFlow][kotlinx.coroutines.flow.StateFlow]; a poller in the overlay
- * re-reads the OS while the System Accent surface is chosen, so changing the
- * macOS/Windows accent recolours the notch in place. Reads are deduped by the
- * StateFlow, so composables only recompose when the colour actually changes.
- */
+/** Reads the OS accent colour (macOS `defaults` index, Windows DWM DWORD via
+ * `accent.ps1`); a failed probe yields null. */
 object SystemAccent {
 
     private val _accent = MutableStateFlow<Color?>(null)
     /** Live accent colour; [refresh] publishes new OS values as they are read. */
     val accent: StateFlow<Color?> = _accent.asStateFlow()
 
-    /**
-     * Re-reads the OS accent and publishes it. A failed probe keeps the
-     * previous value (the indicator only ever shows real data), matching the
-     * pass-through-failure behaviour of the other bridges.
-     */
+    /** Re-reads the OS accent; a failed probe keeps the previous value. */
     fun refresh() {
         val fresh = if (HostPlatform.isMac) readFromMacOS() else readFromWindows()
         if (fresh != null) _accent.value = fresh

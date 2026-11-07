@@ -100,16 +100,8 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The one "about" surface: what this app is, which version is running, what
- * changed in every version up to it, and the banner that downloads a newer one
- * in the background and installs it on restart.
- *
- * Two rules shape the content:
- *  - the release list stops at the running version. A newer changelog entry is
- *    not documentation yet; it is an update, and showing its notes as if the
- *    user already had it would be a lie.
- *  - the notes come from the release feed. Opened offline, the dialog shows the
- *    last cached history and a short line instead of inventing an empty release.
+ * The changelog stops at the running version; offline it shows the
+ * cached history rather than inventing an empty release.
  */
 @Composable
 internal fun ChangelogDialog(onDismiss: () -> Unit) {

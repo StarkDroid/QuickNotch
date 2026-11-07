@@ -13,37 +13,9 @@ import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
 /**
- * Frame rate for the gaming HUD, from Intel's PresentMon on Windows.
- *
- * There is no cross-platform API for another process's frame rate: the OS
- * compositor does not publish one, and both major platforms refuse to hand out
- * another app's GPU timings. PresentMon solves it the only way that works — it
- * opens an ETW session on the graphics driver's present events — and ships as a
- * single self-contained executable, so it can live beside the app and be run
- * for the few seconds a sample needs.
- *
- * macOS has no equivalent through a supported API, so this probe is a permanent
- * no-op there: the HUD simply has one fewer cell. Same on a Windows install
- * whose binary is missing — the HUD drops the FPS cell rather than showing a
- * fabricated number.
- *
- * ## Why a 2 s capture every 6 s
- *
- * PresentMon reports one row per presented frame; a rate needs a window of
- * frames to average. Two seconds smooths shader-compile hitches while still
- * tracking the scene, and sleeping between captures means the ETW overhead only
- * exists while a sample is being taken.
- *
- * ## Unverified surface
- *
- * The binary is not bundled in this repository (it is a third-party release
- * artifact — see `native/windows/README-presentmon.md`). PresentMon 2.x renamed
- * every long option from `-process_id` to `--process_id` and rejects the other
- * spelling, so the probe tries one style, and only if that yields no CSV
- * header does it retry with the other and remember which worked. The parser is
- * header-driven and case-insensitive, so either version's columns read. Every
- * failure path — missing binary, refused ETW session, unexpected output —
- * yields "no FPS", never a wrong number.
+ * FPS from PresentMon on Windows, one 2 s capture every 6 s. macOS and
+ * an install without the binary get no FPS cell rather than a made-up
+ * number.
  */
 object FpsProbe {
 
@@ -136,11 +108,8 @@ object FpsProbe {
     }
 
     /**
-     * PresentMon prints a CSV whose first line is the header. The frame-time
-     * column has been `msBetweenPresents` since 1.x (2.x prints the same name),
-     * so one case-insensitive lookup finds it; rows with a non-positive or
-     * unparsable frame time (the first row of a session, a dropped frame) are
-     * skipped rather than counted as zero.
+     * Header-driven CSV parse: msBetweenPresents is the same in 1.x and 2.x;
+     * non-positive rows are skipped.
      */
     internal fun averageFps(csv: String): Int? {
         val lines = csv.lineSequence().filter { it.isNotBlank() }.toList()

@@ -13,21 +13,11 @@ import androidx.compose.ui.unit.IntSize
 import java.awt.MouseInfo
 import java.awt.Point
 
-// ── Hover input sharing ────────────────────────────────────────────────────
 
 /**
- * Hover tracking lives on a small transparent sibling Box that sits on top of
- * the dock. On macOS the dock Box carries a scroll handler and is therefore
- * pointer-eligible, so a plain [Modifier.onPointerEvent] hover area would be
- * shadowed by it: when siblings overlap, hit testing only adds the highest-z
- * eligible one, and the dock is drawn above the hover area.
- *
- * This node opts into [sharePointerInputWithSiblings], so once the hover area
- * is hit the hit test keeps walking down through the dock subtree and both
- * stay on the pointer path — hover Enter/Exit still fires while the dock keeps
- * its scroll handling and icon clicks. See the sibling ordering in
- * [FloatingNotchOverlay] for why the hover area has to be on top for this to
- * work.
+ * The hover area is a sibling above the dock.
+ * sharePointerInputWithSiblings keeps hover events flowing while the dock
+ * keeps scroll and clicks.
  */
 internal class SharingHoverNode(
     var onHoverChanged: (Boolean) -> Unit
@@ -66,19 +56,9 @@ internal fun Modifier.sharingHover(onHoverChanged: (Boolean) -> Unit): Modifier 
     this.then(SharingHoverElement(onHoverChanged))
 
 /**
- * True while the cursor is inside the notch's current hover footprint
- * (island + glow, in screen coordinates). Collapse is gated on this rather
- * than on an Exit event alone because undecorated layered overlay windows
- * re-state their hover region when they resize under a stationary cursor on
- * macOS and Windows alike — with media ticking its progress under the pointer,
- * trusting the raw event made the notch flap open/closed while hovering.
- *
- * [awtDrift] is the live difference between the window's real CG origin and
- * AWT's cached `locationOnScreen` (see `MacAppKit.screenOriginDelta`): Compose's
- * `localToScreen` rides the stale AWT position, which the above-menu-bar
- * placement invalidates by exactly the menu-bar height. Null means no drift.
- *
- * Unknown footprint or pointer position errs toward keeping the notch open.
+ * True while the real cursor is inside the island. Collapse is gated on
+ * this because resize events flap the hover region; awtDrift corrects
+ * AWT's stale origin above the menu bar.
  */
 internal fun cursorOverNotch(coordinates: LayoutCoordinates?, awtDrift: Point?): Boolean {
     val coords = coordinates ?: return true

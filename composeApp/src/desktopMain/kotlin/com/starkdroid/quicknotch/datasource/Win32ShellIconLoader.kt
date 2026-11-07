@@ -119,18 +119,13 @@ object Win32ShellIconLoader {
         if (cached != null) return@withContext cached
 
         val iconBitmap = try {
-            // Registry DisplayIcon strings are frequently junk ("%SystemRoot%\...")
-            // or stale, so always fall back to the executable's own file.
+            // DisplayIcon strings are often junk or stale, so always fall back to the executable's own file.
             val file = app.iconPath?.let { cleanPath(it) } ?: cleanPath(app.executablePath)
             if (file != null) {
-                // 1. Try Windows Shell ImageList (256x256 Jumbo, then 48x48 Extra Large)
                 extractShellImageListIcon(file.absolutePath, SHIL_JUMBO)
                     ?: extractShellImageListIcon(file.absolutePath, SHIL_EXTRALARGE)
-                    // 2. Classic SHGetFileInfo + SHGFI_ICON (32x32, honours app overrides)
                     ?: extractShellIcon(file.absolutePath)
-                    // 3. Try User32 PrivateExtractIcons (128x128)
                     ?: extractPrivateIcon(file.absolutePath, 128)
-                    // 4. Fallback to Java Swing system icon rendered at 128x128
                     ?: run {
                         val icon = fsv.getSystemIcon(file)
                         iconToImageBitmap(icon, 128)
@@ -217,11 +212,7 @@ object Win32ShellIconLoader {
         }
     }
 
-    /**
-     * Direct SHGetFileInfoW + SHGFI_ICON extraction. This resolves the shell
-     * overlay/association icon the same way Explorer does and is a good middle
-     * ground when the system image list is unavailable.
-     */
+    /** SHGetFileInfoW + SHGFI_ICON: resolves the shell association icon the way Explorer does. */
     private fun extractShellIcon(filePath: String): ImageBitmap? {
         return try {
             val sfi = SHFILEINFOW()

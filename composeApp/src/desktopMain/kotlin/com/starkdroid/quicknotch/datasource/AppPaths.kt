@@ -2,15 +2,7 @@ package com.starkdroid.quicknotch.datasource
 
 import java.io.File
 
-/**
- * The per-user app-data directory, in one place.
- *
- * `FavoritesRepository` used to compute this inline, which meant anything that
- * needs the directory *before* the repository exists — the render-backend
- * marker read at startup, for instance — had no way to reach it. Keeping the
- * resolution here also means the path can never drift between the settings
- * writer and the readers.
- */
+/** The per-user app-data directory, resolved here so every writer and reader agrees on it. */
 object AppPaths {
     val configDir: File by lazy {
         val dir = when {

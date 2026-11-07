@@ -3,12 +3,8 @@
 	import { calendarDemo } from '$data/site';
 
 	/**
-	 * The desktop calendar page, drawn with the site's on-dark tokens: the dark
-	 * product hardware on top of the cream page. Mirrors the real widget — the
-	 * collapsed pill badges today's still-upcoming count; the expanded page
-	 * shows today's date big on the left, then the next event days as tiles
-	 * with time strips. `connected` toggles between the live view and the quiet
-	 * "waiting for the code" state the connect page shows mid-flow.
+	 * The desktop calendar page mock; connected switches between the live
+	 * view and the connect page's waiting state.
 	 */
 
 	interface Props {

@@ -25,28 +25,8 @@ data class GameSession(
 )
 
 /**
- * Watches for a fullscreen game and publishes it as one [StateFlow], which is
- * the entire trigger for the gaming quickview: while this is non-null and the
- * island is collapsed, the performance HUD replaces the pill.
- *
- * Two very different probes behind one contract:
- *
- *  - **macOS** asks `MacGameWatch` (CoreGraphics, in-process) every 1.5 s. A
- *    layer-0 non-shell window covering the main display is the signal — the
- *    same thing the user sees when a game takes the screen.
- *  - **Windows** keeps one long-lived `game-detect.ps1` running and reads the
- *    line it prints per tick. Spawning the script per probe was the obvious
- *    shape and the wrong one: its `Add-Type` P/Invoke surface costs ~1 s to
- *    compile in PowerShell 5.1, so a per-tick spawn would burn a fifth of a
- *    core for the app's whole life. One process, one compile, one cheap loop —
- *    and the script exits by itself once this JVM is gone (see its header).
- *
- * A game that drops out for a single probe (a loading screen recreating its
- * window, an alt-tab) does not clear the session: [MissingProbesBeforeIdle]
- * consecutive misses are required, which is what keeps the HUD from blinking
- * mid-match. The detector costs nothing while disabled — the Behavior toggle
- * owns [setEnabled], and a switched-off detector runs no probe and reports no
- * game.
+ * One StateFlow is the gaming trigger. Windows keeps one long-lived
+ * watcher; two misses clear a session.
  */
 object GameDetector {
 
@@ -121,11 +101,8 @@ object GameDetector {
     }
 
     /**
-     * Starts the Windows watcher once and translates its protocol into
-     * sessions. `1|name|pid` is a game; `0||` is a miss, held for
-     * [MissingProbesBeforeIdle] lines exactly like the macOS probe. A watcher
-     * that cannot start (script missing, PowerShell blocked by policy) leaves
-     * the detector silent rather than retrying in a loop.
+     * Translates game-detect.ps1 lines into sessions; a watcher that cannot
+     * start leaves the detector silent.
      */
     private suspend fun watchWindows() {
         val script = NativeResources.extract(WindowsScriptResource, ".ps1")

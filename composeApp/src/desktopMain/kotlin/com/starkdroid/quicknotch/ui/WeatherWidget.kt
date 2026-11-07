@@ -112,10 +112,8 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * WMO weather-code groups to the packaged condition glyph. Solid
- * `currentColor` silhouettes like every other ring/pill glyph, so they tint
- * fully under `ColorFilter`-style SrcIn painting. Clear/partly resolve to the
- * moon variants after dark via the feed's `is_day` flag.
+ * WMO groups to packaged condition glyphs; clear and partly resolve to the
+ * moon variant after dark.
  */
 internal enum class WeatherCondition {
     CLEAR, PARTLY, CLOUDY, FOG, RAIN, SNOW, STORM;
@@ -176,10 +174,8 @@ internal fun weatherTemp(celsius: Double, fahrenheit: Boolean): String {
 internal fun weatherTempUnitLetter(fahrenheit: Boolean): String = if (fahrenheit) "F" else "C"
 
 /**
- * The quickview weather chip: condition glyph + temperature, drawn first in
- * the idle clock row so it sits left of the date. Shown only while a forecast
- * is loaded — an unlocated/failed feed hides the chip rather than showing a
- * false "--°".
+ * Condition glyph and temperature, left of the date; hidden until a
+ * forecast loads.
  */
 @Composable
 internal fun WeatherQuickChip(
@@ -224,14 +220,8 @@ internal fun weatherChipDescription(data: WeatherData, fahrenheit: Boolean): Str
     )
 
 /**
- * The expanded notch's weather page: current conditions on the left (glyph,
- * temperature, place, today's high/low plus precipitation chance and UV
- * index), then one tile per outlook day. Mirrors the calendar page's shape —
- * a schedule in a single row that fits the island's depth.
- *
- * Loading is never blocking: with nothing cached yet the page is a spinner,
- * and a failed feed with no cache says so with a tap-to-retry chip instead
- * of a dead stop.
+ * Current conditions plus one tile per outlook day, mirroring the
+ * calendar page. Loading and failure never block the page.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -470,10 +460,8 @@ private fun weatherDow(dateIso: String): String = runCatching {
 }.getOrNull() ?: dateIso
 
 /**
- * The Widgets-tab weather card: live status (place + sync age), manual
- * refresh, the location picker, and the temperature unit. Whether the notch
- * shows it at all lives on the accordion header (like every other widget).
- * No connection flow — the feed locates itself, so there is nothing to connect.
+ * Live status, refresh, location picker and unit. The widget toggle lives
+ * on the accordion header.
  */
 @Composable
 internal fun WeatherSettings(
@@ -578,10 +566,8 @@ private fun WeatherStatusRow(
 }
 
 /**
- * Manual-location picker: the active place over a city/state search backed by
- * Open-Meteo geocoding. Picking a result pins the pill + page to it; the reset
- * chip drops back to the automatic IP position. Search is debounced so typing
- * never fires a request per keystroke.
+ * Pins the feed to a searched place; reset returns to IP location, and
+ * search is debounced.
  */
 @Composable
 private fun WeatherLocationSection(

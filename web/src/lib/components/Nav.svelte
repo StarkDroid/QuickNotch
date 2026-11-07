@@ -4,18 +4,8 @@
 	import { chrome, site } from '$data/site';
 
 	/**
-	 * The header is the notch: a dark capsule pinned to the top of the page with
-	 * the mark, the wordmark and the download button. At the top of the page it
-	 * rests compact, hugging its content; scrolling opens it into a full-width
-	 * bar and scrolling back up closes it again. There are no section links — the
-	 * tour and the FAQ are found by scrolling, and the destinations are the
-	 * download page, the changelog (the version chip) and the source.
-	 *
-	 * The scroll state is two pieces driven by one rAF-batched listener:
-	 * `scrolled` (which the CSS transition animates) and the progress line.
-	 * Everything visual is a CSS transition, so both directions are smooth and
-	 * nothing re-renders per frame. The version chip reads the committed release
-	 * feed, so the header and `/changelog` always name the same build.
+	 * The header capsule; scroll state is one rAF-batched listener and CSS
+	 * transitions. The version chip reads the committed changelog feed.
 	 */
 	let scrolled = $state(false);
 	let progress = $state(0);

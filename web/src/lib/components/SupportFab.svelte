@@ -3,17 +3,8 @@
 	import { site, support } from '$data/site';
 
 	/**
-	 * The support ask, parked in the bottom-right corner of every page.
-	 *
-	 * Ko-fi's own overlay widget is a floating chat bubble loaded from their CDN;
-	 * this is the same idea drawn in the site's hand: a cream pill with an ink
-	 * border and a hard shadow, so it reads as one more sticker on the page
-	 * instead of a stranger's branding. Nothing is loaded from Ko-fi until the
-	 * reader clicks.
-	 *
-	 * It is fixed and always visible, on the landing page and on the app's own
-	 * OAuth pages alike. No scroll threshold, no footer hand-off: the ask does not
-	 * appear halfway through a read or vanish at the bottom of one.
+	 * Fixed Ko-fi ask on every page, drawn in the site's own style. Nothing
+	 * loads from Ko-fi until it is clicked.
 	 */
 </script>
 

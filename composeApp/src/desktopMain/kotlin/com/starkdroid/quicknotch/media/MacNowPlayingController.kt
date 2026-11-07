@@ -6,27 +6,9 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * macOS now-playing via the system MediaRemote service — the same "now
- * playing" surface the media keys use, so any registered source (Music,
- * Spotify, browsers, VLC, IINA, …) is covered, not just apps we script.
- *
- * Since macOS 15.4 the MediaRemote daemon only serves processes whose bundle
- * id starts with "com.apple.", so a plain helper binary is silently denied.
- * The compiled helper (`composeApp/native/macos/nowplaying_bridge.m`) is a
- * supervisor that runs the private-class API (`MRNowPlayingRequest`,
- * `MRNowPlayingController`) inside an `osascript -l JavaScript` subprocess —
- * which is entitled — and streams one canonical JSON snapshot per change on
- * stdout. Transport commands spawn a short-lived helper invocation the same
- * way.
- *
- * Cover art needs its own channel: scripted contexts only ever see metadata,
- * never the artwork bytes. Any snapshot that arrives without art (browsers,
- * Spotify, Music alike) goes to [MacArtworkFetcher], which runs one
- * entitled-helper query per track through `/usr/bin/perl` and fills the art
- * in behind the poll loop.
- *
- * If the helpers are absent (non-mac build host) the controller simply never
- * publishes a session.
+ * macOS now playing from MediaRemote through an osascript helper, the
+ * only context the daemon entitles since 15.4. Cover art comes from
+ * MacArtworkFetcher; without the helpers no session is published.
  */
 internal class MacNowPlayingController : MediaControllerBase() {
 
@@ -93,13 +75,8 @@ internal class MacNowPlayingController : MediaControllerBase() {
     override fun seekTo(positionMs: Long) = Unit
 
     /**
-     * Transport commands spawn a short-lived `osascript` helper (~100-300ms,
-     * 2s deadline) — that MUST NOT run on the calling thread: clicks arrive on
-     * the Compose UI thread, and blocking it made every press freeze the
-     * overlay + settings windows for the spawn duration (very visible on the
-     * SOFTWARE renderer, which paints both windows on that same thread). The
-     * command is fire-and-forget on the controller's IO scope; the session
-     * feed reflects the outcome on its own.
+     * Transport commands spawn an osascript helper and must not run on the
+     * UI thread, which would freeze both windows for the spawn.
      */
     private fun send(command: String) {
         val binary = bridge ?: return

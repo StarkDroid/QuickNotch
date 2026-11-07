@@ -5,21 +5,9 @@
 	import { reveal } from '$lib/actions/reveal';
 
 	/**
-	 * The tour: every widget explained in one place.
-	 *
-	 * A tall section with a sticky stage. The device swings from a skewed
-	 * three-quarter view to frontal as the lid opens, then the screen walks
-	 * through the seven states while the copy beside it swaps.
-	 * The section is deliberately the only place widgets are described — it
-	 * replaced four separate sections (widget cards, hover demo, gaming page,
-	 * theme cards) and the copy is one sentence per state.
-	 *
-	 * Scroll is read on rAF, not per event: progress is written straight to CSS
-	 * variables on the device so a frame never touches Svelte state. Only the
-	 * step index crosses into the component, and only when it changes.
-	 *
-	 * Everything degrades: no JS or reduced motion un-sticks the stage and shows
-	 * all seven captions as a plain list, with the device open on the quickview.
+	 * The tour: one sticky stage, the device opens while the seven captions
+	 * swap. Scroll progress goes straight to CSS variables; only the step
+	 * index enters Svelte state.
 	 */
 
 	let pinEl: HTMLElement | undefined = $state();
@@ -313,7 +301,6 @@
 		opacity: 0.8;
 	}
 
-	/* ---- Small screens ---------------------------------------------------- */
 	@media (max-width: 900px) {
 		:global(html:not(.js)) .tour__device,
 		:global(html.reduced-motion) .tour__device {
@@ -369,7 +356,7 @@
 		}
 	}
 
-	/* ---- Static fallback ---------------------------------------------------
+	/*
 	   No JavaScript, or a visitor who asked for less motion: no sticky stage, no
 	   state swapping. The device keeps its final pose and every caption reads as
 	   a plain list. */

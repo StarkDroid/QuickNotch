@@ -15,11 +15,8 @@ import kotlinx.datetime.toLocalDateTime
  */
 
 /**
- * How early before an event the ticker appears, so a 10:00 meeting is already
- * on screen at 9:58 rather than popping in as it starts. There is
- * deliberately no linger on the far side: the ticker is a notification, not a
- * status -- it leaves when the event ends or when the user expands the notch
- * over it, whichever comes first, and the next event is what brings it back.
+ * The ticker appears this early before an event and leaves when the event
+ * ends or the notch expands.
  */
 const val TICKER_LEAD_MS = 2 * 60 * 1000L
 
@@ -35,11 +32,8 @@ data class CalendarEvent(
     val allDay: Boolean
 ) {
     /**
-     * The ticker window: [TICKER_LEAD_MS] before the start until the event
-     * ends. No linger on the far side — the ticker is a notification, and a
-     * meeting that is over should not keep scrolling across the pill. All-day
-     * entries never tick — "Team offsite" scrolling all morning is noise, not
-     * information.
+     * TICKER_LEAD_MS before the start until the event ends; all-day entries
+     * never tick.
      */
     fun isTickerLiveAt(nowMillis: Long): Boolean =
         !allDay &&
@@ -56,12 +50,8 @@ fun todayDate(
 ): LocalDate = Clock.System.todayIn(timeZone)
 
 /**
- * Where a fetch begins: local midnight today. There is deliberately no upper
- * bound -- the API has no "schedule mode" endpoint, but omitting timeMax *is*
- * schedule-mode semantics: everything upcoming from this instant, ordered,
- * capped by maxResults. One fetch serves the pill badge, the ticker and the
- * schedule page, so there is exactly one thing to keep in sync with Google's
- * bounds instead of three queries drifting apart.
+ * Fetch window starts at local midnight; no upper bound is schedule mode.
+ * One fetch feeds the badge, the ticker and the page.
  */
 fun fetchFromMillis(
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
@@ -90,11 +80,7 @@ fun List<CalendarEvent>.todayUpcomingCount(
 }
 
 /**
- * The next [maxDates] dates with an event coming, soonest first -- four, one
- * per date even when a date carries several, because the schedule row is about
- * where the calendar is heading, not how dense today is. Today comes first
- * when it has one still running or ahead; gaps are the point, and a quiet
- * calendar should not show empty days.
+ * The next maxDates dates with an event, one per date and no empty days.
  */
 fun List<CalendarEvent>.upcomingDateGroups(
     timeZone: TimeZone = TimeZone.currentSystemDefault(),

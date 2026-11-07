@@ -6,14 +6,8 @@
 	import { notFound, site } from '$data/site';
 
 	/**
-	 * The page behind a wrong address.
-	 *
-	 * The static adapter writes this route to `404.html` at the root of the
-	 * build. Cloudflare answers any unmatched path with that file and a real 404
-	 * status, so a mistyped or dead link looks like a missing page instead of the
-	 * homepage pretending everything is fine. It is deliberately unlinked from
-	 * the rest of the site and kept out of the sitemap; the two ways out are the
-	 * only things it offers.
+	 * Written to 404.html and served by Cloudflare for unmatched paths, so a
+	 * dead link is a real 404 rather than the homepage.
 	 */
 </script>
 

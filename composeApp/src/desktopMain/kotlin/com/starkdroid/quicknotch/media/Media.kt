@@ -8,14 +8,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 enum class PlaybackState { PLAYING, PAUSED, STOPPED, NONE }
 
 /**
- * A single point-in-time sample of the system's active media session — the
- * "now playing" surface the OS maintains for whichever app currently owns the
- * media keys (Music/Spotify/browsers on macOS via MediaRemote; the SMTC
- * session on Windows).
- *
- * [sampledAt] is a monotonic millisecond stamp taken when the sample was made;
- * [displayedPositionMs] extrapolates forward from it so the progress and the
- * vinyl can advance at frame rate without polling the controller.
+ * One now-playing sample. sampledAt is monotonic, so the position
+ * extrapolates at frame rate without polling.
  */
 @Immutable
 data class MediaSession(

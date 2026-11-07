@@ -16,21 +16,8 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * System master-volume percentage (0-100) plus the device mute flag, polled at
- * a low cadence for the music widget.
- *
- * Neither backend's "now playing" feed exposes volume — SMTC and MediaRemote
- * carry none — so this is read straight from the OS, independent of the media
- * session flow. Windows uses a tiny PowerShell helper over the CoreAudio COM
- * API (the same master volume the flyout shows); macOS uses AppleScript's
- * `output volume` / `output muted`. Each poll spawns ONE process that answers
- * both values as a single `"<percent>,<muted>"` line. A failed or misparsed
- * query simply leaves both null and the widget hides the chip.
- *
- * [toggleMute] flips the OS mute flag from the volume ring's click listener;
- * it is fire-and-forget (spawns on IO like every other native call) and pokes
- * an immediate re-read so the ring reflects the change without waiting for the
- * next poll tick.
+ * Master volume and mute read from the OS, since neither media feed
+ * exposes them. One process answers both; a failed read hides the chip.
  */
 internal object SystemVolume {
 

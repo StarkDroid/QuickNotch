@@ -16,21 +16,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Thin JVM front for the compiled `passthrough_bridge.m` dylib, shared by the
- * overlay's click-through (see `WindowPassthrough`), the notch's window policy
- * (above-menu-bar placement + Spaces behaviour) and the Dock-presence toggle.
- *
- * The dylib exists only when the project was built on a macOS host; on other
- * hosts every call here is a silent no-op so the Windows build degrades the same
- * way the click-through already does (fail soft, never throws).
- *
- * All computed constants mirror the AppKit headers. Window/application geometry
- * reads go through the bridge's main-thread-safe helpers so callers never have
- * to care which JVM thread they run on.
+ * JVM front for `passthrough_bridge.m`: click-through, window policy and Dock presence.
+ * Without the dylib (a non-macOS build) every call is a silent no-op.
  */
 internal object MacAppKit {
-
-    // ── AppKit constants (kept here so the JVM side never hardcodes magic) ──────
 
     /** NSAccessory equivalent: no Dock icon, no app menu bar (pure agent). */
     const val ACTIVATION_REGULAR = 0
@@ -94,12 +83,8 @@ internal object MacAppKit {
     }
 
     /**
-     * The window's top-left in *real* CG screen coordinates (top-left origin,
-     * points). AWT's `locationOnScreen` reports its own cached virtual position
-     * (AWT y=0 is 30pt below the true top), which drifts from the actual
-     * NSWindow frame once the above-menu-bar nudge moves it directly in Cocoa.
-     * Passthrough's cursor-over math needs this real origin. Null when the
-     * native side can't answer (bridge missing, window not mapped).
+     * The window's top-left in real CG screen coordinates (top-left origin, points). AWT's
+     * `locationOnScreen` reports a cached position whose y=0 sits 30pt below the true top.
      */
     private val originXBuf: Memory by lazy { Memory(8) }
     private val originYBuf: Memory by lazy { Memory(8) }
@@ -116,14 +101,8 @@ internal object MacAppKit {
     }
 
     /**
-     * How far AWT's cached `locationOnScreen` strays from the window's *real*
-     * CG origin (top-left origin, points). `Window.locationOnScreen` on macOS
-     * reflects AWT's own virtual placement (its y=0 sits at the bottom of the
-     * menu bar), which stops matching the live NSWindow frame the moment the
-     * overlay policy parks the window with direct Cocoa moves. Compose's
-     * `localToScreen` inherits that stale number, so screen-space hover checks
-     * must be shifted by this delta. Null = no reliable real origin (bridge
-     * missing / window not mapped) → callers fall back to AWT's coordinates.
+     * How far AWT's cached `locationOnScreen` strays from the window's real CG origin; screen-space
+     * hover checks must shift by this delta. Null means no reliable origin, fall back to AWT.
      */
     fun screenOriginDelta(window: java.awt.Window): Point? {
         val ptr = resolveMacWindowPtr(window) ?: return null
@@ -141,10 +120,8 @@ internal object MacAppKit {
     }
 
     /**
-     * Backdrop blur behind the island, via the island-sized helper window
-     * (created, positioned and torn down inside the bridge; the compositor
-     * radius + effect view inside it both follow `frame.intensity`).
-     * Fire-and-forget on AppKit's main queue; a no-op without the bridge.
+     * Backdrop blur via the island-sized helper window (the bridge owns it); fire-and-forget on
+     * AppKit's main queue, no-op without the bridge.
      */
     fun setContentBlur(ptr: Long, enabled: Boolean, frame: BlurFrame) {
         call(
@@ -165,21 +142,8 @@ internal object MacAppKit {
 }
 
 /**
- * macOS-only per-overlay controller that gives the notch its above-menu-bar
- * home: raised above the menu bar, flush against the true top of the screen
- * (AWT cannot reach that position — it clamps placement to the visible area),
- * joining every Space and surviving full-screen apps.
- *
- * AWT's z-order bookkeeping resets window levels whenever it reorders sibling
- * windows, and each Compose placement re-parks the window 30pt low, so the
- * policy keeps a slow reconcile loop that re-asserts level + frame every tick.
- * The "always on top" toggle maps to level and collection behaviour only; the
- * frame never changes:
- *
- *  • on  — NSStatusWindowLevel (25, above the menu bar), joining every Space
- *          and surviving full-screen apps.
- *  • off — one level below normal (-1), the same frame, no full-screen band,
- *          so regular windows can cover the island again.
+ * macOS-only controller that parks the notch flush at the true top of the screen, above the menu bar,
+ * on every Space. AWT re-parks the window 30pt low, so a 700ms loop re-asserts level and frame.
  */
 internal class MacOverlayWindowPolicy private constructor(
     private val window: Window
@@ -207,8 +171,7 @@ internal class MacOverlayWindowPolicy private constructor(
         }
     }
 
-    /** Re-target the policy (new always-on-top state / style edge gap), applied
-     *  on the next reconcile tick (≤ ~700ms) */
+    /** Re-targets the policy; applied on the next reconcile tick. */
     fun update(alwaysOnTop: Boolean, edgeGapDp: Int) {
         wantedAlwaysOnTop = alwaysOnTop
         wantedEdgeGapDp = edgeGapDp
@@ -219,9 +182,7 @@ internal class MacOverlayWindowPolicy private constructor(
         val ptr = nsWindowPtr
         if (ptr == 0L) return
         val onTop = wantedAlwaysOnTop
-        // Off gives up the full-screen band as well as the level: an ordinary
-        // window should not keep riding above a game or a full-screen video,
-        // which is what fullScreenAuxiliary is for.
+        // Off drops the full-screen band too: an ordinary window should not ride above a game.
         MacAppKit.setCollectionBehavior(
             ptr,
             if (onTop) MacAppKit.COLLECTION_NOTCH else MacAppKit.COLLECTION_DESKTOP
@@ -230,10 +191,7 @@ internal class MacOverlayWindowPolicy private constructor(
             ptr,
             if (onTop) MacAppKit.LEVEL_STATUS_BAR else MacAppKit.LEVEL_BELOW_NORMAL
         )
-        // The frame is identical in both states: the toggle changes stacking,
-        // never position. Level -1 sits under every app window but is not
-        // clamped by the menu bar the way level 0 is, so the notch keeps its
-        // top-edge home while a foreground window can cover it.
+        // The frame is identical in both states: the toggle changes stacking, never position.
         MacAppKit.setFrameTopGap(ptr, wantedEdgeGapDp.toDouble())
     }
 
@@ -256,36 +214,15 @@ internal class MacOverlayWindowPolicy private constructor(
 }
 
 /**
- * macOS Dock/application presence tied to the Settings window: the notch's
- * resting state is an accessory agent — no Dock icon, no app menu bar, no
- * focus stealing, and the overlay can layer over full-screen apps. As soon as
- * the Settings window is open the app flips to a regular application (Dock
- * icon + app switcher) and is brought to the front **once** so launching/
- * settings feels like a real app; closing Settings returns it to the quiet tray
- * agent.
- *
- * A reconcile loop re-asserts the activation *policy* every tick because AWT
- * initialises the process as a regular application and can fight a one-shot
- * flip mid-session. It deliberately never re-activates: `activateIgnoringOther
- * Apps` called on each tick would keep yanking focus back to the Settings
- * window and make every other app unclickable (the front-most app would snap
- * back to QuickNotch within one tick). Activation is therefore a one-shot
- * request consumed on the next policy pass, armed only when Settings transitions
- * to visible.
- *
- * No-op off macOS. Mirrors the "the app belongs in the Dock only when the
- * Settings page is open" requirement.
+ * Dock/application presence tied to the Settings window: accessory agent at rest, Regular plus a
+ * single activation while Settings is open. The loop re-asserts policy only, never activation.
  */
 internal object MacDockPresence {
 
     @Volatile private var settingsVisible = false
     @Volatile private var running = false
 
-    /**
-     * One-shot focus request: armed when Settings opens, consumed by the next
-     * [applyPolicy] pass. Kept false during the steady state so the reconcile
-     * loop never steals focus from another application.
-     */
+    /** One-shot focus request, armed when Settings opens and consumed by the next [applyPolicy]. */
     @Volatile private var pendingActivate = false
     private var scope: CoroutineScope? = null
 
@@ -311,9 +248,7 @@ internal object MacDockPresence {
         if (!running) return
         MacAppKit.setActivationPolicy(if (settingsVisible) MacAppKit.ACTIVATION_REGULAR else MacAppKit.ACTIVATION_ACCESSORY)
         if (settingsVisible && pendingActivate) {
-            // Front the app exactly once per open transition. An accessory app
-            // can't surface its (now regular) Settings window on its own, but
-            // re-firing this every tick would make other apps unclickable.
+            // Front the app once per open transition: re-firing every tick makes other apps unclickable.
             pendingActivate = false
             MacAppKit.activateApp()
         }
@@ -321,8 +256,7 @@ internal object MacDockPresence {
 
     fun setSettingsVisible(visible: Boolean) {
         settingsVisible = visible
-        // Only a transition into "visible" asks for a single activation; staying
-        // open never re-activates (that's what blocked focus on other apps).
+        // Only the transition into visible arms an activation; staying open never re-fires it.
         if (visible) pendingActivate = true
         scope?.launch { applyPolicy() }
     }

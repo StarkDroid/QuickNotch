@@ -18,21 +18,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Every Google Calendar request the app makes, in one multiplatform place.
- *
- * Ktor rather than `HttpURLConnection` for one reason that is not taste, and one
- * that is. The reason that is not taste: the runtime jpackage bundles is
- * jlink-trimmed and contains neither `java.net.http` nor `jdk.httpserver`, so
- * the tidier JDK options are simply absent from the shipped app — and a missing
- * module is a `NoClassDefFoundError` at the first call, which is exactly how the
- * OAuth loopback died silently (pitfall 34). CIO is ordinary bytecode, so it
- * travels with the jars. The reason that is taste: this file has no `java.*` in
- * it, so the network layer moves to a non-JVM target unchanged.
- *
- * Every call is `suspend` and returns a result type instead of throwing, because
- * the caller has three genuinely different failures to tell apart — refused,
- * unreachable, and succeeded — and a null return collapses them (which is how a
- * rejected token exchange once reported whatever the previous failure was).
+ * Every Google Calendar request, over Ktor CIO because the jlink runtime
+ * has no java.net.http and a missing module is a NoClassDefFoundError.
  */
 class CalendarApi(
     private val clientId: String,
@@ -42,19 +29,11 @@ class CalendarApi(
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    // ── OAuth ───────────────────────────────────────────────────────────────
 
     /**
-     * Trade the loopback code for tokens.
-     *
-     * The secret goes along despite this being the documented PKCE-no-secret
-     * desktop flow, because the endpoint now rejects every code grant without
-     * it — Desktop clients included (verified 2026-09 against a real code: the
-     * identical request without the secret answers
-     * `invalid_request: client_secret is missing`, and Google's own gcloud
-     * client behaves the same). PKCE stays: it is what binds the exchange to
-     * *this* app's authorization request. The secret by itself authorizes
-     * nothing — tokens still require a real user's consent.
+     * Trades the loopback code for tokens. Google now requires the client
+     * secret on every code grant, Desktop clients included; PKCE still binds
+     * the exchange to this request.
      */
     suspend fun exchangeCode(code: String, redirect: String, verifier: String): OAuthResult {
         val response = postForm(
@@ -93,26 +72,10 @@ class CalendarApi(
         return runCatching { json.parseToJsonElement(body).jsonObject.string("email") }.getOrNull()
     }
 
-    // ── events ──────────────────────────────────────────────────────────────
 
     /**
-     * Today's events from the primary calendar, already filtered down to what is
-     * worth showing: cancelled entries are gone, and so are unnamed ones — a
-     * "Busy" block would put a meaningless word on the pill's ticker, so those
-     * are left to the day's count alone.
-     *
-     * Null means the day could not be fetched at all, which the caller treats as
-     * "keep the last known day" rather than "the day is empty".
-     */
-    /**
-     * Today's events, with the failure named rather than flattened into a null.
-     *
-     * The flattening cost a real bug: `timeMin` went out as epoch seconds, which
-     * Google's API answers with a 400 ("must be an RFC3339 timestamp") — and a
-     * null return made that indistinguishable from every other failure, so the
-     * widget showed "not connected" after a sign-in that had fully succeeded,
-     * and nothing was logged anywhere. The timestamps are RFC3339 now; the
-     * reason travels back to the caller, which logs it.
+     * Today's events with cancelled and unnamed entries removed. A failed
+     * fetch returns a named failure, never an empty day.
      */
     suspend fun events(accessToken: String, fromMillis: Long): EventsResult {
         val timeMin = fromMillis
@@ -130,16 +93,8 @@ class CalendarApi(
             }
         }.getOrNull() ?: return EventsResult.Unreachable
 
-        // A failed status is "we could not fetch the day", which is NOT the same
-        // as "the day is empty" and must not be reported as one. Google's refusal
-        // is a JSON body with no `items` key, so parsing alone would quietly turn
-        // a revoked token into an empty calendar and wipe the pill's contents
-        // instead of keeping the last known day. Null sends the caller down its
-        // existing "refresh once, then keep the last known day" path, which is
-        // also what catches a genuinely dead token.
-        //
-        // No logging here on purpose: this file is commonMain, so it has no
-        // business reaching for the desktop-only log file.
+        // A failed status is not an empty day: return a named failure so the
+        // caller keeps the last known day.
         if (!response.status.isSuccess()) {
             // Google's error body is the most useful thing in the response and
             // it costs nothing to read -- the 403 for a disabled API names the
@@ -174,7 +129,6 @@ class CalendarApi(
         }.getOrElse { EventsResult.Malformed }
     }
 
-    // ── plumbing ────────────────────────────────────────────────────────────
 
     private suspend fun postForm(endpoint: String, form: Map<String, String>): JsonObject? = runCatching {
         val response = client.submitForm(
@@ -227,11 +181,8 @@ sealed interface EventsResult {
     data class Ok(val events: List<CalendarEvent>) : EventsResult
 
     /**
-     * Google answered, and said no. [detail] is Google's own message from the
-     * body, because the body is the diagnosis: a 403 whose body says "Calendar
-     * API has not been used in project ... before or it is disabled" is the
-     * project's API Library, not a token problem, and the two remedies are in
-     * completely different places.
+     * Google's own message from the body: a 403 naming a disabled Calendar
+     * API is a project setting, not a token problem.
      */
     data class Http(val status: Int, val detail: String? = null) : EventsResult
 

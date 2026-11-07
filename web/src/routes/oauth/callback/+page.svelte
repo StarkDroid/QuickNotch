@@ -5,14 +5,8 @@
 	import { onMount, onDestroy } from 'svelte';
 
 	/**
-	 * Google's OAuth bounce lands here (the redirect URI registered in the
-	 * console). This is a static page, so it cannot exchange the code — that is
-	 * the secret-bearing desktop app. Instead, it takes the query (code/state)
-	 * and performs a top-level navigation to the loopback landing strip the
-	 * desktop spun up: `http://127.0.0.1:<port>/oauth` with the same query.
-	 * The desktop's ServerSocket accepts that GET, reads the code+state (state
-	 * must match the exact string this attempt emitted), sends the small
-	 * consent page back, and completes the exchange.
+	 * Static page: forwards the query to the loopback, which validates state
+	 * and performs the token exchange.
 	 */
 	let status = $state<'idle' | 'jumping' | 'done' | 'refused' | 'error'>('idle');
 	let error = $state('');
@@ -31,11 +25,8 @@
 	let returnToApp = $state<() => void>(() => {});
 
 	/**
-	 * The loopback port rides inside the `state` the desktop minted: it is
-	 * base64url-encoded JSON `{"p":<port>,"s":"<nonce>"}`. Only `p` matters
-	 * here — the desktop verifies the whole string it sees against the one it
-	 * sent, so this page only needs the port out of it and must not treat the
-	 * nonce as authority for anything.
+	 * state is base64url JSON with the port and nonce. Only the port is read
+	 * here; the desktop verifies the whole string.
 	 */
 	function extractPortFromState(state: string | null): number | null {
 		if (!state) return null;
@@ -63,13 +54,8 @@
 		const hasPort = port !== null && port >= 1 && port <= 65535;
 
 		/**
-		 * Hand control back to the loopback, carrying whatever Google said.
-		 * A refusal is forwarded too, not just a code: the desktop classifies
-		 * `access_denied` against its description to tell "user pressed Cancel"
-		 * from "consent screen still in Testing" (pitfall 33), and that
-		 * distinction only exists on the app side. Swallowing it here would
-		 * leave the settings widget spinning out its whole timeout on the one
-		 * outcome it is best equipped to explain.
+		 * Forward refusals too, not just codes: the desktop tells Cancel from a
+		 * Testing consent screen.
 		 */
 		returnToApp = function () {
 			if (!hasPort || !state) return;

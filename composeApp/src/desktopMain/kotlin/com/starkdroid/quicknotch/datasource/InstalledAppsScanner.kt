@@ -5,10 +5,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 object InstalledAppsScanner {
-    // The installed list only changes when apps are added/removed, and the
-    // underlying scan can be slow on Windows (registry + shell calls). Cache it
-    // in memory so opening Settings again is instant and never re-runs the
-    // blocking pass on the UI thread.
+    // Cached: the scan is slow on Windows (registry + shell calls) and only changes when apps do.
     private var cached: List<AppItem>? = null
     private val scanMutex = Mutex()
 

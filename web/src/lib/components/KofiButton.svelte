@@ -2,13 +2,8 @@
 	import { site, support } from '$data/site';
 
 	/**
-	 * Ko-fi's published button artwork, used unchanged.
-	 *
-	 * The file is Ko-fi's own 580×146 PNG (cream fill, ink lettering, tomato
-	 * heart) committed to `static/` rather than hot-linked: no runtime call to
-	 * their CDN, no layout shift if it is slow, and the button keeps working if
-	 * they ever move it. Their cream is close enough to this site's paper that it
-	 * needs no frame.
+	 * Ko-fi's own button PNG, committed rather than hot-linked so there is
+	 * no runtime call and no layout shift.
 	 */
 	interface Props {
 		/** Smaller presentation for tighter rows (the ticket serial line). */

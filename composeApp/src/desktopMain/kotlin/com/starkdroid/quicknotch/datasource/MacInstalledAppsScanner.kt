@@ -46,9 +46,7 @@ object MacInstalledAppsScanner {
     }
 
     private fun addBundle(bundle: File, map: MutableMap<String, AppItem>) {
-        // Read the plist once and share it across every key we need, instead of
-        // re-reading the whole file per key (DisplayName / Name / IconFile /
-        // Identifier) for every bundle in the scan.
+        // Read the plist once and share it across the DisplayName / Name / IconFile / Identifier lookups.
         val plistText = readPlistText(bundle)
         val displayName = plistString(plistText, "CFBundleDisplayName")
             ?: plistString(plistText, "CFBundleName")

@@ -5,13 +5,8 @@
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
-	 * The download, as a printed ticket.
-	 *
-	 * The stub carries the price (free), the reason it is free (MIT), and the
-	 * button to `/download`; the right-hand side lists what the download
-	 * contains. A perforated rule with two punch marks runs between them. Every
-	 * string comes from the content module, so the ticket, the buttons and the
-	 * structured data in `Seo.svelte` can never disagree.
+	 * The download as a ticket: price and licence on the stub, contents on
+	 * the right, strings from the content module.
 	 */
 </script>
 
@@ -85,7 +80,6 @@
 </section>
 
 <style>
-	/* ---- The ticket ------------------------------------------------------- */
 	.ticket {
 		position: relative;
 		display: grid;
@@ -135,7 +129,6 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Price ------------------------------------------------------------ */
 	.ticket__price {
 		display: flex;
 		align-items: baseline;
@@ -181,7 +174,6 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Perforation ------------------------------------------------------ */
 	.ticket__perf {
 		position: relative;
 		border-left: 2px dashed var(--line-strong);
@@ -206,7 +198,6 @@
 		bottom: 8%;
 	}
 
-	/* ---- What is in the box ----------------------------------------------- */
 	.ticket__includes ul {
 		display: flex;
 		flex-direction: column;
@@ -242,7 +233,6 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Layout ----------------------------------------------------------- */
 	@media (min-width: 860px) {
 		.ticket {
 			grid-template-columns: minmax(0, 1.02fr) 0 1fr;

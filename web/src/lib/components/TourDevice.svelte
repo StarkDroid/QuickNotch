@@ -4,18 +4,9 @@
 	import { desktopChrome, site, type TourStepId } from '$data/site';
 
 	/**
-	 * The laptop the tour happens on.
-	 *
-	 * Deliberately frontal at rest, skewed on arrival: the settle drives the yaw
-	 * and pitch out as the lid swings up, so the laptop turns to face you as it
-	 * opens. The deck matches the lid's footprint on a 90° hinge — visible while
-	 * skewed, edge-on (front lip only) when frontal — and stays blank, so no
-	 * angle ever shows keys.
-	 *
-	 * The lid angle, settle and wake are written by `TourSection` as CSS
-	 * variables on the wrapper — per-frame values must never round-trip through
-	 * Svelte state. Everything here is decorative: the captions beside it carry
-	 * the meaning, so the whole device is hidden from assistive tech.
+	 * The laptop: skews to frontal as the lid opens, deck blank so no angle
+	 * shows keys. Per-frame values arrive as CSS variables; the device is
+	 * decorative.
 	 */
 
 	interface Props {
@@ -119,7 +110,6 @@
 		will-change: transform;
 	}
 
-	/* ---- Lid ------------------------------------------------------------- */
 	.lid {
 		position: absolute;
 		inset: 0;
@@ -188,7 +178,6 @@
 		translate: -50% 0;
 	}
 
-	/* ---- Screen ---------------------------------------------------------- */
 	/* The screen is the size container every `cqw` inside the notch reads from. */
 	.screen {
 		position: relative;
@@ -305,7 +294,6 @@
 		background: rgb(255 255 255 / 0.08);
 	}
 
-	/* ---- The game backdrop ----------------------------------------------- */
 	.game {
 		position: absolute;
 		inset: 0;
@@ -392,7 +380,7 @@
 		z-index: 3;
 	}
 
-	/* ---- Base: the front elevation of the machine -------------------------
+	/* Base: the front elevation of the machine
 	   A solid body hanging from the hinge, drawn in the device's own plane so
 	   it shares the lid's perspective. Height is the machine's real thickness
 	   (~3.4% of its width), with the lid's width, rounded lower corners and a
@@ -427,7 +415,6 @@
 		box-shadow: inset 0 1px 0 rgb(0 0 0 / 0.6);
 	}
 
-	/* ---- Hinge ------------------------------------------------------------ */
 	.hinge {
 		position: absolute;
 		left: 4%;
@@ -441,7 +428,6 @@
 			0 1px 2px rgb(0 0 0 / 0.6);
 	}
 
-	/* ---- Ground shadow --------------------------------------------------- */
 	.device__shadow {
 		position: absolute;
 		left: 50%;

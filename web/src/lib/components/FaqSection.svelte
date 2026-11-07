@@ -3,13 +3,8 @@
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
-	 * The questions people actually ask before downloading. Built on native
-	 * <details>/<summary> so disclosure works with zero JS and full keyboard /
-	 * screen-reader support.
-	 *
-	 * SEO-first enhancement order: in the prerendered HTML every answer is open
-	 * and crawlable. Once JS hydrates, all panels collapse into a single-open
-	 * accordion so the strip reads tight.
+	 * Native details/summary, so disclosure works without JS. Answers are
+	 * open in the prerendered HTML, then collapse after hydration.
 	 */
 	let hydrated = $state(false);
 	let openIndex = $state(0);

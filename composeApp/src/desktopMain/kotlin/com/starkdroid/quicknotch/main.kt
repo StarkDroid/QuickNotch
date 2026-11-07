@@ -88,11 +88,8 @@ import org.jetbrains.compose.resources.stringResource
 private var instanceLockChannel: FileChannel? = null
 
 /**
- * Lets exactly one notch exist. A second process would stack a second
- * identical overlay (same position, same level) that reads as one frozen,
- * misbehaving notch — e.g. a blurred box that ignores expand/collapse while
- * the live instance underneath keeps working. Fails open: a lock hiccup must
- * never prevent launch.
+ * Ensures one notch: a second process would stack an identical overlay that reads as a single
+ * frozen pill. Fails open, since a lock hiccup must never prevent launch.
  */
 private fun takeInstanceLock(): Boolean = try {
     val lockFile = AppPaths.configDir.resolve("instance.lock")
@@ -118,35 +115,19 @@ fun main(args: Array<String>) {
     if (HostPlatform.isMac) {
         System.setProperty("apple.laf.useScreenMenuBar", "true")
         System.setProperty("apple.awt.application.appearance", "system")
-        // Skiko backend selection — the single biggest performance lever in the
-        // app. Measured on the settings list, one scroll frame costs ~70ms of
-        // process CPU on the SOFTWARE rasterizer (14fps, visibly unsmooth)
-        // versus ~3.4ms on Metal (vsync-capped 60fps), so macOS now defaults to
-        // METAL. The old comment here claimed Metal crashed on the transparent
-        // overlay window; that was skiko 0.8.18's MetalRedrawer running on the
-        // AWT EDT and tripping the macOS 26/27 main-thread assertion, fixed in
-        // the pinned skiko.
-        //
-        // Precedence: an explicit -Dskiko.renderApi / SKIKO_RENDER_API wins, then
-        // the `software-render` marker file, then METAL. The marker exists
-        // because a backend problem is a native crash, so it must be fixable
-        // without a UI the crash may prevent from appearing.
+        // Skiko backend: an explicit -Dskiko.renderApi / SKIKO_RENDER_API wins, then the
+        // `software-render` marker file (a crash can hide the UI that would remove it), then METAL.
         val marker = AppPaths.configDir.resolve("software-render")
         val backend = System.getProperty("skiko.renderApi")?.takeIf { it.isNotBlank() }
             ?: System.getenv("SKIKO_RENDER_API")?.takeIf { it.isNotBlank() }
             ?: (if (marker.exists()) "SOFTWARE" else "METAL")
         System.setProperty("skiko.renderApi", backend)
         println("QuickNotch: skiko render backend = $backend${if (marker.exists()) " (marker file)" else ""}")
-        // Retro-clean bridges leaked by earlier runs (JVM death skips
-        // media.stop(); the bridges now watchdog themselves, but versions
-        // already in the wild do not — see NativeResources.sweepOrphanedBridges).
+        // Clean up bridges leaked by earlier runs: JVM death skips media.stop().
         NativeResources.sweepOrphanedBridges()
     }
-    // A fresh manual launch (Spotlight/Dock/Finder/Launchpad) opens the Settings
-    // window alongside the notch so the app's presence is obvious and the user
-    // can configure it immediately. A login-item auto-start passes
-    // `--login-item` (written into the launch command by StartupManager) and
-    // stays quietly behind the tray instead — nobody asked for settings at boot.
+    // A manual launch opens Settings so the app is obvious; a login-item auto-start passes
+    // `--login-item` (written by StartupManager) and stays quietly behind the tray.
     val loginItemLaunch = args.contains(StartupManager.LAUNCHED_AT_LOGIN_ARG)
 
     application {
@@ -154,15 +135,10 @@ fun main(args: Array<String>) {
         val config by repository.config.collectAsState()
         val favorites by repository.favorites.collectAsState()
 
-        // One gaming signal for the whole app: the overlay swaps in the HUD,
-        // the window sizer reserves its width, and the system poller runs while
-        // it is up. `gamingActive` (not the raw session) is the gate, so a user
-        // who switches the HUD off pays nothing even though the detector still
-        // knows a game is running.
+        // One gaming signal for the whole app; `gamingActive` (not the raw session) is the gate,
+        // so a user who switches the HUD off pays nothing.
         val gameSession by GameDetector.game.collectAsState()
-        // Windows-only: the HUD's frame rate comes from PresentMon and the
-        // switches are hidden everywhere else, so a macOS session must never
-        // light up a feature the user cannot see or turn off.
+        // Windows-only: a macOS session must never light up a HUD the user cannot see or turn off.
         val gamingActive = HostPlatform.isWindows &&
             gameSession != null &&
             config.gameHudEnabled
@@ -176,11 +152,8 @@ fun main(args: Array<String>) {
             AudioBattery.start()
             SystemBattery.start()
             SystemMetrics.start()
-            // The gaming detector is started once and gated by its toggle: on
-            // macOS it is an in-process CoreGraphics call, on Windows one
-            // long-lived PowerShell watcher (see GameDetector).
-            // Gaming is a Windows feature end to end; starting the detector on a
-            // Mac would only probe for a HUD that is gated off below.
+            // Gaming is a Windows feature end to end; the detector is one long-lived PowerShell
+            // watcher (see GameDetector), and a Mac would only probe for a HUD gated off below.
             if (HostPlatform.isWindows) {
                 GameDetector.start()
                 GameDetector.logAvailability()
@@ -189,13 +162,10 @@ fun main(args: Array<String>) {
             // Calendar is opt-in and file-backed: with no token on disk this
             // returns immediately, so an unconnected user pays nothing.
             GoogleCalendar.start()
-            // Weather locates itself over IP and caches the day to disk, so a
-            // cold start paints the last known forecast on the first frame.
-            // A manual place from settings seeds the position instead.
+            // Weather caches the day to disk, so a cold start paints the last forecast on the
+            // first frame; a manual place from settings seeds the position instead.
             Weather.start(repository.config.value.widgets.weatherPlace)
-            // Update checks and the remote changelog are background work: the
-            // app is fully usable offline, and a check that lands after the
-            // user quit is harmless.
+            // Update checks and the remote changelog are background work; the app stays usable offline.
             AppUpdates.start()
             onDispose {
                 media.stop()
@@ -219,63 +189,43 @@ fun main(args: Array<String>) {
         var isNotchVisible by remember { mutableStateOf(true) }
         var isExpanded by remember { mutableStateOf(false) }
 
-        // The installer script waits for this PID to vanish before it replaces
-        // the app, so quitting is part of the update, not an afterthought.
+        // The installer script waits for this PID to vanish before it replaces the app.
         val quittingForUpdate by AppUpdates.quitting.collectAsState()
         LaunchedEffect(quittingForUpdate) {
             if (quittingForUpdate) exitApplication()
         }
 
-        // Flip the Dock/app presence in-step with the Settings window: the
-        // first Settings open forces activation (an accessory agent can't bring
-        // a regular window forward on its own), and closing it returns the app
-        // to its quiet agent state.
-        // Onboarding counts as "settings open": the user is actively
-        // configuring, so the Dock presence and activation apply while it runs.
+        // Settings, or onboarding, forces activation: an accessory agent cannot bring a regular
+        // window forward on its own, and closing returns to the quiet agent state.
         LaunchedEffect(showSettings, onboardingDone) {
             MacDockPresence.setSettingsVisible(showSettings || !onboardingDone)
         }
 
-        // Manual weather place picked in settings replaces the IP position for
-        // the poller (cleared back to null = re-locate automatically). Keyed on
-        // the place itself, and the controller dedupes re-emits, so unrelated
-        // config writes never cost a refetch.
+        // A manual place replaces the IP position (null re-locates automatically); the controller
+        // dedupes re-emits, so unrelated config writes never cost a refetch.
         LaunchedEffect(config.widgets.weatherPlace) {
             Weather.setManualPlace(config.widgets.weatherPlace)
         }
 
-        // The system monitor only polls while its widget is switched on: a user
-        // who turns the page off pays no process spawns at all, rather than a
-        // poller idling in the background forever. The gaming HUD is the one
-        // exception — it needs CPU/GPU/latency, so a game switches the poller on
-        // even when the System page itself is off (the page stays off the wheel;
-        // only the readout is fed).
+        // The system monitor only polls while its widget is on; the gaming HUD is the exception,
+        // and a game switches the poller on even when the page stays off the wheel.
         LaunchedEffect(config.widgets.showSystem, gamingActive) {
             SystemMetrics.setEnabled(config.widgets.showSystem || gamingActive)
         }
 
-        // Detection only runs while the HUD can actually draw: its switch is on
-        // and at least one metric is selected. Switching the last metric off
-        // stops the probe just like switching the HUD off does.
+        // Detection runs only while the HUD can draw: its switch is on and at least one metric is selected.
         LaunchedEffect(config.gameHudEnabled) {
             GameDetector.setEnabled(config.gameHudEnabled)
         }
 
-        // FPS follows the detected game. A PresentMon capture takes ~2 s, so it
-        // lives in its own coroutine and never delays a system sample; the
-        // effect's cancellation is what stops the capture when the game ends.
+        // A PresentMon capture takes ~2 s, so it gets its own coroutine and never delays a system
+        // sample; cancelling the effect stops it when the game ends.
         LaunchedEffect(gameSession?.pid, gamingActive) {
             if (gamingActive) FpsProbe.follow(gameSession)
         }
 
-        // Dock presence is a function of the Settings window, never of the
-        // notch: the resting QuickNotch is a silent agent (no Dock icon, no app
-        // menu bar — the overlay layers over full-screen apps), and the Dock
-        // icon + app activation appear only while the Settings page is open.
-        // Started from a DisposableEffect(Unit), NOT the composition body: the
-        // body re-executes on every media/volume/battery tick, and a raw call
-        // here re-armed the one-shot activation on each recomposition — the app
-        // then yanked focus back to itself ~every second while music played.
+        // Started from DisposableEffect(Unit), never the composition body: the body re-runs on
+        // every media/volume/battery tick, and a raw call re-armed the activation and stole focus.
         DisposableEffect(Unit) {
             MacDockPresence.start()
             onDispose { MacDockPresence.stop() }
@@ -329,11 +279,8 @@ fun main(args: Array<String>) {
             )
         }
 
-        // The onboarding flow lives in this same window: first-run users open
-        // straight into it (even at login launch -- a fresh install has no
-        // login item yet), and finishing hands the window to the tabbed
-        // settings while the notch, which did not exist during onboarding,
-        // appears for the first time.
+        // First-run users open straight into onboarding (even at login launch); finishing hands
+        // the same window to settings and the notch appears for the first time.
         if (showSettings || !onboardingDone) {
             val settingsState = rememberWindowState(
                 position = WindowPosition.Aligned(Alignment.Center),
@@ -341,9 +288,8 @@ fun main(args: Array<String>) {
             )
             Window(
                 onCloseRequest = {
-                    // Closing the window mid-onboarding finishes the flow: the
-                    // notch must exist no matter what, and the config the user
-                    // already touched stays.
+                    // Closing mid-onboarding finishes the flow: the notch must exist, and config
+                    // the user already touched stays.
                     showSettings = false
                     if (!onboardingDone) repository.updateConfig { it.copy(onboardingDone = true) }
                 },
@@ -359,11 +305,8 @@ fun main(args: Array<String>) {
                 DisposableEffect(settingsWindow) {
                     val listener = object : WindowFocusListener {
                         override fun windowGainedFocus(e: WindowEvent?) {
-                            // The user just came back from System Settings
-                            // (possibly after granting Full Disk Access): re-read
-                            // the notification store right now instead of waiting
-                            // for the next 3s poll tick, so the helper row swaps
-                            // to "Send test notification" as soon as access lands.
+                            // Re-read the notification store on focus, so granting Full Disk Access
+                            // updates the helper row now instead of at the next 3s tick.
                             NotificationCount.poke()
                         }
                         override fun windowLostFocus(e: WindowEvent?) {
@@ -394,23 +337,8 @@ fun main(args: Array<String>) {
 }
 
 /**
- * Hosts the transparent overlay window and pins it to the top of the screen.
- *
- * The native window adopts a single fixed footprint — the expanded dock size —
- * and never resizes while the notch opens or collapses. On macOS a transparent
- * AWT window that resizes flashes white / skips frames for a frame (a known
- * Compose Desktop + Skiko issue), which reads as a blink; keeping the window
- * size stable and drawing the growing/shrinking island inside it eliminates
- * that entirely. The trade-off: the fixed window is wider/taller than the
- * collapsed pill, so its transparent margin swallows clicks on the desktop
- * directly around the pill until the notch expands.
- *
- * Size and position are both written to [androidx.compose.ui.window.WindowState]
- * within a single effect so Compose applies them atomically in one pass — this is
- * what keeps the notch perfectly still while it grows and shrinks. The effect
- * re-runs only when the style or the target footprint changes (favourites count,
- * the widened now-playing page), never in response to the window's own live
- * dimensions, so there is no feedback loop and no second corrective placement.
+ * Hosts the transparent overlay on one fixed footprint: resizing it on macOS flashes white and
+ * skips frames, so the island grows inside a stable window. Size and position land in one effect.
  */
 @Composable
 private fun NotchOverlayWindow(
@@ -431,20 +359,15 @@ private fun NotchOverlayWindow(
     val favorites by repository.favorites.collectAsState()
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarTick by GoogleCalendar.minuteTick.collectAsState()
-    // The calendar page width is only reserved while the widget is switched
-    // on *and* connected — the same rule the overlay's pager follows, so a
-    // toggled-off calendar neither pages nor widens the window.
+    // Calendar width is reserved only while the widget is on and connected, the same rule the
+    // pager follows, so a toggled-off calendar neither pages nor widens the window.
     val calendarConnected =
         config.widgets.showCalendar && calendarState is CalendarState.Connected
-    // The native window and the overlay content must size the quickview
-    // identically, or the indicator slots (device + laptop battery + the
-    // notification bell, the calendar mail badge) clip off the far edge. Both
-    // derive the slot count through the same helper.
+    // Window and content must derive the indicator slot count through quickViewIndicatorSlots,
+    // or the right-edge icons clip.
     val calendarEventCount =
         if (config.widgets.showCalendar) calendarUpcomingCount(calendarState, calendarTick) else 0
-    // The weather chip draws while a forecast is loaded; the expanded outlook
-    // page exists under the same condition the overlay uses, so both sizers
-    // claim the identical footprint.
+    // The chip and the outlook page share one condition, so both sizers claim the same footprint.
     val weatherState by Weather.state.collectAsState()
     val weatherFetching by Weather.fetching.collectAsState()
     val weatherData = (weatherState as? WeatherState.Ready)?.data
@@ -454,9 +377,7 @@ private fun NotchOverlayWindow(
     // exists once there is a reading behind it.
     val systemState by SystemMetrics.state.collectAsState()
     val systemReady = config.widgets.showSystem && systemState != null
-    // The gaming HUD claims the same width the overlay draws it at. Collected
-    // here too because the native window must already be wide enough the
-    // instant a game starts — resizing the window then would flash on macOS.
+    // The window must already be wide enough the instant a game starts; resizing then would flash on macOS.
     val game by GameDetector.game.collectAsState()
     val gameHudActive = HostPlatform.isWindows && game != null && config.gameHudEnabled
     val indicatorSlots = quickViewIndicatorSlots(
@@ -484,11 +405,8 @@ private fun NotchOverlayWindow(
             gameHudActive
         )
     }
-    // The native window keeps the expanded footprint at all times (see class
-    // doc): opening/collapsing never resizes the transparent window, which is
-    // what would flash on macOS. The visible island animates inside it instead.
-    // `window` (not `expanded`) reserves the widest thing the island can draw,
-    // so the gaming HUD needs no resize either.
+    // `window` (not `expanded`) reserves the widest thing the island can draw, so the gaming HUD
+    // needs no resize either.
     val targetSize = metrics.window
 
     val overlayState = rememberWindowState(
@@ -508,23 +426,15 @@ private fun NotchOverlayWindow(
     ) {
         val awtWindow = window
 
-        // Keep the fixed window's transparent margin click-through: only the
-        // drawn island is a touch target (SetWindowRgn on Windows, cursor-gated
-        // ignoresMouseEvents on macOS). Fails soft — no passthrough if the
-        // native handle can't be resolved.
+        // Keep the fixed window's transparent margin click-through: only the drawn island is a
+        // touch target. Fails soft, with no passthrough when the native handle cannot be resolved.
         val passthrough = remember(awtWindow) { WindowPassthrough.install(awtWindow) }
         DisposableEffect(awtWindow) {
             onDispose { passthrough?.close() }
         }
 
-        // macOS above-menu-bar placement: AWT can't reach the true top of the
-        // screen (it clamps to the visible area), so a direct Cocoa policy parks
-        // the island there — raised above the menu bar, joining every Space and
-        // surviving full-screen apps while "always on top" is on. The policy is
-        // re-asserted on a slow reconcile tick because Compose placement and
-        // AWT's z-order bookkeeping keep re-parking the window below the menu
-        // bar; `update` just retargets the flags it re-adheres to. Off-mac this
-        // installs nothing.
+        // AWT clamps to the visible area, so a Cocoa policy parks the island above the menu bar
+        // and re-asserts it on a reconcile tick, because Compose keeps re-parking the window.
         val macPolicy = remember(awtWindow) { MacOverlayWindowPolicy.install(awtWindow) }
         LaunchedEffect(config.alwaysOnTop, metrics.edgeGapDp) {
             macPolicy?.update(config.alwaysOnTop, metrics.edgeGapDp)
@@ -533,13 +443,8 @@ private fun NotchOverlayWindow(
             onDispose { macPolicy?.close() }
         }
 
-        // Windows z-order keeper: AWT sets WS_EX_TOPMOST once, but a fullscreen
-        // game re-raises its own window into the same band and ends up above
-        // the notch — the HUD then only surfaces after an alt-tab re-shuffles
-        // the z-order. Re-assert topmost on a slow tick (fast while a game is
-        // detected) without activating or moving the window. Off-Windows it
-        // installs nothing; a true exclusive-fullscreen swap chain still cannot
-        // be overlaid, but borderless fullscreen (the common case) can.
+        // A fullscreen game re-raises its own window into the topmost band, so re-assert
+        // HWND_TOPMOST on a tick. Exclusive fullscreen still cannot be overlaid; borderless can.
         val windowsPolicy = remember(awtWindow) { WindowsOverlayWindowPolicy.install(awtWindow) }
         LaunchedEffect(config.alwaysOnTop, game != null) {
             windowsPolicy?.update(config.alwaysOnTop, game != null)
@@ -548,16 +453,12 @@ private fun NotchOverlayWindow(
             onDispose { windowsPolicy?.close() }
         }
 
-        // Shared widget-pager state; on Windows the wheel listener below drives
-        // it straight from AWT because the unfocused overlay window never sees
-        // scroll through Compose's pointer pipeline (which macOS' trackpad does).
+        // On Windows the unfocused overlay never sees scroll through Compose, so AWT drives the
+        // pager directly; macOS keeps its Compose path.
         val density = LocalDensity.current
         val pager = remember { OverlayPager(with(density) { 30.dp.toPx() }) }
 
-        // Windows: one wheel notch on the whole overlay window maps onto one
-        // pager step through AWT (the layer that actually receives
-        // WM_MOUSEWHEEL) — independent of what is under the cursor or window
-        // focus. macOS keeps its Compose-path handling inside the overlay.
+        // One wheel notch maps onto one pager step straight from AWT, the layer that receives WM_MOUSEWHEEL.
         if (HostPlatform.isWindows) {
             DisposableEffect(awtWindow, pager) {
                 val listener = MouseWheelListener { event ->
@@ -569,11 +470,8 @@ private fun NotchOverlayWindow(
         }
 
         LaunchedEffect(config.style, targetSize) {
-            // Absolute placement is only honoured once the AWT window is mapped:
-            // an assignment made earlier is silently dropped and the window keeps
-            // its aligned placeholder position (top-centre) instead of hugging
-            // the screen edge. Wait for the window to show, give it a frame to
-            // finish its initial layout, then pin it to the edge atomically.
+            // Absolute placement is silently dropped before the window is mapped: wait for
+            // isShowing, let layout settle, then pin it to the edge.
             while (!awtWindow.isShowing) delay(10)
             delay(100)
             val graphicsConfiguration = awtWindow.graphicsConfiguration
@@ -589,10 +487,8 @@ private fun NotchOverlayWindow(
             )
             overlayState.size = targetSize
             overlayState.position = WindowPosition.Absolute(location.x.dp, location.y.dp)
-            // Compose just re-parked the window at AWT's visible-clamped spot
-            // (30pt low on macOS). Ask the Cocoa policy to re-adhere it to the
-            // true top right after the placement lands instead of waiting for
-            // its next reconcile tick.
+            // Compose just re-parked the window at AWT's visible-clamped spot (30pt low on macOS),
+            // so re-adhere to the true top instead of waiting for the next reconcile tick.
             delay(120)
             macPolicy?.update(config.alwaysOnTop, metrics.edgeGapDp)
         }
@@ -615,13 +511,7 @@ private fun NotchOverlayWindow(
     }
 }
 
-/**
- * Loads the brand-mark icon shared by the tray and every window: the indigo
- * rounded square with the white notch pill — the exact logo the site header
- * shows next to "QuickNotch". Rendered from [quicknotch-icon.svg] into a taskbar
- * and system-tray PNG kept under desktopMain resources; falls back to a
- * hand-drawn equivalent if the resource is missing at runtime.
- */
+/** The brand mark shared by the tray and every window, with a hand-drawn fallback if the resource is missing. */
 private fun loadQuickNotchIcon(): ImageBitmap {
     return try {
         ClassLoader.getSystemResourceAsStream("quicknotch-tray.png")?.use {

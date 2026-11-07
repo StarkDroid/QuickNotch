@@ -288,7 +288,7 @@
 		rotate: -3deg;
 	}
 
-	/* --- Entrance guard ----------------------------------------------------
+	/*
 	   The hero hides itself from first paint so nothing flashes while GSAP is
 	   being fetched, then the timeline animates from exactly these values (see
 	   the `fromTo` tweens). With JavaScript disabled the `.js` flag is absent,

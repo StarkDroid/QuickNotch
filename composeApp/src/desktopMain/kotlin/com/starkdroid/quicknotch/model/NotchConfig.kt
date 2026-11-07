@@ -28,16 +28,8 @@ enum class NotchStyle(
 }
 
 /**
- * The body's material. All entries resolve to brushes built once and cached, so
- * none is rebuilt per frame while the island animates. [SYSTEM_ACCENT] is
- * deliberately texture-free glass: a tinted body that lets the desktop bleed
- * through the transparent window plus a smooth light sheen.
- *
- * [TRANSLUCENT] is the real thing: the OS blurs the desktop behind the island
- * (compositor blur radius on macOS, DWM acrylic on Windows) under a dark
- * scrim. Where the native bridge is missing it falls back to the painted
- * translucent glass. (Serialised as "BLUR", which is what this entry has
- * always been called on disk.)
+ * Island materials, built once as brushes. TRANSLUCENT is real OS blur
+ * with a painted fallback; it serialises as BLUR.
  */
 @Serializable
 enum class NotchSurface {
@@ -54,10 +46,7 @@ enum class NotchSurface {
 }
 
 /**
- * What colour the collapsed pill's waveform bars take. [ALBUM_ART] derives a
- * tint from the current cover once per track (see `dominantArtTint`); [WHITE]
- * keeps them a constant white. A missing or unreadable cover falls back to
- * white rather than inventing a colour.
+ * Album-art tint per track, or white; a missing cover falls back to white.
  */
 @Serializable
 enum class WaveformTint {
@@ -103,10 +92,8 @@ data class WidgetsConfig(
      */
     val showCollapsedNotifications: Boolean = true,
     /**
-     * Equalizer bars under the collapsed title while a track is live. Lives in
-     * the title's own slot (no new indicator slot, so the footprint math is
-     * untouched) and hides the edge progress strip for as long as it is on.
-     * Never rendered in the expanded music page.
+     * Equalizer bars in the title slot, replacing the edge progress strip
+     * while on. The expanded page never draws them.
      */
     val showCollapsedWaveform: Boolean = true,
     /**
@@ -116,34 +103,24 @@ data class WidgetsConfig(
      */
     val showCalendar: Boolean = false,
     /**
-     * Weather in the collapsed pill (condition glyph + temperature, left of
-     * the date) and as an expanded wheel page (today plus the 7-day outlook
-     * with UV index and precipitation chances). Zero-config: the position is
-     * IP-geolocated, so no account or setup is needed.
+     * Weather in the pill and as a wheel page; IP-located, so no setup.
      */
     val showWeather: Boolean = true,
     /**
-     * System monitor as an expanded wheel page: CPU, GPU (when the OS reports
-     * one), memory, boot-volume fill and network throughput, each as the same
-     * ring the pill uses for volume/battery, with the live value beneath it.
-     * The poller only runs while this is on, so switching it off costs nothing.
+     * System page with CPU, GPU, memory, storage and network rings; the poller
+     * runs only while this is on.
      */
     val showSystem: Boolean = true,
     /**
-     * Manual weather place picked from Open-Meteo geocoding (label +
-     * coordinates). Null means the automatic IP-geolocated position; a manual
-     * pick replaces it for the pill, the page, and the poll. Old configs load
-     * null, so existing installs keep their current behaviour.
+     * Manual place for the weather feed; null means IP location. Old configs
+     * load null.
      */
     val weatherPlace: WeatherPlace? = null,
     /** Display temperatures in Fahrenheit instead of Celsius. */
     val weatherFahrenheit: Boolean = false,
     /**
-     * Paint condition glyphs in per-condition colours (amber sun, blue rain,
-     * …) instead of the monochrome text tint. Purely a render choice — the
-     * same glyphs, only the tint changes.
+     * Tints condition glyphs per condition instead of the text tint.
      */
-    /** Album-art-derived or constant white; see [WaveformTint]. */
     val waveformTint: WaveformTint = WaveformTint.ALBUM_ART,
     /**
      * Which visualiser shape the collapsed bars take. Defaults to the
@@ -157,25 +134,18 @@ data class WidgetsConfig(
      */
     val showProgressBorder: Boolean = true,
     /**
-     * While the waveform is on, drop the song name from the collapsed pill: the
-     * live view then reads as disc + analyser + level rings only, and the bars
-     * get the whole title frame (18dp instead of a 7dp band). Meaningless with
-     * the waveform off, so the settings row appears only inside that section.
+     * Drops the song title while the waveform is on, giving the bars the full
+     * title frame.
      */
     val waveformHidesTitle: Boolean = false,
     /**
-     * Gaming performance HUD: while a fullscreen game is detected, the
-     * collapsed quickview is replaced by live FPS (Windows, via PresentMon),
-     * CPU, GPU, latency and download rate. Detection only runs while this is
-     * on, so a user who never games pays no probe at all.
+     * Replaces the collapsed pill with FPS, CPU, GPU, latency and download
+     * while a game runs; detection runs only while on.
      */
     val showGameHud: Boolean = true,
     /**
-     * Which readouts the gaming HUD draws. Every cell can be switched off on
-     * its own; with all five off [NotchConfig.gameHudEnabled] is false and the
-     * notch keeps its ordinary pill rather than showing an empty strip. FPS is
-     * still dropped when PresentMon is absent and GPU when the OS reports no
-     * engine, exactly as before — a cell can only show a true number.
+     * Each HUD cell can be switched off; with all five off the pill returns.
+     * FPS and GPU still drop when unavailable.
      */
     val gameMetrics: GameMetrics = GameMetrics()
 )
@@ -221,11 +191,8 @@ enum class ClockDateFormat(val pattern: String) {
 }
 
 /**
- * Persistent configuration for the floating notch and its dock.
- *
- * The fisheye magnification radius is no longer user-tunable: it is derived
- * from [baseIconSizeDp] so the wave always tracks the cursor with icon-level
- * precision (see `fisheyeRadiusPx`).
+ * Persistent configuration. The fisheye radius is derived from
+ * baseIconSizeDp, not user-tunable.
  */
 @Immutable
 @Serializable
@@ -233,19 +200,13 @@ data class NotchConfig(
     val style: NotchStyle = NotchStyle.NOTCH,
 
     /**
-     * Set once the first-run onboarding has been walked through (or skipped
-     * through): the notch overlay does not exist until then, because the user
-     * is still configuring the pill it would draw. Defaults false, so a config
-     * written before this field existed runs onboarding once on next launch.
+     * False until onboarding finishes; the overlay does not exist before that.
      */
     val onboardingDone: Boolean = false,
     val surface: NotchSurface = NotchSurface.SOLID,
     /**
-     * Gaming-only transparency: while the gaming HUD is showing, the island
-     * drops its body, rim, dividers and shadow entirely, so only the readout's
-     * glyphs sit over the game. Deliberately separate from [surface]: Solid /
-     * Blurred / System accent are untouched, and this only ever applies while a
-     * game is detected.
+     * Drops the island body, rim and shadow while the gaming HUD shows; other
+     * surfaces are untouched.
      */
     val transparentInGame: Boolean = false,
     /**
@@ -278,11 +239,8 @@ data class NotchConfig(
     val themeDark: Boolean = true
 ) {
     /**
-     * True when the gaming HUD has a body to draw: its switch is on and at
-     * least one metric is selected. Every consumer (the overlay, the window
-     * sizer, the system poller and the detector) gates on this rather than the
-     * raw switch, so switching the last metric off returns the pill instead of
-     * leaving an empty island.
+     * True when the HUD is on and at least one metric is selected; every
+     * consumer gates on this.
      */
     val gameHudEnabled: Boolean
         get() = widgets.showGameHud && widgets.gameMetrics.any

@@ -3,11 +3,8 @@
 	import { facts, faq, offer, platforms, seo, site, themes, tour } from '$data/site';
 
 	/**
-	 * All document-level SEO in one place.
-	 *
-	 * Every value is derived from the same content module the page renders, so
-	 * the structured data can never drift from the visible copy — which is
-	 * exactly what rich-result validators complain about.
+	 * Document-level SEO derived from the same content module the page
+	 * renders, so structured data cannot drift from the copy.
 	 */
 
 	const title = seo.title;

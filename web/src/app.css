@@ -1,13 +1,7 @@
-/* ==========================================================================
-   QuickNotch — design system v2
-   "Retro print-shop poster": warm cream paper, near-black ink, tomato-red and
-   deep-blue spot accents, chunky editorial serif. Flat poster shapes with hard
-   offset "sticker" shadows — still deliberately gradient-free.
-   ========================================================================== */
+/* QuickNotch design system: retro print-shop poster, warm cream paper, flat shapes and hard offset shadows, no gradients. */
 
-/* ---------- 1. Tokens ---------- */
 :root {
-	/* Surfaces — paper, not glass. */
+	/* Surfaces: paper, not glass. */
 	--paper: #f9f3e7;
 	--paper-deep: #f1e8d6;
 	--paper-lift: #fffdf6;
@@ -17,7 +11,7 @@
 	--ink-2: #4c4437;
 	--ink-3: #8b8271;
 
-	/* Accents — spot colours, one per job. */
+	/* Accents: spot colours, one per job. */
 	--tomato: #e8481c;
 	--tomato-deep: #b83a10;
 	--blue: #1f4fd8;
@@ -42,7 +36,7 @@
 	--line-strong: rgb(33 28 19 / 0.38);
 	--line-focus: rgb(232 72 28 / 0.65);
 
-	/* Accent fills — flat tints stand in for gradient washes. */
+	/* Accent fills: flat tints stand in for gradient washes. */
 	--accent: var(--tomato);
 	--accent-text: var(--tomato-deep);
 	--accent-soft: rgb(232 72 28 / 0.1);
@@ -50,21 +44,20 @@
 	--on-accent: #fff6ea;
 	--wash: rgb(33 28 19 / 0.02);
 
-	/* On-dark neutrals — the product mock and its notch stay dark so they read
-	   as the deep-black hardware on top of the cream page. */
+	/* On-dark neutrals: the product mock and its notch stay dark against the cream page. */
 	--on-dark: #f5f2ea;
 	--on-dark-2: #b9b2a2;
 	--on-dark-3: #7d7767;
 	--on-dark-line: rgb(245 242 234 / 0.12);
 	--on-dark-line-strong: rgb(245 242 234 / 0.22);
 
-	/* Type — Fraunces is the quirky editorial voice. */
+	/* Type: Fraunces is the quirky editorial voice. */
 	--font-display: 'Fraunces Variable', 'Fraunces', Georgia, 'Times New Roman', serif;
 	--font-body: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
 		sans-serif;
 	--font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
-	/* Fluid type scale — big, poster-sized headlines. */
+	/* Fluid type scale: big, poster-sized headlines. */
 	--fs-mega: clamp(2.9rem, 8.6vw, 7.25rem);
 	--fs-display: clamp(2.35rem, 6.2vw, 5rem);
 	--fs-h2: clamp(2rem, 5vw, 3.9rem);
@@ -82,14 +75,14 @@
 	--maxw: 1240px;
 	--maxw-narrow: 780px;
 
-	/* Radii — a little sharper than the café era. */
+	/* Radii: a little sharper than the café era. */
 	--r-sm: 8px;
 	--r-md: 14px;
 	--r-lg: 20px;
 	--r-xl: 26px;
 	--r-pill: 999px;
 
-	/* Elevation — hard "print" shadows, never gradients. */
+	/* Elevation: hard print shadows, never gradients. */
 	--shadow-1: 0 1px 0 rgb(33 28 19 / 0.1);
 	--shadow-2: 5px 5px 0 rgb(33 28 19 / 0.92);
 	--shadow-3: 8px 8px 0 rgb(33 28 19 / 0.85);
@@ -104,7 +97,6 @@
 	--dur-slow: 620ms;
 }
 
-/* ---------- 2. Reset & base ---------- */
 *,
 *::before,
 *::after {
@@ -126,9 +118,7 @@ body {
 	font-size: var(--fs-body);
 	line-height: 1.62;
 	color: var(--text-2);
-	/* No background here: the base colour lives on `html` (see app.html). If body
-	   painted its own opaque background, it would sit on top of every negative
-	   z-index layer — the grain, spotlight and wash — and bury them all. */
+	/* No background here: an opaque body would bury the negative z-index grain, spotlight and wash. */
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	text-rendering: optimizeLegibility;
@@ -138,11 +128,7 @@ body {
 }
 
 /*
-	Ambient background.
-
-	The depth comes from a single faint flat tint, the scroll-driven spotlight at
-	`z-index: -2`, and the film-grain layer rendered by `Grain.svelte` at
-	`z-index: -1`. Nothing gradient-based.
+	Ambient background: a flat wash at z-index -3, the scroll spotlight at -2 and the grain at -1.
 */
 body::before {
 	content: '';
@@ -197,7 +183,6 @@ textarea {
 	color: var(--ink);
 }
 
-/* ---------- 3. Typography ---------- */
 h1,
 h2,
 h3,
@@ -282,7 +267,7 @@ p {
 	color: var(--text-3);
 }
 
-/* Editorial highlighter — a flat swipe accent behind a word or two. */
+/* Editorial highlighter: a flat swipe accent behind a word or two. */
 .hl {
 	position: relative;
 	display: inline-block;
@@ -331,7 +316,6 @@ p {
 	will-change: transform;
 }
 
-/* ---------- 4. Layout ---------- */
 .container {
 	width: 100%;
 	max-width: var(--maxw);
@@ -348,8 +332,7 @@ p {
 
 .section {
 	position: relative;
-	/* Tight top, generous bottom: when a nav link jumps here the heading lands
-	   right below the sticky header, not after a wall of empty padding. */
+	/* Tight top, generous bottom, so a nav jump lands the heading below the sticky header. */
 	padding-block: clamp(2rem, 4vw, 3rem) var(--section-y);
 }
 
@@ -391,9 +374,7 @@ p {
 	margin-inline: auto;
 }
 
-/* The way home, on every page that is not the home page. The header's logo does
-   this too, but a reader who arrived from the version chip should not have to
-   know that. */
+/* The way home on subpages; the header logo does this too, but a reader from the version chip should not have to know that. */
 .back {
 	display: inline-flex;
 	align-items: center;
@@ -411,7 +392,6 @@ p {
 	color: var(--accent-text);
 }
 
-/* ---------- 5. Eyebrow / chips / stickers ---------- */
 .eyebrow {
 	display: inline-flex;
 	align-items: center;
@@ -468,7 +448,7 @@ p {
 	letter-spacing: 0.02em;
 }
 
-/* Rotating sticker badge — a little piece of tape-and-ink flair. */
+/* Rotating sticker badge: tape-and-ink flair. */
 .sticker {
 	display: inline-flex;
 	align-items: center;
@@ -507,7 +487,6 @@ p {
 	pointer-events: none;
 }
 
-/* ---------- 6. Surfaces ---------- */
 .glass {
 	position: relative;
 	border-radius: var(--r-lg);
@@ -546,7 +525,6 @@ p {
 	transform: translateY(-1px);
 }
 
-/* ---------- 7. Buttons — chunky print accents ---------- */
 .btn {
 	position: relative;
 	display: inline-flex;
@@ -617,7 +595,6 @@ p {
 	width: 100%;
 }
 
-/* ---------- 8. Scroll reveal ---------- */
 .js [data-reveal] {
 	opacity: 0;
 	will-change: opacity, transform;
@@ -648,8 +625,7 @@ p {
 	transform: none;
 }
 
-/* Set by the reveal action when GSAP is unavailable, so content can never
-   be stuck invisible. */
+/* Set by the reveal action when GSAP is unavailable, so content can never be stuck invisible. */
 .js [data-reveal].no-gsap,
 .js [data-stagger].no-gsap > * {
 	transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
@@ -691,7 +667,6 @@ p {
 	}
 }
 
-/* ---------- 9. Utilities ---------- */
 .sr-only {
 	position: absolute;
 	width: 1px;
@@ -731,7 +706,6 @@ p {
 	border-top: 2px dashed var(--line-strong);
 }
 
-/* ---------- 11. Scrollbar ---------- */
 @media (pointer: fine) {
 	::-webkit-scrollbar {
 		width: 11px;

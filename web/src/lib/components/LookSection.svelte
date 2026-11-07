@@ -3,11 +3,8 @@
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
-	 * The look: three profiles, two finishes, one row.
-	 *
-	 * The old section spent three tall cards and three more rows on this — a
-	 * screen of scrolling for two dropdowns. A swatch plus one line each says the
-	 * same thing, and the tour above already shows the real shapes at scale.
+	 * Three profiles, two finishes, one row; the tour above already shows the
+	 * real shapes.
 	 */
 </script>
 

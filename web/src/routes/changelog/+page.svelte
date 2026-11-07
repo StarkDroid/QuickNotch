@@ -7,12 +7,8 @@
 	import { changelog, releasePage, type ChangelogRelease } from '$data/releases';
 
 	/**
-	 * The published history, newest first.
-	 *
-	 * The feed is the same `changelog.json` the release workflow attaches to the
-	 * release and the desktop app reads under Settings → Changelog: committed to
-	 * the site and imported at build time, so this page is real prerendered text
-	 * rather than something that appears after hydration.
+	 * The same changelog.json the release publishes and the app reads,
+	 * committed and prerendered.
 	 */
 	const kinds = changelogPage.kinds;
 
@@ -165,7 +161,6 @@
 		color: var(--text-2);
 	}
 
-	/* ---- Releases --------------------------------------------------------- */
 	.releases {
 		display: flex;
 		flex-direction: column;

@@ -113,7 +113,7 @@ import java.util.UUID
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 
-// ── Pinned apps panel (Widgets tab → Pinned apps accordion) ──────────────────
+// Pinned apps panel (Widgets tab → Pinned apps accordion).
 
 @Composable
 internal fun PinnedAppsTab(
@@ -434,10 +434,8 @@ internal fun PinnedAppsTab(
 }
 
 /**
- * Resolves an app icon with no visible pop-in while scrolling: the shared
- * in-memory cache is read synchronously on first composition, and only a cold
- * miss falls back to a background load. Combined with stable LazyColumn keys,
- * rows keep their icons when recycled, so the list stays smooth.
+ * Reads the shared icon cache synchronously; only a cold miss loads in the
+ * background.
  */
 @Composable
 internal fun rememberAppIcon(app: AppItem): ImageBitmap? {
@@ -450,7 +448,7 @@ internal fun rememberAppIcon(app: AppItem): ImageBitmap? {
     return iconBitmap
 }
 
-// ── Shared row building blocks (Pinned + Available rows) ─────────────────────
+// Shared row building blocks (Pinned + Available rows).
 
 /**
  * The icon slot both list rows share: an elevated rounded box that crossfades
