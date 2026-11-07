@@ -1,8 +1,10 @@
 # QuickNotch — marketing site
 
-The landing page for QuickNotch: a bold, light, scroll-driven single page that
-explains the glanceable notch and its widgets in one tour, shows the two looks,
-and links to the installers.
+The site for QuickNotch: a bold, light, scroll-driven landing page that explains
+the glanceable notch and its widgets in one tour, shows the two looks, and hands
+over an installer — plus `/download` and `/changelog`, which read the release
+feed the app itself uses. Free and open source, so the copy, the schema and the
+installers all say the same thing.
 
 It lives in the same repository as the Kotlin desktop app but is a completely
 separate workspace — the app's Gradle build and the site's Node build never
@@ -43,8 +45,16 @@ npm run dev        # http://localhost:5173
 | `npm run check` | `svelte-check` — types plus Svelte and a11y diagnostics. |
 | `npm run verify` | Runtime smoke test against a running preview server (see [Verification](#verification)). |
 | `npm run og` | Regenerates `static/og.png` and the PNG icons from SVG. Run only when those change; the output is committed. |
+| `npm run banner` | Rasterises `../docs/banner.svg` into `../docs/banner.png` for the README. |
 
 Node 20+ is recommended (developed on Node 24).
+
+`npm audit` reports no high-severity findings. Six low-severity advisories
+remain in the build toolchain (`@sveltejs/kit` 2.x, `cookie`, `deepmerge`);
+clearing them needs SvelteKit 3, which moves the config into `vite.config.ts`,
+drops `$lib` and requires Vite 8 — a separate migration. None is reachable in
+what ships: the output is prerendered HTML with no server, no cookies and no
+form actions.
 
 ---
 
@@ -60,6 +70,7 @@ web/
 │   │   │   ├── reveal.ts         # scroll-reveal + cascade actions (IntersectionObserver → GSAP)
 │   │   │   └── magnetic.ts       # magnetic hover for primary buttons
 │   │   ├── data/site.ts          # ALL copy, links and not-a-token values
+│   │   ├── data/releases.ts      # changelog feed + installer file names
 │   │   ├── motion/
 │   │   │   ├── gsap.ts           # lazy GSAP + ScrollTrigger loader
 │   │   │   └── smoothScroll.ts   # Lenis, wired into the GSAP ticker
@@ -67,31 +78,61 @@ web/
 │   │       ├── TourSection.svelte # the sticky scroll tour (state machine)
 │   │       ├── TourDevice.svelte  # the CSS-3D laptop chassis
 │   │       ├── NotchPanel.svelte  # one notch state, drawn to the app's geometry
+│   │       ├── KofiButton.svelte  # Ko-fi's own button artwork, used unchanged
+│   │       ├── SupportFab.svelte  # the floating support pill (every page)
 │   │       ├── Spotlight.svelte  # scroll-driven glow (flat colour + blur)
 │   │       └── Grain.svelte      # generated film-grain background layer
 │   └── routes/
 │       ├── +layout.ts            # `prerender = true`
 │       ├── +layout.svelte        # fonts, styles, smooth-scroll, backdrop layers
-│       └── +page.svelte          # page composition (section order)
-├── static/                       # favicon, icons, og.png, robots.txt, sitemap.xml, manifest, _headers
+│       ├── +page.svelte          # page composition (section order)
+│       ├── download/+page.svelte # platform cards, install notes, thank-you modal
+│       ├── changelog/+page.svelte# the published release history
+│       ├── connect/+page.svelte  # Calendar consent (app-invoked, unlinked)
+│       ├── oauth/callback/+page.svelte  # hands the code back to the app
+│       └── 404/+page.svelte      # rendered to 404.html at the root of the build
+├── static/                       # favicon, icons, og.png, kofi-button.png, robots.txt, sitemap.xml, manifest, _headers
+├── worker/site.js                # www and http → the apex, then the assets
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
+    ├── generate-banner.mjs       # docs/banner.svg → the README banner
     └── verify-render.mjs         # runtime smoke test over the DevTools Protocol
 ```
+
+The Worker config is one level up, at the repository root (`wrangler.toml`), next
+to the `package.json` whose `build` script drives this directory — see
+[Hosting on Cloudflare](#hosting-on-cloudflare-quicknotchapp).
 
 ### Page order
 
 `Hero` (`#top`) → `TourSection` (`#tour`) → `LookSection` (`#look`) →
-`PricingSection` (`#pricing`) → `FaqSection` (`#faq`) → `Footer`.
+`OfferSection` (`#download`) → `FaqSection` (`#faq`) → `Footer`.
 
 The header is a notch, not a menu: a dark bar flush with the top edge — square
 upper corners, only the two facing the page rounded, exactly the app's base
-notch — carrying the mark, the wordmark and the buy button. It rests compact at
-the top of the page and opens to full width as you scroll, closing again when
-you return to the top; the progress hairline runs along its lower edge. There are
-no section links at all — the tour, the look and the price are found by
-scrolling. The FAQ is the last section; there is no separate download section,
-because the buy button in pricing is the one call to action.
+notch — carrying the mark, the wordmark, the version (linking to the changelog)
+and the download button. It rests compact at the top of the page and opens to
+full width as you scroll, closing again when you return to the top; the progress
+hairline runs along its lower edge. There are no section links at all — the
+tour, the look and the download are found by scrolling. The FAQ is the last
+section; the ticket in `OfferSection` is the one call to action, and it points
+at `/download` rather than shipping its own second demo.
+
+The support ask is a floating pill in the bottom-right corner (`SupportFab`),
+drawn in the same cream-and-ink as the rest of the page rather than borrowed
+from Ko-fi's overlay widget: nothing is loaded from their CDN, and nothing at
+all until it is clicked. It is fixed and always visible, on every page,
+including `/connect` and the OAuth callback: there is no scroll threshold to
+cross and no footer to step aside for. On a phone it is the cup alone.
+
+It is the page's only standing ask. The footer carries links and the
+copyright, not a second support button; Ko-fi's own artwork still appears where
+it belongs to the moment, on the download ticket and in the thank-you dialog.
+
+`/download` and `/changelog` are the only subpages anyone navigates to, and both
+open the same way: a `← Home` back link above the eyebrow. The header mark, the
+footer mark and the footer's `Home` also resolve to `/`, so leaving a page never
+depends on guessing that the logo is a link.
 
 The tour is the whole product in one scroll: a CSS-3D laptop settles, its lid
 opens and its screen walks through the seven states — quickview, dock, system,
@@ -108,6 +149,12 @@ from it rather than hardcoding copy, which keeps the page copy and the JSON-LD
 structured data in `Seo.svelte` provably in sync — the most common cause of
 rich-result validation failures is structured data that has drifted from the
 visible text.
+
+That includes the page titles and descriptions, the OAuth status copy and the
+values the mock notch draws. If a sentence appears on screen it is in this file;
+components own markup, layout and punctuation between two values. User-facing
+copy avoids em dashes: a colon, a full stop or a comma does the same job and
+reads like a person wrote it.
 
 ---
 
@@ -228,54 +275,129 @@ Other deliberate choices:
 
 ---
 
+## Download page and changelog
+
+`/download` and `/changelog` are the only two subpages, and they share one data
+source: `src/lib/data/changelog.json`, the cumulative feed the
+release workflow generates. `src/lib/data/releases.ts` imports it and builds the
+installer URLs from the version it names.
+
+The feed is committed rather than fetched from GitHub for a concrete reason:
+release assets are served without CORS headers, so a browser cannot read
+`changelog.json` from the release itself, and going through the API would spend
+a rate limit on a file the release already deploys. Importing it at build time
+also means the version chip, the history and `softwareVersion` in the structured
+data are in the prerendered HTML — nothing appears after hydration. The release
+workflow copies the new feed to `web/src/lib/data/changelog.json` after it
+publishes, which also triggers the Cloudflare build.
+
+Installer names are stable, so no site change is needed per release:
+
+| Platform | Asset |
+| :--- | :--- |
+| Windows | `QuickNotch-<version>.msi` and `QuickNotch-<version>.exe` |
+| macOS, Apple silicon | `QuickNotch-<version>-arm64.dmg` |
+| macOS, Intel | `QuickNotch-<version>-x64.dmg` |
+
+Both Windows files install the same app and both self-update: the updater
+prefers the `.msi` and falls back to the `.exe`, and its script branches on the
+extension. The card therefore offers them as two peer buttons, the way macOS
+offers two disk images, and the button labels carry the file type. Nothing sits
+under the buttons on either card: the cards end where the choice ends.
+
+Clicking any download opens a thank-you dialog once the file has started. It is a
+native `<dialog>`, so focus is trapped, Escape dismisses it and the page behind is
+inert without any of that being hand-rolled; it never intercepts the link, which
+is already navigating by the time the card appears. The card carries Ko-fi's own
+button artwork (`static/kofi-button.png`, committed rather than hot-linked) and a
+"Maybe later" button. Nothing there gates the download — the tip jar is the only
+thing the site asks for, and it asks after the installer is on its way.
+
+---
+
 ## SEO
 
 - Titles, description, canonical, robots directives, Open Graph and Twitter card
   tags, plus three JSON-LD graphs (`SoftwareApplication`, `WebSite`,
-  `Organization`) rendered in the prerendered HTML.
-- `static/sitemap.xml` and `static/robots.txt`.
+  `Organization`) rendered in the prerendered HTML. The software graph declares
+  `isAccessibleForFree`, a zero price and the MIT licence, and names the
+  repository in `sameAs`.
+- `/download` and `/changelog` carry their own title, description, canonical and
+  Open Graph tags through `PageSeo.svelte`.
+- `static/sitemap.xml` lists all three public routes; `/connect` and `/oauth/*`
+  stay out of it and out of `robots.txt`.
 - One `<h1>` and one `<h2>` per section, with `h3`s beneath.
 - Descriptive anchor text on every link, and `alt`/`aria-label` coverage.
-- The visible CTAs all point at `site.purchaseUrl`; `site.downloadUrl` survives
-  only in the `SoftwareApplication` schema. There is no code-host, licence or
-  issue-tracker reference anywhere in the markup, the copy, the structured data
-  or the generated Open Graph image.
+- Every public link (site, download, changelog, source, issues, Ko-fi) comes from
+  `site` in `src/lib/data/site.ts`, so the markup, the schema and the footer
+  cannot point at different places.
 
-### Before deploying
+---
 
-1. **Set the purchase destination.** Every visible CTA reads `site.purchaseUrl`
-   in `src/lib/data/site.ts` (`https://quicknotch.app/buy` as a placeholder).
-   `site.downloadUrl` is schema-only now; point it at the installer or drop the
-   property.
-2. **Confirm the domain.** `site.url` drives the canonical URL, the Open Graph
-   image URL, the sitemap and the JSON-LD. Update it alongside
-   `static/sitemap.xml` and `static/robots.txt`.
+## Hosting on Cloudflare (quicknotch.app)
 
-### Hosting on Cloudflare (prepared, not yet live)
+`adapter-static` emits plain files to `build/`, all asset URLs are relative, and
+there is no server rendering, no database and no secret anywhere in `web/`.
+Cloudflare serves that directory as the static assets of a Worker, which is what
+the repository's Cloudflare build deploys.
 
-The build is already Cloudflare-Pages-shaped: `adapter-static` emits plain
-files to `build/`, all asset URLs are relative, and there is no server code —
-no SSR, no edge functions, no environment variables. To go live:
+The Worker script (`worker/site.js`) exists for two reasons: a custom domain can
+only be attached to a Worker, and the site should answer on one address.
+`www.quicknotch.app` and plain `http` both redirect with a 301 to
+`https://quicknotch.app`, same path, query string intact. Every other request is
+handed straight to the assets binding.
 
-1. In Cloudflare Pages, create a project from this repo with build command
-   `npm run build` (working directory `web/`) and output directory `build`.
-2. Add the custom domain `quicknotch.app` (apex) in the Pages project. Approve
-   the automatic DNS handling, then confirm Cloudflare owns DNS for the apex —
-   proxy (orange cloud) on, **Always Use HTTPS** on, **Automatic HTTPS Rewrites**
-   on.
-3. Add a `www` → apex redirect (a single Redirect Rule: `www.quicknotch.app/*`
-   → `https://quicknotch.app/$1`, 301). The site's canonical, sitemap and
-   structured data all name the apex, so there must be exactly one.
-4. In the Google OAuth client, register the production redirect URI
-   `https://quicknotch.app/oauth/callback` alongside the local preview URIs.
-   The desktop reads the loopback port out of `state`, so no app change is
-   needed — but consent fails as `redirect_uri_mismatch` until the URI is
-   registered, and new URIs can take time to propagate.
-5. After the first deploy, check: `https://quicknotch.app/` loads with HSTS,
-   `/_headers` took effect (DevTools → response headers shows `content-security-policy`),
-   `/robots.txt` serves the flow disallows, `/sitemap.xml` lists only `/`,
-   and `/connect?standby=1` renders the standby card with a `noindex` robots
-   meta (view source — it must never be reachable from any link on `/`).
+The `quicknotch` Worker builds on every push to `main`:
+
+| Setting | Value |
+| :--- | :--- |
+| Root directory | empty (the repository root) |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Environment variable | `NODE_VERSION=22` |
+
+Nothing else about the deploy lives in the dashboard. The repository root has a
+`package.json` whose `build` script hands off to `web/` (install, then Vite), and
+a `wrangler.toml` that names `web/build` as the asset directory and
+`web/worker/site.js` as the script. Running the two commands above from a clean
+clone is exactly what the Cloudflare build does, which is also the reason the
+root directory must stay empty: pointing it at `web` would hide both files.
+
+Page counts come from Cloudflare Web Analytics: the beacon is rendered from
+`+layout.svelte` with the token that lives in `site.ts`, and `_headers` allows
+`static.cloudflareinsights.com` in `script-src` and `cloudflareinsights.com` in
+`connect-src`, so nothing else third-party can load. It is cookieless, which is
+why there is no consent banner; the desktop app itself still has no analytics at
+all. `/connect` and `/oauth/*` are deliberately left uncounted: the callback URL
+carries a one-time authorisation code in its query string, and that must never
+reach an analytics endpoint.
+
+`.github/workflows/deploy-web.yml` is the manual fallback: the same build, then
+`wrangler deploy`. It needs two repository secrets, `CLOUDFLARE_API_TOKEN`
+(Workers Scripts: Edit) and `CLOUDFLARE_ACCOUNT_ID`; without them it
+type-checks and builds, then skips the deploy with a warning.
+
+Then, once, in Cloudflare:
+
+1. Attach the custom domains `quicknotch.app` and `www.quicknotch.app` to the
+   Worker. The zone is in the same account, so both records and their
+   certificates are provisioned for you; proxy stays on.
+2. In the Google OAuth client, register the production redirect URI
+   `https://quicknotch.app/oauth/callback` alongside the local preview URIs. The
+   desktop reads the loopback port out of `state`, so no app change is needed —
+   but consent fails as `redirect_uri_mismatch` until the URI is registered, and
+   new URIs can take a while to propagate.
+3. After the first deploy, check: `/` loads over HSTS, `_headers` took effect
+   (DevTools → response headers shows `content-security-policy`), `/download`
+   resolves without `.html`, `/changelog` shows the published version in its
+   HTML, `/robots.txt` serves the flow disallows, `/sitemap.xml` lists only the
+   three public routes, and a mistyped address returns a real 404 with the
+   "this page never made it into the dock" page.
+
+The site itself can be hosted while the repository is private, but its download
+buttons cannot work: GitHub serves no release assets to anonymous clients on a
+private repository. Make the repository public before pointing anyone at
+`quicknotch.app`.
 
 Security posture, all in-repo rather than in-dashboard:
 
@@ -293,10 +415,13 @@ Security posture, all in-repo rather than in-dashboard:
   disallows. They are also unlinked: no nav, footer, sitemap or copy points at
   them. The only in-repo `/connect` reference is the OAuth error page's
   "Start again" link, which is itself inside the unindexed flow.
-- No secrets in the repo: the OAuth `client_id` is a public identifier by
-  design; the `client_secret` never leaves the desktop app and appears nowhere
-  in `web/`. There is no token endpoint, no cookie, no analytics, no third-party
-  script — so there is nothing to leak and nothing to consent to.
+- No secrets in the repo: the Google OAuth client id and its secret are both
+  injected into the desktop build at compile time and appear nowhere in this
+  repository; the connect page names no client, because the desktop sends its
+  own. There is no token endpoint and no cookie. The one third-party script is
+  Cloudflare's Web Analytics beacon: cookieless, no identifier that follows
+  anyone between sites, and the `Content-Security-Policy` allows exactly its
+  origin — so there is nothing to leak and nothing to consent to.
 
 ---
 
@@ -329,11 +454,12 @@ It drives headless Chrome over the DevTools Protocol (no extra dependencies)
 and reports, in order: **page health** (uncaught errors and console errors,
 reported first so a hydration crash is obvious), whether the reveal actions fire,
 whether the **spotlight tracks the scroll and lands within a few pixels of the
-pricing CTA**, whether the **tour advances its step and opens the lid**,
+download CTA**, whether the **tour advances its step and opens the lid**,
 whether the hero entrance completes with each headline line at rest inside its
-mask, **whether any element renders a painted gradient** (must be 0) and whether
-the grain texture generated, any horizontal overflow at 1440 px and 390 px, and
-finally any console errors raised during interaction.
+mask, **whether any element renders a painted gradient** (must be 0), whether the
+grain texture generated, any horizontal overflow at 1440 px and 390 px, and
+finally any console errors raised during interaction. The spotlight probe follows
+the scroll to the download ticket's CTA.
 
 Each probe is isolated, so one failing probe cannot abort the report.
 

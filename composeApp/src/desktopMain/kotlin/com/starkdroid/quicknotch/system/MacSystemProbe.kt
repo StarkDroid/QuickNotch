@@ -30,18 +30,8 @@ private val RamUsedKeys = listOf(
 private val GpuUtilisation = Regex("\"Device Utilization %\"=(\\d+)")
 
 /**
- * macOS half of the system monitor. Everything comes from one `/bin/sh` round
- * trip — measured at ~40 ms for the whole set, versus ~5 separate process
- * spawns if each reading were its own command. `netstat` is numeric (`-n`):
- * without it, macOS resolves every interface address through DNS and the probe
- * blocked for 5 s in testing.
- *
- * There is no public CPU/GPU API reachable from the JVM here, so the readings
- * are the same ones a shell-minded user would run: `ps` sums to the machine
- * percentage, `vm_stat` + `hw.memsize` give memory, `df` gives the data
- * volume's fill (the read-only system volume always looks nearly empty) and
- * `ioreg`'s IOAccelerator statistics give GPU utilization where the driver
- * publishes it.
+ * One /bin/sh per tick for CPU, memory, data-volume fill and GPU, about
+ * 40 ms. netstat must be -n, or DNS resolution stalls the probe.
  */
 internal object MacSystemProbe {
 
@@ -114,10 +104,8 @@ private fun sections(raw: String): Map<String, List<String>> =
         .toMap()
 
 /**
- * `ps %cpu` is per process, where 100 means one full core. Summing gives
- * "cores × 100"-scale load, so dividing by the core count lands back on the
- * machine-wide 0-100 the ring draws. It is the decaying recent average `ps`
- * reports, which is exactly the calm reading a glanceable ring wants.
+ * ps %cpu is per process, so the sum is divided by the core count to get
+ * the 0-100 the ring draws.
  */
 private fun cpuPercent(lines: List<String>, cores: Int): Int? {
     if (cores <= 0 || lines.isEmpty()) return null
@@ -140,10 +128,8 @@ private fun ramUsedBytes(lines: List<String>, totalBytes: Long?): Long? {
 }
 
 /**
- * Cumulative interface byte counters, summed over every real interface.
- * `netstat -ib` prints several rows per interface (one per address family) and
- * only the first carries the counters, so names are de-duplicated. Loopback is
- * skipped: browser↔app traffic on `lo0` is not the network the user is watching.
+ * netstat -ib repeats a row per address family; de-duplicate by name and
+ * skip lo0.
  */
 private fun parseNetCounters(lines: List<String>): Pair<Long, Long>? {
     val seen = mutableSetOf<String>()

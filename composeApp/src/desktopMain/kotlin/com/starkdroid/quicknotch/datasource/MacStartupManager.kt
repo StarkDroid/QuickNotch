@@ -11,8 +11,6 @@ object MacStartupManager {
             "Library/LaunchAgents/$LABEL.plist"
         )
 
-    fun isAutoStartEnabled(): Boolean = plistFile.isFile
-
     fun setAutoStartEnabled(enabled: Boolean): Boolean {
         return try {
             if (enabled) {
@@ -47,9 +45,7 @@ object MacStartupManager {
         val command = info.command().orElse(null) ?: return emptyList()
         val args = info.arguments().orElse(emptyArray()).toList()
         val packagedApp = findEnclosingAppBundle(File(command))
-        // Tag the login-item command with the marker so the app can tell a boot
-        // auto-start (stay quietly in the tray) from a manual launch (open the
-        // Settings window).
+        // The marker keeps a boot auto-start tray-quiet while a manual launch opens Settings.
         return if (packagedApp != null) {
             listOf("/usr/bin/open", "-a", packagedApp.absolutePath, "--args", StartupManager.LAUNCHED_AT_LOGIN_ARG)
         } else {

@@ -100,15 +100,10 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun SettingsScreen(
     repository: FavoritesRepository,
-    media: MediaController,
-    onClose: () -> Unit
+    media: MediaController
 ) {
-    // Deliberately NO screen-level config/favorites/session collects here: the
-    // settings window used to recompose end-to-end on every media heartbeat
-    // (a new MediaSession object every ~2s) and on every slider-drag frame,
-    // which read as low-fps scrolling. Each tab collects exactly the state it
-    // renders (see the tab signatures), so a media tick only touches the tiny
-    // now-playing status row and a slider drag only touches its own card.
+    // No screen-level state collects: each tab collects only what it renders,
+    // so a media tick touches one row.
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(
         stringResource(Res.string.tab_dock_sizing),
@@ -130,11 +125,9 @@ fun SettingsScreen(
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
 
-    // Restore the appearance/sizing/clock defaults. This is the same set the tab
-    // used to own; it now lives here because the button sits in the content
-    // header, and the screen already holds the repository. Widgets and Behavior
-    // keep their own state (pinned apps, toggles) — resetting the notch's look
-    // must not silently undo a user's widget choices.
+    // Setters record the latest value under a lock that guards only the
+    // assignment; one writer drains the snapshots into a single disk write, so
+    // no JSON is torn.
     val onResetDefaults: () -> Unit = {
         repository.updateConfig {
             it.copy(
@@ -182,7 +175,6 @@ fun SettingsScreen(
             .background(SettingsBg)
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            // ── Sidebar ──────────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .width(232.dp)
@@ -269,7 +261,6 @@ fun SettingsScreen(
                     .background(SettingsBorder.copy(alpha = 0.7f))
             )
 
-            // ── Content pane ─────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .weight(1f)

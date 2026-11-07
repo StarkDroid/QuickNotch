@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-label="QuickNotch: one tiny notch, apps, system, weather and more">
+	<title>QuickNotch — one tiny notch. apps, system, weather and more.</title>
+
+	<defs>
+		<pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+			<path d="M40 0H0V40" fill="none" stroke="#211c13" stroke-opacity="0.05"/>
+		</pattern>
+		<clipPath id="screen">
+			<rect x="872" y="104" width="336" height="160" rx="12"/>
+		</clipPath>
+	</defs>
+
+	<!-- Paper -->
+	<rect width="1280" height="360" fill="#f9f3e7"/>
+	<rect width="1280" height="360" fill="url(#grid)"/>
+	<rect x="1" y="1" width="1278" height="358" rx="18" fill="none" stroke="#211c13" stroke-width="2"/>
+
+	<!-- Flat spot colour: no gradients anywhere. -->
+	<circle cx="1216" cy="46" r="150" fill="#e8481c" fill-opacity="0.1"/>
+	<circle cx="70" cy="330" r="120" fill="#1f4fd8" fill-opacity="0.08"/>
+
+	<!-- The notch -->
+	<g transform="translate(96,64)">
+		<rect x="0" y="0" width="196" height="46" rx="23" fill="#0a0a0a" stroke="#211c13" stroke-width="2"/>
+		<circle cx="34" cy="23" r="5" fill="#ffffff" fill-opacity="0.32"/>
+		<rect x="64" y="17" width="34" height="12" rx="6" fill="#ffffff" fill-opacity="0.22"/>
+		<g>
+			<rect x="112" y="9" width="28" height="28" rx="9" fill="#f4a259"/>
+			<rect x="146" y="9" width="28" height="28" rx="9" fill="#e8481c"/>
+		</g>
+	</g>
+
+	<!-- Wordmark -->
+	<text x="96" y="206" font-family="Fraunces, Georgia, 'Times New Roman', serif" font-size="86" font-weight="700" letter-spacing="-3" fill="#211c13">QuickNotch</text>
+
+	<!-- Tagline -->
+	<text x="99" y="248" font-family="Inter, Helvetica, Arial, sans-serif" font-size="23" font-weight="500" fill="#4c4437">One tiny notch. Apps, system, weather and more.</text>
+
+	<!-- Chips -->
+	<g font-family="Inter, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.4">
+		<rect x="99" y="278" width="152" height="38" rx="8" fill="#f1e8d6" stroke="#211c13" stroke-width="2"/>
+		<text x="175" y="303" text-anchor="middle" fill="#211c13">FREE · MIT</text>
+
+		<rect x="263" y="278" width="196" height="38" rx="8" fill="#fffdf6" stroke="#211c13" stroke-width="2"/>
+		<text x="361" y="303" text-anchor="middle" fill="#211c13">WINDOWS + macOS</text>
+
+		<rect x="471" y="278" width="176" height="38" rx="8" fill="#e8481c" stroke="#211c13" stroke-width="2"/>
+		<text x="559" y="303" text-anchor="middle" fill="#fffdf6">OPEN SOURCE</text>
+	</g>
+
+	<!-- The island, with the system page's six rings -->
+	<g clip-path="url(#screen)">
+		<rect x="872" y="104" width="336" height="160" rx="12" fill="#0f141f"/>
+		<rect x="872" y="104" width="336" height="160" rx="12" fill="none" stroke="#211c13" stroke-width="2"/>
+
+		<g fill="none" stroke-width="5" stroke-linecap="round">
+			<!-- One 288-degree ring per metric, all with the bottom gap the app uses. -->
+			<circle cx="932" cy="152" r="18" stroke="#ffffff" stroke-opacity="0.12"/>
+			<circle cx="932" cy="152" r="18" stroke="#38bdf8" stroke-dasharray="90.5 22.6" transform="rotate(126 932 152)"/>
+			<circle cx="1012" cy="152" r="18" stroke="#ffffff" stroke-opacity="0.12"/>
+			<circle cx="1012" cy="152" r="18" stroke="#a855f7" stroke-dasharray="90.5 22.6" transform="rotate(126 1012 152)"/>
+			<circle cx="1092" cy="152" r="18" stroke="#ffffff" stroke-opacity="0.12"/>
+			<circle cx="1092" cy="152" r="18" stroke="#f4a259" stroke-dasharray="90.5 22.6" transform="rotate(126 1092 152)"/>
+			<circle cx="932" cy="214" r="18" stroke="#ffffff" stroke-opacity="0.12"/>
+			<circle cx="932" cy="214" r="18" stroke="#22c55e" stroke-dasharray="90.5 22.6" transform="rotate(126 932 214)"/>
+			<circle cx="1012" cy="214" r="18" stroke="#ffffff" stroke-opacity="0.12"/>
+			<circle cx="1012" cy="214" r="18" stroke="#38bdf8" stroke-dasharray="90.5 22.6" transform="rotate(126 1012 214)"/>
+			<circle cx="1092" cy="214" r="18" stroke="#ffffff" stroke-opacity="0.12"/>
+			<circle cx="1092" cy="214" r="18" stroke="#e8481c" stroke-dasharray="90.5 22.6" transform="rotate(126 1092 214)"/>
+		</g>
+
+		<!-- The text column beside the rings -->
+		<rect x="1136" y="130" width="52" height="7" rx="3.5" fill="#ffffff" fill-opacity="0.5"/>
+		<rect x="1136" y="147" width="38" height="6" rx="3" fill="#ffffff" fill-opacity="0.24"/>
+		<rect x="1136" y="190" width="52" height="7" rx="3.5" fill="#ffffff" fill-opacity="0.5"/>
+		<rect x="1136" y="207" width="44" height="6" rx="3" fill="#ffffff" fill-opacity="0.24"/>
+	</g>
+
+	<!-- Sticker, rotated like a strip of tape -->
+	<g transform="translate(1010,86) rotate(4)">
+		<rect x="-92" y="-17" width="184" height="34" rx="6" fill="#fffdf6" stroke="#211c13" stroke-width="2"/>
+		<text x="0" y="6" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1" fill="#211c13">FLICK · DOCK · DONE</text>
+	</g>
+</svg>

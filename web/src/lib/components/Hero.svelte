@@ -2,10 +2,10 @@
 	import Icon from './Icon.svelte';
 	import NotchPanel from './NotchPanel.svelte';
 	import ScreenFrame from './ScreenFrame.svelte';
-	import { buyCta, hero, site } from '$data/site';
+	import { downloadCta, hero, site } from '$data/site';
 	import { loadMotion, prefersReducedMotion } from '$lib/motion/gsap';
 	import { magnetic } from '$lib/actions/magnetic';
-	import { scrollToId } from '$lib/motion/smoothScroll';
+	import { scrollToId } from '$lib/motion/scroll';
 
 	let copyEl: HTMLDivElement | undefined = $state();
 	/** Reveals the hero immediately if the entrance timeline never runs. */
@@ -124,15 +124,9 @@
 			<p class="lead hero__lead" data-hero-extra>{hero.sub}</p>
 
 			<div class="hero__cta" data-hero-extra>
-				<a
-					class="btn btn--primary btn--lg"
-					href={site.purchaseUrl}
-					use:magnetic
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					<Icon name="cart" size={18} />
-					{buyCta}
+				<a class="btn btn--primary btn--lg" href={site.downloadPath} use:magnetic>
+					<Icon name="download" size={18} />
+					{downloadCta}
 				</a>
 				<button class="btn btn--ghost btn--lg" type="button" onclick={() => scrollToId('tour')}>
 					{hero.secondaryCta}
@@ -147,7 +141,7 @@
 			</ul>
 
 			<div class="hero__scrollhint mono" data-hero-extra aria-hidden="true">
-				<span>one scroll, the whole tour</span>
+				<span>{hero.scrollHint}</span>
 				<svg viewBox="0 0 16 24" width="12" height="18" aria-hidden="true">
 					<path d="M8 2 v14 M8 16 l-5 -5 M8 16 l5 -5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 				</svg>
@@ -161,7 +155,7 @@
 				{/snippet}
 			</ScreenFrame>
 
-			<span class="sticker hero__screen-note" aria-hidden="true">hover it — there is the dock</span>
+			<span class="sticker hero__screen-note" aria-hidden="true">{hero.screenNote}</span>
 		</div>
 	</div>
 </section>
@@ -294,7 +288,7 @@
 		rotate: -3deg;
 	}
 
-	/* --- Entrance guard ----------------------------------------------------
+	/*
 	   The hero hides itself from first paint so nothing flashes while GSAP is
 	   being fetched, then the timeline animates from exactly these values (see
 	   the `fromTo` tweens). With JavaScript disabled the `.js` flag is absent,

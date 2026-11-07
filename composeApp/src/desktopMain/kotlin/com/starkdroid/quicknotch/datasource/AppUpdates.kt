@@ -8,9 +8,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
-import java.awt.Desktop
 import java.io.File
-import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import com.starkdroid.quicknotch.AppVersion
 import kotlinx.coroutines.CancellationException
@@ -22,7 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** What the updater knows right now. */
 sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
@@ -40,14 +37,8 @@ sealed interface UpdateState {
 }
 
 /**
- * The app-side updater: check GitHub, download the right package, hand it to
- * [AppInstaller], and let the main process quit.
- *
- * Deliberately *not* a silent auto-installer. It downloads quietly, then waits
- * for the user to press "Restart & update": swapping the binary out from under
- * someone who is mid-song or mid-game is not a feature. Everything the user
- * avoids is the manual part — finding the release, downloading the right
- * installer, running it, relaunching.
+ * Checks GitHub, downloads the right package and hands it to [AppInstaller].
+ * It never restarts on its own: the user presses Restart & update.
  */
 object AppUpdates {
 
@@ -91,11 +82,7 @@ object AppUpdates {
         }
     }
 
-    /**
-     * Ask GitHub for the latest release. [force] bypasses the debounce; the
-     * changelog panel uses the debounced form so opening it repeatedly does
-     * not hammer the API.
-     */
+    /** Asks GitHub for the latest release; [force] bypasses the debounce the changelog panel uses. */
     @Suppress("TooGenericExceptionCaught")
     fun check(force: Boolean = false) {
         val mayCheck = !busy() &&
@@ -146,15 +133,12 @@ object AppUpdates {
     fun openReleasePage() {
         val url = (_state.value as? UpdateState.Available)?.releaseUrl
             ?: ReleaseApi.RELEASES_PAGE
-        runCatching { Desktop.getDesktop().browse(URI(url)) }
-            .onFailure { AppLog.line("update: could not open browser: ${it.message}") }
+        ProjectLinks.open(url)
     }
 
     private suspend fun refresh() {
         _state.value = UpdateState.Checking
-        // The release carries the exact changelog asset URL, which beats the
-        // `/releases/latest/download/...` guess while the repository still has
-        // an old tag that sorts higher than 2.x.
+        // The release's exact changelog URL beats the `/releases/latest` guess, which finds the old tag.
         val release = ReleaseApi.latest()
         Changelog.refresh(release?.changelogUrl)
 
@@ -175,18 +159,15 @@ object AppUpdates {
             asset = asset?.copy(sha256 = checksum),
             releaseUrl = release?.pageUrl ?: ReleaseApi.RELEASES_PAGE
         )
-        // Fetch the package in the background: the only decision left to the
-        // user is when to restart. `download()` no-ops when this build cannot
-        // replace itself (a Gradle run) or the release has nothing for this
-        // platform, in which case the banner offers the release page instead.
+        // Fetch in the background; `download()` no-ops when this build cannot replace itself,
+        // in which case the banner offers the release page instead.
         download()
     }
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun runDownload(version: String, asset: UpdateAsset) {
         val directory = File(AppPaths.configDir, "updates").apply { mkdirs() }
-        // One package at a time: a stale download from an older version would
-        // only waste disk and confuse a later install.
+        // One package at a time: a stale download would only waste disk and confuse a later install.
         directory.listFiles()?.forEach { it.delete() }
         val target = File(directory, asset.name)
 

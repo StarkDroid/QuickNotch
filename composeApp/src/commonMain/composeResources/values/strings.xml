@@ -97,7 +97,8 @@
     <string name="calendar_error_auth">Sign-in didn&#39;t finish. Try connecting again.</string>
     <string name="calendar_error_network">Couldn&#39;t reach Google. Showing the last known day.</string>
     <string name="calendar_error_api_disabled">The Google Calendar API is not enabled for this project yet. Enable it in the Google Cloud console (APIs &amp; Services &#8594; Library), then press Refresh.</string>
-    <string name="calendar_error_client_type">This Google client is set up as a web app. Create a Desktop app client in the Google Cloud console and use its client ID instead.</string>
+    <string name="calendar_error_client_credentials">Google rejected this build&#39;s client credentials. The Google client secret is missing, rotated, or has not reached this machine yet; rebuild with the current one.</string>
+    <string name="calendar_error_not_configured">This build has no Google client configured, so Calendar cannot connect. The build notes in the README show how to supply one.</string>
     <string name="calendar_error_not_verified">Google has not released this app yet. Add your Google account as a test user on the OAuth consent screen, then try again.</string>
     <string name="calendar_error_cancelled">Sign-in was cancelled. Nothing was connected.</string>
     <string name="calendar_error_revoked">Google access was revoked. Reconnect to continue.</string>
@@ -225,12 +226,11 @@ Add apps from the list on the right.</string>
     <string name="changelog_header">Changelog</string>
     <string name="about_product_name">QuickNotch Desktop</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_description">Your apps, calendar, weather, music and live system stats — one flick away in a notch that never blocks the view, on Windows and macOS. It updates itself and keeps getting better: there’s plenty more in the pipeline.</string>
+    <string name="about_description">Your apps, calendar, weather, music and system stats, in one small notch that stays out of the way.</string>
     <string name="changelog_empty">No release notes published yet.</string>
     <string name="changelog_loading">Fetching the latest notes from GitHub…</string>
     <string name="changelog_error">Couldn’t reach GitHub. Check your connection and try again.</string>
     <string name="changelog_retry">Try again</string>
-    <string name="changelog_source_note">Fetched from GitHub — never bundled with the build.</string>
     <string name="changelog_update_available">Version %1$s is available.</string>
     <string name="changelog_update_ready">Version %1$s is downloaded and ready.</string>
     <string name="changelog_update_now">Update now</string>
@@ -238,10 +238,13 @@ Add apps from the list on the right.</string>
     <string name="changelog_updating">Installing version %1$s…</string>
     <string name="changelog_downloading">Downloading %1$s…</string>
     <string name="changelog_up_to_date">You’re on the latest version.</string>
-    <string name="changelog_update_hint">Updates install in place — no installers to hunt down.</string>
+    <string name="changelog_update_hint">Updates install in place. No installer to download.</string>
     <string name="changelog_update_manual">This build can’t update itself. Download the latest version from GitHub.</string>
     <string name="changelog_view_release">View release</string>
     <string name="changelog_update_failed">Update failed: %1$s</string>
-    <string name="changelog_no_asset">A newer version is on GitHub — open the release page to download it.</string>
-    <string name="about_copyright">© 2026 VelocityApps. All rights reserved.</string>
+    <string name="changelog_no_asset">A newer version is on GitHub. Open the release page to download it.</string>
+    <string name="view_source">Source on GitHub</string>
+    <string name="support_kofi">Support on Ko-fi</string>
+    <string name="menu_support">Support QuickNotch</string>
+    <string name="about_copyright">© 2026 VelocityApps · MIT licensed</string>
 </resources>

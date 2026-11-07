@@ -1,0 +1,27 @@
+# The Worker that serves quicknotch.app.
+#
+# This file sits at the repository root because that is where Cloudflare's build
+# runs its commands by default: `npm run build` (delegated to `web/` by the root
+# package.json) and then `npx wrangler deploy`. Keeping the entry point here
+# means the deploy needs no dashboard setting beyond the two commands.
+#
+# The site is fully static: `web/build` holds prerendered HTML and assets, plus
+# `_headers`, and 404 handling comes from `web/build/404.html`. The only edge
+# code is `web/worker/site.js`, which sends www and plain http to the apex.
+name = "quicknotch"
+main = "web/worker/site.js"
+compatibility_date = "2026-11-01"
+
+[assets]
+directory = "./web/build"
+# Named so the handler can serve anything that is not the www host.
+binding = "ASSETS"
+# A missing route serves `404.html` from the build with a real 404 status.
+not_found_handling = "404-page"
+# The handler runs first so it can answer the www host before assets do.
+run_worker_first = true
+
+# Worker Previews needs this block for `wrangler preview`, which is what
+# Cloudflare runs for a non-production branch. The block can be empty: assets
+# and compatibility settings stay at the top level.
+[previews]

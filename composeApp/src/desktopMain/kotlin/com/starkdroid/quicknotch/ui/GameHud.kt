@@ -54,24 +54,8 @@ private val HudSidePadding = 10.dp
 private val HudDividerHeight = 14.dp
 
 /**
- * The gaming quickview: a live performance strip that stands in for the pill
- * while a fullscreen game owns the screen.
- *
- * Deliberately a *readout*, not a control surface — hovering still expands the
- * dock, so nothing here needs to be clickable, and the whole strip stays one
- * unbroken line of numbers. Cells are ordered by how often a player glances at
- * them: frames, then the two loads, then the network.
- *
- * Missing readings drop their cell rather than showing a dash that never
- * resolves: FPS is absent on macOS (no supported API) and on Windows installs
- * without PresentMon, GPU is absent where the OS exposes no engine counter.
- * That is the same rule the System page follows, and it keeps every number on
- * screen true.
- *
- * [transparent] is the "transparent in games" mode: only the numbers remain.
- * The body, the dividers and the island shadow are all dropped, so nothing but
- * the metrics is drawn over the game; each glyph carries its own soft black
- * shadow for legibility. The solid mode keeps the body and its hairlines.
+ * The gaming quickview: a read-only strip ordered frames, loads, network.
+ * A missing reading drops its cell instead of showing a dash.
  */
 @Composable
 internal fun GameHud(

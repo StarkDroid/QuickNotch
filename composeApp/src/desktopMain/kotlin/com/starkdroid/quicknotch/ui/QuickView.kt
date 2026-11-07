@@ -54,10 +54,8 @@ import com.starkdroid.quicknotch.model.NotchSurface
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The collapsed island's content: three branches by state — live media (vinyl
- * disc + marquee title + level rings, each gated by its own collapsed-only
- * toggle), idle clock (date/time + optional rings), else the idle dots. The
- * drag-handle style shows only a slim grabber line.
+ * Collapsed island: live media, idle clock with optional rings, or the idle
+ * dots. The drag style shows a grabber.
  */
 @Composable
 internal fun QuickView(
@@ -89,11 +87,8 @@ internal fun QuickView(
      */
     waveformHidesTitle: Boolean = false,
     /**
-     * Calendar element (collapsed view only): [calendarEvent] is the live
-     * event's title for the ticker — null unless one is running right now — and
-     * [calendarEventCount] is how many events the day has, for the badged
-     * calendar glyph. Gated by the widget toggle in settings, which is also
-     * what decides whether a connection exists at all.
+     * Live event title for the ticker and the day's count for the badge; both
+     * are optional.
      */
     showCalendar: Boolean = false,
     calendarEvent: String? = null,
@@ -113,11 +108,8 @@ internal fun QuickView(
     batteryRingModifier: Modifier = Modifier,
     clock: ClockPrefs,
     /**
-     * Reports the measured width of the wrapping branches (idle clock, idle
-     * dots) so the overlay can hug the pill to its content. The fill branches
-     * (live media, ticker) never report: measuring them would read the island
-     * back into itself. The overlay clears staleness itself by only consuming
-     * the value while a wrapping branch is showing.
+     * Reports the width of wrapping branches only; measuring the fill branches
+     * would read the island into itself.
      */
     onWrapWidthChange: (Dp?) -> Unit = {},
 ) {
@@ -132,12 +124,8 @@ internal fun QuickView(
                     .background(handleTint(surface))
             )
         } else if (media != null) {
-            // Collapsed live activity: the disc hugs the left end, the title
-            // sits centred (marqueed when long) and the system volume degree
-            // plus the audio device's battery cap the right — each behind its
-            // own collapsed-only toggle. The pill is not interactive, so there
-            // is no transport control here; play/pause lives in the expanded
-            // page.
+            // Disc left, title centred, volume and device battery right; the pill is
+            // not interactive, so no transport here.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -156,12 +144,8 @@ internal fun QuickView(
                     size = 20.dp,
                     modifier = discModifier
                 )
-                // The title shares the exact 22dp frame the level rings use, so
-                // the disc, text and rings all sit on one vertical centreline.
-                // With the waveform on, that same frame stacks the title over the
-                // bars — 13sp line + 1.5dp + 7dp of bars still fits inside it, so
-                // the group stays on the shared centreline and the collapsed
-                // footprint (and every morph key) is untouched.
+                // The title shares the rings' 22dp frame; with the waveform on, title and
+                // bars stack inside it.
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -313,11 +297,8 @@ internal fun QuickView(
 }
 
 /**
- * Reports a wrapping row's measured width to the island sizer. The wrapper
- * sizes itself to the content (both branches wrap rather than fill), so the
- * reported width is the content width including the row's own insets — the
- * island adds nothing on top and the pill hugs with exactly the row's
- * side padding on each end.
+ * Reports a wrapping row's content width, including its insets, to the
+ * island sizer.
  */
 @Composable
 private fun WrapWidthReporter(
@@ -336,10 +317,8 @@ private fun WrapWidthReporter(
 }
 
 /**
- * 250 ms interpolation clock for the media progress displays. Localizing this
- * state keeps the 4 Hz tick from recomposing the whole overlay tree — only
- * the composable that owns the state (the pill strip, the music page's
- * transport/progress cluster) recomposes on each tick.
+ * Local 250 ms clock; keeping it here stops the 4 Hz tick from recomposing
+ * the overlay.
  */
 @Composable
 internal fun rememberMediaNowMs(playing: Boolean): Long {
@@ -409,13 +388,8 @@ internal fun NotchProgressOutlineForSession(
             // Top edge of the island in canvas coords (flush, no top margin).
             val oy = 0f
             val top = if (spec.roundTop) r else 0f
-            // Perimeter from the top-left corner, clockwise down the left side,
-            // around the bottom and up to the top-right: the notch's visible
-            // outline, so playback fills the island's own border. Angle
-            // convention is Android's: 0° at 3 o'clock, increasing CLOCKWISE
-            // (y-down) — so both bottom quarters run 9→6 and 6→3 o'clock with
-            // a NEGATIVE sweep. A +90 here bulges the arcs to the wrong side
-            // and the following lineTo cuts diagonally through the middle.
+            // Perimeter from top-left clockwise; Android angles run clockwise, so the
+            // bottom quarters sweep negative.
             val path = Path().apply {
                 moveTo(ox, oy + top)
                 lineTo(ox, oy + h - r)

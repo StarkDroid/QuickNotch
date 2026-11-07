@@ -53,10 +53,13 @@ import com.starkdroid.quicknotch.datasource.Changelog
 import com.starkdroid.quicknotch.datasource.ChangelogChange
 import com.starkdroid.quicknotch.datasource.ChangelogRelease
 import com.starkdroid.quicknotch.datasource.ChangelogStatus
+import com.starkdroid.quicknotch.datasource.ProjectLinks
 import com.starkdroid.quicknotch.datasource.UpdateState
 import com.starkdroid.quicknotch.datasource.AppInstaller
 import com.starkdroid.quicknotch.generated.resources.Res
 import com.starkdroid.quicknotch.generated.resources.about_copyright
+import com.starkdroid.quicknotch.generated.resources.support_kofi
+import com.starkdroid.quicknotch.generated.resources.view_source
 import com.starkdroid.quicknotch.generated.resources.about_description
 import com.starkdroid.quicknotch.generated.resources.about_product_name
 import com.starkdroid.quicknotch.generated.resources.about_version
@@ -69,7 +72,6 @@ import com.starkdroid.quicknotch.generated.resources.changelog_loading
 import com.starkdroid.quicknotch.generated.resources.changelog_no_asset
 import com.starkdroid.quicknotch.generated.resources.changelog_restart_update
 import com.starkdroid.quicknotch.generated.resources.changelog_retry
-import com.starkdroid.quicknotch.generated.resources.changelog_source_note
 import com.starkdroid.quicknotch.generated.resources.changelog_update_available
 import com.starkdroid.quicknotch.generated.resources.changelog_update_failed
 import com.starkdroid.quicknotch.generated.resources.changelog_update_hint
@@ -98,16 +100,8 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The one "about" surface: what this app is, which version is running, what
- * changed in every version up to it, and — when GitHub has something newer —
- * the banner that downloads it in the background and installs it on restart.
- *
- * Two rules shape the content:
- *  - the release list stops at the running version. A newer changelog entry is
- *    not documentation yet; it is an update, and showing its notes as if the
- *    user already had it would be a lie.
- *  - the feed is fetched, never bundled. A dialog opened offline shows the last
- *    cached history and a small note instead of inventing a blank release.
+ * The changelog stops at the running version; offline it shows the
+ * cached history rather than inventing an empty release.
  */
 @Composable
 internal fun ChangelogDialog(onDismiss: () -> Unit) {
@@ -201,20 +195,27 @@ private fun ChangelogCardBody(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = stringResource(Res.string.changelog_source_note),
-            style = AppTypography.labelSmall,
-            color = TextMuted,
-            fontSize = 10.sp
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(Res.string.about_copyright),
-            style = AppTypography.labelSmall,
-            color = TextMuted,
-            fontSize = 11.sp
-        )
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(Res.string.about_copyright),
+                style = AppTypography.labelSmall,
+                color = TextMuted,
+                fontSize = 11.sp
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SettingsLinkButton(stringResource(Res.string.view_source)) {
+                    ProjectLinks.open(ProjectLinks.REPOSITORY)
+                }
+                SettingsLinkButton(stringResource(Res.string.support_kofi)) {
+                    ProjectLinks.open(ProjectLinks.KOFI)
+                }
+            }
+        }
     }
 }
 
@@ -302,7 +303,9 @@ private fun UpdateBanner(state: UpdateState) {
                     text = stringResource(Res.string.changelog_up_to_date),
                     style = AppTypography.labelSmall,
                     color = TextMuted,
-                    fontSize = 10.5.sp
+                    fontSize = 10.5.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }

@@ -12,12 +12,8 @@ import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 
 /**
- * Loads macOS application icons in-process from the `.icns` packed into each app
- * bundle, so refreshing a full list never spawns dozens of `sips`/`qlmanage`
- * sub-processes (those used to time out under concurrency and fall back to
- * monograms). The large representations inside a modern `.icns` are bare PNG
- * chunks that [ImageIO] can decode directly; the shell utilities remain only as
- * a last resort for legacy JPEG2000-only archives or bundles without any `.icns`.
+ * Loads macOS app icons in-process from the `.icns` in each bundle, so a list refresh spawns no sips/qlmanage.
+ * Modern icons are bare PNG chunks [ImageIO] decodes; the shell tools remain a last resort.
  */
 object MacAppIconLoader {
     private val cache = ConcurrentHashMap<String, ImageBitmap>()
@@ -78,13 +74,8 @@ object MacAppIconLoader {
     }
 
     /**
-     * Decodes a PNG representation embedded in an `.icns` archive with
-     * [ImageIO], avoiding a sub-process per app. Modern macOS icons store every
-     * scale as a bare PNG chunk; we take the smallest one that still covers the
-     * cache cap (decoding a 1024px PNG just to draw it at 38dp is the waste that
-     * made scrolling stutter) and fall back to the largest if the archive only
-     * ships smaller sizes. Legacy JPEG2000-only archives return null so
-     * [convertWithSips] can take over.
+     * Decodes the smallest PNG chunk that covers the cache cap (a 1024px decode for a 38dp draw is what
+     * made scrolling stutter); JPEG2000-only archives return null so [convertWithSips] takes over.
      */
     private fun parseIcnsPng(icns: File?): ImageBitmap? {
         if (icns == null || !icns.isFile) return null
@@ -99,8 +90,7 @@ object MacAppIconLoader {
             (bytes[2].toInt() and 0xFF) != 0x6E || (bytes[3].toInt() and 0xFF) != 0x73
         ) return null
 
-        // Chunks appear in no particular order, so scan once and remember both
-        // the smallest chunk that meets the cap and the largest overall.
+        // Chunks appear in no order: scan once, keeping the smallest chunk that meets the cap and the largest.
         var idealSize = Int.MAX_VALUE
         var idealStart = -1
         var idealEnd = -1
@@ -150,8 +140,7 @@ object MacAppIconLoader {
     }
 
     private fun convertWithSips(icns: File, size: Int = 128): ImageBitmap? {
-        // Include the source path: many apps ship an identical "AppIcon.icns"
-        // with the same timestamp, which used to collide on one cache entry.
+        // Include the source path: many apps ship an identical "AppIcon.icns" with the same timestamp.
         val out = File(iconCacheDir, "${icns.absolutePath.hashCode()}-${icns.name}-${icns.lastModified()}-$size.png")
         if (out.isFile && out.length() > 0) {
             return ImageIO.read(out)?.toComposeImageBitmap()

@@ -29,19 +29,8 @@ private val windowsJson: Json = Json {
 }
 
 /**
- * Windows half of the system monitor.
- *
- * One `system-metrics.ps1` spawn per tick collects everything through PDH
- * (`Get-Counter`, sampled over one second — CPU and the network rates are
- * deltas, so they need two PDH samples and Get-Counter supplies both) plus
- * `DriveInfo` for the boot volume. RAM *total* is a static fact and is read
- * once at startup, so the per-tick script never pays for a second WMI query
- * beyond the GPU-engine counter set.
- *
- * GPU utilization is the 3D engine's `Utilization Percentage` summed across GPU
- * engine instances and clamped to 100 — the same number Task Manager shows as
- * "GPU", approximated. Machines without GPU performance counters (no WDDM 2.0
- * engine provider) simply get no GPU tile.
+ * One system-metrics.ps1 per tick over PDH, plus DriveInfo for the disk.
+ * GPU is the summed 3D-engine utilization; no counters means no tile.
  */
 internal object WindowsSystemProbe {
 

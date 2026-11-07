@@ -1,61 +1,61 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { buyCta, pricing, site } from '$data/site';
+	import KofiButton from './KofiButton.svelte';
+	import { downloadCta, offer, site, ticket } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
-	 * The price, as a printed ticket.
-	 *
-	 * One payment, one ticket: the price and the buy button sit on the left stub,
-	 * what the purchase covers reads on the right, and a perforated rule with two
-	 * punch marks runs between them. Every number and string comes from the
-	 * content module, so the card, the buttons and the structured data can never
-	 * disagree about what the app costs.
+	 * The download as a ticket: price and licence on the stub, contents on
+	 * the right, strings from the content module.
 	 */
 </script>
 
-<section class="section" id="pricing">
+<section class="section" id="download">
 	<div class="container">
 		<header
 			class="section-head section-head--center"
 			use:reveal={{ from: 'up' }}
 			data-reveal="up"
 		>
-			<p class="eyebrow">{pricing.eyebrow}</p>
-			<h2 class="display h2">{pricing.title}</h2>
-			<p class="lead">{pricing.body}</p>
+			<p class="eyebrow">{offer.eyebrow}</p>
+			<h2 class="display h2">{offer.title}</h2>
+			<p class="lead">{offer.body}</p>
 		</header>
 
 		<div class="ticket" use:reveal={{ from: 'scale', delay: 0.08 }} data-reveal="scale">
 			<span class="ticket__sticker sticker sticker--blue" aria-hidden="true">
-				pay once ★ keep forever
+				{ticket.sticker}
 			</span>
 
 			<div class="ticket__stub">
-				<p class="mono ticket__kicker">Lifetime licence · Windows + macOS</p>
+				<p class="mono ticket__kicker">{ticket.kicker}</p>
 
 				<p class="ticket__price">
-					<span class="ticket__amount">{pricing.label}</span>
-					<span class="ticket__unit">{pricing.unit}</span>
+					<span class="ticket__amount">{offer.price.label}</span>
+					<span class="ticket__unit">{offer.price.unit}</span>
 				</p>
 
 				<p class="ticket__lede">
-					One payment. Every widget, both installers, and the updates that follow.
+					{ticket.lede}
 				</p>
 
 				<div class="ticket__cta">
+					<a class="btn btn--primary btn--lg" href={site.downloadPath}>
+						<Icon name="download" size={18} />
+						{downloadCta}
+					</a>
 					<a
-						class="btn btn--primary btn--lg"
-						href={site.purchaseUrl}
+						class="btn btn--ghost btn--lg"
+						href={site.repository}
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						<Icon name="cart" size={18} />
-						{buyCta}
+						{offer.secondary}
+						<Icon name="github" size={18} />
 					</a>
 				</div>
 
-				<p class="mono ticket__fine">{pricing.finePrint}</p>
+				<p class="mono ticket__fine">{offer.finePrint}</p>
 			</div>
 
 			<div class="ticket__perf" aria-hidden="true">
@@ -64,14 +64,15 @@
 			</div>
 
 			<div class="ticket__includes">
-				<p class="mono ticket__kicker">In the box</p>
+				<p class="mono ticket__kicker">{ticket.includesLabel}</p>
 				<ul use:stagger={{ step: 0.07 }} data-stagger>
-					{#each pricing.includes as item (item)}
+					{#each offer.includes as item (item)}
 						<li><Icon name="check" size={15} /><span>{item}</span></li>
 					{/each}
 				</ul>
-				<p class="mono ticket__serial" aria-hidden="true">
-					no. 0001 · printed on cream · {pricing.currency}
+				<p class="mono ticket__serial">
+					<span>{ticket.serial}</span>
+					<KofiButton compact />
 				</p>
 			</div>
 		</div>
@@ -79,7 +80,6 @@
 </section>
 
 <style>
-	/* ---- The ticket ------------------------------------------------------- */
 	.ticket {
 		position: relative;
 		display: grid;
@@ -109,7 +109,7 @@
 		position: absolute;
 		top: -1.05rem;
 		right: clamp(1rem, 4vw, 2.5rem);
-		rotate: 1.5deg;
+		rotate: -1.5deg;
 		z-index: 2;
 	}
 
@@ -129,7 +129,6 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Price ------------------------------------------------------------ */
 	.ticket__price {
 		display: flex;
 		align-items: baseline;
@@ -175,7 +174,6 @@
 		color: var(--text-3);
 	}
 
-	/* ---- Perforation ------------------------------------------------------ */
 	.ticket__perf {
 		position: relative;
 		border-left: 2px dashed var(--line-strong);
@@ -200,7 +198,6 @@
 		bottom: 8%;
 	}
 
-	/* ---- What is in the box ----------------------------------------------- */
 	.ticket__includes ul {
 		display: flex;
 		flex-direction: column;
@@ -223,16 +220,19 @@
 	}
 
 	.ticket__serial {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
 		margin-top: auto;
 		padding-top: 0.9rem;
 		border-top: 2px dashed var(--line);
 		font-size: var(--fs-micro);
 		letter-spacing: 0.1em;
 		color: var(--text-3);
-		opacity: 0.75;
 	}
 
-	/* ---- Layout ----------------------------------------------------------- */
 	@media (min-width: 860px) {
 		.ticket {
 			grid-template-columns: minmax(0, 1.02fr) 0 1fr;

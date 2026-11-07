@@ -64,21 +64,14 @@ internal object MediaJson {
 }
 
 /**
- * How long an empty player holds the last session before clearing it. Covers
- * the no-item beat between songs (the bridge polls at 1–2s) without turning a
- * genuine stop into a lingering pill. The hold ends on a *clock* driven by
- * [MediaControllerBase.armHoldExpiry], never only on the next bridge line:
- * the macOS bridge de-dups identical lines, so a force-quit delivers exactly
- * one empty sample inside the grace and then silence — a hold that only the
- * next line could end would never end at all (pitfall 51).
+ * How long an empty player holds the last session. The hold ends on a
+ * timer because the bridge de-dups lines and may never send another.
  */
 private const val EMPTY_GRACE_MS = 4_000L
 
 /**
- * Shared snapshot decoding for every backend: JSON parsing, monotonic
- * stamping, and artwork decoding cached by content id so a base64 blob is
- * rasterized exactly once per track. All decoding runs on the caller's worker
- * thread; the flow is published to the UI.
+ * JSON parsing, monotonic stamping and per-id art decoding shared by every
+ * backend.
  */
 internal abstract class MediaControllerBase : MediaController {
     protected val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -100,23 +93,15 @@ internal abstract class MediaControllerBase : MediaController {
     private var previousPlayingRawId: String? = null
 
     /**
-     * The last playable snapshot and when it arrived (monotonic ms). An empty
-     * player holds onto these for [EMPTY_GRACE_MS] instead of clearing the
-     * session at once — the bridge reports no item for a beat between songs,
-     * and without the hold the whole music page would unmount and remount on
-     * every track change. The hold is armed as a one-shot timer (see
-     * [armHoldExpiry]) because the bridge's line de-dup can swallow every
-     * later sample, leaving no line on which a re-check could ever run.
+     * Last playable snapshot and its arrival time, held for EMPTY_GRACE_MS
+     * so a track change does not unmount the music page.
      */
     private var lastSnapshot: MediaSnapshot? = null
     private var lastPlayableAtMs: Long = 0L
 
     /**
-     * Serialises every session write. The poller and the hold-expiry timer run
-     * on different IO coroutines: a reap interleaved with a publish could
-     * re-write a session that was just cleared, and a late artwork merge could
-     * graft a cover onto a session the timer had already dropped. Lock order is
-     * always publishLock → artLock, never the reverse.
+     * Serialises session writes from the poller and the reap timer. Lock order
+     * is publishLock then artLock.
      */
     private val publishLock = Any()
 
@@ -124,14 +109,8 @@ internal abstract class MediaControllerBase : MediaController {
     private var holdExpiryJob: Job? = null
 
     /**
-     * Parses one bridge line into a playable snapshot. A playable line refreshes
-     * the hold and cancels any pending reap; anything else serves the held
-     * snapshot while the grace is open (arming the one-shot reap so the hold
-     * still ends when the bridge falls silent) and clears the session once it
-     * expires — so a track switch (or a corrupt sample) never blanks the pill,
-     * while a real stop lands a few seconds later.
-     *
-     * Called only while holding [publishLock].
+     * Parses one bridge line under publishLock. A playable line refreshes
+     * the hold; anything else serves the held snapshot and arms the reap.
      */
     private fun playableSnapshot(jsonLine: String): MediaSnapshot? {
         val snapshot = runCatching {
@@ -158,16 +137,8 @@ internal abstract class MediaControllerBase : MediaController {
     }
 
     /**
-     * Starts the one-shot reap for the current hold: [EMPTY_GRACE_MS] after
-     * the last playable sample. A hold used to be re-evaluated only when the
-     * *next* bridge line arrived, but the macOS bridge de-dups identical lines
-     * — a force-quit delivers one empty sample inside the grace and then
-     * silence, so nothing ever re-ran the expiry check and the pill hung on
-     * the dead track forever. The deadline is therefore clock-driven: the hold
-     * still lasts exactly [EMPTY_GRACE_MS], but it *ends* even when no further
-     * line ever comes. The wait re-checks under [publishLock], so a playable
-     * line landing in the meantime (fresh grace, this job cancelled) wins the
-     * race instead of being reaped.
+     * Arms the clock-driven reap. The bridge de-dups identical lines, so a
+     * force-quit would otherwise leave the pill on the dead track forever.
      */
     private fun armHoldExpiry() {
         if (holdExpiryJob?.isActive == true) return
@@ -185,11 +156,8 @@ internal abstract class MediaControllerBase : MediaController {
     }
 
     /**
-     * Drops the held session and the pinned-position pins — the single place
-     * the "nothing is playing" state is written, so the reap timer and an
-     * expired line can never drift apart. Caller must hold [publishLock];
-     * idempotent (a second empty line after the reap just rewrites the null
-     * the flow already holds).
+     * The only place the empty session is written, so the reap timer and an
+     * expired line cannot drift. Caller holds publishLock.
      */
     private fun reapHeldSnapshot() {
         previousPlayingRawPosition = null
@@ -199,28 +167,17 @@ internal abstract class MediaControllerBase : MediaController {
     }
 
     /**
-     * Decodes one bridge snapshot into the session flow. Returns the snapshot
-     * when it produced (or refreshed) a session, null when the line carried
-     * nothing playable — macOS uses the returned snapshot to decide whether
-     * the track still needs cover art from the entitled helper. The whole
-     * read-modify-write runs under [publishLock] so the hold-expiry timer can
-     * never reap between the hold check and the session write.
+     * Writes one snapshot under publishLock so the reap cannot fall between
+     * the hold check and the write; returns it when a session was produced.
      */
     protected fun publish(jsonLine: String): MediaSnapshot? = synchronized(publishLock) {
         val snapshot = playableSnapshot(jsonLine)
         if (snapshot == null) return null
         val state = stateOf(snapshot)
 
-        // Browsers (Chrome/Edge) register with SMTC but do not pump timeline
-        // position updates while a track plays: `Position` stays pinned at its
-        // last change (the play-start offset) for the whole track, so every
-        // poll re-delivers the same raw value. Snapping the playhead to it each
-        // second resets the progress bar to ~0 and the extrapolation clock with
-        // it. When a playing sample repeats the previous playing sample's raw
-        // position for the same content, treat it as that pinned value and
-        // keep advancing from where the previous sample extrapolated to —
-        // players that genuinely advance (Spotify, Music, foobar) and seeks
-        // (which do update `Position`) never match and keep their raw value.
+        // Chrome and Edge pin Position while playing, so a repeated raw value
+        // for the same content is extrapolated instead of snapping the playhead
+        // back to the start.
         val sampledAt = System.nanoTime() / 1_000_000
         val positionMs = extrapolatedPosition(state, snapshot, sampledAt)
 
@@ -275,10 +232,8 @@ internal abstract class MediaControllerBase : MediaController {
     }
 
     /**
-     * Fills in cover art that arrived late — the macOS entitled helper answers
-     * one track behind the poll loop by design. Drops the bytes when the track
-     * has already moved on (or another source already supplied art), so a slow
-     * fetch can never paste a cover onto the wrong song.
+     * Fills in late cover art, dropping bytes when the track already moved on
+     * or another source supplied art.
      */
     protected fun publishArtwork(contentId: String, base64: String) {
         if (base64.isBlank() || contentId.isBlank()) return
@@ -295,10 +250,8 @@ internal abstract class MediaControllerBase : MediaController {
     }
 
     /**
-     * Decodes one base64 cover straight to display size and caches it under
-     * [contentId]. Blank input (or a failed decode) falls back to whatever the
-     * cache holds for that id, so a track the helper has no art for simply
-     * keeps the placeholder vinyl.
+     * Decodes base64 art straight to display size, cached by contentId; a
+     * blank or failed decode keeps the placeholder.
      */
     private fun decodeArtworkBytes(base64: String?, contentId: String): DecodedArtwork {
         if (base64.isNullOrBlank()) return cachedArtwork(contentId)
@@ -356,17 +309,8 @@ private fun stateOf(snapshot: MediaSnapshot): PlaybackState =
     }
 
 /**
- * Dominant colour of a cover, for the waveform tint.
- *
- * A coarse 4-bit-per-channel histogram over a sampled grid (at most ~56×56
- * pixels regardless of the art's size), scored by `population × chroma` with a
- * penalty for luma far from mid-grey: that picks the colour the cover actually
- * *means* rather than the background black or a big pale field. Near-black and
- * near-white bins are skipped outright, and a cover with no chroma at all
- * returns null so the caller keeps its white default. The winner is then pushed
- * into a legible band (never washed out, never so dark it merges with the
- * island) because a dark cover's dominant colour would otherwise be invisible
- * against the notch.
+ * Picks a cover's dominant colour by population and chroma, skipping
+ * near-black and near-white bins, then keeps it legible against the island.
  */
 private fun dominantArtTint(img: BufferedImage): Color? {
     val w = img.width
@@ -431,19 +375,8 @@ private fun dominantArtTint(img: BufferedImage): Color? {
 }
 
 /**
- * Decode album art straight to the size we actually use.
- *
- * Artwork arrives as a 900–1200px JPEG, and the naive path (decode it, wrap it
- * as a Compose bitmap, unwrap it again, scale it, wrap it once more) measured
- * 19–49ms of pure copying *per track* — 131ms on a cold first track. That is
- * the single heaviest thing the app does when a track starts, and it is enough
- * to make every other app on the machine feel like it stuttered.
- *
- * ImageIO's `sourceSubsampling` lets the decoder skip pixels while reading, so a
- * 1200px JPEG destined for a 256px slot costs a fraction of a full decode and
- * never materialises the full-size bitmap at all. When the format cannot
- * subsample (PNG, and anything whose reader rejects the hint) we fall back to a
- * plain decode plus one bilinear step.
+ * Decodes art straight to 256 px with sourceSubsampling; a full decode
+ * and rescale was the heaviest work on track start.
  */
 private fun decodeArtBytes(bytes: ByteArray): BufferedImage? {
     val stream = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))

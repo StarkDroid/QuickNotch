@@ -1,19 +1,11 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { buyCta, site } from '$data/site';
+	import { latest } from '$data/releases';
+	import { chrome, site } from '$data/site';
 
 	/**
-	 * The header is the notch: a dark capsule pinned to the top of the page with
-	 * the mark, the wordmark and the buy button. At the top of the page it rests
-	 * compact, hugging its content; scrolling opens it into a full-width bar and
-	 * scrolling back up closes it again. There are no section links — the tour
-	 * and the FAQ are found by scrolling, and the only destinations are the buy
-	 * page and the top of this one.
-	 *
-	 * Only two pieces of state exist, both driven by one rAF-batched scroll
-	 * listener: `scrolled` (which the CSS transition animates) and the progress
-	 * line. Everything visual is a CSS transition, so both directions are smooth
-	 * and nothing re-renders per frame.
+	 * The header capsule; scroll state is one rAF-batched listener and CSS
+	 * transitions. The version chip reads the committed changelog feed.
 	 */
 	let scrolled = $state(false);
 	let progress = $state(0);
@@ -42,24 +34,22 @@
 	});
 </script>
 
-<a class="skip-link" href="#main">Skip to content</a>
+<a class="skip-link" href="#main">{chrome.skip}</a>
 
 <header class="nav" class:scrolled>
 	<div class="nav__pill">
-		<a class="brand" href="#top" aria-label="{site.name}, back to top">
+		<a class="brand" href={site.homePath} aria-label={site.homeLabel}>
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			<span class="brand__name">{site.name}</span>
 		</a>
 
-		<a
-			class="buy"
-			href={site.purchaseUrl}
-			target="_blank"
-			rel="noopener noreferrer"
-		>
-			<Icon name="cart" size={15} />
-			<span>{buyCta}</span>
-		</a>
+		<div class="nav__links">
+			<a class="nav__version mono" href={site.changelogPath}>v{latest}</a>
+			<a class="buy" href={site.downloadPath}>
+				<Icon name="download" size={15} />
+				<span>{chrome.download}</span>
+			</a>
+		</div>
 
 		<span class="nav__progress" style:transform="scaleX({progress})" aria-hidden="true"></span>
 	</div>
@@ -144,11 +134,31 @@
 			inset 0 -1px 0 rgb(0 0 0 / 0.25);
 	}
 
+	.nav__links {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-left: auto;
+	}
+
+	.nav__version {
+		display: inline-flex;
+		align-items: center;
+		color: rgb(255 255 255 / 0.62);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		padding: 0.25rem 0.35rem;
+		border-radius: 999px;
+	}
+
+	.nav__version:hover {
+		color: #fff;
+	}
+
 	.buy {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.45rem;
-		margin-left: auto;
 		padding: 0.58rem 0.95rem;
 		border-radius: 999px;
 		border: 1px solid rgb(0 0 0 / 0.5);
@@ -216,6 +226,31 @@
 		.buy {
 			padding: 0.55rem 0.8rem;
 			font-size: 0.84rem;
+		}
+
+		.nav__version {
+			display: none;
+		}
+	}
+
+	/* Under 380px the capsule narrows to the screen: the wordmark and the
+	   download button share one line, so the side padding and the gaps go
+	   first. */
+	@media (max-width: 380px) {
+		.nav__pill {
+			width: 96%;
+			gap: 0.4rem;
+			padding-right: 0.3rem;
+		}
+
+		.brand {
+			font-size: 0.88rem;
+			gap: 0.4rem;
+		}
+
+		.buy {
+			padding: 0.55rem 0.62rem;
+			font-size: 0.8rem;
 		}
 	}
 

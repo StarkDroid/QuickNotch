@@ -1,196 +1,161 @@
 # QuickNotch
 
-<div align="center">
+<img src="docs/banner.png" alt="QuickNotch — one tiny notch. Apps, system, weather and more." width="100%" />
 
-![QuickNotch Banner](https://raw.githubusercontent.com/StarkDroid/QuickNotch/main/banner.png)
+**A floating notch and app dock for Windows and macOS.** Hover the pill at the top of
+your screen and it opens into a dock of pinned apps; scroll and it turns into pages for
+your machine, the sky, your day and your music. Free, MIT licensed, no account, no
+telemetry.
 
-**A floating notch and dock that pins apps so you can launch them from anywhere on Windows and macOS.**
+[![Latest release](https://img.shields.io/github/v/release/StarkDroid/QuickNotch?label=latest&sort=semver&color=E8481C)](https://github.com/StarkDroid/QuickNotch/releases)
+[![Downloads](https://img.shields.io/github/downloads/StarkDroid/QuickNotch/total?color=1F4FD8)](https://github.com/StarkDroid/QuickNotch/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1C8F4C)](LICENSE)
 
-[![Build & Release](https://github.com/StarkDroid/QuickNotch/actions/workflows/release.yml/badge.svg)](https://github.com/StarkDroid/QuickNotch/actions)
+[![Windows 10 & 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](#install)
+[![macOS 12+](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.7.3-4285F4?logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/lp/compose-multiplatform/)
-[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://microsoft.com/windows)
-[![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-</div>
+**[Download](https://quicknotch.app/download)** ·
+[Website](https://quicknotch.app) ·
+[Changelog](https://quicknotch.app/changelog) ·
+[Releases](https://github.com/StarkDroid/QuickNotch/releases) ·
+[Report a bug](https://github.com/StarkDroid/QuickNotch/issues)
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I41TRI2M)
 
 ---
 
 ## What it does
 
-QuickNotch lives as a small pill at the top-centre of the screen. Hover it to expand a dock of pinned apps, click an icon to launch, then keep working. The same Jetpack Compose UI runs on both platforms; only scanning, icons, launch, and login items differ.
+QuickNotch is one small pill pinned to the top-centre of the screen. Hover it and a dock
+of pinned apps grows out of it, leaning toward the cursor so a click always lands where
+you expect. Scroll over it and the same island turns into another page — no window to
+arrange, no tab to find, nothing to dismiss.
 
----
-
-## Features
-
-- **Floating notch** — Collapsed pill that morphs into a dock, anchored to the top-centre of the screen. It stays perfectly still while it expands and collapses (on macOS it sits above the menu bar, flush against the true top of the screen).
-- **Dock fisheye wave** — Cosine-squared magnification and lift that track the cursor exactly; the wave radius is derived from icon size automatically.
-- **Pin any app** — Search installed apps or browse for a custom executable / `.app` bundle. Reorder and remove from Settings.
-- **Native icons**
-  - Windows: Win32 Shell jumbo / extra-large icons from `.exe` and `.lnk` files.
-  - macOS: `.icns` via `sips`, with Quick Look (`qlmanage`) as fallback.
-- **Installed-app discovery**
-  - Windows: Start Menu, Desktop, system tools, and Registry uninstall entries.
-  - macOS: `/Applications`, `/System/Applications`, Utilities, and `~/Applications`.
-- **Launch from anywhere**
-  - Windows: `cmd` / UWP AppsFolder / Desktop browse.
-  - macOS: `open` for bundles, files, and URLs.
-- **Start at login** — Windows Run registry key, or a macOS LaunchAgent (`com.starkdroid.quicknotch`).
-- **Tray / menu bar** — Show or hide the notch, open Settings, reset defaults, quit.
-- **Settings** — Magnification, icon size, notch geometry, always-on-top, collapse-on-launch, labels.
-
-Pinned apps and config are stored as JSON:
-
-| Platform | Location |
+| State | What you get |
 | :--- | :--- |
-| Windows | `%APPDATA%\QuickNotch\` |
-| macOS | `~/Library/Application Support/QuickNotch/` |
+| **Quickview** (collapsed) | Date and time, weather, laptop and device battery, unread notifications. While music plays it becomes a vinyl disc with a marquee title and a live waveform. |
+| **Apps** | Fisheye dock of pinned apps, one click to launch. |
+| **System** | CPU, GPU, memory, storage, download and upload as live rings; click through to Task Manager or Activity Monitor. |
+| **Weather** | Today plus a seven-day outlook, automatic by IP or pinned to a town you choose. |
+| **Calendar** | Google Calendar for the day, with the next event ticking along in the pill. |
+| **Music** | Cover art, progress, transport and volume — Windows media sessions, or MediaRemote on macOS. |
+| **Gaming** (Windows) | A fullscreen game replaces the pill with FPS, CPU, GPU, ping and download; each cell can be switched off. |
 
----
+The notch sits flush above the menu bar on macOS and above fullscreen games on Windows,
+and it stays quiet: the Dock icon (on macOS) and taskbar presence appear only while
+Settings is open.
 
-## Architecture
+## Install
 
-- **Language**: Kotlin 2.1.10 (Compose Multiplatform Desktop JVM)
-- **UI**: Jetpack Compose 1.7.3 (Material 3) on both platforms — no SwiftUI or WinUI
-- **Concurrency**: Kotlinx Coroutines (`kotlinx-coroutines-swing`)
-- **Native**: JNA 5.16.0 for Win32; Kotlin + built-in macOS tools (`open`, `sips`, `qlmanage`, LaunchAgents)
-- **Persistence**: Kotlinx Serialization JSON
+Grab the installer for your machine from **[quicknotch.app/download](https://quicknotch.app/download)**
+or the [latest release](https://github.com/StarkDroid/QuickNotch/releases/latest):
 
-```
-QuickNotch/
-├── composeApp/
-│   ├── build.gradle.kts
-│   └── src/desktopMain/kotlin/com/starkdroid/quicknotch/
-│       ├── model/
-│       │   ├── AppItem.kt
-│       │   ├── NotchConfig.kt
-│       │   └── FavoritesRepository.kt
-│       ├── datasource/
-│       │   ├── HostPlatform.kt
-│       │   ├── InstalledAppsScanner.kt          # facade
-│       │   ├── WindowsInstalledAppsScanner.kt
-│       │   ├── MacInstalledAppsScanner.kt
-│       │   ├── AppIconLoader.kt
-│       │   ├── Win32ShellIconLoader.kt
-│       │   ├── MacAppIconLoader.kt
-│       │   ├── AppLauncher.kt
-│       │   ├── StartupManager.kt                # facade
-│       │   ├── WindowsStartupManager.kt
-│       │   └── MacStartupManager.kt
-│       ├── ui/
-│       │   ├── FloatingNotchOverlay.kt          # notch + fisheye dock
-│       │   ├── OverlayGeometry.kt               # footprint metrics + top-centre placement
-│       │   ├── SettingsScreen.kt
-│       │   └── NoiseGenerator.kt
-│       ├── theme/
-│       └── main.kt                              # tray + overlay + settings windows
-├── gradle/libs.versions.toml
-├── web/                                         # SvelteKit marketing site (prerendered, static)
-└── …
-```
+| Platform | File |
+| :--- | :--- |
+| Windows 10 & 11 (x64) | `.msi` (or `.exe`) |
+| macOS 12+ Apple silicon | `-arm64.dmg` |
+| macOS 12+ Intel | `-x64.dmg` |
 
----
+The builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask
+once — *More info → Run anyway* on Windows, right-click → *Open* on macOS. Once installed,
+QuickNotch updates itself: it checks GitHub in the background and swaps in the next
+release after you press **Restart & update** in **Settings → Changelog**.
 
-## Getting started
+## Build from source
 
-### Prerequisites
-
-- **JDK 17+** (Eclipse Temurin or Oracle recommended; Homebrew OpenJDK 17 also works)
-- **Windows 10/11 (x64)** or **macOS 12+** (Apple Silicon and Intel)
-
-### Run from source
+You need **JDK 17+**. Everything else is downloaded by Gradle. macOS builds also compile
+the small Objective-C bridges (`cc` is part of the Xcode command-line tools).
 
 ```bash
 git clone https://github.com/StarkDroid/QuickNotch.git
 cd QuickNotch
-./gradlew :composeApp:run
+./gradlew :composeApp:run                      # launch overlay + tray
+./gradlew :composeApp:compileKotlinDesktop     # fast type check
+./gradlew :composeApp:detekt                   # static analysis (must be green)
+./gradlew :composeApp:packageDistributionForCurrentOS   # installer for this OS
 ```
 
-On first launch you get a default pin set (Explorer / Terminal / browsers on Windows; Finder, Safari, Terminal, Calculator, and similar on macOS). Hover the pill, or use the tray / menu bar extra to open Settings.
+On Windows use `gradlew.bat`. Installers land in
+`composeApp/build/compose/binaries/main/` (`.msi`/`.exe`, or `.dmg` plus
+`app/QuickNotch.app` via `:composeApp:createDistributable`).
 
-### Package for the current OS
+Run the app with `:composeApp:run`, not `java -jar` — the plain jar has no manifest and
+the bridges are synced by the build.
 
-```bash
-./gradlew :composeApp:packageDistributionForCurrentOS
+Calendar sign-in needs a Google OAuth client, and this repository carries
+neither half of it: the client id names this project's client, the secret
+authenticates it. Official installers get both from CI. For a local build, put
+them in the ignored `local.properties`:
+
+```properties
+googleClientId=...apps.googleusercontent.com
+googleClientSecret=GOCSPX-...
 ```
 
-Outputs land under `composeApp/build/compose/binaries/main/`:
+or export `QUICKNOTCH_GOOGLE_CLIENT_ID` and
+`QUICKNOTCH_GOOGLE_CLIENT_SECRET` before building. Everything else works
+without them; Calendar then reports that the build has no Google client. If you
+are forking, create your own client in the Google Cloud console and use its
+values.
 
-| OS | Formats |
-| :--- | :--- |
-| Windows | `.msi`, `.exe` |
-| macOS | `.dmg`, plus `app/QuickNotch.app` from `createDistributable` |
+The website has its own build entry at the repository root: `npm run build`
+installs and builds `web/`, and `npx wrangler deploy` publishes it to
+`quicknotch.app`. Those are the same two commands Cloudflare runs, so see
+`web/README.md` before changing either.
 
-```bash
-./gradlew :composeApp:createDistributable
-open composeApp/build/compose/binaries/main/app/QuickNotch.app   # macOS
+## Project layout
+
+```
+composeApp/     Kotlin + Compose Multiplatform desktop app
+  src/commonMain     pure Kotlin: calendar + weather APIs, strings, glyphs
+  src/desktopMain    overlay, dock, widgets, media, system probes, settings
+  native/            Win32 PowerShell bridges and macOS Objective-C bridges
+web/            SvelteKit marketing site (static, prerendered, Cloudflare Workers)
+docs/           banner sources for the README
+config/         detekt configuration and baseline
 ```
 
-On newer macOS releases, Skiko's Metal backend can crash when creating transparent overlay windows, so `main()` forces `-Dskiko.renderApi=SOFTWARE` at runtime on macOS only to keep the notch stable. Other platforms keep Skiko's default GPU renderer (DIRECT3D on Windows) — forcing the software pipeline app-wide is what made the full-size Settings window lag while the notch stayed smooth.
+The app is documented where it lives: `main.kt` for the process and window model,
+`system/` for the per-platform probes, `FloatingNotchOverlay` for the overlay
+choreography, and the media, calendar and weather packages for the rest. The
+comments carry the reasons, including the traps that cost a day. Read those before
+changing anything under `ui/` or `system/`.
 
----
+## How releases work
 
-## Releases and updates
+Every merged pull request that touches the app becomes a release. The workflow plans the
+next version from the PR's labels, builds the Windows installers and both macOS DMGs,
+then publishes them with `SHA256SUMS.txt` and a cumulative `changelog.json` — the same
+feed the app and the [website changelog](https://quicknotch.app/changelog) read.
 
-Every merged pull request that touches the app becomes a release. The workflow
-in `.github/workflows/release.yml` plans the next version with
-`.github/scripts/changelog.mjs`, builds the Windows installers and two macOS
-DMGs (Apple silicon + Intel), and publishes them together with:
-
-- **`changelog.json`** — the cumulative, user-facing history the app reads from
-  GitHub and shows in **Settings → Changelog**. It is fetched at runtime and
-  cached locally, never bundled into a build.
-- **`SHA256SUMS.txt`** — checked by the in-app updater before it installs.
-
-Versioning starts at **2.0.0** and is driven by labels on the merged PR:
-
-| Labels | Bump |
+| Label | Bump |
 | :--- | :--- |
 | `release:major`, `major`, `breaking` | major |
 | `release:patch`, `patch`, `fix`, `bug` | patch |
-| anything else, or no label | minor |
+| anything else | minor |
 
-A PR that changes only `web/`, the docs or CI merges without producing a build.
-The local build defaults to `2.0.0`; CI passes the published number with
-`-PappVersion=x.y.z`, and the running binary reports it in **Settings →
-Changelog**.
+A PR that only touches `web/`, docs or CI merges without producing a build. Local builds
+report `2.0.0` unless CI passes the published number with `-PappVersion=x.y.z`.
 
-While the PR is still open, `.github/workflows/changelog-preview.yml` runs the
-same planner and rewrites a fenced **Changelog preview** block at the bottom of
-the description — the version that will ship, the bump, and the exact sentences
-users will read. Relabel the PR or edit its body and the block follows; the
-author's own description is never touched, and the preview says plainly when a PR
-does not touch the app and therefore ships nothing.
+## Contributing
 
-The app updates itself: it downloads the package for the current platform in the
-background, then a detached script waits for the JVM to exit after **Restart &
-update**, installs the MSI (same upgrade UUID, higher version) or rsyncs the
-DMG's bundle into place, and relaunches. A build started with `./gradlew run`
-has no `jpackage.app-path`, so self-update is unavailable there and the button
-opens the GitHub release page instead.
+1. Branch from `main`, keep one logical change per commit, and sign your commits
+   (`git commit -S`).
+2. `./gradlew :composeApp:compileKotlinDesktop :composeApp:detekt` must pass; run
+   `:composeApp:run` and check the notch before you open the PR.
+3. A feature ships on three surfaces — the overlay, the onboarding walkthrough and
+   `web/` — in the same pull request, all telling the same story.
+4. Nothing is pushed for you: open the PR from your own fork or branch.
 
----
+Issues and ideas are welcome at
+[github.com/StarkDroid/QuickNotch/issues](https://github.com/StarkDroid/QuickNotch/issues).
 
-## Marketing site
+## Licence
 
-The landing page lives in `web/` as a separate SvelteKit workspace. It is built
-independently of the Gradle build and produces a fully static, prerendered site
-with scroll-driven animation (GSAP, Three.js, Lenis).
+MIT — see [LICENSE](LICENSE). Use it, fork it, ship your own notch.
 
-```bash
-cd web
-npm install
-npm run dev      # dev server
-npm run build    # static output in web/build/
-```
-
-See [`web/README.md`](web/README.md) for the architecture, performance budget,
-SEO setup and conventions.
-
----
-
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+QuickNotch is free and has no upsell. If it earns a place on your screen and you feel
+like saying thanks, [buy me a coffee](https://ko-fi.com/trishiraj) — it keeps the updates
+coming and unlocks nothing.

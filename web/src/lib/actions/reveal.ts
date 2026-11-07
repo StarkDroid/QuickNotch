@@ -54,11 +54,8 @@ function scheduleRevealAll() {
 }
 
 /**
- * Scroll-triggered entrance animation for a single element.
- *
- * The element is hidden by CSS (`.js [data-reveal]`) rather than by JS, so the
- * initial state is applied before first paint — no flash — while a visitor
- * without JavaScript still sees fully visible, crawlable content.
+ * Hides the element via CSS before first paint, so there is no flash and
+ * no-JS visitors still see the content.
  */
 export function reveal(node: HTMLElement, options: RevealOptions = {}) {
 	const {

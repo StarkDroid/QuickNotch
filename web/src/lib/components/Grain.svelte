@@ -2,16 +2,8 @@
 	import { onMount } from 'svelte';
 
 	/**
-	 * Film-grain background layer.
-	 *
-	 * A single tiling noise texture sits behind the page on `z-index: -1`, so it
-	 * reads as background texture without ever sitting between the copy and the
-	 * reader. It is deliberately static, fine-grained (one pixel per cell) and
-	 * low-opacity: the noise should be felt, not noticed.
-	 *
-	 * The tile is generated on the client rather than shipped as an asset, which
-	 * keeps a few tens of kilobytes out of the HTML; `background-repeat` does the
-	 * tiling. No animation means no per-frame cost — it is a single static layer.
+	 * Static tiling noise behind the page, generated on the client so no
+	 * asset ships. Low opacity, no animation.
 	 */
 
 	interface Props {

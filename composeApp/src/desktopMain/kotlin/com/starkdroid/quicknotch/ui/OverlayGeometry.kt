@@ -15,12 +15,8 @@ import java.awt.Point
 import java.awt.Rectangle
 
 /**
- * Static layout constants shared by the dock renderer and the window sizer so
- * the overlay window always matches the rendered content pixel-for-pixel.
- *
- * Along the dock axis every icon occupies `baseIconSize + 2 * IconPadding`.
- * [AlongSafety] absorbs the fisheye magnification of the end icons so they
- * never clip against the window edge, keeping the expanded footprint tight.
+ * Layout constants shared by the dock renderer and the window sizer, so
+ * the window matches the content. AlongSafety absorbs end-icon fisheye.
  */
 internal object DockLayout {
     val IconPadding: Dp = 4.dp
@@ -33,40 +29,27 @@ internal object DockLayout {
     const val DragHandleHeightDp: Int = 8
 
     /**
-     * Collapsed-pill width slider bounds. The floor hugs a clock-only pill
-     * instead of stranding ~15dp of dead air on each side of it; indicator
-     * slots widen the footprint from whatever base is chosen, so a low base
-     * never clips.
+     * Collapsed-pill width bounds; indicator slots widen from whatever base is
+     * chosen.
      */
     const val QuickViewWidthMinDp: Int = 110
     const val QuickViewWidthMaxDp: Int = 190
 
     /**
-     * Degenerate-measurement guard for the content-hugging pill: the island
-     * never contracts past this, so a zero-size first frame (or a future
-     * empty branch) never collapses it into a sliver. Well under every real
-     * branch's width, so it only ever binds on garbage input.
+     * Guard against a zero-size first frame; well under every real branch width.
      */
     val HugMinWidth: Dp = 32.dp
 
     /**
-     * Breathing room the hugging island adds around the measured row, total
-     * across both ends (on top of the row's own insets) — enough that edge
-     * components never kiss the pill border, little enough that no dead air
-     * reads.
+     * Breathing room around the measured row, total across both ends.
      */
     val HugPadding: Dp = 16.dp
 
     /** Width of a single icon slot along the dock axis. */
     fun iconSlot(baseIconSize: Dp): Dp = baseIconSize + IconPadding * 2
 
-    /**
-     * Along-axis footprint of the now-playing page when it is live. Sized so
-     * the vinyl, metadata and transport controls fit without clipping inside
-     * the expanded dock; the apps page is narrower, so the window widens to
-     * this whenever the music page is active.
-     */
-    /** Five date tiles need their own room even when no dock or music page does. */
+    /** Along-axis width of the live music page, wide enough for vinyl, metadata and transport. */
+    /** Five date tiles need their own room when no dock or music page does. */
     val CalendarPageWidth = 348.dp
     val NowPlayingWidth: Dp = 356.dp
     /**
@@ -88,12 +71,8 @@ internal object DockLayout {
     val LiveCollapsedWidth: Dp = 236.dp
 
     /**
-     * Gaming HUD length while a fullscreen game is detected: five readouts
-     * (frames, CPU, GPU, latency, download) need more room than the pill, and
-     * the strip is a fixed-width fill branch like the live media pill. The
-     * *window* always reserves this width (see `NotchMetrics.window`) so
-     * starting a game never resizes the native window; only the drawn island
-     * grows.
+     * Fixed HUD width. The window reserves it always, so starting a game
+     * never resizes the native window.
      */
     val GameHudWidth: Dp = 264.dp
 
@@ -105,10 +84,7 @@ internal object DockLayout {
     val GameHudHeight: Dp = 30.dp
 
     /**
-     * Extra quickview length per indicator shown in the idle pill (22dp ring or
-     * bell + 6dp spacing). The idle pill widens by this per indicator so
-     * date/time + device battery + laptop battery + notifications all coexist
-     * without clipping, mirroring how the live pill already grows to its rings.
+     * Extra pill length per indicator: 22dp ring or bell plus 6dp spacing.
      */
     val QuickViewIndicatorSlot: Dp = 28.dp
 }
@@ -119,10 +95,6 @@ internal object DockLayout {
  */
 @Immutable
 data class NotchMetrics(
-    /** Native window footprint when collapsed. */
-    val collapsed: DpSize,
-    /** Native window footprint when expanded. */
-    val expanded: DpSize,
     /** Visible island when expanded. */
     val island: DpSize,
     /** Visible island when collapsed. */
@@ -130,10 +102,8 @@ data class NotchMetrics(
     /** Box the dock fills (the island itself for a top-centred notch). */
     val dockArea: DpSize,
     /**
-     * Native window footprint. Always at least as wide as the widest thing the
-     * island can ever draw — the expanded dock *and* the gaming HUD — so
-     * starting a game widens the drawn island without resizing the window
-     * (a per-open/close resize is what flashes on macOS; see main.kt).
+     * Window footprint, at least the widest branch (dock or HUD), so a game
+     * never resizes the window.
      */
     val window: DpSize = dockArea,
     /**
@@ -143,22 +113,13 @@ data class NotchMetrics(
      */
     val edgeGapDp: Int = 0
 ) {
-    fun sizeFor(isExpanded: Boolean): DpSize = if (isExpanded) expanded else collapsed
     fun islandFor(isExpanded: Boolean): DpSize = if (isExpanded) island else islandCollapsed
 }
 
 /**
- * Derives the overlay window footprint from configuration, pin count and
- * whether the now-playing live activity is currently on. The expanded "along"
- * length hugs the actual widget content instead of a fixed minimum, which
- * removes the dead space that used to flank the icons. When the now-playing
- * page is live it is wider than the apps page, so the window widens to that
- * page — the apps page keeps its own (narrower) layout, centred.
- *
- * [indicatorSlots] is the count of indicators actually rendered in the idle
- * quickview next to the clock (connected-device + laptop battery rings, plus the
- * notification bell); the collapsed footprint grows by one slot per indicator so
- * nothing is ever clipped by the configured pill width.
+ * Derives the window footprint from config, pin count and whether music
+ * is live. The expanded length hugs content, and indicatorSlots widens
+ * the collapsed pill per rendered indicator.
  */
 fun computeNotchMetrics(
     config: NotchConfig,
@@ -199,11 +160,7 @@ fun computeNotchMetrics(
         if (config.style == NotchStyle.DRAG_HANDLE) DockLayout.DragHandleHeightDp
         else config.quickViewHeightDp
     val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
-    // The HUD stacks a value over a caption, so it keeps a floor of its own
-    // even when the quickview has been shrunk to a slim pill.
-    // The HUD is its own, slimmer strip: it may sit shallower than the pill
-    // rather than inheriting the quickview's depth. Its two lines of 11/6sp
-    // type still fit inside 30dp.
+    /** Collapsible widget card: header with icon, title, switch and chevron over an animated body. */
     val collapsedDepth = if (gameActive) DockLayout.GameHudHeight else islandCollapsedDepth
 
     val islandExpanded = DpSize(alongExpanded, islandDepth)
@@ -214,8 +171,6 @@ fun computeNotchMetrics(
     val window = DpSize(maxOf(alongExpanded, DockLayout.GameHudWidth), islandDepth)
 
     return NotchMetrics(
-        collapsed = islandCollapsed,
-        expanded = dockArea,
         island = islandExpanded,
         islandCollapsed = islandCollapsed,
         dockArea = dockArea,
@@ -225,15 +180,8 @@ fun computeNotchMetrics(
 }
 
 /**
- * How many indicator slots the idle quickview actually renders right now: the
- * connected-device ring, the laptop ring (each gated by its own collapsed-only
- * toggle), the notification bell (shown whenever the unread count is
- * readable AND its toggle is on) and the weather chip (condition glyph + temperature,
- * two slots wide). The window sizer and the overlay content MUST
- * agree on this — it widens the collapsed footprint by one slot per indicator
- * so nothing clips against the window edge. Gated to the idle branches: the
- * drag-handle style renders no indicators and a live media pill grows to its
- * own (fixed) width.
+ * Number of indicators the idle quickview renders; both the window sizer
+ * and the content must use this or the right icon clips.
  */
 fun quickViewIndicatorSlots(
     config: NotchConfig,
@@ -263,12 +211,8 @@ fun quickViewIndicatorSlots(
 }
 
 /**
- * Computes the top-left screen coordinate (in AWT points) for the overlay
- * window, hugging the top edge of the chosen screen and centred along it. On
- * macOS the notch hugs the very top of the panel ([hugMenuBar]) so it reads as
- * a real top-edge notch. [edgeGapPx] floats capsule styles off the edge by
- * insetting the anchored coordinate, leaving the gap as ordinary desktop
- * (click-through) rather than dead window area.
+ * Top-centre position in AWT points. On macOS the notch hugs the true
+ * top; edgeGapPx insets capsule styles.
  */
 fun overlayScreenLocation(
     windowWidthPx: Int,
@@ -303,10 +247,8 @@ internal fun notchShape(expanded: Boolean, style: NotchStyle): CornerBasedShape 
 }
 
 /**
- * The island's bottom-corner radius as a value, for everything that must agree
- * with [notchShape] without being a shape: the outline progress ring and the
- * mac blur panel. (The Windows capture doesn't need it — its frame is cropped
- * to the island rect and clipped by the shape itself.)
+ * Corner radius as a value for the outline ring and the Mac blur panel,
+ * matching notchShape.
  */
 internal fun notchCornerRadius(expanded: Boolean, style: NotchStyle): Dp {
     if (style.capsule) return if (expanded) 18.dp else 14.dp

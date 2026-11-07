@@ -23,12 +23,8 @@ private val ShimmerBase = Color(0xFF262830)
 private val ShimmerHighlight = Color(0xFF3A3F4C)
 
 /**
- * Paints a slowly sweeping highlight over the modified content (used as an
- * icon skeleton while the real bitmap loads in the background).
- *
- * The animated value is read inside [drawWithContent] on purpose: the state
- * only invalidates the draw phase of this node, so a list of shimmering rows
- * never recomposes while the user scrolls or while icons trickle in.
+ * Sweeping skeleton highlight. The animated value is read in
+ * drawWithContent so only the draw phase invalidates.
  */
 @Composable
 fun Modifier.shimmer(
@@ -66,10 +62,8 @@ fun Modifier.shimmer(
 }
 
 /**
- * A standalone skeleton slot (icon-sized box) that shimmers. Prefer
- * [Modifier.shimmer] when the placeholder already has a parent box to paint.
- * The shimmer band already paints the base colour across the whole slot, so no
- * separate background is applied (it would cover the band via drawContent).
+ * Icon-sized shimmer slot; the band paints the base colour, so no
+ * background is applied.
  */
 @Composable
 fun ShimmerBox(

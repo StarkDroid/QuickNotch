@@ -5,22 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import kotlin.math.abs
 
 /**
- * Page-switch state for the expanded dock's widget pager, shared between the
- * overlay (which renders the pages and expands/collapses the dock) and — on
- * Windows — an AWT-level wheel listener attached to the overlay window.
- *
- * The overlay window is unfocused and transparent, so it never receives wheel
- * input through Compose's pointer pipeline on Windows; AWT is the layer that
- * actually sees WM_MOUSEWHEEL. That listener is attached in `Main` and drives
- * this state from the AWT event thread — the same thread Compose Desktop
- * renders on, so no synchronization is needed.
- *
- * Gesture model: ONE continuous event stream flips at most ONE page. The
- * burst locks on the first flip, swallows everything that follows (trackpad
- * momentum included), and only releases when the stream has been quiet for
- * [gestureGapNs] — which is exactly when the fingers have left the surface.
- * A new swipe can therefore be switched instantly, and every swipe that
- * actually delivers travel will always page exactly once.
+ * Pager state shared with the Windows AWT wheel listener, which runs on
+ * the render thread. One gesture flips one page and swallows momentum
+ * until gestureGapNs.
  */
 internal class OverlayPager(
     /** Scroll pixels required to flip one page. */
@@ -47,10 +34,8 @@ internal class OverlayPager(
     var pageCount: Int = 1
 
     /**
-     * Feeds one wheel sample (already in screen pixels) into the accumulator.
-     * A no-op while the dock is hidden or when there is nothing to page
-     * between. Fractional deltas accumulate until one step clears [stepPx];
-     * each flip zeroes the travel, locks the burst, and the tail is swallowed.
+     * Accumulates wheel deltas; one step flips one page, then locks the burst
+     * and swallows the tail.
      */
     fun consumeWheel(deltaPx: Float) {
         if (!dockVisible.value || pageCount <= 1 || deltaPx == 0f) return

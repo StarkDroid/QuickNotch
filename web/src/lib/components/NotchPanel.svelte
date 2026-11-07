@@ -1,21 +1,11 @@
 <script lang="ts">
 	import Glyph from './Glyph.svelte';
 	import Icon from './Icon.svelte';
-	import { dockTiles, type TourStepId } from '$data/site';
+	import { dockTiles, notchDemo, type TourStepId } from '$data/site';
 
 	/**
-	 * One state of the notch, drawn to the app's own geometry.
-	 *
-	 * This is the single mock every surface reuses: the hero's desktop, the
-	 * laptop screen in the scroll tour, and the compact step list that stands in
-	 * for the tour when motion is off. It is the reason the page can explain
-	 * every widget in one place and still never show a shape the app does not
-	 * draw.
-	 *
-	 * Everything is sized in `cqw`, against the stage it is dropped into, so the
-	 * same markup reads correctly on a 620px laptop screen and a 300px phone.
-	 * The panel is decorative — the caption beside it carries the meaning — so
-	 * it is hidden from assistive tech.
+	 * One state of the notch, drawn to the app's own geometry; every surface reuses this mock.
+	 * Everything is sized in `cqw`; the panel is decorative, so it is hidden from assistive tech.
 	 */
 
 	interface Props {
@@ -37,39 +27,10 @@
 
 	const expanded = $derived(state !== 'quickview' && state !== 'gaming');
 
-	const gauges = [
-		{ icon: 'cpu' as const, name: 'CPU', value: '34%', percent: 34 },
-		{ icon: 'gpu' as const, name: 'GPU', value: '12%', percent: 12 },
-		{ icon: 'ram' as const, name: 'Memory', value: '61%', percent: 61 },
-		{ icon: 'storage' as const, name: 'Storage', value: '48%', percent: 48 },
-		{ icon: 'download' as const, name: 'Download', value: '1.2M/s', percent: 26 },
-		{ icon: 'upload' as const, name: 'Upload', value: '8K/s', percent: 6 }
-	];
-
-	const forecast: { dow: string; today?: boolean; icon: 'sun' | 'cloud' | 'partly' | 'rain'; high: string; low: string }[] = [
-		{ dow: 'Today', today: true, icon: 'sun', high: '23°', low: '16°' },
-		{ dow: 'Tue', icon: 'partly', high: '21°', low: '15°' },
-		{ dow: 'Wed', icon: 'cloud', high: '19°', low: '14°' },
-		{ dow: 'Thu', icon: 'rain', high: '17°', low: '12°' },
-		{ dow: 'Fri', icon: 'sun', high: '20°', low: '13°' },
-		{ dow: 'Sat', icon: 'partly', high: '22°', low: '15°' },
-		{ dow: 'Sun', icon: 'cloud', high: '18°', low: '13°' }
-	];
-
-	const dates = [
-		{ label: '24 Oct', count: 2 },
-		{ label: '27 Oct', count: 1 },
-		{ label: '29 Oct', count: 3 },
-		{ label: '31 Oct', count: 1 }
-	];
-
-	const hud = [
-		{ label: 'FPS', value: '144' },
-		{ label: 'CPU', value: '38%' },
-		{ label: 'GPU', value: '91%' },
-		{ label: 'PING', value: '12 ms' },
-		{ label: 'NET', value: '1.4M/s' }
-	];
+	const gauges = notchDemo.gauges;
+	const forecast = notchDemo.forecast;
+	const dates = notchDemo.dates;
+	const hud = notchDemo.hud;
 
 	const tiles = dockTiles.slice(0, 6);
 </script>
@@ -86,9 +47,9 @@
 		{#if state === 'quickview'}
 			<div class="pill">
 				<span class="pill__logo"><Icon name="logo" size="100%" /></span>
-				<span class="pill__time">2:52</span>
-				<span class="pill__date">25 Oct</span>
-				<span class="pill__weather"><Icon name="sun" size="100%" /><b>23°</b></span>
+				<span class="pill__time">{notchDemo.time}</span>
+				<span class="pill__date">{notchDemo.date}</span>
+				<span class="pill__weather"><Icon name="sun" size="100%" /><b>{notchDemo.temp}</b></span>
 				<span class="ring ring--battery">
 					<svg viewBox="0 0 40 40">
 						<g transform="rotate(126 20 20)">
@@ -99,7 +60,7 @@
 				</span>
 				<span class="pill__bell">
 					<Icon name="bell" size="100%" />
-					<b>3</b>
+					<b>{notchDemo.notifications}</b>
 				</span>
 			</div>
 		{:else if state === 'gaming'}
@@ -147,11 +108,11 @@
 				<div class="wx__now">
 					<span class="wx__top">
 						<span class="wx__glyph"><Icon name="sun" size="100%" /></span>
-						<strong>23°C</strong>
+						<strong>{notchDemo.weather.now}</strong>
 					</span>
-					<span class="wx__place">Berlin</span>
-					<span class="wx__hilow">H 23° · L 16°</span>
-					<span class="wx__extra">20% precip · UV 3</span>
+					<span class="wx__place">{notchDemo.weather.place}</span>
+					<span class="wx__hilow">{notchDemo.weather.highLow}</span>
+					<span class="wx__extra">{notchDemo.weather.detail}</span>
 				</div>
 				<span class="page__divider"></span>
 				{#each forecast as day (day.dow)}
@@ -166,10 +127,10 @@
 		{:else if state === 'calendar'}
 			<div class="page page--calendar">
 				<span class="cal__today">
-					<strong>23</strong>
+					<strong>{notchDemo.calendar.day}</strong>
 					<span class="cal__meta">
-						<b>Fri</b>
-						<span>Oct</span>
+						<b>{notchDemo.calendar.weekday}</b>
+						<span>{notchDemo.calendar.month}</span>
 					</span>
 				</span>
 				<span class="page__divider"></span>
@@ -185,8 +146,8 @@
 			<div class="page page--music">
 				<span class="vinyl"><span class="vinyl__label"></span></span>
 				<span class="music__meta">
-					<strong>Midnight City</strong>
-					<span>M83 · Hurry Up, We&rsquo;re Dreaming</span>
+					<strong>{notchDemo.music.title}</strong>
+					<span>{notchDemo.music.artist}</span>
 					<span class="track"><i></i></span>
 					<span class="music__controls">
 						<span class="transport"><Icon name="next" size="100%" class="flip" /></span>
@@ -204,8 +165,7 @@
 </div>
 
 <style>
-	/* The stage is the size container: one panel unit is 1% of its width, so the
-	   same mock scales from a phone to a laptop without a second layout. */
+	/* The stage is the size container: one panel unit is 1% of its width, so the mock scales from phone to laptop. */
 	.notch-stage {
 		container-type: inline-size;
 		display: flex;
@@ -237,7 +197,7 @@
 			background-color 320ms var(--ease-out);
 	}
 
-	/* AMOLED: no rim, no sheen — the pill reads as a cut-out in the display. */
+	/* AMOLED: no rim, no sheen, the pill reads as a cut-out in the display. */
 	.notch[data-shape='amoled'] {
 		border-color: transparent;
 		background: #000;
@@ -288,7 +248,6 @@
 		display: none;
 	}
 
-	/* ---- Quickview ------------------------------------------------------- */
 	.pill {
 		display: flex;
 		align-items: center;
@@ -375,7 +334,6 @@
 		font-weight: 700;
 	}
 
-	/* ---- Rings ----------------------------------------------------------- */
 	.ring {
 		position: relative;
 		display: grid;
@@ -411,7 +369,6 @@
 		stroke: var(--on-dark-2);
 	}
 
-	/* ---- Gaming HUD ------------------------------------------------------ */
 	.hud {
 		display: flex;
 		align-items: center;
@@ -453,7 +410,6 @@
 		background: rgb(0 0 0 / 0.5);
 	}
 
-	/* ---- Dock ------------------------------------------------------------ */
 	.dock {
 		display: flex;
 		align-items: flex-end;
@@ -483,13 +439,11 @@
 		color: #fff;
 	}
 
-	/* A frozen fisheye beat: the two middle tiles sit magnified, exactly where
-	   the cursor would be resting. */
+	/* A frozen fisheye beat: the two middle tiles sit magnified where the cursor would rest. */
 	.dock__tile--lift {
 		transform: translateY(-0.5cqw) scale(1.14);
 	}
 
-	/* ---- Shared page chrome --------------------------------------------- */
 	.page {
 		display: flex;
 		width: 100%;
@@ -497,7 +451,6 @@
 		color: var(--on-dark);
 	}
 
-	/* ---- System page ----------------------------------------------------- */
 	.page--system {
 		align-items: center;
 		justify-content: space-between;
@@ -563,10 +516,7 @@
 		margin-inline: 0;
 	}
 
-	/* ---- Weather page ----------------------------------------------------
-	   Mirrors WeatherNotchPage: current conditions anchored left (glyph +
-	   temperature, place, high/low, precip · UV), then one tile per outlook day
-	   — weekday over glyph over high over low. */
+	/* Mirrors WeatherNotchPage: current conditions left, then one tile per outlook day. */
 	.page--weather {
 		align-items: center;
 		gap: 0.5cqw;
@@ -682,10 +632,7 @@
 		color: var(--on-dark-3);
 	}
 
-	/* ---- Calendar page ---------------------------------------------------
-	   Mirrors CalendarNotchPage: today anchored left (big date in accent with
-	   weekday + month beside it), then one tile per upcoming date — "24 Oct"
-	   over its red count badge. */
+	/* Mirrors CalendarNotchPage: today left, then one date tile per upcoming day. */
 	.page--calendar {
 		align-items: center;
 		gap: 0.6cqw;
@@ -764,7 +711,6 @@
 		line-height: 1;
 	}
 
-	/* ---- Music page ------------------------------------------------------ */
 	.page--music {
 		align-items: center;
 		gap: 2.2cqw;

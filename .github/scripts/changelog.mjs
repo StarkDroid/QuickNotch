@@ -192,8 +192,8 @@ function previewBlock({ entry, version, bump, previous, released }) {
     );
   } else {
     const from = previous.latest
-      ? ` — a ${bump} bump from v${previous.latest}`
-      : " — the first release";
+      ? `: a ${bump} bump from v${previous.latest}`
+      : ": the first release";
     lines.push(`Merging publishes **QuickNotch ${version}**${from}.`, "");
     if (previous.latest) {
       lines.push("<sub>If another pull request merges first, this becomes the next number after it.</sub>", "");
@@ -212,7 +212,7 @@ function previewBlock({ entry, version, bump, previous, released }) {
   lines.push(
     `<sub>${previewGuidance(entry, released, previous)}</sub>`,
     "",
-    "<sub>This block is rewritten on every push — the text above it is yours.</sub>",
+    "<sub>This block is rewritten on every push. The text above it is yours.</sub>",
     "",
     PREVIEW_END
   );
@@ -223,7 +223,7 @@ function previewBlock({ entry, version, bump, previous, released }) {
 function previewGuidance(entry, released, previous) {
   if (released || !entry) return "Nothing to publish from this description.";
   if (!previous.latest) {
-    return "The first release is always 2.0.0 — labels steer the bump from the next one.";
+    return "The first release is always 2.0.0. Labels steer the bump from the next one.";
   }
   return (
     "Bump: `release:major` (or `breaking`) for a major, `release:patch` (or `fix`, `bug`) for a patch," +
@@ -450,11 +450,23 @@ async function previousFeed() {
   if (!managed) return { latest: null, releases: [], source: null };
 
   const asset = managed.assets.find((candidate) => candidate.name === CHANGELOG_ASSET);
-  const response = await fetch(asset.browser_download_url, {
-    headers: { "User-Agent": "QuickNotch release planner" }
-  });
+
+  // Read the asset through the API, with the token. `browser_download_url` is
+  // the public link and answers a private repository with 404, which failed the
+  // preview on the first run against a release that exists.
+  const headers = { "User-Agent": "QuickNotch release planner" };
+  let url = asset.browser_download_url;
+  if (TOKEN) {
+    url = asset.url;
+    headers.Accept = "application/octet-stream";
+    headers.Authorization = `Bearer ${TOKEN}`;
+    headers["X-GitHub-Api-Version"] = "2022-11-28";
+  }
+  const response = await fetch(url, { headers, redirect: "follow" });
   if (!response.ok) {
-    throw new Error(`previous changelog -> HTTP ${response.status} (${managed.tag_name})`);
+    throw new Error(
+      `previous changelog -> HTTP ${response.status} (${managed.tag_name}, ${asset.name})`
+    );
   }
 
   const feed = await response.json();

@@ -15,33 +15,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Keeps the Windows overlay in the topmost z-order band for the app's whole
- * life, and much more aggressively while a fullscreen game owns the screen.
- *
- * AWT's `alwaysOnTop` sets `WS_EX_TOPMOST` exactly once, when the property is
- * assigned. That is enough for a normal desktop, but a fullscreen game raises
- * its own window into the same band on every mode switch / foreground grab,
- * and Windows orders topmost windows by recency: the game ends up above the
- * notch until some unrelated window change re-shuffles the band. The symptom
- * is the one users report as "the HUD only shows after I alt-tab" — the notch
- * is drawn, it is just underneath the game.
- *
- * Re-asserting [User32.SetWindowPos] with `HWND_TOPMOST` on a slow reconcile
- * tick is the Windows twin of [MacOverlayWindowPolicy]'s level reconcile. The
- * call carries `SWP_NOACTIVATE` (never steal focus from the game),
- * `SWP_NOMOVE | SWP_NOSIZE` (AWT owns placement) and `SWP_ASYNCWINDOWPOS` (the
- * native call never blocks this worker on the window's thread). The tick
- * tightens to [GamingTickMs] while a game session is live so the HUD is back
- * on top within a frame or two of the game re-raising itself.
- *
- * This cannot beat a true exclusive-fullscreen swap chain — Windows stops
- * compositing every other window there, so no ordinary window can draw over
- * it. Games running borderless (the common modern case, including Windows'
- * "fullscreen optimizations") are covered, which is exactly where a topmost
- * window is supposed to work.
- *
- * Off Windows this installs nothing. Fail-soft: an unresolvable HWND or a
- * rejected `SetWindowPos` leaves AWT's original behaviour in place.
+ * Re-asserts `HWND_TOPMOST` on a reconcile tick: AWT sets `WS_EX_TOPMOST` once and a fullscreen
+ * game re-raises into that band, leaving the notch underneath. Exclusive fullscreen cannot be overlaid.
  */
 internal class WindowsOverlayWindowPolicy private constructor(
     private val window: Window
@@ -68,8 +43,7 @@ internal class WindowsOverlayWindowPolicy private constructor(
 
     init {
         if (handle == null) {
-            // The peer is normally there by the time the overlay composes; if
-            // not, `currentHandle()` retries on every tick rather than giving up.
+            // Peer is usually present by now; if not, currentHandle() retries on every tick.
             System.err.println("QuickNotch: Windows overlay z-order keeper waiting for HWND")
         }
         scope.launch {
@@ -84,12 +58,7 @@ internal class WindowsOverlayWindowPolicy private constructor(
         }
     }
 
-    /**
-     * Re-targets the policy. [alwaysOnTop] mirrors the Behavior toggle;
-     * [gaming] is the raw detector session (the HUD, or the notch itself while
-     * a game owns the screen) and only changes how often the band is
-     * re-asserted.
-     */
+    /** Re-targets the policy; [gaming] only changes how often the band is re-asserted. */
     fun update(alwaysOnTop: Boolean, gaming: Boolean) {
         wantedAlwaysOnTop = alwaysOnTop
         this.gaming = gaming
@@ -98,9 +67,7 @@ internal class WindowsOverlayWindowPolicy private constructor(
 
     private fun apply() {
         val wanted = wantedAlwaysOnTop
-        // With always-on-top off, leave AWT's z-order alone unless this policy
-        // previously raised the window itself. Re-asserting NOTOPMOST every
-        // tick would keep shoving the notch below every other window.
+        // Only undo our own raise: re-asserting NOTOPMOST every tick would keep shoving us below other windows.
         if (!wanted && !forcedTopmost) return
         val hwnd = currentHandle() ?: return
         val flags = WinUser.SWP_NOMOVE or WinUser.SWP_NOSIZE or WinUser.SWP_NOACTIVATE or
@@ -138,11 +105,8 @@ internal class WindowsOverlayWindowPolicy private constructor(
         /** While a game owns the screen, recover from a game re-raise fast. */
         private const val GamingTickMs = 250L
 
-        // `SetWindowPos` insert-after pseudo-handles (-1 = topmost, -2 = not).
-        // Deliberately `Pointer(-1L)`, not `Pointer.createConstant(-1)`: the
-        // latter's special constant representation reaches the native call as
-        // an invalid handle (SetWindowPos fails with ERROR_INVALID_WINDOW_HANDLE
-        // 1400), which is exactly the silent no-op this policy exists to avoid.
+        // `Pointer(-1L)`, not `Pointer.createConstant(-1)`: the latter arrives as an invalid handle
+        // (SetWindowPos fails 1400), the exact silent no-op this policy exists to prevent.
         private val HWND_TOPMOST = WinDef.HWND(Pointer(-1L))
         private val HWND_NOTOPMOST = WinDef.HWND(Pointer(-2L))
 

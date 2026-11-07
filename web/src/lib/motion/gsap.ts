@@ -1,9 +1,6 @@
 /**
- * Lazy GSAP loader.
- *
- * GSAP is only needed once the page is interactive, so it is pulled in through a
- * dynamic import. Vite splits it into its own chunk (see vite.config.ts), which
- * keeps the prerendered HTML + critical CSS as the fast path for first paint.
+ * Loaded through a dynamic import; Vite splits it into its own chunk so
+ * the prerendered HTML stays the fast first paint.
  */
 
 type GsapModule = typeof import('gsap');

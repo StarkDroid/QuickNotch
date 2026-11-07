@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import { pricing, site } from '$data/site';
+	import { latest } from '$data/releases';
+	import { footer, site } from '$data/site';
 
 	// Prerendered at build time; the constant is a defensive fallback so a missing
 	// or unusable Date can never crash the render.
@@ -10,23 +11,28 @@
 
 <footer class="footer">
 	<div class="container footer__inner">
-		<a class="brand" href="#top" aria-label="{site.name}, back to top">
+		<a class="brand" href={site.homePath} aria-label={site.homeLabel}>
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			{site.name}
 		</a>
 
 		<p class="footer__tagline">{site.tagline}</p>
 
-		<nav class="footer__links" aria-label="More">
-			<a href={site.purchaseUrl} target="_blank" rel="noopener noreferrer">
-				Buy — {pricing.label}
-			</a>
-			<a href="{site.url}">Back to top</a>
+		<nav class="footer__links" aria-label={footer.linksLabel}>
+			{#each footer.links as link (link.label)}
+				<a
+					href={link.href}
+					target={link.external ? '_blank' : undefined}
+					rel={link.external ? 'noopener noreferrer' : undefined}
+				>
+					{link.label}
+				</a>
+			{/each}
 		</nav>
 
 		<p class="footer__bar">
-			<span>© {year} {site.author} · v{site.version}</span>
-			<span aria-hidden="true">· printed on cream, obviously</span>
+			<span>{footer.copyright(year, latest)}</span>
+			<span aria-hidden="true">· {footer.note}</span>
 		</p>
 	</div>
 </footer>
@@ -38,6 +44,15 @@
 		border-top: 2px dashed var(--line-strong);
 		background: var(--paper-deep);
 		padding-block: clamp(2.5rem, 5vw, 3.5rem);
+	}
+
+	/* The support pill is fixed to the bottom-right corner on every page. Below
+	   a wide desktop the copyright line can run under it, so the footer keeps a
+	   lane clear at the bottom instead of letting the last line be covered. */
+	@media (max-width: 900px) {
+		.footer {
+			padding-bottom: calc(clamp(2.5rem, 5vw, 3.5rem) + 3.5rem);
+		}
 	}
 
 	.footer__inner {

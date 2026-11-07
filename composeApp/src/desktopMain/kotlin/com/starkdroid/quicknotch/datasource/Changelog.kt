@@ -17,18 +17,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * The changelog as published by the release workflow.
- *
- * The feed is deliberately *not* bundled with the app: a build ships without
- * any release notes at all and reads them from GitHub, so the history a user
- * sees is the real published history rather than whatever was frozen into the
- * installer months ago. The URL is the `changelog.json` asset on the newest
- * managed release (falling back to the `releases/latest` download path), which
- * the workflow rewrites with the full cumulative list on every release.
- *
- * [releases] is newest-first. The UI keeps only entries at or below the running
- * version — a newer entry is an *update*, not something this build should
- * pretend to document (see `AppUpdates`).
+ * The changelog published by the release workflow, read from GitHub rather than bundled so
+ * the history is the real published one. [releases] is newest-first; the UI hides newer versions.
  */
 @Serializable
 data class ChangelogFeed(
@@ -55,7 +45,6 @@ data class ChangelogChange(
     val text: String = ""
 )
 
-/** What the changelog panel is currently showing. */
 sealed interface ChangelogStatus {
     data object Idle : ChangelogStatus
     data object Loading : ChangelogStatus
@@ -65,12 +54,7 @@ sealed interface ChangelogStatus {
 
 /**
  * Reads the published changelog and keeps a last-known-good copy on disk.
- *
- * Cached-on-disk matters more than it looks: the first thing the panel paints
- * after a cold start should be the history the user saw last time, not a
- * spinner. A failed refresh keeps that copy (and reports [ChangelogStatus.Offline]
- * only when there is nothing cached at all), the same fail-soft rule the
- * weather and system widgets follow.
+ * A failed refresh keeps the cache and reports Offline only when nothing is cached.
  */
 object Changelog {
 
@@ -95,7 +79,6 @@ object Changelog {
     private val _status = MutableStateFlow<ChangelogStatus>(ChangelogStatus.Idle)
     val status: StateFlow<ChangelogStatus> = _status
 
-    /** The cached copy, if there is one. Cheap enough to call on app start. */
     fun loadCache() {
         val cached = runCatching {
             if (!cacheFile.isFile) return@runCatching null
@@ -108,14 +91,14 @@ object Changelog {
     }
 
     /**
-     * Fetch the feed. A network failure is not an error the user must act on:
-     * keep the cached history and only surface [ChangelogStatus.Offline] when
-     * the panel would otherwise be empty.
+     * Fetch the feed; a failure keeps the cached history and only surfaces Offline when nothing is cached.
      */
     suspend fun refresh(feedUrl: String? = null): Boolean = withContext(Dispatchers.IO) {
         _status.value = ChangelogStatus.Loading
+        // Name the URL in the failure log: a bare "HTTP 404" cannot tell a rate limit from a missing feed.
+        val url = feedUrl ?: FEED_URL
         val result = runCatching {
-            val response = client.get(feedUrl ?: FEED_URL) {
+            val response = client.get(url) {
                 header("Accept", "application/json")
                 header("User-Agent", "QuickNotch/${AppVersion.VERSION}")
             }
@@ -136,7 +119,7 @@ object Changelog {
                 }
             }
         }.onFailure { failure ->
-            AppLog.line("changelog refresh failed: ${failure.message}")
+            AppLog.line("changelog refresh failed for $url: ${failure.message}")
             _status.value = if (_feed.value.releases.isEmpty()) {
                 ChangelogStatus.Offline
             } else {

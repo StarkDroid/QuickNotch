@@ -93,16 +93,12 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 
-// ── Widget pages ─────────────────────────────────────────────────────────────
 
 internal enum class WidgetPage { Apps, Music, Calendar, Weather, System }
 
 /**
- * Renders every active widget page as an always-composed sibling so the pager
- * never measures the music page while the window is animating. Inactive pages
- * are pushed aside with a small alpha+slide layer transform (never a
- * subtraction/recomposition), and only the page under the pointer receives
- * input.
+ * Every active page stays composed so the pager never measures the music page mid-animation;
+ * inactive pages are offset with alpha+slide, and only the page under the pointer gets input.
  */
 @Composable
 internal fun WidgetPages(
@@ -160,9 +156,8 @@ internal fun WidgetPages(
                     WidgetPage.Calendar -> CalendarNotchPage(
                         state = calendarState,
                         refreshing = calendarRefreshing,
-                        // Same rule as the other two pages: only the page under
-                        // the cursor may own the hit path, or an alpha-0 page
-                        // keeps swallowing clicks meant for the page beneath it.
+                        // Only the page under the cursor may own the hit path: an alpha-0 page
+                        // would otherwise swallow clicks meant for the page beneath it.
                         interactive = interactive && isActive
                     )
                     WidgetPage.Weather -> WeatherNotchPage(
@@ -232,12 +227,8 @@ private fun MusicPage(
 }
 
 /**
- * Vinyl left in an album-tinted halo with a live-status dot, the metadata
- * held in the middle over a thicker playhead strip, and the level rings
- * stacked above a roomier transport cluster on the right. The title block
- * crossfades on every track change so back-to-back songs glide instead of
- * cutting. Every transport control stays visible here; collapsing the
- * play/pause only affects the slim quickview.
+ * Vinyl left in an album-tinted halo with a live dot, metadata in the middle over a thicker
+ * playhead, rings above a roomier transport cluster; the title block crossfades on track change.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,8 +249,7 @@ private fun MusicContent(
     val duration = session.durationMs.coerceAtLeast(0L)
     val elapsed = session.displayedPositionMs(nowMs).coerceAtLeast(0L)
         .coerceAtMost(if (duration > 0L) duration else Long.MAX_VALUE)
-    // "Artist — Album" second line; either half alone still reads fine, and a
-    // track with neither keeps its single-line title layout.
+    // Subtitle joins artist and album; either half alone reads fine, a track with neither stays one line.
     val subtitle = remember(session.artist, session.album) {
         listOf(session.artist, session.album)
             .map { it.trim() }
@@ -275,20 +265,13 @@ private fun MusicContent(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // The vinyl slot morphs between pill and page (discModifier on the
-        // slot), and swaps records on a track change: the old cover slides out
-        // through the notch's left edge (the Row above clips at the island
-        // bounds) and the new one slides in from the left with a springy
-        // settle. Keyed on the artwork itself, so the entrance fires exactly
-        // when the next cover has decoded — a cover that lands a poll late
-        // gets its own entrance instead of popping in.
+        // The vinyl slot swaps records on a track change: keyed on the artwork, so the entrance
+        // fires when the next cover decodes and a cover that lands a poll late still gets one.
         Box(
             modifier = discModifier.size(62.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Ambient halo tinted by the cover's dominant colour (accent cyan
-            // with no cover), so the player picks up the album's mood without
-            // repainting the island itself.
+            // Ambient halo tinted by the cover's dominant colour (accent cyan with no cover).
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -299,16 +282,8 @@ private fun MusicContent(
             AnimatedContent(
                 targetState = session.artwork,
                 transitionSpec = {
-                    // A record-swap conveyor: both covers travel LEFT, so the
-                    // eye reads one continuous motion — the old disc glides
-                    // out through the notch's left edge (the Row above clips
-                    // at the island bounds) while the new one slides in from
-                    // beyond it and settles with a soft spring. Travel is 3x
-                    // the disc width so the exit/enter are unmistakable, the
-                    // exit fades only in its last third (the cover stays
-                    // readable while it travels), and everything animates
-                    // offset/alpha/scale — all graphicsLayer-backed, so the
-                    // SOFTWARE renderer never relayouts mid-swap.
+                    // Both covers travel left, the old one out through the clipped island edge and
+                    // the new in from beyond it; offset/alpha/scale only, so SOFTWARE never relayouts.
                     (slideInHorizontally(
                         initialOffsetX = { -it * 3 },
                         animationSpec = spring(
@@ -335,9 +310,8 @@ private fun MusicContent(
                     art = art,
                     playing = playing,
                     size = 56.dp,
-                    // null (not a no-op lambda) while the page is inactive: the
-                    // clickable modifier only exists when onClick != null, so an
-                    // inactive page contributes no hit-testable node at all.
+                    // null while inactive: the clickable modifier only exists when onClick != null,
+                    // so an inactive page contributes no hit node.
                     onClick = if (interactive) {
                         { AppLauncher.openMediaProvider(session.sourceId, session.source) }
                     } else {
@@ -345,9 +319,7 @@ private fun MusicContent(
                     }
                 )
             }
-            // Live-status dot riding the disc's lower edge: accent while the
-            // record turns, dimmed white on pause. Zero layout cost — it
-            // overlaps the halo instead of claiming a row of its own.
+            // Live dot overlapping the halo (no layout cost): accent while the record turns, dimmed on pause.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -361,9 +333,8 @@ private fun MusicContent(
             )
         }
 
-        // Title block floats in the space above the progress strip, and the
-        // strip hugs the bottom edge — mirroring the transport cluster's own
-        // bottom bias so both flanks settle at the same baseline.
+        // Title block floats above the progress strip, which hugs the bottom edge to share the
+        // transport cluster's baseline.
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -427,12 +398,8 @@ private fun MusicContent(
             Spacer(modifier = Modifier.height(6.dp))
         }
 
-        // Level indicators sit on top of the media controls, with the whole
-        // cluster riding near the bottom edge. Both rings use the exact same
-        // shapes as the quickview's, so volume and battery read
-        // identically everywhere — the collapsed-only toggles govern just the
-        // pill. Fixed stack is 30 + 4 + 36 + 4 = 74dp, matching the previous
-        // budget so the minimum island depth still fits.
+        // Both rings reuse the quickview's shapes so volume and battery read the same everywhere;
+        // the fixed stack of 30 + 4 + 36 + 4 = 74dp keeps the minimum island depth fitting.
         Column(
             modifier = Modifier.fillMaxHeight(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -443,11 +410,8 @@ private fun MusicContent(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (volumePercent != null) {
-                    // The expanded volume ring doubles as the mute toggle: one
-                    // click flips the OS device mute, and the ring empties to
-                    // level 0 (with a dimmed glyph) while muted so the state
-                    // reads at a glance. The sharedElement modifier rides the
-                    // wrapping Box, so the morph bounds stay the ring's 30dp.
+                    // The expanded ring doubles as the mute toggle: one click flips the OS mute and
+                    // the ring empties to level 0 with a dimmed glyph.
                     val mutedNow = volumeMuted == true
                     val muteLabel = stringResource(
                         if (mutedNow) Res.string.music_unmute else Res.string.music_mute
@@ -503,11 +467,9 @@ private fun MusicContent(
     }
 }
 
-// ── Dock (fisheye app launcher) ──────────────────────────────────────────────
 
 /**
- * Warms the shared icon cache for the pinned list so the dock never shows a
- * wall of shimmering placeholders after a cold start.
+ * Warms the shared icon cache so the dock never shows a wall of shimmering placeholders.
  */
 @Composable
 internal fun LoadFavoriteIcons(
@@ -562,9 +524,8 @@ private fun Dock(
         }
     }
 
-    // The dock lives in the tree even while hidden, so pointer tracking and icon
-    // clicks must be gated explicitly: an invisible dock must not swallow events
-    // meant for the quickview or launch apps from under the cursor.
+    // The dock stays in the tree while hidden, so pointer tracking and clicks must be gated:
+    // an invisible dock must not swallow events meant for the quickview.
     val pointerModifier = if (interactive) {
         Modifier
             .onPointerEvent(PointerEventType.Move) { change ->
@@ -595,10 +556,8 @@ private fun Dock(
         }
     }
 
-    // Centred along the depth axis instead of pinned to the anchored edge:
-    // that removes the dead strip that used to pile up under the icons
-    // (labels off) or above the label (labels on), and keeps the label's
-    // descenders clear of the window border.
+    // Centred on the depth axis so no dead strip piles up under the icons or above the label,
+    // and the label's descenders stay clear of the window border.
     Column(
         modifier = Modifier.fillMaxSize().padding(dockPadding()),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -614,8 +573,7 @@ private fun Dock(
 }
 
 /**
- * Insets the dock away from the top screen edge so icons never touch the
- * display border, and leaves extra room on the inner edge for the
+ * Insets the dock away from the top screen edge, with extra room on the inner edge for the
  * magnification lift.
  */
 private fun dockPadding(): PaddingValues =
@@ -635,10 +593,8 @@ private fun DockIcon(
     onPositioned: (Float) -> Unit,
     onClick: () -> Unit
 ) {
-    // Reading the pointer here (not in the dock body) keeps recomposition local
-    // to each icon as the cursor glides across the dock. derivedStateOf filters
-    // out repeated frames whose computed scale is unchanged (icons outside the
-    // fisheye radius publish 1f every tick, so they never invalidate).
+    // Read the pointer here, not in the dock body, so recomposition stays local to each icon;
+    // derivedStateOf drops frames whose scale is unchanged (icons outside the radius).
     val targetScale by remember(enabled, center, radiusPx, peakScale) {
         derivedStateOf {
             if (enabled) fisheyeScale(pointer.value, center, radiusPx, peakScale) else 1f
@@ -664,11 +620,8 @@ private fun DockIcon(
             }
             .clip(RoundedCornerShape(11.dp))
             .then(
-                // Only install the clickable while the dock page is
-                // interactive: `clickable(enabled = false)` still registers a
-                // hit-testable node, so a disabled icon would keep occupying
-                // the hit path of the page stacked beneath it. Dropping the
-                // modifier leaves an inactive page with no hit nodes.
+                // Only install the clickable while interactive: clickable(enabled = false) still
+                // hit-tests, so a disabled icon would occupy the hit path of the page beneath.
                 if (enabled) {
                     Modifier.clickable(
                         interactionSource = interaction,
@@ -711,9 +664,8 @@ private fun DockIcon(
 private fun DockLabel(nameState: State<String?>, config: NotchConfig) {
     val labelSize = (config.expandedNotchHeightDp * DockLabelFontSizeFactor).sp
     val lineHeight = (labelSize.value * 1.15f).sp
-    // The slot is always as tall as one line even with no name showing, so the
-    // icons never shift when the label appears; the snug line height plus the
-    // vertical padding guarantee descenders clear the window border.
+    // The slot is always one line tall so icons never shift when the label appears; the snug
+    // line height keeps descenders clear of the border.
     val slotHeight = with(LocalDensity.current) { lineHeight.toDp() }
     Box(
         modifier = Modifier

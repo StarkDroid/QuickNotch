@@ -113,7 +113,7 @@ import java.util.UUID
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 
-// ── Pinned apps panel (Widgets tab → Pinned apps accordion) ──────────────────
+// Pinned apps panel (Widgets tab → Pinned apps accordion).
 
 @Composable
 internal fun PinnedAppsTab(
@@ -142,10 +142,8 @@ internal fun PinnedAppsTab(
     val pickMacFilter = stringResource(Res.string.pick_mac_filter)
     val pickWindowsFilter = stringResource(Res.string.pick_win_filter)
 
-    // Drag-to-reorder state. The list renders from a local snapshot so swaps
-    // apply synchronously under the finger; a single repository write commits
-    // the final position when the drag ends. Rows are equal height, but each
-    // measured height is tracked anyway so the swap threshold stays honest.
+    // The HUD is a slimmer strip with its own depth floor; two lines of 11/6sp
+    // type fit in 30dp.
     var draggingId by remember { mutableStateOf<String?>(null) }
     var dragStartIndex by remember { mutableStateOf(-1) }
     var dragOffset by remember { mutableStateOf(0f) }
@@ -434,10 +432,8 @@ internal fun PinnedAppsTab(
 }
 
 /**
- * Resolves an app icon with no visible pop-in while scrolling: the shared
- * in-memory cache is read synchronously on first composition, and only a cold
- * miss falls back to a background load. Combined with stable LazyColumn keys,
- * rows keep their icons when recycled, so the list stays smooth.
+ * Reads the shared icon cache synchronously; only a cold miss loads in the
+ * background.
  */
 @Composable
 internal fun rememberAppIcon(app: AppItem): ImageBitmap? {
@@ -450,7 +446,7 @@ internal fun rememberAppIcon(app: AppItem): ImageBitmap? {
     return iconBitmap
 }
 
-// ── Shared row building blocks (Pinned + Available rows) ─────────────────────
+// Shared row building blocks (Pinned + Available rows).
 
 /**
  * The icon slot both list rows share: an elevated rounded box that crossfades

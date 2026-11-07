@@ -62,10 +62,7 @@ internal fun formatClockTime(clock24Hour: Boolean, now: LocalDateTime = LocalDat
     now.toLocalTime().format(DateTimeFormatter.ofPattern(if (clock24Hour) "HH:mm" else "h:mm a", Locale.getDefault()))
 
 /**
- * The quickview idle content shown in place of the dots while nothing is
- * playing: a live date and/or time, centred, marquee-free. The display refreshes
- * exactly on the minute boundary so "9:41" flips at :00 rather than drifting
- * a few seconds off the real minute.
+ * Idle date/time, refreshed on the minute boundary so it does not drift.
  */
 @Composable
 internal fun IdleClockRow(
@@ -182,11 +179,8 @@ internal fun IdleClockRow(
 }
 
 /**
- * The quickview's notification indicator: the packaged bell silhouette tinted
- * with the island colour, wearing a red badge bubble on its top-right corner
- * that carries the unread [count] (capped at "99+"). Shown only while the
- * count is readable — an unreadable store (e.g. Full Disk Access not granted)
- * hides the whole indicator rather than showing a false "empty" state.
+ * Bell with an unread badge capped at 99+; hidden while the store is
+ * unreadable.
  */
 @Composable
 internal fun NotificationIndicator(
@@ -213,11 +207,8 @@ internal fun NotificationIndicator(
 }
 
 /**
- * Renders a clock fragment centred inside the same fixed-height frame that the
- * battery ring occupies, so the date, separator and time all share one
- * vertical centreline with the ring regardless of the font's reported line
- * box. The explicit tight line height keeps the default typography from
- * inflating the box and pushing the glyphs off centre.
+ * Centres a clock fragment in the ring's frame; a tight line height keeps
+ * it on the centreline.
  */
 @Composable
 private fun ClockTextFrame(

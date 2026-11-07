@@ -10,24 +10,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * Universal cover-art fetcher for macOS: browsers, Spotify, Music and every
- * other MediaRemote client that publishes artwork.
- *
- * The poll loop's JXA context only ever sees metadata — scripted callers are
- * denied the artwork bytes — so a track whose snapshot arrives without art
- * gets exactly one entitled-helper run: `artwork-driver.pl` loads the tiny
- * `artwork_bridge` dylib into `/usr/bin/perl` (whose `com.apple.perl*`
- * identity the daemon honours) for a single full-access
- * `MRMediaRemoteGetNowPlayingInfo` query. Found covers settle per content id;
- * artless-but-matched answers retry on a bounded budget instead, because
- * browsers publish the cover seconds after the metadata — settling the first
- * empty answer would leave every switched-to track coverless. A reply that
- * lands after a track change is dropped by
- * [MediaControllerBase.publishArtwork] instead of pasting onto the new song.
- *
- * When the helper is absent (a jar built on a non-mac host carries no dylib)
- * every fetch is a silent no-op and the Music.app AppleScript path inside the
- * poll bridge remains the only artwork source — fail-soft by design.
+ * Scripted media contexts get metadata but never artwork, so one
+ * entitled perl helper query runs per artless track. A late reply is
+ * dropped by content id; a missing helper is a silent no-op.
  */
 internal class MacArtworkFetcher(
     private val ioScope: CoroutineScope,
@@ -49,10 +34,8 @@ internal class MacArtworkFetcher(
     private var inFlight = false
 
     /**
-     * Last helper *failure* (timeout/crash — not an artless track) and when it
-     * happened. Failures back off instead of settling, so a slow daemon gets
-     * retried by later polls rather than condemning the track to the
-     * placeholder for the rest of the song.
+     * Last helper failure and its time; failures back off instead of settling
+     * the track.
      */
     @Volatile
     private var failedId: String? = null
@@ -65,12 +48,8 @@ internal class MacArtworkFetcher(
     private var failedRetryMs: Long = FAILED_RETRY_MS
 
     /**
-     * Bounded second chances for a track the daemon reports *artless*: browsers
-     * publish the cover seconds after the metadata, so the first query of a
-     * fresh switch usually lands before the bytes exist. Retried on a slow
-     * cadence ([EMPTY_RETRY_MS], at most [EMPTY_MAX_TRIES] runs) and only then
-     * settled artless — a truly coverless source stops spawning helpers after
-     * about a minute instead of on every poll forever.
+     * Browsers publish art seconds after metadata, so an artless match
+     * retries on a slow bounded budget, then settles.
      */
     @Volatile
     private var emptyId: String? = null
@@ -90,10 +69,8 @@ internal class MacArtworkFetcher(
         get() = driver != null && helper != null
 
     /**
-     * Requests cover bytes for [contentId]. Called on every artless poll, but
-     * spawning is gated: one in flight at a time, failures back off, and empty
-     * answers get a bounded retry budget — the rest return without touching a
-     * process.
+     * Requests art for contentId: one run in flight, failures back off, empty
+     * answers retry on a budget.
      */
     fun fetch(contentId: String) {
         if (!shouldFetch(contentId)) return
@@ -143,13 +120,8 @@ internal class MacArtworkFetcher(
     }
 
     /**
-     * One perl run with a 12s deadline. The helper itself lingers up to ~7s
-     * inside the entitled process, reporting the moment the cover appears (or
-     * the daemon moves on) instead of answering a single blind query — that
-     * wait is where freshly switched tracks spend most of their coverless
-     * seconds. Artwork lines can exceed the OS pipe buffer, so a drainer
-     * consumes stdout while the deadline runs — reading only after `waitFor`
-     * would wedge the helper mid-write and turn every cover into a timeout.
+     * One perl run with a 12 s deadline; stdout is drained while waiting
+     * because artwork exceeds the pipe buffer and a read after wait deadlocks.
      */
     private fun runHelper(): HelperOutcome {
         val script = driver
@@ -180,10 +152,8 @@ internal class MacArtworkFetcher(
 }
 
 /**
- * What one helper run concluded: did it answer, which track the daemon was
- * actually on, and with what bytes. The track id gates the merge — without it
- * a lagging daemon would settle the old cover (or artlessness) onto the new
- * song after every switch.
+ * What one helper run concluded; the track id gates the merge so a lagging
+ * daemon cannot settle the wrong cover.
  */
 private data class HelperOutcome(val finished: Boolean, val trackId: String?, val base64: String?)
 

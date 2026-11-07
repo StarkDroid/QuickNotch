@@ -5,8 +5,8 @@ compose-multiplatform = "1.7.3"
 # its MetalRedrawer.createMetalDevice runs on the AWT EDT and trips the
 # WindowServer "must only be used from the main thread" assertion. 0.8.25
 # fixed it, and it is what puts the settings window on the GPU (~20x less
-# CPU per scroll frame). Never downgrade without re-reading the pitfall in
-# agents.md section 10.
+# CPU per scroll frame). Never downgrade without re-reading the renderer notes
+# in `main.kt` and the pin in `composeApp/build.gradle.kts`.
 skiko = "0.8.25"
 kotlin = "2.1.10"
 # Static analysis: detekt 1.23.8 is the last stable line and the newest one

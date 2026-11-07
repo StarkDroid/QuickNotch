@@ -13,7 +13,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 
-// ── Overlay motion ───────────────────────────────────────────────────────────
 // Near-critically-damped springs mirror AppKit's default view animation: a
 // fast, confident response that settles without a rubbery bounce, so the notch
 // never overshoots its window footprint (which would clip) yet still feels
@@ -46,16 +45,9 @@ internal fun pageSpring() = spring(
 internal val DockFadeIn = tween<Float>(170, easing = FastOutSlowInEasing)
 internal val DockFadeOut = tween<Float>(90)
 
-// The idle "curtain" expansion moves: the quickview slides down the growing
-// island while the pinned apps scale up from behind it, as if the dock surges
-// forward under the sliding pill. Live music deliberately skips both — its
-// content flies to the detail page through the shared-element morph, so the
-// pill keeps its plain fade (sliding the source would fight the flight).
-//
-// The motion is deliberately gradual: the pill glides most of the way down the
-// expanded island ({ it * 3 } ≈ three of its own heights, carrying it off the
-// bottom edge) over a long, eased tween while the dock rises on a slow spring,
-// so the whole cross reads as one unbroken descent rather than a snap-and-pop.
+// Idle expansion slides the quickview down while the dock rises behind
+// it. Live music skips this because the shared-element morph carries the
+// content.
 internal val QuickViewSlideIn = tween<IntOffset>(360, easing = FastOutSlowInEasing)
 internal val QuickViewSlideOut = tween<IntOffset>(620, easing = FastOutSlowInEasing)
 internal val QuickViewFadeOut = tween<Float>(420)
@@ -84,10 +76,8 @@ internal fun idleDockRevealSpring() = spring(
 )
 
 /**
- * Bounds spring for shared-element morphs. The quickview's disc/title and
- * their detailed-view counterparts travel on the same near-critically-damped
- * curve as the notch itself, so the two ends of the transition read as one
- * continuous motion rather than a crossfade.
+ * The same near-critically-damped spring as the notch, so both ends of a
+ * morph read as one move.
  */
 internal fun sharedBoundsSpring() = spring<Rect>(dampingRatio = 0.9f, stiffness = 320f)
 
@@ -98,10 +88,8 @@ internal const val FisheyeRadiusFactor = 1.5f
 internal val IconLift = 8.dp
 
 /**
- * Extra hover tolerance around the island footprint (the quickview or the
- * expanded dock). The hover hit area is the island plus this glow — never the
- * whole native window — so the notch retracts as soon as the cursor leaves the
- * visible island instead of staying glued open.
+ * Extra tolerance around the island; the hover footprint is the island plus
+ * this glow, never the window.
  */
 internal val HoverGlow = 10.dp
 
@@ -109,18 +97,14 @@ internal val HoverGlow = 10.dp
 internal const val DockLabelFontSizeFactor = 0.145f
 
 /**
- * Hard ceiling on how long the choreography waits for the size spring to settle
- * (in either direction) before acting anyway, so an interrupted animation can
- * never leave the notch stuck. Comfortably past the spring's settle time, and
- * past the dock fade that can delay the collapse spring starting.
+ * Hard limit on waiting for the size spring, so an interrupted animation
+ * cannot leave the notch stuck.
  */
 internal const val IslandSettleTimeoutMs = 650L
 
 /**
- * Cosine-squared falloff that peaks at [peakScale] when the cursor is exactly
- * over an icon's centre and eases back to 1.0 at [radiusPx]. Because the peak
- * sits on the centre and the radius scales with icon size, the magnified icon
- * always lines up with the true cursor position.
+ * Cosine-squared falloff peaking at the cursor and easing to 1.0 at
+ * radiusPx.
  */
 internal fun fisheyeScale(
     pointer: Float?,
@@ -137,21 +121,10 @@ internal fun fisheyeScale(
 }
 
 /**
- * Ceiling for the notch's continuous animations: the vinyl, the title marquee and
- * the waveform all push at most this many updates per second.
- *
- * Display rate (60 or 120Hz) buys nothing here — a 12s-per-turn disc advances
- * about 1° per frame at 30fps, and a 30px/s marquee moves 1px per frame, both
- * visually identical to display rate — while every push is a full overlay
- * repaint on the EDT the settings window also renders on. So the animations are
- * *rate-capped* rather than frozen: a top-centred notch stays visible even with
- * settings open (the window floats under it, never over it), and a notch whose
- * disc and analyser have visibly stopped reads as broken. Freezing was the first
- * attempt at this budget and it looked like a bug; throttling gets the same
- * energy saving without lying to the user.
+ * Continuous animations are capped at this rate; a full overlay repaint
+ * is the cost, and freezing them looked like a bug.
  */
 internal const val PillAnimationFps = 30f
-internal const val PillAnimationStepSec = 1f / PillAnimationFps
 
 /** The matching [kotlinx.coroutines.delay] step, in milliseconds. */
 internal val PillAnimationStepMillis = (1000L / PillAnimationFps).toLong()

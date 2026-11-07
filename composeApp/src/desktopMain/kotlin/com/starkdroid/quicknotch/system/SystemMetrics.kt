@@ -20,16 +20,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /**
- * One reading of the machine's own health, as the System widget page draws it:
- * CPU, GPU (when the OS exposes one), memory, the boot volume and the network
- * throughput since the previous sample.
- *
- * Every field is nullable on purpose. A metric the current OS will not tell us
- * (GPU utilization on a Mac without `Device Utilization %`, the very first
- * network sample, a failed probe) stays null and the page draws a dim ring with
- * a dash instead of inventing a number. The poller merges each fresh sample
- * over the last one, so a transient failure keeps the previous value rather
- * than blanking the notch.
+ * One system reading. Nullable fields mean the OS did not answer; the
+ * poller merges over the last sample instead of blanking the page.
  */
 data class SystemSnapshot(
     val cpuPercent: Int? = null,
@@ -42,10 +34,8 @@ data class SystemSnapshot(
     val downBytesPerSec: Long = 0L,
     val upBytesPerSec: Long = 0L,
     /**
-     * Round-trip time of one TCP handshake to a public resolver, in ms. Used by
-     * the gaming HUD ("how is my connection to the match server") and kept off
-     * the System page, which is about load rather than reachability. Null until
-     * the first probe answers, and on a machine with no route out.
+     * TCP handshake round trip for the HUD; null until the first probe or
+     * with no route.
      */
     val pingMs: Int? = null
 ) {
@@ -66,10 +56,8 @@ data class SystemSnapshot(
     val gpuAvailable: Boolean get() = gpuPercent != null
 
     /**
-     * Whether this snapshot carries any reading at all. A probe can answer with
-     * an empty object (every counter on the machine failed), and such a
-     * snapshot must never reach the page: it would put a System page on the
-     * wheel that shows nothing but dashes.
+     * Whether the snapshot carries any reading; an all-null sample must not
+     * put an empty System page on the wheel.
      */
     val hasAnyReading: Boolean
         get() = cpuPercent != null || gpuPercent != null || ramUsedBytes != null ||
@@ -93,15 +81,8 @@ internal data class SystemSample(
 )
 
 /**
- * Polls a handful of cheap OS readings into one [StateFlow] the notch observes.
- *
- * Cost is the whole design constraint here, because the notch polls for as long
- * as the app runs: macOS runs exactly one `/bin/sh` per tick that shells out to
- * `ps`, `vm_stat`, `netstat` and `ioreg` (≈40 ms of work together), and Windows
- * runs one `system-metrics.ps1` per tick that samples PDH counters once. Batch
- * modelling static facts (total RAM, GPU name, core count) is read once at
- * start, never per tick. The loop is gated on [setEnabled], so a user who
- * turns the widget off pays literally nothing.
+ * Polls one batched probe per tick and reads static facts once. Disabled
+ * means no process is spawned.
  */
 object SystemMetrics {
 
@@ -216,12 +197,8 @@ object SystemMetrics {
     }
 
     /**
-     * Cumulative interface counters to a per-second rate for **both** directions
-     * from one delta: [lastNet] may only advance once per sample, or the second
-     * direction would subtract a counter from itself and read as a permanent
-     * zero. The first sample has nothing to subtract from, and a counter that
-     * went backwards (an interface re-appearing, a sleep/wake cycle) is not a
-     * negative rate, so both yield null and the previous rate stands.
+     * Both network directions share one delta, so lastNet advances once per
+     * sample; the first sample and a backwards counter are null.
      */
     private fun netRates(net: Pair<Long, Long>?): Pair<Long?, Long?> {
         val counters = net ?: return null to null
@@ -268,10 +245,8 @@ object SystemMetrics {
         else MacSystemProbe.gpuName()
 
     /**
-     * Runs a one-shot helper and returns its trimmed stdout, or null when it
-     * times out / cannot start. Every spawn in this file goes through here so
-     * a wedged helper can never pin a poller thread: `destroyForcibly` on the
-     * timeout, and stderr merged so one stream drains.
+     * One-shot helper with a timeout and merged stderr; destroyForcibly on
+     * timeout.
      */
     internal fun runProcess(command: List<String>, timeoutMs: Long = ProbeTimeoutMs): String? =
         runCatching {
@@ -291,19 +266,8 @@ private const val PingPort = 443
 private const val PingTimeoutMs = 1_000
 
 /**
- * One TCP connect to a public resolver and back, in whole milliseconds.
- * Chosen over ICMP because a raw socket needs root/Administrator while a TCP
- * handshake is an ordinary outbound connection — and because a game's own
- * traffic is TCP/UDP to a server, so a completed handshake measures the thing
- * the player actually cares about (route + queueing) rather than a host that
- * may deprioritise echo requests.
- *
- * File-level rather than a member of [SystemMetrics]: the poller already sits
- * on detekt's function-count ceiling, and this shares nothing with it but the
- * constants above.
- *
- * Fail-soft: no route, a firewall, a captive portal or a 1 s timeout all return
- * null and the previous reading stands.
+ * One TCP handshake to a public resolver, since ICMP needs root. Null on
+ * timeout or no route.
  */
 private fun probePingMs(): Int? = runCatching {
     val started = System.nanoTime()

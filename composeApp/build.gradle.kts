@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -33,6 +34,30 @@ detekt {
 // updater compare against something meaningful.
 val appVersion = providers.gradleProperty("appVersion").getOrElse("2.0.0")
 
+// Neither half of the Google OAuth client is in this repository. Both are read
+// from the environment (what CI uses) or from a maintainer's ignored
+// `local.properties`, then written into a generated source file. A build
+// without them compiles and runs; Calendar then says the build has no client
+// rather than opening a consent screen it cannot finish.
+//
+// The client id is public in OAuth's model (it travels in every consent URL),
+// but it names this project's client, so it is injected too: a fork should
+// bring its own rather than inherit one it cannot use.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
+fun oauthSetting(property: String, environment: String): String =
+    (providers.gradleProperty(property).orNull
+        ?: providers.environmentVariable(environment).orNull
+        ?: localProperties.getProperty(property))
+        .orEmpty()
+        .trim()
+
+val googleClientId: String = oauthSetting("googleClientId", "QUICKNOTCH_GOOGLE_CLIENT_ID")
+val googleClientSecret: String = oauthSetting("googleClientSecret", "QUICKNOTCH_GOOGLE_CLIENT_SECRET")
+
 version = appVersion
 
 // `AppVersion.VERSION` is generated rather than hardcoded in a string resource:
@@ -57,6 +82,46 @@ val generateAppVersion by tasks.registering {
              */
             internal object AppVersion {
                 const val VERSION: String = "$current"
+            }
+            """.trimIndent() + "\n"
+        )
+    }
+}
+
+// `OAuthConfig` holds the Google client the Calendar flow signs in with. The
+// secret is injected here from the build environment instead of being written
+// into a tracked file, so the repository can be public and the history shows no
+// credential.
+val generateOAuthConfig by tasks.registering {
+    val outputDir = layout.buildDirectory.dir("generated/oauthConfig")
+    val clientId = googleClientId
+    val clientSecret = googleClientSecret
+    inputs.property("clientId", clientId)
+    inputs.property("clientSecret", clientSecret)
+    outputs.dir(outputDir)
+    // The output carries a credential: keep it out of the build cache and any
+    // cache upload.
+    outputs.cacheIf { false }
+    doLast {
+        fun literal(value: String): String = value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("$", "\\$")
+        val packageDir = outputDir.get().asFile.resolve("com/starkdroid/quicknotch")
+        packageDir.mkdirs()
+        packageDir.resolve("OAuthConfig.kt").writeText(
+            """
+            package com.starkdroid.quicknotch
+
+            /**
+             * The Google OAuth client this binary signs in with. Injected by the
+             * `generateOAuthConfig` Gradle task; never edit by hand. The client id
+             * is public, the secret comes from the build environment and is not
+             * in the repository.
+             */
+            internal object OAuthConfig {
+                const val CLIENT_ID: String = "${literal(clientId)}"
+                const val CLIENT_SECRET: String = "${literal(clientSecret)}"
             }
             """.trimIndent() + "\n"
         )
@@ -116,8 +181,10 @@ kotlin {
 // Generated version source: registered after the KMP block so the
 // `desktopMain` source set exists, and wired into every Kotlin compile.
 kotlin.sourceSets.getByName("desktopMain").kotlin.srcDir(layout.buildDirectory.dir("generated/appVersion"))
+kotlin.sourceSets.getByName("desktopMain").kotlin.srcDir(layout.buildDirectory.dir("generated/oauthConfig"))
 tasks.matching { it.name.startsWith("compileKotlin") }.configureEach {
     dependsOn(generateAppVersion)
+    dependsOn(generateOAuthConfig)
 }
 
 // The media ("now playing") feature ships a small native helper per platform.
@@ -329,10 +396,10 @@ compose.desktop {
 
         // Renderer selection is handled in `main()`: an explicit
         // -Dskiko.renderApi or SKIKO_RENDER_API wins, then the
-        // `software-render` marker file, then METAL — the ~20x-faster default
-        // (agents.md pitfall 28). Never set skiko.renderApi here: an
-        // unconditional assignment shadows both the env var and the marker
-        // and silently parks the settings window on the CPU rasterizer.
+        // `software-render` marker file, then METAL — the ~20x-faster default.
+        // Never set skiko.renderApi here: an unconditional assignment shadows
+        // both the env var and the marker and silently parks the settings
+        // window on the CPU rasterizer.
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Dmg)
@@ -364,7 +431,8 @@ compose.desktop {
 }
 
 // Skiko is pinned to a version whose macOS Metal backend actually works (see
-// the `skiko` entry in gradle/libs.versions.toml and pitfall 28 in agents.md).
+// the `skiko` entry in gradle/libs.versions.toml and the renderer notes in
+// `main.kt`).
 // Every artifact in the group has to move together: skiko, skiko-awt and the
 // platform runtime jar the Compose plugin pulls in, otherwise the JNI layer
 // and the native half disagree.

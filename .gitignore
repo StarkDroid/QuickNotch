@@ -21,3 +21,16 @@ replay_pid*
 
 # Agent tooling state (local machine memory, never shared)
 /.serena/
+
+# Local-only notes: the launch runbook and the agent onboarding doc stay on
+# this machine. They are useful here and noise in a public repository.
+/agents.md
+/launch.md
+
+# The launch film's project and captures. Production material: the repository
+# ships the app, the site and the release pipeline, not the 6 MB of stills and
+# the rendered MP4 that live beside them.
+/video/
+
+# Wrangler login state and local build cache. Machine-specific, never shared.
+/.wrangler/

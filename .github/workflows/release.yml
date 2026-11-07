@@ -116,6 +116,12 @@ jobs:
             artifact: QuickNotch-macos-x64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    # The Calendar flow needs a Google OAuth client, which is not in the
+    # repository. CI injects both halves; the Gradle task turns them into
+    # `OAuthConfig`.
+    env:
+      QUICKNOTCH_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      QUICKNOTCH_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,6 +133,13 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Google client
+        shell: bash
+        run: |
+          if [ -z "${QUICKNOTCH_GOOGLE_CLIENT_ID}" ] || [ -z "${QUICKNOTCH_GOOGLE_CLIENT_SECRET}" ]; then
+            echo "::warning::GOOGLE_OAUTH_CLIENT_ID and/or GOOGLE_OAUTH_CLIENT_SECRET are not set; installers will ship without Calendar sign-in."
+          fi
 
       - name: Build installer (Windows)
         if: matrix.platform == 'windows'
@@ -231,4 +244,29 @@ jobs:
               --title "QuickNotch $VERSION" \
               --notes-file release-notes.md \
               --latest
+          fi
+
+      - name: Publish the site changelog
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The site imports the feed at build time, so the version and the
+          # history are prerendered. Commit the same JSON into the site source;
+          # the push redeploys the site on Cloudflare.
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site
+          cp dist/changelog.json site/web/src/lib/data/changelog.json
+          cd site
+          if git diff --quiet -- web/src/lib/data/changelog.json; then
+            echo "Site changelog already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/src/lib/data/changelog.json
+          git commit -m "Publish the site changelog for $VERSION"
+          if ! git push origin HEAD:main; then
+            echo "::warning::Could not push the site changelog to main; deploy it by hand."
           fi

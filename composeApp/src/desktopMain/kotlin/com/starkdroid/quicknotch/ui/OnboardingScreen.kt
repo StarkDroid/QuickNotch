@@ -100,15 +100,8 @@ import com.starkdroid.quicknotch.generated.resources.style_drag_handle
 import com.starkdroid.quicknotch.generated.resources.style_floating_pill
 
 /**
- * The first-run onboarding: four sequential screens -- welcome, pill style,
- * Google Calendar, pinned apps -- walked one after the other, each skippable,
- * and all of them styling a live preview of the notch carried between screens.
- * The real overlay does not exist until the flow ends: the user is configuring
- * the pill that would otherwise already be on screen.
- *
- * Every choice applies to the config immediately, so skipping a later step
- * keeps the earlier ones -- "skip" means "I'll fine-tune in Settings", which is
- * also why each screen says exactly that.
+ * Four skippable first-run screens styling a live notch preview. Choices
+ * apply immediately, so skipping a later step keeps earlier ones.
  */
 private enum class OnboardingStep(val index: Int) {
     Welcome(0),
@@ -603,7 +596,7 @@ private fun StyleCards(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // The pill itself, in this style, with a sample quickview row
-                    // -- except the drag handle, whose collapsed design is a slim
+                    // except the drag handle, whose collapsed design is a slim.
                     // grabber bar with nothing else in it (QuickView draws exactly
                     // that), so this card previews it honestly.
                     Box(
@@ -689,14 +682,8 @@ private fun StyleCards(
 }
 
 /**
- * One "what the app can do" card: icon chip over a short promise on a solid
- * surface. Row siblings share the tallest card's height (the row sizes itself
- * to its tallest child and every card stretches to fill it), so wrapped
- * labels never clip and all four boxes stay proportionate.
- *
- * [wide] is the gaming banner: the same chrome, laid out icon-beside-text
- * across the whole column. The HUD is automatic, so it reads as a headline
- * ("this happens on its own") rather than as a fifth square to configure.
+ * One capability card; row siblings stretch to the tallest, so wrapped
+ * labels do not clip. wide is the gaming banner.
  */
 @Composable
 private fun FeatureCard(

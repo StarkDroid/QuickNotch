@@ -32,16 +32,8 @@ private val systemBatteryJson: Json = Json {
 }
 
 /**
- * The machine's own battery (a laptop): level 0-100 and whether the OS is
- * actively charging it. Null while no battery exists (desktops), so the
- * quickview indicator only ever appears on machines that can actually
- * drain.
- *
- * Polling lives in the companion: it runs independently of [AudioBattery]
- * (same ring design, different data source). Windows reads `Win32_Battery`
- * through [system-battery.ps1]; macOS parses `pmset -g batt`. A failed or
- * misparsed read leaves the last value alone, so the indicator only ever
- * shows real data.
+ * The machine's battery level and charging state, polled from pmset or
+ * Win32_Battery. Null on desktops and on a failed read.
  */
 data class SystemBattery(
     val levelPercent: Int,
@@ -57,9 +49,8 @@ data class SystemBattery(
         val state: StateFlow<SystemBattery?> = _state.asStateFlow()
 
         /**
-         * Whether the machine actually has a battery (a laptop vs. a desktop).
-         * Stays false until the first successful probe, then tracks presence;
-         * it gates the settings toggle so desktops never offer a dead control.
+         * One upcoming date: month and day over the count badge. Clicking it opens
+         * that date in Google Calendar.
          */
         private val _hasBattery = MutableStateFlow(false)
         val hasBattery: StateFlow<Boolean> = _hasBattery.asStateFlow()
@@ -125,7 +116,6 @@ data class SystemBattery(
             _state.value = SystemBattery(level.coerceIn(0, 100), snap.charging)
         }
 
-        // ── macOS (`pmset -g batt`) ────────────────────────────────────────────
         //
         //   Now drawing from 'AC Power'
         //    -InternalBattery-0 (id=123)	87%; charging; 0:00 remaining present: true

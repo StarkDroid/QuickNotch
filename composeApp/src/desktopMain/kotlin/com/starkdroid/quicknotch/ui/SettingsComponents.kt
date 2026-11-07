@@ -53,7 +53,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,7 +77,6 @@ import com.starkdroid.quicknotch.theme.TextMuted
 import com.starkdroid.quicknotch.theme.TextPrimary
 import com.starkdroid.quicknotch.theme.TextSecondary
 
-// ── Shared interaction helpers ───────────────────────────────────────────────
 // Every hoverable settings/onboarding control used to redeclare the same two
 // booleans, the same four pointer handlers and the same ripple-free clickable.
 // They share one state shape and three helpers instead.
@@ -108,6 +109,39 @@ internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier = this.click
     indication = null,
     onClick = onClick
 )
+
+/**
+ * Footer link with GhostButton chrome, so it reads as a link rather than a
+ * second Cancel.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+internal fun SettingsLinkButton(label: String, onClick: () -> Unit) {
+    val hoverPress = rememberHoverPressState()
+    val bg by animateColorAsState(
+        targetValue = if (hoverPress.hovered) SettingsCardHover else Color.Transparent,
+        animationSpec = tween(120),
+        label = "linkBg"
+    )
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .trackHoverPress(hoverPress)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .plainClickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = AppTypography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = AccentSolid,
+            fontSize = 11.sp
+        )
+    }
+}
 
 /** Spring dip on press, optional lift on hover. One tuning for all controls. */
 @Composable
@@ -335,10 +369,8 @@ internal fun GhostButton(
 }
 
 /**
- * A minimal, flat selection dropdown (label above, current value, popup menu)
- * shared by the style and surface pickers. Popup rows are plain composables, so
- * opening it costs one small popup — no preview textures are ever rendered.
- * Hover highlights the field border; the chevron rotates open.
+ * Flat dropdown shared by the style and surface pickers; rows are plain
+ * composables, no preview textures.
  */
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -582,7 +614,7 @@ internal fun MinimalistRectSwitch(
 }
 
 
-// ── Shared section chrome (used by multiple tabs) ────────────────────────────
+// Shared section chrome (used by multiple tabs).
 
 /**
  * Card section header: icon chip beside title, optional subtitle underneath.
@@ -628,10 +660,8 @@ internal fun SectionHeader(icon: ImageVector, title: String, subtitle: String? =
 }
 
 /**
- * One cell in the quickview indicators grid (Volume / Audio Battery /
- * Laptop Battery): a square toggle that previews the level-ring glyph and its
- * level, with the label centered underneath. Hover lifts it, press dips it,
- * and the border animates to the accent when on.
+ * One toggle cell in the indicators grid, previewing the ring glyph and
+ * level.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -659,12 +689,8 @@ internal fun IndicatorToggleBox(
 }
 
 /**
- * The notifications entry of the same quickview indicators grid: identical
- * chrome to [IndicatorToggleBox] but the preview is the real bell glyph — a
- * notification has no level percentage to show inside a ring. Deliberately
- * badge-free: a hardcoded count here would misrepresent the live Notification
- * Center count the notch itself reads; the real badge only ever renders on the
- * island.
+ * Notifications tile in the indicators grid. No badge here: a hardcoded
+ * count would misstate the live Notification Center value.
  */
 @Composable
 internal fun NotificationToggleBox(
@@ -748,11 +774,8 @@ private fun IndicatorCell(
 }
 
 /**
- * Helper row under the indicators grid for the one thing that still needs the
- * user's action: granting QuickNotch Full Disk Access so the quickview can read
- * the macOS Notification Center count. A short hint on the left, a compact
- * solid button on the right that deep-links straight to the Privacy &
- * Security pane. Rendered only while the store is unreadable.
+ * Full Disk Access hint and deep link, shown only while the notification
+ * store is unreadable.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -873,9 +896,8 @@ internal fun BehaviorSwitchRow(
 }
 
 /**
- * A collapsible widget card: header row (icon chip, title, enable switch,
- * rotating chevron) over an animated content area. Used by the Widgets tab.
- * The header lifts on hover and the chevron springs 180° when opened.
+ * One ring tile per metric. Network uses a log sweep with the exact rate as
+ * the label; no GPU counter means no tile.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable

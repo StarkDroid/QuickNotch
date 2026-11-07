@@ -1,9 +1,8 @@
 <script lang="ts">
 	import Icon from '$components/Icon.svelte';
-	import { site } from '$data/site';
+	import { calendarAuth, connectPage, site } from '$data/site';
 	import CalendarNotchMock from '$components/CalendarNotchMock.svelte';
 	import Footer from '$components/Footer.svelte';
-	import { calendarAuth } from '$data/site';
 	import { onMount } from 'svelte';
 
 	let status = $state<'idle' | 'starting' | 'ready' | 'sent' | 'error'>('idle');
@@ -12,12 +11,9 @@
 	let consentUrl = $state('');
 
 	/**
-	 * The connect page owns the consent UI: it's editorial (retro poster), not a
-	 * system dialog. The desktop passes us the parameters it needs to assemble
-	 * Google's auth URL (`state` already contains the loopback port), and we
-	 * send the user there. Google's reply bounces the browser to `/oauth/callback`
-	 * on this site, which then jumps home to `http://127.0.0.1:<port>/...` where
-	 * the token exchange happens with the secret that never leaves the app.
+	 * Editorial consent page. The desktop sends state, client id and
+	 * redirect; Google returns to /oauth/callback, which forwards to the
+	 * loopback.
 	 */
 	onMount(() => {
 		try {
@@ -28,28 +24,23 @@
 			const prompt = params.get('prompt');
 			const codeChallenge = params.get('code_challenge');
 			const codeChallengeMethod = params.get('code_challenge_method');
-			if (!state || !codeChallenge) {
+			// The client id arrives from the desktop rather than living here: the
+			// site is public, the app is the only thing that needs to name its own
+			// Google client, and a copy of it in this page would only be one more
+			// value to keep in step.
+			const clientId = params.get('client_id');
+			if (!state || !codeChallenge || !clientId) {
 				error = 'The desktop app sent an incomplete sign-in request.';
 				status = 'error';
 				return;
 			}
 
-			// Prefer what the desktop sent, falling back to *this page's own origin*.
-			// Same-origin is the right fallback rather than a hardcoded constant
-			// because during local testing the correct URI is literally wherever this
-			// page was served from -- 5173 under `vite dev`, 4173 under `vite
-			// preview`, whatever in production. Echoing the wrong one would fail as a
-			// redirect_uri_mismatch, or worse, quietly authorise against a URI the
-			// app is not going to exchange against.
-			const clientId = params.get('client_id') ?? calendarAuth.clientId;
+			// Prefer the redirect_uri the desktop sent; this page's origin is the
+			// local-dev fallback. The wrong URI fails as redirect_uri_mismatch.
 			const redirectUri = params.get('redirect_uri') ?? (location.origin + '/oauth/callback');
 
-			// Note the loopback `port` the desktop also sends is deliberately not
-			// read here. It rides inside `state` instead, which is the only value
-			// Google's round-trip echoes back intact, so that is where
-			// /oauth/callback recovers it from. Reading the query param would look
-			// equivalent and quietly couple the handoff to the URL the user
-			// happened to reach this page through.
+			// The loopback port is not read from the query: it rides inside state,
+			// the only value Google echoes back intact.
 			const qs = new URLSearchParams({
 				client_id: clientId,
 				redirect_uri: redirectUri,
@@ -80,7 +71,7 @@
 				window.location.assign(consentUrl);
 			}, 160);
 		} catch (e) {
-			error = 'Could not parse the sign-in request from the desktop app.';
+			error = connectPage.errorParse;
 			status = 'error';
 		}
 	});
@@ -92,8 +83,8 @@
 </script>
 
 <svelte:head>
-	<title>Connect Google Calendar · {site.name}</title>
-	<meta name="description" content="Sign in with Google so QuickNotch can show your calendar. This page is opened by the desktop app, not linked from the site." />
+	<title>{connectPage.title} · {site.name}</title>
+	<meta name="description" content={connectPage.description} />
 	<!-- App-invoked OAuth step: reachable only from the desktop app's sign-in
 	     button. Never indexed, never followed, never shown in search. The
 	     X-Robots-Tag in _headers says the same thing at the HTTP layer. -->
@@ -107,13 +98,13 @@
      anchors have no target here. -->
 <header class="bar">
 	<div class="container bar__inner">
-		<a class="brand" href="/">
+		<a class="brand" href={site.homePath} aria-label={site.homeLabel}>
 			<span class="brand__mark"><Icon name="logo" size={18} /></span>
 			{site.name}
 		</a>
-		<a class="bar__back" href="/">
+		<a class="bar__back" href={site.homePath}>
 			<Icon name="arrow-left" size={15} />
-			Back to site
+			{connectPage.backToSite}
 		</a>
 	</div>
 </header>
@@ -122,89 +113,75 @@
 	<section class="hero">
 		<div class="container stack-lg">
 			<div class="stack-md">
-				<span class="eyebrow">Google Calendar · read-only</span>
+				<span class="eyebrow">{connectPage.eyebrow}</span>
 				<h1 class="display">
-					Connect QuickNotch <span class="hl">to your calendar</span>
+					{connectPage.headline} <span class="hl">{connectPage.headlineHighlight}</span>
 				</h1>
-				<p class="lead">
-					The notch shows today's upcoming events at a glance, and scrolls the
-					next one as a live ticker, without ever needing to open Google
-					Calendar. The connection is read-only, stays on your machine, and
-					never sends your events anywhere else.
-				</p>
+				<p class="lead">{connectPage.lead}</p>
 			</div>
 
 			<div class="mock stack-md">
 				<CalendarNotchMock expanded connected={status !== 'error'} theme="pill" />
-				<p class="text-muted mono">You will land back in QuickNotch after granting access.</p>
+				<p class="text-muted mono">{connectPage.mockNote}</p>
 			</div>
 
 			<div class="card card--lift connect-card stack-lg">
 				{#if status === 'idle'}
-					<p class="text-muted">Preparing your sign-in…</p>
+					<p class="text-muted">{connectPage.preparing}</p>
 				{:else if status === 'ready'}
 					<!-- Standby mode: the consent button is the trigger instead of
 					   an automatic hop, so the page can be walked through safely. -->
 					<div class="stack-md">
-						<span class="eyebrow">Ready when you are</span>
-						<h2 class="h3">Sign in with Google to link your calendar</h2>
-						<p class="text-muted">
-							QuickNotch only reads your calendar. QuickNotch never uploads your
-							events anywhere, and you can disconnect any time from Settings.
-						</p>
+						<span class="eyebrow">{connectPage.ready.eyebrow}</span>
+						<h2 class="h3">{connectPage.ready.title}</h2>
+						<p class="text-muted">{connectPage.ready.body}</p>
 					</div>
 					<div class="cluster">
 						<button class="btn btn--primary btn--lg" onclick={openGoogle}>
 							<Icon name="arrow-right" size={18} />
-							Sign in with Google
+							{connectPage.signIn}
 						</button>
 						<button class="btn btn--ghost" onclick={() => history.back()}>
 							<Icon name="arrow-left" size={16} />
-							Back to QuickNotch
+							{connectPage.backToApp}
 						</button>
 					</div>
 				{:else if status === 'starting' || status === 'sent'}
 					<div class="cluster">
 						<span class="dot dot--pulse"></span>
 						<p>
-							{status === 'starting'
-								? 'Opening Google consent…'
-								: 'Taking you to Google. If the tab did not open, try again.'}
+							{status === 'starting' ? connectPage.opening : connectPage.sent}
 						</p>
 					</div>
 					<div class="cluster">
 						<button class="btn btn--primary" onclick={openGoogle}>
 							<Icon name="arrow-right" size={16} />
-							Open Google again
+							{connectPage.openAgain}
 						</button>
 						<button class="btn btn--ghost" onclick={() => history.back()}>
 							<Icon name="arrow-left" size={16} />
-							Back to QuickNotch
+							{connectPage.backToApp}
 						</button>
 					</div>
 				{:else if status === 'error'}
 					<div class="stack-md">
-						<span class="eyebrow">Something needs a fix</span>
+						<span class="eyebrow">{connectPage.errorEyebrow}</span>
 						<h2 class="h4">{error}</h2>
-						<p class="text-muted">
-							QuickNotch expects to hand this flow off to a small listener on your
-							own machine. If the link expired, or you opened this page directly,
-							start again from QuickNotch → Settings → Google Calendar.
-						</p>
+						<p class="text-muted">{connectPage.errorBody}</p>
 					</div>
 					<!-- No "try again" here on purpose: `consentUrl` is empty in this branch, so
 					   that button was inert. The only way out is back through the app,
 					   which is what mints the loopback port this page needs. -->
 					<div class="cluster">
-						<a class="btn btn--primary" href="/">
+						<a class="btn btn--primary" href={site.homePath}>
 							<Icon name="arrow-left" size={16} />
-							Back to the website
+							{connectPage.backToWebsite}
 						</a>
 					</div>
 				{/if}
 				{#if debug && status !== 'error' && status !== 'idle'}
 					<details class="debug mono text-muted">
-						<summary>Technical details (for debugging)</summary>
+						<summary>{connectPage.debugSummary}</summary>
 						<code>{debug}</code>
 					</details>
 				{/if}

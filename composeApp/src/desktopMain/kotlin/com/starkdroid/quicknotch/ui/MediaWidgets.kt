@@ -85,19 +85,15 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-// ── Palette ──────────────────────────────────────────────────────────────────
 
 internal val LiveAccent = Color(0xFF38BDF8)
 internal val VinylDiscFill = Color(0xFF14161C)
 internal val VinylRing = Color(0xFF343A45)
 
-// ── Media state helpers ──────────────────────────────────────────────────────
 
 /**
- * A widget only renders when its feature is enabled and its conditions hold:
- * the now-playing page needs a live session and a capsule-friendly style
- * (the drag handle is deliberately excluded from every live-activity surface,
- * both collapsed and expanded).
+ * A live-activity surface needs its feature on and a style that is not the drag handle,
+ * which is excluded from every one of them, collapsed and expanded.
  */
 internal fun isStyleEligibleForLiveActivity(config: NotchConfig): Boolean =
     config.style != NotchStyle.DRAG_HANDLE
@@ -107,7 +103,6 @@ internal fun isMusicLive(config: NotchConfig, session: MediaSession?): Boolean =
         isStyleEligibleForLiveActivity(config) &&
         session?.isActive == true
 
-// ── Glyph tints ──────────────────────────────────────────────────────────────
 
 // Glyph colours brighten slightly over the translucent surfaces so they
 // stay legible, and stay near-white on the opaque one.
@@ -121,15 +116,10 @@ internal fun islandTint(surface: NotchSurface): Color =
         Color.White.copy(alpha = 0.72f)
     else Color.White
 
-// ── Vinyl disc ───────────────────────────────────────────────────────────────
 
 /**
- * The spinning record the live activity is named after: the track's album art
- * clipped to a disc that rotates while playing — frozen at its current angle
- * when paused. The rotation accumulates real frame deltas and only runs while
- * playing: an `InfiniteTransition` here would keep invalidating the draw phase
- * even with a paused track, burning a constant redraw of the whole overlay for
- * nothing. Turns are pushed at [PillAnimationFps], not at display rate.
+ * The album art clipped to a disc that turns while playing and freezes on pause: turns are
+ * pushed at [PillAnimationFps], since an InfiniteTransition would redraw a paused track forever.
  */
 @Composable
 internal fun VinylDisc(
@@ -145,18 +135,11 @@ internal fun VinylDisc(
     var angle by remember { mutableFloatStateOf(0f) }
     val spinning = playing && animate
     if (spinning) {
-        // Accumulate frame deltas so pause/resume is seamless: cancelling the
-        // effect (spinning → false) simply stops the disc where it is, and a
-        // later resume continues from that exact angle. Real deltas are still
-        // summed across the skipped frames, so the [PillAnimationFps] write cap
-        // changes how often the pill repaints, never how fast it turns.
+        // Accumulate frame deltas so pause/resume is seamless: the effect stops on cancel and
+        // skipped frames still count, so PillAnimationFps caps writes, never speed.
         LaunchedEffect(spinning) {
-            // A `delay` tick, deliberately NOT `withFrameNanos`: awaiting the
-            // frame clock subscribes the whole scene to display-rate frames, so
-            // the pill kept taking 60 frames a second however rarely this loop
-            // wrote (measured: even a 10 writes/s cap still cost ~16% of a core —
-            // the subscription, not the write, was the cost). Monotonic deltas
-            // keep the turn rate exact regardless of scheduler jitter.
+            // A `delay` tick, not `withFrameNanos`: awaiting the frame clock subscribes the whole
+            // scene to display rate, which cost ~16% of a core even at a 10 writes/s cap.
             var last = System.nanoTime()
             while (true) {
                 delay(PillAnimationStepMillis)
@@ -216,17 +199,10 @@ internal fun VinylDisc(
     }
 }
 
-// ── Marquee title ────────────────────────────────────────────────────────────
 
 /**
- * A single-line label that marquees when its text is wider than the available
- * space: centred normally, then slowly scrolling right-to-left with a small
- * gap before the loop. The rate scales with the overflow so short titles crawl
- * and long ones glide.
- *
- * The scrolling transition exists only while the text actually overflows —
- * a fitting title must not keep a 60fps animation alive (and, on the software
- * renderer, a full-window redraw loop) just to sit centred.
+ * Marquees when the text is wider than the space, at a rate scaled to the overflow.
+ * The transition exists only while it overflows, so a fitting title keeps no loop alive.
  */
 @Composable
 internal fun MarqueeText(
@@ -264,11 +240,8 @@ internal fun MarqueeText(
     val durationMs = (travelPx * 1000 / 30).coerceIn(2500, 20000)
     val speedPxPerSecond = travelPx * 1000f / durationMs
 
-    // Same clock shape as the vinyl and the waveform: the transition used to run
-    // at display rate (an InfiniteTransition cannot be throttled), so a long
-    // title forced a full overlay repaint every frame. Travelling by real frame
-    // deltas and pushing at [PillAnimationFps] keeps the exact same speed while
-    // halving the repaints.
+    // Real frame deltas written at [PillAnimationFps]: the old InfiniteTransition ran at display
+    // rate, so a long title forced a full overlay repaint every frame.
     var scrollX by remember(text, travelPx) { mutableFloatStateOf(0f) }
     LaunchedEffect(needsMarquee, animate, travelPx, speedPxPerSecond) {
         if (!needsMarquee || !animate) {
@@ -302,12 +275,8 @@ internal fun MarqueeText(
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Clip,
-            // graphicsLayer, not Modifier.offset { }: the offset lambda runs in
-            // the placement phase, so every tick of the scroll re-laid-out the
-            // pill's row. A layer translation is a draw-phase change — the same
-            // pixels, one invalidation instead of a layout pass. The scrollX
-            // state is likewise read inside the layer lambda, so each 30 Hz
-            // tick invalidates only the draw of this Text, never composition.
+            // graphicsLayer, not Modifier.offset { }: placement-phase offsets re-laid-out the row
+            // every tick. scrollX is read inside the layer lambda, so a tick invalidates only this draw.
             modifier = Modifier.graphicsLayer {
                 translationX = if (needsMarquee) {
                     scrollX
@@ -319,7 +288,6 @@ internal fun MarqueeText(
     }
 }
 
-// ── Time + progress ──────────────────────────────────────────────────────────
 
 internal fun formatMs(ms: Long): String {
     val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
@@ -347,15 +315,8 @@ internal fun TrackTimeLabel(ms: Long, frameHeight: Dp = 28.dp) {
 }
 
 /**
- * A playhead strip: a slim rounded track, a solid fill in the album's colour,
- * and — when seeking is available — a round head ringed in the same colour
- * that rides the tip of the fill. Dragging or tapping (when the backend
- * supports seeking) retargets the OS player; on macOS the strip is
- * display-only, matching MediaRemote's limitations.
- *
- * [accent] is the cover's dominant colour (or the live accent with no cover):
- * a plain Color background, so no brush is built per frame while the playhead
- * advances.
+ * Playhead strip: a track, an album-coloured fill and a head when seeking is available; macOS
+ * stays display-only, matching MediaRemote. The accent is a plain Color, never a per-frame brush.
  */
 @Composable
 internal fun TrackProgress(
@@ -440,7 +401,6 @@ internal fun TrackProgress(
     }
 }
 
-// ── Transport ────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -449,19 +409,14 @@ internal fun TransportControls(
     enabled: Boolean,
     media: MediaController,
     /**
-     * Cover's dominant colour (or the live accent with no cover) behind the
-     * play circle. A plain Color background read straight from the session —
-     * it changes per track, never per frame, so nothing is rebuilt while the
-     * playhead advances.
+     * Cover's dominant colour (or the live accent with no cover); a plain Color that changes
+     * per track, never per frame.
      */
     accent: Color = LiveAccent
 ) {
     val tint = TextPrimary.copy(alpha = if (enabled) 0.9f else 0.3f)
-    // Optimistic play/pause: the OS player reacts through the media bridge's
-    // next poll (up to ~2s), and without this the icon sat on the old state
-    // for that whole window — read as "the button is laggy". The flip happens
-    // the instant the button is pressed and reconciles when the session state
-    // changes (or after 3s, if a command was lost).
+    // Optimistic play/pause: the bridge only reports back on its next poll (up to ~2s), so the
+    // flip lands on press and reconciles with the session state, or after 3s if the command was lost.
     var pendingPlay by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(state) { pendingPlay = null }
     LaunchedEffect(pendingPlay) {
@@ -471,20 +426,12 @@ internal fun TransportControls(
         }
     }
     val showPlaying = pendingPlay ?: (state == PlaybackState.PLAYING)
-    // Material3 inflates every IconButton to a 48dp touch target — on this
-    // tightly packed 30/36dp row (4dp apart) those targets overlapped each
-    // other and the neighbouring buttons, so clicks near an edge landed on the
-    // wrong control. Pin the targets to the visible buttons.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Plain sized-Box clickables instead of IconButton: Material3's
-        // IconButton inflates its touch target to 48dp (overflowing its slot
-        // symmetrically), which on this tightly packed row made the drawn
-        // buttons and the hit geometry disagree — clicks near an edge landed
-        // in the neighbour's inflated zone or nowhere at all. With these, the
-        // hit area is exactly the drawn button.
+        // Plain sized-Box clickables instead of IconButton: Material3 inflates every IconButton
+        // to a 48dp target, which on this 4dp-apart row made clicks land on the neighbour.
         TransportButton(
             onClick = {
                 media.previous()
@@ -509,9 +456,7 @@ internal fun TransportControls(
                     scaleX = playScale
                     scaleY = playScale
                 }
-                // clip BEFORE clickable: the hit area is exactly the drawn
-                // circle (clip also clips pointer input), so the whole icon
-                // plus its background is one clickable surface.
+                // clip before clickable: the hit area is exactly the drawn circle (clip clips input too).
                 .clip(CircleShape)
                 .background(
                     accent.copy(
@@ -561,8 +506,7 @@ internal fun TransportControls(
 }
 
 /**
- * One flat transport button: a fixed-size hit target with a centred glyph —
- * hit area = drawn area, no Material touch-target inflation.
+ * One flat transport button: hit area equals drawn area, no Material touch-target inflation.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -591,12 +535,8 @@ private fun TransportButton(
                 scaleY = scale
             }
             .then(
-                // The pointer modifiers exist ONLY while the page is
-                // interactive. `clickable(enabled = false)` still registers a
-                // hit-testable node, so an inactive page (alpha 0, composed
-                // above the music page) would keep intercepting pointer input
-                // in its slot; dropping the modifiers entirely guarantees an
-                // inactive page contributes no hit node at all.
+                // Pointer modifiers exist only while the page is interactive: clickable(enabled = false)
+                // still hit-tests, so an inactive page would keep intercepting input in its slot.
                 if (enabled) {
                     Modifier
                         .onPointerEvent(PointerEventType.Enter) { hovered = true }
@@ -623,7 +563,6 @@ private fun TransportButton(
 }
 
 
-// ── Waveform ─────────────────────────────────────────────────────────────────
 
 /** Default bar tint: the same brightness the collapsed title uses. */
 internal val WaveformWhite = Color(0xEBFFFFFF)
@@ -631,9 +570,8 @@ internal val WaveformWhite = Color(0xEBFFFFFF)
 private const val TAU = 6.2831855f
 
 /**
- * Fraction of the band every bar keeps once the track is paused: a flat line
- * across the middle of the lane, the way a real analyser bottoms out at
- * silence. It is the resting state the bars fall to, not a placeholder.
+ * Fraction of the band every bar keeps when paused: a flat line across the middle, the resting
+ * state of a real analyser at silence.
  */
 private const val WaveformFlatFraction = 0.12f
 
@@ -641,34 +579,8 @@ private const val WaveformFlatFraction = 0.12f
 private const val WaveformRampSec = 0.25f
 
 /**
- * The collapsed pill's faux analyser: side-by-side capsules that each grow and
- * shrink around their vertical centre, so every bar breathes from both ends the
- * way a real spectrum does.
- *
- * Deliberately NOT an FFT. Nothing in the media pipeline can hear the audio —
- * `MediaRemote` (and SMTC on Windows) publish metadata only, and reading the
- * system mix would need a ScreenCaptureKit stream plus a permission grant, so
- * this is motion driven by playback state instead. It reads like a visualiser
- * and costs nothing the pill was not already paying:
- *
- * - One coroutine for the whole bar set (not one per bar) and one state write
- *   per update, read inside the draw scope: the node invalidates its draw phase
- *   only, exactly like [shimmer] — no recomposition, no extra layer.
- * - The clock shares the notch-wide [PillAnimationFps] tick: bars look fluid at
- *   30 updates a second, and every update is exactly one overlay repaint.
- * - `playing && animate` gates the loop, so a paused track freezes the bars
- *   (same contract as [VinylDisc], resumed from the frozen phase so it never
- *   jumps). Nothing freezes while the settings window merely has focus — a
- *   top-centred notch stays visible above it, so a still pill reads as broken.
- *
- * Heights come from two fast sines per band plus a shared loudness envelope,
- * all parameters hashed deterministically from the band index: the pattern is
- * stable across frames (it reads as one coherent wave, not per-bar noise),
- * bass-weighted like a real spectrum, and allocates nothing per frame.
- *
- * [style] picks the bar geometry without touching the motion: [VisualiserStyle.WAVEFORM]
- * draws centred capsules, [VisualiserStyle.BARS] anchors sharp rectangles of
- * the same pitch to the bottom edge.
+ * Faux analyser: not an FFT, since the media pipeline carries metadata only, so the motion is
+ * driven by playback state. One coroutine for the bar set, one state write read in the draw scope.
  */
 @Composable
 internal fun MusicWaveform(
@@ -682,11 +594,8 @@ internal fun MusicWaveform(
     barPitch: Dp = 6.dp,
     style: VisualiserStyle = VisualiserStyle.WAVEFORM
 ) {
-    // The bar count is resolved in composition (not in the draw scope, and not
-    // from an onSizeChanged write): the band table and the draw loop must be
-    // built from the *same* value, or a width change lets the loop index past a
-    // table that has not been rebuilt yet — an ArrayIndexOutOfBounds that takes
-    // the whole app with it.
+    // Resolve the bar count in composition, not from an onSizeChanged write: the band table and
+    // the draw loop must share one value, or the index runs past a stale table.
     BoxWithConstraints(modifier) {
         val count = if (bars > 0) {
             bars
@@ -718,9 +627,8 @@ private fun WaveformCanvas(
     modifier: Modifier = Modifier
 ) {
     var phase by remember { mutableFloatStateOf(0f) }
-    // 0 = flat line (paused), 1 = full motion. A paused track does not merely
-    // freeze: the bars fall to an even line, which is what a real level meter
-    // does when the signal stops and the only honest way to say "no audio".
+    // 0 = flat line (paused), 1 = full motion. A paused track falls to an even line, which is
+    // what a real level meter does at silence.
     var presence by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(animate, playing) {
         if (!animate) {
@@ -759,11 +667,8 @@ private fun WaveformCanvas(
         val loud = presence
         for (index in 0 until count) {
             val dynamic = (shape.level(index, t) * envelope).coerceIn(0.08f, 1f)
-            // At loud = 0 every bar collapses onto the same height, which is
-            // what draws the flat line; at 1 it is the untouched analyser shape.
-            // The bottom-anchored style settles onto a thin strip at the floor
-            // instead of a centred line — same pause contract, honest to its
-            // own anchor.
+            // At loud = 0 every bar collapses onto one height, which draws the flat line; the
+            // bottom-anchored style settles onto a thin floor strip instead.
             val level = WaveformFlatFraction + (dynamic - WaveformFlatFraction) * loud
             val barHeight = level * size.height
             val x = index * pitch + (pitch - barWidth) / 2f
@@ -793,9 +698,8 @@ private fun WaveformCanvas(
 }
 
 /**
- * Precomputed band parameters: two frequencies, their phases, and a bass-leaning
- * weight per bar. All derived from a cheap deterministic hash of the index, so
- * the set is identical on every machine and every launch.
+ * Precomputed band parameters (two frequencies, phases, a bass weight), hashed from the index so
+ * the pattern is identical on every machine.
  */
 private class WaveformBands(private val count: Int) {
     private val freqA = FloatArray(count)
@@ -814,7 +718,6 @@ private class WaveformBands(private val count: Int) {
             phaseA[index] = TAU * hash(index, 3)
             phaseB[index] = TAU * hash(index, 4)
             // Left bands (bass) sit taller, jittered so it is a slope, not a ramp.
-            // Wider spread than before so quiet and loud bars separate clearly.
             weight[index] = (1.12f - 0.60f * position) * (0.70f + 0.60f * hash(index, 5))
         }
     }

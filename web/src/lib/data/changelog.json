@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "latest": "2.0.0",
+  "updatedAt": "2026-11-03T11:17:31.572Z",
+  "releases": [
+    {
+      "version": "2.0.0",
+      "date": "2026-11-03",
+      "title": "System monitor widget",
+      "pr": 11,
+      "highlights": [
+        "Make the gaming HUD a Windows-only feature",
+        "Keep the overlay above fullscreen games on Windows",
+        "Move the gaming HUD switches into the System widget"
+      ],
+      "changes": [
+        {
+          "kind": "new",
+          "text": "Make the gaming HUD a Windows-only feature"
+        },
+        {
+          "kind": "improved",
+          "text": "Keep the overlay above fullscreen games on Windows"
+        },
+        {
+          "kind": "improved",
+          "text": "Move the gaming HUD switches into the System widget"
+        },
+        {
+          "kind": "improved",
+          "text": "Preview the gaming HUD on macOS (temporary)"
+        },
+        {
+          "kind": "improved",
+          "text": "Strip the transparent HUD to its metrics"
+        },
+        {
+          "kind": "improved",
+          "text": "Remove the HUD preview and the settings readout"
+        }
+      ]
+    }
+  ]
+}

@@ -3,21 +3,8 @@
 	import { prefersReducedMotion } from '$lib/motion/gsap';
 
 	/**
-	 * Scroll-driven spotlight.
-	 *
-	 * A fixed layer holding two heavily blurred flat discs. It rests near the top
-	 * of the viewport as the hero's "glow from above", then follows the reading
-	 * position down the page, settling on one focal element per section and
-	 * finishing on the pricing CTA.
-	 *
-	 * Two deliberate choices:
-	 *  - The glow is flat colour blurred with `filter: blur()`, not a
-	 *    `radial-gradient`, so the design system stays gradient-free while still
-	 *    producing soft light.
-	 *  - Target rects are read once per frame in a read-then-write batch rather
-	 *    than cached in document coordinates, because one of the targets is a
-	 *    `position: sticky` panel whose document position changes while scrolling.
-	 *    The loop stops as soon as the glow has settled and scrolling has paused.
+	 * Scroll-driven spotlight made of blurred flat discs. Targets are
+	 * measured per frame because one is sticky.
 	 */
 
 	interface Props {
@@ -26,7 +13,7 @@
 	}
 
 	let {
-		targets = ['#tour .tour__device', '#look .look__row', '#pricing .ticket__cta']
+		targets = ['#tour .tour__device', '#look .look__row', '#download .ticket__cta']
 	}: Props = $props();
 
 	let coreEl: HTMLSpanElement | undefined = $state();

@@ -1,15 +1,13 @@
 <script lang="ts">
-	import { facts, faq, platforms, pricing, site, themes, tour } from '$data/site';
+	import { latest } from '$data/releases';
+	import { facts, faq, offer, platforms, seo, site, themes, tour } from '$data/site';
 
 	/**
-	 * All document-level SEO in one place.
-	 *
-	 * Every value is derived from the same content module the page renders, so
-	 * the structured data can never drift from the visible copy — which is
-	 * exactly what rich-result validators complain about.
+	 * Document-level SEO derived from the same content module the page
+	 * renders, so structured data cannot drift from the copy.
 	 */
 
-	const title = 'QuickNotch: the desktop notch, app launcher and widgets for Windows and macOS';
+	const title = seo.title;
 	const canonical = `${site.url}/`;
 	const ogImage = `${site.url}/og.png`;
 	const logo = `${site.url}/icon-512.png`;
@@ -20,25 +18,26 @@
 		'@context': 'https://schema.org',
 		'@type': 'SoftwareApplication',
 		name: site.name,
-		alternateName: 'QuickNotch floating dock',
-		applicationCategory: 'UtilitiesApplication',
-		applicationSubCategory: 'Application Launcher',
+		alternateName: seo.alternateName,
+		applicationCategory: seo.applicationCategory,
+		applicationSubCategory: seo.applicationSubCategory,
 		operatingSystem: osList,
-		softwareVersion: site.version,
+		softwareVersion: latest,
 		downloadUrl: site.downloadUrl,
 		installUrl: site.downloadUrl,
 		fileFormat: 'application/octet-stream',
-		sameAs: [canonical],
-		isAccessibleForFree: false,
+		license: 'https://opensource.org/license/mit',
+		sameAs: [canonical, site.repository],
+		isAccessibleForFree: true,
 		description: site.description,
 		inLanguage: 'en',
 		keywords: site.keywords.join(', '),
 		offers: {
 			'@type': 'Offer',
-			price: pricing.amount,
-			priceCurrency: pricing.currency,
+			price: offer.price.amount,
+			priceCurrency: offer.price.currency,
 			availability: 'https://schema.org/InStock',
-			url: site.purchaseUrl
+			url: site.downloadUrl
 		},
 		author: {
 			'@type': 'Organization',
@@ -52,20 +51,7 @@
 			url: site.url,
 			logo: { '@type': 'ImageObject', url: logo }
 		},
-		featureList: [
-			'Five glanceable widgets with vertical-scroll pagination',
-			'Quick-launch apps, live system rings, weather, calendar and now-playing controls',
-			'System page: CPU, GPU, memory, storage, download and upload rings',
-			'Windows-only gaming HUD: FPS, CPU, GPU, latency and download rate while a fullscreen game runs',
-			'Transparent in games: the notch body drops away, leaving a thin rim and soft shadow',
-			'Three notch styles: AMOLED notch, floating pill or drag handle',
-			'Solid ink or frosted glass, with the desktop blurring through the island',
-			'Pin any installed app or browse for one on disk',
-			'Launch from anywhere with always-on-top overlay',
-			'Start at login automatically',
-			'Runs offline with no account and no telemetry',
-			'One licence covers Windows and macOS'
-		],
+		featureList: [...seo.featureList],
 		// Interesting, indexable facts rather than generic marketing filler.
 		additionalProperty: facts.map((fact) => ({
 			'@type': 'PropertyValue',
@@ -95,7 +81,7 @@
 		name: site.author,
 		url: site.url,
 		logo: { '@type': 'ImageObject', url: logo },
-		description: `Makers of ${site.name}, a floating app launcher and notch for Windows and macOS.`
+		description: seo.organizationDescription
 	};
 
 	/**
@@ -117,7 +103,7 @@
 	const widgetListSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'ItemList',
-		name: 'QuickNotch widgets',
+		name: seo.widgetListName,
 		itemListElement: tour.steps.map((step, index) => ({
 			'@type': 'ListItem',
 			position: index + 1,
@@ -129,7 +115,7 @@
 	const themeListSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'ItemList',
-		name: 'QuickNotch notch themes',
+		name: seo.themeListName,
 		itemListElement: themes.map((theme, index) => ({
 			'@type': 'ListItem',
 			position: index + 1,
@@ -172,7 +158,7 @@
 	<meta property="og:image:type" content="image/png" />
 	<meta
 		property="og:image:alt"
-		content="QuickNotch: a floating notch at the top of a desktop that expands into a dock of pinned apps, with system, weather and calendar widgets, for Windows and macOS."
+		content={seo.ogImageAlt}
 	/>
 
 	<meta name="twitter:card" content="summary_large_image" />
@@ -181,7 +167,7 @@
 	<meta name="twitter:image" content={ogImage} />
 	<meta
 		name="twitter:image:alt"
-		content="QuickNotch: a floating notch at the top of a desktop that expands into a dock of pinned apps."
+		content={seo.twitterImageAlt}
 	/>
 
 	{@html `<script type="application/ld+json">${serialise(softwareSchema)}<\/script>`}

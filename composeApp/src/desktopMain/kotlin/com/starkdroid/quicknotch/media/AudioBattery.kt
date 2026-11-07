@@ -23,25 +23,13 @@ import kotlinx.serialization.json.intOrNull
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/**
- * A connected audio device reporting a battery percentage (0-100).
- *
- * @param isAudio true when the OS data reports the device as part of a
- *   Bluetooth audio stack (Hands-Free / A2DP / AVRCP), which drives which
- *   glyph the level ring shows. Decided from real device metadata on both
- *   platforms; defaults to true as the least-bad fallback for unknown devices.
- */
+/** A connected audio device reporting a battery percentage (0-100); [isAudio] picks the ring glyph. */
 data class AudioDeviceBattery(
     /** Device name as reported by the OS; null when unknown. */
     val name: String?,
     val levelPercent: Int,
     val isAudio: Boolean = true,
-    /**
-     * How many Bluetooth devices the OS reports as connected right now,
-     * including the one this ring reads its level from. The ring only shows a
-     * count badge above 1, so a single connected device looks exactly as it did
-     * before this field existed.
-     */
+    /** Bluetooth devices the OS reports connected right now, including this one. */
     val connectedCount: Int = 1
 )
 
@@ -71,44 +59,13 @@ private val batteryJson: Json = Json {
 }
 
 /**
- * Battery percentage of the connected Bluetooth audio device for the music
- * widget (quickview chip + expanded page).
- *
- * Presence on Windows comes from the OS's live Bluetooth connection state
- * ([battery.ps1] mode A: `Windows.Devices.Enumeration` +
- * `BluetoothDevice.ConnectionStatus`), NOT from the battery property — PnP
- * keeps reporting paired devices as present and hands out cached battery
- * values for seconds after the device is gone. The connection probe therefore
- * surfaces a connect or disconnect on the very next poll (≈1 s):
- *
- *  - the 1 s probe asks "is a Bluetooth audio device connected right now"
- *    (a fast WinRT enumeration; the PnP instance walk is skipped entirely
- *    when nothing is connected, so a disconnect is effectively immediate);
- *  - the ~30 s refresh reads that device's battery level with a generous
- *    timeout (the OS may poll the headset over the air for many seconds) and
- *    only publishes while presence still says the device is connected;
- *  - the last-known level is persisted per device instance, so reconnecting
- *    the same device (or restarting the app) restores the chip instantly;
- *  - [poke] forces an immediate probe whenever the notch opens, and a device
- *    that just appeared kicks an immediate refresh so the level shows up
- *    right away.
- *
- * macOS has no public API for this; `system_profiler SPBluetoothDataType`
- * reports the connected device's battery and services (≈100 ms, so it carries
- * both presence and battery in the poll — at a slower 10 s cadence to keep the
- * laptop quiet, with an instant re-probe when the notch opens/music goes live).
- * The old Bluetooth preferences plist
- * (~/Library/Preferences/com.apple.Bluetooth.plist) stopped carrying a
- * DeviceCache on modern macOS, so it is kept only as a fallback for older
- * systems. A failed or misparsed read simply leaves the value null and the UI
- * hides the chip.
+ * Battery percentage of the connected Bluetooth audio device for the quickview chip.
+ * Windows must read presence from live WinRT connection state; the PnP battery property caches a dead device.
  */
 internal object AudioBattery {
 
     private const val PresencePollMs = 1_000L
-    // system_profiler is more expensive than the Windows WinRT probe, so the
-    // macOS cadence is slower; a notch-open or music-live poke still probes
-    // immediately, so connect/disconnect reflects right away on expand.
+    // system_profiler costs more than the WinRT probe, so macOS polls slower.
     private const val MacPresencePollMs = 10_000L
     private const val LiveProbeTimeoutMs = 8_000L
     private const val BatteryRefreshMs = 30_000L
@@ -122,10 +79,7 @@ internal object AudioBattery {
     @Volatile
     private var script: File? = null
 
-    // Identity + level currently believed. The level is deliberately kept
-    // across disconnects so reconnecting the same device restores instantly;
-    // it is only replaced by a successful read, and only used while the probe
-    // confirms the same instance is still connected.
+    // Level is kept across disconnects so reconnecting the same device restores instantly.
     @Volatile
     private var activeInstance: String? = null
     @Volatile
@@ -135,17 +89,13 @@ internal object AudioBattery {
     @Volatile
     private var cachedName: String? = null
 
-    // Whether the active device is part of a Bluetooth audio stack; picked up
-    // from the probe alongside identity so the UI's level-ring glyph matches.
+    // Whether the active device is part of a Bluetooth audio stack; drives the ring glyph.
     @Volatile
     private var cachedAudio = false
     /** Connected-device count from the last presence probe (Windows). */
     private var cachedCount = 1
 
-    // True while the last probe (mode A, real connection state) saw an audio
-    // device connected. The slow refresh consults this before publishing — a
-    // mode-B snapshot alone cannot be trusted, because the battery property
-    // keeps answering for a device that is already unplugged.
+    // Last mode-A probe saw an audio device connected; mode B's battery answer outlives a disconnect.
     @Volatile
     private var isPresent = false
 
@@ -175,15 +125,12 @@ internal object AudioBattery {
             batteryJob = active.launch {
                 while (isActive) {
                     refreshBattery()
-                    // While no level has ever been read the refresh runs on a
-                    // short retry cadence; once known, a slow ~30 s tick keeps
-                    // the chip honest without hammering the OS.
+                    // Retry fast until a level is known, then settle on the slow refresh cadence.
                     delay(if (cachedLevel == null) BatteryFirstRetryMs else BatteryRefreshMs)
                 }
             }
         } else {
-            // Events bridge connect/disconnect instantly; the 10 s poll above
-            // becomes a backstop for OSes that never post a notification.
+            // Events bridge connect/disconnect; the poll is only a backstop.
             startMacWatch()
         }
     }
@@ -200,20 +147,8 @@ internal object AudioBattery {
     }
 
     /**
-     * Forces an immediate connectivity probe (and a battery re-read when a
-     * device is present), so the chip right after the notch opens is fresh.
-     */
-    /**
-     * Force an immediate re-probe (notch opened, etc).
-     *
-     * Coalesced, because a probe is a *process launch*: on macOS it is
-     * `system_profiler`, which costs ~150ms of system-wide CPU. Without the
-     * guard, every track start (musicLive flipping) fired one exactly when the
-     * user was least likely to want a system-wide stall, and rapid open/close
-     * cycles stacked more on top. Probes that started within
-     * [pokeCooldownMs] are dropped instead: the 10s poll and the event-driven
-     * connect/disconnect bridge already keep the chip honest, so a poke more
-     * often than that buys nothing a user could see.
+     * Forces an immediate re-probe (notch opened, music went live).
+     * Coalesced on a 4 s cooldown: each probe is a process launch, ~150 ms of system CPU on macOS.
      */
     fun poke() {
         val active = scope ?: return
@@ -237,8 +172,6 @@ internal object AudioBattery {
         val active = scope ?: return
         active.launch { refreshBattery() }
     }
-
-    // ── Probe (1 s cadence) ──────────────────────────────────────────────────
 
     private fun probePresence() {
         if (!HostPlatform.isWindows) {
@@ -270,8 +203,7 @@ internal object AudioBattery {
             isPresent = true
             cachedName = snap.name?.takeIf { it.isNotBlank() } ?: cachedName
             cachedAudio = snap.audio
-            // A device that just appeared (or one we have no level for yet)
-            // kicks an immediate refresh so the percentage shows up quickly.
+            // A device that just appeared kicks an immediate refresh so the percentage shows up.
             if (appeared || cachedLevel == null) kickRefresh()
             val level = if (cachedInstance == instance) cachedLevel else null
             if (snap.count != null) cachedCount = snap.count
@@ -281,8 +213,7 @@ internal object AudioBattery {
                 null
             }
         } else {
-            // The WinRT connected set is empty — the device is gone. Hide now;
-            // the cached level is kept for an instant restore on reconnect.
+            // WinRT connected set is empty: hide now, keep the cached level for an instant restore.
             isPresent = false
             activeInstance = null
             cachedCount = 1
@@ -290,13 +221,10 @@ internal object AudioBattery {
         }
     }
 
-    // ── Refresh (Windows, ~30 s cadence) ─────────────────────────────────────
-
     private fun refreshBattery() {
         if (!HostPlatform.isWindows) return
         val file = script ?: return
-        // Only ever probe a known device instance (mode B); the probe's mode A
-        // finds the connected device and drives identity + presence.
+        // Only a known instance is refreshed; the probe's mode A owns identity and presence.
         val instance = activeInstance ?: return
         val raw = runProcess(
             listOf(
@@ -311,10 +239,8 @@ internal object AudioBattery {
             batteryJson.decodeFromString(BatteryProbe.serializer(), line)
         }.getOrNull() ?: return
 
-        // The probe has the final word on presence: mode B's own `present`
-        // merely reflects PnP presence, which a paired-but-off device still
-        // reports as true — and its battery answer can be a stale cached
-        // value. Nothing publishes once presence says the device is gone.
+        // Mode B's own `present` only reflects PnP presence and its battery can be cached, so
+        // nothing publishes once mode A says the device is gone.
         if (!isPresent || instance != activeInstance) return
 
         val level = snap.level ?: return // connected but no data yet: keep display
@@ -326,25 +252,13 @@ internal object AudioBattery {
         _info.value = AudioDeviceBattery(cachedName, level, cachedAudio, cachedCount)
     }
 
-    // ── macOS (10 s cadence, system_profiler carries presence + battery) ────
-
     private fun probeMac(): Boolean {
-        // system_profiler carries presence + battery in one fast call.
-        //
-        // macOS, however, keeps recent earphones listed as Connected (an
-        // audio-capable BLE link) even while audio is actually playing through
-        // other speakers — so a headset ring must additionally be checked
-        // against the *active output*, or it reads as a phantom device. Plist
-        // remains a fallback for older systems that still write a DeviceCache;
-        // every path that finds nothing local ends by clearing _info so a
-        // disconnected ring can never linger. Returns true when a ring was
-        // published (the Bluetooth-change watcher uses that to decide whether
-        // to re-probe once the audio routing settles).
+        // macOS keeps recently used earphones listed as Connected even when audio plays through
+        // other speakers, so the candidate must match the active output. Returns true when published.
         val raw = runProcess(listOf("system_profiler", "SPBluetoothDataType"), MacProbeTimeoutMs)
         val candidate = raw?.let { parseSystemProfiler(it) }
         if (candidate != null && candidate.name != null) {
-            // A probe failure leaves the last value alone (no opinion); a clear
-            // "the default output is something else" hides the ring right away.
+            // A probe failure leaves the last value alone; a mismatch hides the ring right away.
             val activeOutput = macActiveOutputName() ?: return false
             if (activeOutput.isNotEmpty() && macNamesMatch(activeOutput, candidate.name!!)) {
                 _info.value = candidate
@@ -371,16 +285,9 @@ internal object AudioBattery {
         return parsed != null
     }
 
-    // ── macOS Bluetooth-change watcher ────────────────────────────────────────
-
     /**
-     * Supervises the `btwatch-bridge` helper: it watches CoreAudio default-
-     * output changes plus bluetoothd connect/disconnect notifications and
-     * prints one `AUDIO`/`BT` marker per event burst, letting the battery
-     * poller probe the stack the instant a device connects instead of up to
-     * the 10 s backstop cadence later. Restarts the process if it dies (like
-     * the now-playing bridge). Absent on non-mac builds — the poller simply
-     * keeps its slow cadence.
+     * `btwatch-bridge` watcher: an AUDIO/BT marker probes the stack at once instead of waiting
+     * up to the 10 s backstop. Restarts if the process dies; absent on non-mac builds.
      */
     private fun startMacWatch() {
         val binary = NativeResources.extract("macos/btwatch-bridge", "")
@@ -408,11 +315,8 @@ internal object AudioBattery {
     }
 
     /**
-     * A device connected/disconnected at the Bluetooth level. Probe now; if
-     * the immediate snapshot still found nothing routed, re-probe ~1.2 s later
-     * so macOS can finish registering the device as the audio output (that
-     * beats the previous "up to 10 s later"). Cheap: one or two system_profiler
-     * calls per actual Bluetooth connect/disconnect.
+     * A connect/disconnect that is not yet the audio output gets one re-probe ~1.2 s later,
+     * after macOS finishes registering it.
      */
     private fun onMacWatchEvent() {
         val active = scope ?: return
@@ -425,10 +329,8 @@ internal object AudioBattery {
     }
 
     /**
-     * Name of the device the OS currently routes audio to, or null when the
-     * probe failed outright (caller keeps the last value — no opinion). An
-     * empty string means the probe ran but no Default Output Device line
-     * exists, i.e. audio is definitely not routed to a named wireless device.
+     * Device the OS routes audio to, or null when the probe failed (keep the last value).
+     * Empty string means the probe ran and nothing is routed to a named device.
      */
     private fun macActiveOutputName(): String? {
         val audioRaw = runProcess(listOf("system_profiler", "SPAudioDataType"), MacProbeTimeoutMs) ?: return null
@@ -442,22 +344,14 @@ internal object AudioBattery {
         return x == y || x.contains(y) || y.contains(x)
     }
 
-    // system_profiler flags a headset as audio through its service list
-    // (A2DP is the music path; HFP/AVRCP/AACP tag the voice/control stacks) or
-    // through a headphone-style Minor Type line. Both are honoured so realme
-    // earbuds (usually only "Battery Level: nn%") and Apple headphones (with a
-    // full Services line) resolve to the headphone-glyph ring.
+    // system_profiler marks a headset as audio via its service list (A2DP music, HFP/AVRCP/AACP
+    // voice) or a headphone-style Minor Type; both are honoured.
     private val macAudioServices = setOf("HFP", "AVRCP", "A2DP", "AACP")
     private val macAudioMinorTypes = setOf("Headphones", "Headset", "Earbuds", "Audio")
 
     /**
-     * Parses `system_profiler SPBluetoothDataType`: walks the Connected:
-     * section, and picks the battery of the first device the OS classifies as
-     * audio. A headset exposing separate earbuds reports its Left/Right
-     * average; a device with a single percentage uses that; the case level is
-     * the last resort. `isAudio` is decided from the Services/Minor Type lines,
-     * not assumed — BLE-only idle links (AirPods in their case, Find My) never
-     * publish because their Services line carries no audio tags.
+     * Parses `system_profiler SPBluetoothDataType`: first connected device the OS classifies as
+     * audio. Earbuds report Left/Right (averaged), case level is the last resort.
      */
     private fun parseSystemProfiler(raw: String): AudioDeviceBattery? {
         val header = raw.indexOf("Connected:")
@@ -469,10 +363,8 @@ internal object AudioBattery {
             if (notConnected > sectionStart) notConnected else raw.length
         )
 
-        // system_profiler indents the section header N spaces, device names N+4
-        // and attributes N+8 — names carry the device label (no value), while
-        // attributes are always "Key: value" lines, so indentation alone splits
-        // them robustly regardless of the header's own indent.
+        // Device names are indented N+4 with no value, attributes N+8 as "Key: value",
+        // so indentation alone splits them regardless of the header's own indent.
         val headerIndent = countIndent(raw, header)
         val nameRegex = Regex("^\\s{${headerIndent + 4}}\\S.*:$")
         val attrRegex = Regex("^\\s+([^:]+):\\s+(.+)$")
@@ -490,19 +382,14 @@ internal object AudioBattery {
             }
         }
 
-        // Only a device the OS classifies as audio is published: macOS also
-        // lists idle BLE links (e.g. AirPods in their case nearby, Find My) as
-        // "Connected" with a Services line that is BLE-only, and surfacing
-        // those as a bluetooth ring reads as a ghost device to the user.
+        // Only a device classified as audio is published; idle BLE links read as a ghost device.
         val candidates = devices.mapNotNull { device ->
             macDeviceLevel(device)?.let { (level, audio) -> Triple(device, level, audio) }
         }
         val pick = candidates.firstOrNull { it.third } ?: return null
         val name = pick.first.name.takeIf { it.isNotBlank() }
-        // Every entry under "Connected:" counts, audio or not: the badge answers
-        // "how many Bluetooth devices do I have around right now?", which is a
-        // question about the OS's connected set rather than about the one
-        // device whose battery this ring happens to show.
+        // The badge counts every entry under Connected, audio or not: it answers "how many
+        // Bluetooth devices are around", not which one this ring reads.
         return AudioDeviceBattery(name, pick.second, pick.third, devices.size)
     }
 
@@ -530,10 +417,8 @@ internal object AudioBattery {
     }
 
     /**
-     * Name of the device marked as the current output in `SPAudioDataType`.
-     * Its section heading ("Devices:") sits at N spaces and device names at N+4
-     * with "Key: value" attrs deeper — the same indent shape the Bluetooth
-     * parser relies on, so the same regexes apply.
+     * Parses the current output device from SPAudioDataType, the same indent
+     * shape as the Bluetooth parser.
      */
     private fun macDefaultOutputDevice(raw: String): String? {
         val devices = raw.indexOf("Devices:")
@@ -577,10 +462,8 @@ internal object AudioBattery {
     }
 
     /**
-     * Walks the Bluetooth preferences plist's DeviceCache for the first
-     * connected device reporting a numeric `BatteryPercent*` key. The plist's
-     * connection flags are written by the OS the moment devices pair/unpair,
-     * so connect/disconnect reflects on the very next poll.
+     * First connected device with a numeric BatteryPercent key in the
+     * Bluetooth DeviceCache plist.
      */
     private fun parseMacPlist(raw: String): AudioDeviceBattery? {
         val root = runCatching { batteryJson.parseToJsonElement(raw) }.getOrNull() ?: return null
@@ -615,7 +498,6 @@ internal object AudioBattery {
         return null
     }
 
-    // ── Shared helpers ────────────────────────────────────────────────────────
 
     private fun runProcess(command: List<String>, timeoutMs: Long): String? {
         return runCatching {

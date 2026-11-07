@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
+	import { desktopChrome } from '$data/site';
 
 	/**
 	 * A stylised desktop "screen" used throughout the site to place the notch in
@@ -19,8 +20,6 @@
 	}
 
 	let { notch, children, tall = false, class: className = '' }: Props = $props();
-
-	const clock = '9:41';
 </script>
 
 <div class="screen {className}" class:tall>
@@ -32,13 +31,15 @@
 		</span>
 		<span class="screen__menu">
 			<span class="screen__brand"><Icon name="logo" size={13} /></span>
-			<span>File</span><span>Edit</span><span>View</span><span>Window</span>
+			{#each desktopChrome.menu as item (item)}
+				<span>{item}</span>
+			{/each}
 		</span>
 		<span class="screen__status">
 			<Icon name="tray" size={13} />
 			<Icon name="shield" size={13} />
 			<i class="screen__battery"></i>
-			<span class="screen__clock">{clock}</span>
+			<span class="screen__clock">{desktopChrome.clock}</span>
 		</span>
 	</div>
 

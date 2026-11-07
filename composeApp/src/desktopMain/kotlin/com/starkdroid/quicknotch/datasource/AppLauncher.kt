@@ -7,9 +7,7 @@ import java.awt.Desktop
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/**
- * Launches pinned applications. Windows uses cmd/UWP shell; macOS uses `open`.
- */
+/** Launches pinned applications; Windows uses cmd/UWP shell, macOS uses `open`. */
 object AppLauncher {
 
     suspend fun launch(app: AppItem): Result<Unit> = withContext(Dispatchers.IO) {
@@ -98,11 +96,7 @@ object AppLauncher {
         builder.start()
     }
 
-    /**
-     * Brings a media provider forward by launch identifier (bundle id on macOS,
-     * e.g. `com.apple.Music`) or app name — used when the user clicks a now-playing
-     * album art.
-     */
+    /** Brings a media provider forward by bundle id (macOS, e.g. `com.apple.Music`) or app name. */
     fun openMediaProvider(sourceId: String, sourceName: String) {
         runCatching {
             if (HostPlatform.isMac) {
@@ -118,16 +112,8 @@ object AppLauncher {
     }
 
     /**
-     * Open a URL in the user's browser. Public because the calendar's OAuth
-     * consent screen is just another link to hand to the OS, so it reuses this
-     * path rather than growing a second one.
-     *
-     * `open` goes first on purpose. [Desktop.browse] is the tidier API and was
-     * tried first, but it can return normally without a browser having actually
-     * opened — a no-op is indistinguishable from success from here, and this call
-     * sits in the middle of a handshake whose whole failure mode is silence.
-     * A spawned `open` at least has an exit code, and both outcomes are logged
-     * so a packaged app (which has no console anyone can read) leaves a trace.
+     * Opens a URL in the browser. `open` goes first because [Desktop.browse] can return normally
+     * without a browser having opened, and both outcomes are logged for the packaged app.
      */
     fun browse(url: String) {
         if (HostPlatform.isMac) {
@@ -146,11 +132,7 @@ object AppLauncher {
         }
     }
 
-    /**
-     * Spawn the OS hand-off and reap it, so a child is never left behind.
-     * Returns whether it looked like it worked: `open` exits non-zero when it
-     * cannot hand the URL over, which is a real answer rather than a guess.
-     */
+    /** Spawns the hand-off and reaps it; `open` exits non-zero when it cannot pass the URL on. */
     private fun spawnAndReap(vararg command: String): Boolean = runCatching {
         val process = ProcessBuilder(*command).start()
         // Drain the child's pipes so a chatty one cannot fill them and wedge.

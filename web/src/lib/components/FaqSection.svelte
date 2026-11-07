@@ -1,15 +1,10 @@
 <script lang="ts">
-	import { faq } from '$data/site';
+	import { faq, faqHead } from '$data/site';
 	import { reveal, stagger } from '$lib/actions/reveal';
 
 	/**
-	 * The questions people actually ask before downloading. Built on native
-	 * <details>/<summary> so disclosure works with zero JS and full keyboard /
-	 * screen-reader support.
-	 *
-	 * SEO-first enhancement order: in the prerendered HTML every answer is open
-	 * and crawlable. Once JS hydrates, all panels collapse into a single-open
-	 * accordion so the strip reads tight.
+	 * Native details/summary, so disclosure works without JS. Answers are
+	 * open in the prerendered HTML, then collapse after hydration.
 	 */
 	let hydrated = $state(false);
 	let openIndex = $state(0);
@@ -33,8 +28,8 @@
 <section class="section faq" id="faq" aria-labelledby="faq-heading">
 	<div class="container container-narrow">
 		<header class="section-head section-head--center" use:reveal={{ from: 'up' }} data-reveal="up">
-			<h2 class="display h2" id="faq-heading">FAQ</h2>
-			<p class="lead">Straight answers about the things people ask us most.</p>
+			<h2 class="display h2" id="faq-heading">{faqHead.title}</h2>
+			<p class="lead">{faqHead.lead}</p>
 		</header>
 
 		<div class="faq__list" use:stagger={{ step: 0.06 }} data-stagger>

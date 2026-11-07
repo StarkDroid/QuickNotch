@@ -56,7 +56,8 @@ import com.starkdroid.quicknotch.generated.resources.calendar_disconnect
 import com.starkdroid.quicknotch.generated.resources.calendar_error_api_disabled
 import com.starkdroid.quicknotch.generated.resources.calendar_error_auth
 import com.starkdroid.quicknotch.generated.resources.calendar_error_cancelled
-import com.starkdroid.quicknotch.generated.resources.calendar_error_client_type
+import com.starkdroid.quicknotch.generated.resources.calendar_error_client_credentials
+import com.starkdroid.quicknotch.generated.resources.calendar_error_not_configured
 import com.starkdroid.quicknotch.generated.resources.calendar_error_not_verified
 import com.starkdroid.quicknotch.generated.resources.calendar_error_network
 import com.starkdroid.quicknotch.generated.resources.calendar_error_revoked
@@ -87,12 +88,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * The QuickView calendar element: a calendar glyph badged with how many events
- * the day has. Shares the ring-badge look ([CountBadge]) so it sits happily
- * beside the notification bell. Hidden entirely when the day has nothing,
- * rather than showing a lone glyph — and it claims an indicator slot only when
- * it draws (see `quickViewIndicatorSlots`), so an empty day leaves the pill
- * exactly as narrow as it was.
+ * Calendar glyph with the day's event count; hidden when empty, so it
+ * claims no indicator slot.
  */
 @Composable
 internal fun CalendarDayIndicator(
@@ -112,10 +109,8 @@ internal fun CalendarDayIndicator(
 }
 
 /**
- * The Widgets-tab calendar widget: connect Google Calendar, see the account and
- * sync age, and refresh on demand. Whether the notch shows the day at all lives
- * on the accordion header (like every other widget) — the connection is the
- * only thing configured in here.
+ * Connect, show the account and sync age, refresh. The widget toggle lives
+ * on the accordion header.
  */
 @Composable
 internal fun CalendarWidget(
@@ -176,7 +171,8 @@ private fun CalendarConnectRow(
                     error != null -> stringResource(
                         when (error.reason) {
                             GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
-                            GoogleCalendar.REASON_CLIENT_TYPE -> Res.string.calendar_error_client_type
+                            GoogleCalendar.REASON_CLIENT_CREDENTIALS -> Res.string.calendar_error_client_credentials
+                            GoogleCalendar.REASON_NOT_CONFIGURED -> Res.string.calendar_error_not_configured
                             GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
                             GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
                             GoogleCalendar.REASON_REVOKED -> Res.string.calendar_error_revoked
@@ -281,7 +277,8 @@ private fun relativeTime(millis: Long): String {
 private fun String.localized(): StringResource = when (this) {
     GoogleCalendar.REASON_NETWORK -> Res.string.calendar_error_network
     GoogleCalendar.REASON_CANCELLED -> Res.string.calendar_error_cancelled
-    GoogleCalendar.REASON_CLIENT_TYPE -> Res.string.calendar_error_client_type
+    GoogleCalendar.REASON_CLIENT_CREDENTIALS -> Res.string.calendar_error_client_credentials
+    GoogleCalendar.REASON_NOT_CONFIGURED -> Res.string.calendar_error_not_configured
     GoogleCalendar.REASON_NOT_VERIFIED -> Res.string.calendar_error_not_verified
     GoogleCalendar.REASON_API_DISABLED -> Res.string.calendar_error_api_disabled
     else -> Res.string.calendar_error_auth
@@ -289,20 +286,8 @@ private fun String.localized(): StringResource = when (this) {
     
 
 /**
- * The expanded notch's calendar page: the next four dates that actually have an
- * event coming, soonest first, one tile each with its month-labelled date over
- * a count badge. Rows cannot fit the island's ~84dp depth, so the dates run as
- * a single row of tiles -- the wheel flips to this page like any other.
- *
- * Every date on it, today's block included, is a link into that day in Google
- * Calendar: the row's whole job is "where is my calendar heading", and the place
- * a user goes to act on that is the real calendar. The tiles are the only
- * pointer targets on the page, so they hang off [interactive] exactly like the
- * dock icons do -- a hit-testable node on an inactive (alpha 0) page would sit
- * in the hit path of the page composed beneath it (pitfall 24).
- *
- * Loading is never blocking: while a fetch runs with nothing to show yet the
- * page is a small spinner, and an empty-but-settled calendar says so in words.
+ * Upcoming days as a row of tiles, each a link into Google Calendar.
+ * Tiles take the pointer chain only when the page is interactive.
  */
 @Composable
 internal fun CalendarNotchPage(
@@ -376,35 +361,16 @@ internal fun CalendarNotchPage(
 }
 
 /**
- * The web view of one day in Google Calendar, for handing a schedule date to
- * the browser.
- *
- * `u/0` is Google's own documented form and is deliberate, not a shortcut: the
- * number in that path is the account's position in the *browser's* sign-in
- * order, and no API reports it (Google's own guidance on deep links is that the
- * index cannot be derived). The tempting alternative, `?authuser=<email>` with
- * the address this app does know from userinfo, is worse in a way that is easy
- * to miss: if that account is not signed into the browser, Google silently
- * opens a *different* one rather than prompting, so the user lands in a
- * plausible-looking wrong calendar. `u/0` is the default account, which is
- * right often enough and never quietly wrong.
- *
- * Month and day go in unpadded, matching Google's own examples
- * (`.../r/day/2023/4/1`).
+ * u/0 is Google's default-account path; authuser=<email> silently opens
+ * another account when that one is not signed in.
  */
 private fun googleDayUrl(date: kotlinx.datetime.LocalDate): String =
     "https://calendar.google.com/calendar/u/0/r/day/" +
         "${date.year}/${date.monthNumber}/${date.dayOfMonth}"
 
 /**
- * Opens a date's web view in the browser, off the UI thread.
- *
- * [AppLauncher.browse] spawns `open` and then *waits* for it, with a ten second
- * ceiling, so calling it straight from a click handler would stall the Compose
- * thread for the whole spawn -- the same mistake the transport buttons used to
- * make with `waitFor` on the macOS media commands. The OAuth path already runs
- * on an IO scope and needs no help; a click handler arrives on the EDT, so the
- * hop has to happen here.
+ * AppLauncher.browse waits for the spawn, so a click handler must hand it
+ * to the IO scope or freeze the Compose thread.
  */
 @Composable
 private fun rememberDayOpener(): (kotlinx.datetime.LocalDate) -> Unit {
@@ -417,14 +383,8 @@ private fun rememberDayOpener(): (kotlinx.datetime.LocalDate) -> Unit {
 }
 
 /**
- * The shared affordance for a clickable date: a translucent capsule that fades
- * in under the cursor plus the slight spring scale the transport buttons use, so
- * the row reads as "these are links" rather than as a table of numbers.
- *
- * The whole pointer modifier chain is built only while [interactive] --
- * `clickable(enabled = false)` still registers a hit-testable node, so a
- * disabled-but-present clickable would keep an inactive page owning the hit path
- * of the page beneath it.
+ * Capsule hover and spring scale for a clickable date. The pointer chain
+ * exists only while interactive, since a disabled clickable still hit-tests.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -479,10 +439,8 @@ private fun Modifier.dateLink(
 }
 
 /**
- * The schedule view's left anchor: the current date in the big size, the
- * weekday and month beside it. Plain date -- no badge -- because the badge
- * belongs to the upcoming dates and today's running event, if any, is what the
- * pill's ticker already announced.
+ * Today's date, weekday and month; no badge, since the ticker already
+ * announced a running event.
  */
 @Composable
 private fun CalendarTodayBlock(
@@ -529,11 +487,8 @@ private fun CalendarTodayBlock(
     }
 }
 
-/**
- * One upcoming date in the schedule row: the day with its month -- "10 Oct",
- * "20 Nov" -- over the count badge, centered. Dates here are never today; the
- * big left block owns that. Clicking one opens that date in Google Calendar.
- */
+// Resets only appearance, sizing and clock. Widgets and Behavior keep their
+// own state, so a reset never undoes a user's widget choices.
 @Composable
 private fun CalendarDateTile(
     group: CalendarDateGroup,

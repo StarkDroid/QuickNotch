@@ -3,10 +3,11 @@
 	import '@fontsource-variable/fraunces/full.css';
 	import '@fontsource-variable/inter';
 
-	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Grain from '$components/Grain.svelte';
 	import Spotlight from '$components/Spotlight.svelte';
-	import { initSmoothScroll } from '$lib/motion/smoothScroll';
+	import SupportFab from '$components/SupportFab.svelte';
+	import { analytics } from '$data/site';
 
 	// Hashed font URLs, so the display face can be preloaded for a faster LCP.
 	// `full` includes the SOFT/WONK/opsz axes that give Fraunces its quirky
@@ -16,25 +17,27 @@
 
 	let { children } = $props();
 
-	onMount(() => {
-		let dispose: (() => void) | undefined;
-		let cancelled = false;
-
-		initSmoothScroll().then((cleanup) => {
-			if (cancelled) cleanup();
-			else dispose = cleanup;
-		});
-
-		return () => {
-			cancelled = true;
-			dispose?.();
-		};
-	});
+	const countsVisits = $derived(
+		page.url.pathname !== '/connect' && !page.url.pathname.startsWith('/oauth')
+	);
 </script>
 
 <svelte:head>
 	<link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin="anonymous" />
 	<link rel="preload" href={bodyFont} as="font" type="font/woff2" crossorigin="anonymous" />
+
+	<!--
+		Cloudflare Web Analytics: cookieless page counts, no banner needed. It is
+		the only third-party script on the site, and `_headers` allows exactly this
+		origin so nothing else can load.
+	-->
+	{#if countsVisits}
+		<script
+			type="module"
+			src={analytics.src}
+			data-cf-beacon={JSON.stringify({ token: analytics.token })}
+		></script>
+	{/if}
 </svelte:head>
 
 {@render children()}
@@ -47,3 +50,4 @@
 -->
 <Spotlight />
 <Grain />
+<SupportFab />

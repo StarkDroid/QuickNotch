@@ -211,12 +211,8 @@ internal fun WidgetsTab(
                             }
                         )
 
-                        // Mini-pill preview: the real bars component at a frozen
-                        // phase, sitting in a dark stadium the size of the
-                        // collapsed live pill (~220×34dp vs the real 236×34dp)
-                        // and parked left — a notch sample, not a full-width
-                        // banner, so the picker never drifts from what the pill
-                        // draws.
+                        // Mini-pill preview of the real bars at a frozen phase, parked left so the
+                        // picker matches the pill.
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.CenterStart
@@ -425,12 +421,9 @@ internal fun WidgetsTab(
 }
 
 /**
- * The gaming HUD switches, inside the System widget: the HUD is fed by the
- * same poller the System page uses, so it belongs with the widget it reads.
- * Both rows are behaviour, not appearance: the HUD is automatic (a fullscreen
- * game is the trigger) and transparency is a repaint of that HUD only, never a
- * fourth material. The Windows exclusive-fullscreen caveat sits directly under
- * the HUD switch it qualifies, inside the same accordion.
+ * The gaming HUD switches, next to the System widget because the HUD
+ * reads the same poller. The exclusive-fullscreen caveat sits under the
+ * switch.
  */
 @Composable
 private fun GamingWidgetRows(
@@ -560,10 +553,8 @@ private fun GameMetricChip(label: String, selected: Boolean, onToggle: (Boolean)
 }
 
 /**
- * The widget's live status pill: a green dot when a media session is actively
- * feeding the notch, otherwise the rendered state the user can compare against.
- * Collects the session itself — the one state that changes every media
- * heartbeat — so only this tiny row recomposes when a track plays.
+ * Green dot while media feeds the notch, otherwise the rendered state.
+ * Collects the session itself.
  */
 @Composable
 internal fun NowPlayingStatus(

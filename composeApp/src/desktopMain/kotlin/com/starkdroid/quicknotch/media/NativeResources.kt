@@ -7,10 +7,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
- * Extracts a packaged native helper (compiled macOS bridge, Windows PowerShell
- * script) from the jar resources to a temp file so it can be executed. The
- * macOS binary only exists when the project was built on a macOS host; a
- * missing resource is a normal outcome on other hosts and yields no session.
+ * Extracts a packaged helper from the jar to a temp file. A missing macOS
+ * resource is normal on other hosts.
  */
 internal object NativeResources {
 
@@ -31,22 +29,9 @@ internal object NativeResources {
         }
 
     /**
-     * Kills bridge processes orphaned by previous runs (their ppid is 1). The
-     * JVM can die without ever disposing the composition — SIGTERM and kill -9
-     * alike skip `media.stop()` — and a leaked nowplaying bridge then keeps
-     * polling MediaRemote forever (one osascript spawn every 2s per instance;
-     * a dev machine accumulated ~90 over one uptime, ~19 live JXA polls at
-     * ~10% CPU each, and the machine-wide stall that caused is what surfaced
-     * as "the notch performance tanks"). The bridges now watch getppid()
-     * themselves (nowplaying_bridge.m / btwatch_bridge.m), but this
-     * retro-sweeps the leaks of already-shipped versions on startup.
-     *
-     * Only ppid == 1 is ever targeted, so this process's own children (fresh
-     * bridges, ppid == our pid) and every other app's processes are never
-     * touched; the `/quicknotch-` path fragment matches the extracted temp
-     * binaries (`quicknotch-<random>`) and the JXA helper script
-     * (`quicknotch-bridge/nowplaying.jxa`) alike. Any in-flight osascript
-     * under a swept bridge is a one-shot that finishes on its own.
+     * Kills bridge processes with ppid 1 left by earlier runs; a leaked
+     * nowplaying bridge polls MediaRemote forever. Only /quicknotch- paths
+     * are touched.
      */
     fun sweepOrphanedBridges() {
         if (!HostPlatform.isMac) return

@@ -65,16 +65,8 @@ private const val RingSweepDegrees = 288f
 private const val RingSweepAnimationMs = 260
 
 /**
- * The single, reusable level indicator used for both volume and battery
- * everywhere in the notch: a flat [icon] glyph centred inside a circular
- * progress ring that is left 20% open at the bottom. [level] (0–100) maps to
- * the full 288° arc. A [lowTint]/[lowThreshold] pair lets callers flag
- * low-level states (e.g. an amber, alert-icon battery at ≤20%) without
- * forking this component.
- *
- * Sizing is entirely the caller's job via [modifier]; the ring fills the box
- * and the glyph occupies [iconFraction] of its diameter. The sweep settles
- * with a short animation so live value changes read smoothly.
+ * Reusable ring with a glyph inside and a 20% gap at the bottom.
+ * lowTint/lowThreshold flags a draining battery; sizing is the caller's.
  */
 @Composable
 internal fun LevelRing(
@@ -90,18 +82,13 @@ internal fun LevelRing(
     lowTint: Color? = null,
     lowThreshold: Int = BatteryLowThreshold,
     /**
-     * High-level alert tint, the mirror of [lowTint]: a load metric (CPU, GPU,
-     * memory, storage) turns warm once it crosses [highThreshold]. Null keeps
-     * the ring's normal colour at every level, so battery/volume rings are
-     * untouched. A low-level warning wins over a high one.
+     * Load-metric alert tint above highThreshold; null keeps the normal
+     * colour, and a low warning wins.
      */
     highTint: Color? = null,
     highThreshold: Int = LoadHighThreshold,
     /**
-     * Optional count badge on the ring's top-right corner — how many devices the
-     * reading covers, when that is more than one (e.g. several Bluetooth devices
-     * connected while the ring shows one of their levels). Null or ≤ 1 draws
-     * nothing, so a single device looks exactly as it did before.
+     * Count badge on the ring; null or <= 1 draws nothing.
      */
     badgeCount: Int? = null
 ) {
@@ -165,20 +152,15 @@ internal fun LevelRing(
 }
 
 /**
- * Volume glyph as a painter the level ring can draw — the packaged volume
- * drawable, tinted at draw time with the ring's colour. A single glyph for
- * every level: the ring's sweep already carries the level, so the icon never
- * needs to swap.
+ * Volume glyph tinted at draw time; one glyph for every level, since the
+ * ring carries the level.
  */
 @Composable
 internal fun volumePainter(): Painter = painterResource(Res.drawable.volume)
 
 /**
- * Connected-device glyph as a painter: the headphone drawable for anything the
- * OS classifies as an audio stack, the bluetooth drawable for every other
- * device. Both come from packaged compose resources — no icon data lives in
- * code. The ring's sweep already carries the level, so the mark only says which
- * kind of thing the charge belongs to.
+ * Headphone glyph for audio stacks, bluetooth otherwise; both come from
+ * packaged resources.
  */
 @Composable
 internal fun batteryPainter(isAudio: Boolean): Painter =
@@ -186,10 +168,8 @@ internal fun batteryPainter(isAudio: Boolean): Painter =
     else painterResource(Res.drawable.bluetooth)
 
 /**
- * Machine (laptop) battery glyph: the charging bolt while the OS is filling the
- * battery, otherwise a battery silhouette whose fill tracks the level
- * (full ≥ 80%, mid ≥ 3%, a low sliver below 3%). All four come from packaged
- * compose resources.
+ * Charging bolt while charging, otherwise a battery silhouette whose fill
+ * tracks the level.
  */
 @Composable
 internal fun systemBatteryPainter(level: Int, charging: Boolean): Painter =

@@ -19,39 +19,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Makes the transparent margin of the fixed-footprint overlay window
- * click-through, so only the drawn island is a touch target and the desktop /
- * foreground apps right around the collapsed pill keep receiving input.
- *
- * The overlay window is one fixed (expanded) rectangle for its whole life
- * (see `NotchOverlayWindow`): that footprint is what swallowed clicks around
- * the pill. Because AWT has no per-region mouse hit-testing, each platform
- * clips input with its own native mechanism driven by a 30 ms poll:
- *
- *  • Windows — `SetWindowRgn`: clipping the native window's hit-test region to
- *    exactly the island's rectangle makes Win32 skip clicks outside it, so they
- *    fall through to whatever is underneath for free. The region follows the
- *    island while it grows and shrinks, so the whole drag-into-the-dock area
- *    stays live during the open animation.
- *  • macOS — `[NSWindow setIgnoresMouseEvents:]`: there is no region hit-test,
- *    so the whole window is made mouse-transparent unless the real cursor
- *    (`MouseInfo`, which keeps working even on a transparent window) is over
- *    the island's rectangle. Re-arming also synthesizes a MOUSE_MOVED so
- *    Compose's hover machinery learns about a cursor that was already there.
- *
- * Both paths fail soft: if the native handle cannot be resolved (platform
- * surprise, JDK internals moving, a security manager) the window simply keeps
- * its old whole-footprint behaviour and the margin stays click-swallowing —
- * the notch itself always works.
+ * Clips input to the drawn island: Windows `SetWindowRgn`, macOS cursor-gated `setIgnoresMouseEvents`.
+ * The overlay is one fixed rectangle, so without this the transparent margin swallows clicks.
  */
 internal class WindowPassthrough private constructor(
     private val impl: WindowPassthroughPlatform
 ) : AutoCloseable {
 
     /**
-     * The island's touch-target rectangle in *window* (client) pixels, or null
-     * for "the entire window is interactive" (used until the overlay's hover
-     * box has been measured, and while the island covers the window).
+     * The island's touch target in window pixels, or null for "the whole window is interactive".
      */
     @Volatile
     private var islandRect: Rectangle? = null
@@ -59,13 +35,8 @@ internal class WindowPassthrough private constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
-     * Whether the per-tick apply must run on the AWT event thread. Windows'
-     * `SetWindowRgn` is dispatched there out of courtesy to the window's owning
-     * thread; macOS must NOT ride the EDT — its native calls are marshalled
-     * onto AppKit's main queue inside the dylib, and hopping through the EDT
-     * first turned every tick into an EDT→main-queue `dispatch_sync` ping-pong
-     * (33 per second) that could deadlock both threads against each other and
-     * beachball the app while the UI was busy (music + settings).
+     * Windows dispatches `SetWindowRgn` on the EDT; macOS must not, because an EDT to main-queue
+     * `dispatch_sync` at 33 Hz can deadlock both threads.
      */
     private val applyOnEventThread = HostPlatform.isWindows
 
@@ -77,9 +48,7 @@ internal class WindowPassthrough private constructor(
                     if (applyOnEventThread) {
                         SwingUtilities.invokeLater { impl.apply(rect) }
                     } else {
-                        // Off-EDT: cursor math (MouseInfo, cached AWT geometry)
-                        // and the dylib's own main-queue dispatch are all
-                        // thread-safe from here.
+                        // Off-EDT: cursor math and the dylib's main-queue dispatch are thread-safe here.
                         impl.apply(rect)
                     }
                 } catch (_: Throwable) {
@@ -103,11 +72,7 @@ internal class WindowPassthrough private constructor(
     }
 
     companion object {
-        /**
-         * Attaches the right platform implementation to [window], or returns
-         * null when the platform has no passthrough mechanism available. Never
-         * throws: probing native internals must not take the app down.
-         */
+        /** Attaches the platform implementation, or null when none is available; never throws. */
         fun install(window: Window): WindowPassthrough? {
             return try {
                 when {
@@ -123,23 +88,19 @@ internal class WindowPassthrough private constructor(
     }
 }
 
-/**
- * Per-OS strategy for clipping the window's interactive area to [rect]
- * (window-client pixels); null means the whole window is interactive.
- */
+/** Per-OS strategy for clipping the window to [rect] (window pixels); null means the whole window. */
 internal interface WindowPassthroughPlatform {
     fun apply(rect: Rectangle?)
     fun close()
 }
 
 /**
- * The AWT peer behind a [Window] is hidden behind module encapsulation; look it
- * up with reflection so the actual peer type never leaks into compilation.
+ * The AWT peer is behind module encapsulation; read it by reflection so the real type never
+ * leaks into compilation.
  */
 internal fun windowPeer(window: Window): Any? {
     return try {
-        // Component.getPeer() is package-private and there is no public
-        // accessor, so read the private `peer` field (+ --add-opens below).
+        // Component.getPeer() is package-private; read the private `peer` field (needs --add-opens).
         val field = java.awt.Component::class.java.getDeclaredField("peer")
         field.isAccessible = true
         field.get(window)
@@ -170,10 +131,8 @@ internal fun resolvePeerLong(peer: Any?, methodName: String): Long? {
 }
 
 /**
- * The macOS AWT peer (`sun.lwawt.macosx.CPlatformWindow`) holds its NSWindow
- * in the protected `CFRetainedResource.ptr` field — there is no public
- * `getNSWindowPtr` on JDK 17. Resolve it via `peer.getPlatformWindow()` and
- * read that field by reflection.
+ * macOS `CPlatformWindow` keeps its NSWindow in the protected `CFRetainedResource.ptr` field,
+ * with no getter on JDK 17; resolve it via `getPlatformWindow` and reflection.
  */
 internal fun resolveMacWindowPtr(window: Window): Long? {
     val peer = windowPeer(window) ?: return null
@@ -200,18 +159,11 @@ internal fun resolveMacWindowPtr(window: Window): Long? {
     return null
 }
 
-// ── Windows: SetWindowRgn clips both painting and hit-testing ─────────────────
+// Windows: SetWindowRgn clips both painting and hit-testing.
 
 /**
- * Windows impl. [SetWindowRgn] hands the region to the window (which frees it
- * when replaced), so passing a fresh `CreateRectRgn` every tick is safe and the
- * OS cleans up the previous one. A null region restores a fully interactive
- * window.
- *
- * The window also gets the tool-window + no-activate extended styles once, so
- * the notch never occupies a taskbar slot or steals focus (Windows' analogue of
- * "the app belongs in the Dock only when the Settings page is open": the
- * Settings window stays a normal taskbar window, the overlay does not).
+ * SetWindowRgn hands the region to the window, so a fresh CreateRectRgn
+ * per tick is safe and a null region makes the window interactive again.
  */
 private class Win32Region(private val window: Window) : WindowPassthroughPlatform {
     private val hwnd = resolvePeerLong(windowPeer(window), "getHWnd").also {
@@ -276,23 +228,12 @@ private class Win32Region(private val window: Window) : WindowPassthroughPlatfor
     }
 }
 
-// ── macOS: whole-window mouse transparency, cursor-gated ──────────────────────
+// macOS: whole-window mouse transparency, cursor-gated.
 
 /**
- * macOS impl. `ignoresMouseEvents` has no per-region variant, so the window is
- * kept mouse-transparent unless the real cursor sits over the island's
- * rectangle; the toggle is a simple reconcile against `MouseInfo` each tick.
- *
- * The AppKit toggle runs through the compiled `passthrough_bridge.m` dylib via
- * [MacAppKit] (`quicknotch_set_ignores_mouse_events`) rather than driving
- * objc_msgSend straight from JVM land (void-return / BOOL-arg sends crash with
- * SIGTRAP on Apple silicon). Missing native bridge = fail soft.
- *
- * The cursor-over math uses the *real* NSWindow origin from the bridge
- * (`quicknotch_get_window_cg_origin`) because the overlay policy parks the
- * window above the menu bar with direct Cocoa frame moves that AWT's cached
- * `locationOnScreen` never sees — relying on AWT's coordinates would drift the
- * island's hit target down by exactly the menu-bar height.
+ * ignoresMouseEvents has no per-region form, so the window stays transparent
+ * unless the real cursor is over the island. The cursor check uses the
+ * bridge's CG origin.
  */
 private class MacClickThrough(private val window: Window) : WindowPassthroughPlatform {
 
@@ -364,15 +305,8 @@ private class MacClickThrough(private val window: Window) : WindowPassthroughPla
         } catch (_: Throwable) {
             return false
         }
-        // Content origin = window origin + frame insets (macOS keeps shadow
-        // insets even for undecorated windows). Invariant now that the anchor
-        // is the real CG origin: `window.insets` stays the same regardless of
-        // how far above the menu bar the window actually parks.
-        //
-        // The rect arrives in PHYSICAL pixels (Compose px = dp × density) while
-        // the cursor and origin are in AWT logical points, so the rect is
-        // brought back to logical space with the graphics configuration's
-        // scale (1.0 on non-scaled displays — no-op there, correct on Retina).
+        // Convert the island rect from physical pixels to AWT points; the
+        // origin comes from the bridge, not locationOnScreen.
         val scale = try {
             window.graphicsConfiguration.defaultTransform.scaleX.toFloat()
         } catch (_: Throwable) {
