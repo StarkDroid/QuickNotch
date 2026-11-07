@@ -1,8 +1,45 @@
 {
   "schema": 1,
-  "latest": "2.0.0",
-  "updatedAt": "2026-11-03T11:17:31.572Z",
+  "latest": "2.1.0",
+  "updatedAt": "2026-11-07T08:42:09.552Z",
   "releases": [
+    {
+      "version": "2.1.0",
+      "date": "2026-11-07",
+      "title": "Open source launch",
+      "pr": 12,
+      "highlights": [
+        "Link the source and Ko-fi from the changelog and the tray",
+        "Patch the vulnerable Vite and sharp versions",
+        "Rewrite the changelog copy and fix its footer links"
+      ],
+      "changes": [
+        {
+          "kind": "improved",
+          "text": "Link the source and Ko-fi from the changelog and the tray"
+        },
+        {
+          "kind": "improved",
+          "text": "Patch the vulnerable Vite and sharp versions"
+        },
+        {
+          "kind": "improved",
+          "text": "Rewrite the changelog copy and fix its footer links"
+        },
+        {
+          "kind": "improved",
+          "text": "Give the changelog and download pages a way home"
+        },
+        {
+          "kind": "improved",
+          "text": "Give Ko-fi the real button and thank people after they download"
+        },
+        {
+          "kind": "improved",
+          "text": "Move the support ask off the header and onto the page corner"
+        }
+      ]
+    },
     {
       "version": "2.0.0",
       "date": "2026-11-03",
