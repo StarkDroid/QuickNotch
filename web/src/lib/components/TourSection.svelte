@@ -49,61 +49,9 @@
 
 		let frame = 0;
 		let disposed = false;
-		let snapTimer = 0;
-
-		/** Idle settling: after a scroll gesture ends, glide to the centre of the
-		 * nearest step so one flick advances one segment instead of flying past
-		 * the whole tour. Skipped at the pin's edges, where the user is leaving
-		 * the section either way. */
-		const SNAP_IDLE_MS = 200;
-
-		function smoothTo(y: number) {
-			const lenis = (
-				window as unknown as { __lenis?: { scrollTo: (t: number, o?: object) => void } }
-			).__lenis;
-			// Through Lenis when it owns the scroll: a native jump issued while a
-			// Lenis animation is running gets stomped by its rAF loop, so the
-			// glide must go through the same driver. Native smooth scrolling is
-			// instantly cancelled by new wheel input, so a fresh gesture always
-			// wins over a stale glide and the snap simply re-fires at next idle.
-			if (lenis) lenis.scrollTo(y, { duration: 0.7 });
-			else window.scrollTo({ top: y, behavior: 'smooth' });
-		}
-
-		function maybeSnap() {
-			if (!pin || disposed) return;
-			// Never snap mid-animation: a Lenis glide still in flight reports a
-			// position that is not where the user is going to rest, and snapping
-			// from there can settle one step short of a large jump.
-			const lenisState = (
-				window as unknown as {
-					__lenis?: { isScrolling?: boolean; isSmooth?: boolean };
-				}
-			).__lenis;
-			if (lenisState && (lenisState.isScrolling || lenisState.isSmooth)) {
-				snapTimer = window.setTimeout(maybeSnap, 120);
-				return;
-			}
-			const rect = pin.getBoundingClientRect();
-			const travel = rect.height - window.innerHeight;
-			if (!(travel > 0)) return;
-			const progress = clamp01(-rect.top / travel);
-			// Only inside the steps region: the settle/open intro is a transient
-			// animation to scroll through, not a segment to rest on.
-			if (progress < STEPS_START || progress >= 0.995) return;
-			const walk = clamp01((progress - STEPS_START) / (1 - STEPS_START));
-			const index = Math.min(steps.length - 1, Math.floor(walk * steps.length));
-			const centre = (index + 0.5) / steps.length;
-			const pinTop = rect.top + window.scrollY;
-			const targetY = pinTop + (STEPS_START + (1 - STEPS_START) * centre) * travel;
-			if (Math.abs(targetY - window.scrollY) < 6) return;
-			smoothTo(Math.round(targetY));
-		}
 
 		const onScroll = () => {
 			if (!frame) frame = requestAnimationFrame(paint);
-			window.clearTimeout(snapTimer);
-			snapTimer = window.setTimeout(maybeSnap, SNAP_IDLE_MS);
 		};
 
 		const paint = () => {
@@ -153,7 +101,6 @@
 		return () => {
 			disposed = true;
 			if (frame) cancelAnimationFrame(frame);
-			window.clearTimeout(snapTimer);
 			window.removeEventListener('scroll', onScroll);
 			window.removeEventListener('resize', onScroll);
 		};

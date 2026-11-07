@@ -3,13 +3,11 @@
 	import '@fontsource-variable/fraunces/full.css';
 	import '@fontsource-variable/inter';
 
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import Grain from '$components/Grain.svelte';
 	import Spotlight from '$components/Spotlight.svelte';
 	import SupportFab from '$components/SupportFab.svelte';
 	import { analytics } from '$data/site';
-	import { initSmoothScroll } from '$lib/motion/smoothScroll';
 
 	// Hashed font URLs, so the display face can be preloaded for a faster LCP.
 	// `full` includes the SOFT/WONK/opsz axes that give Fraunces its quirky
@@ -19,30 +17,9 @@
 
 	let { children } = $props();
 
-	/**
-	 * The OAuth pages are the app's hand-off, not the site's pages: the callback
-	 * URL carries a one-time authorisation code in its query string, and that
-	 * code must never leave the browser for an analytics endpoint. Both pages are
-	 * unindexed anyway, so nothing is lost by leaving them uncounted.
-	 */
 	const countsVisits = $derived(
 		page.url.pathname !== '/connect' && !page.url.pathname.startsWith('/oauth')
 	);
-
-	onMount(() => {
-		let dispose: (() => void) | undefined;
-		let cancelled = false;
-
-		initSmoothScroll().then((cleanup) => {
-			if (cancelled) cleanup();
-			else dispose = cleanup;
-		});
-
-		return () => {
-			cancelled = true;
-			dispose?.();
-		};
-	});
 </script>
 
 <svelte:head>

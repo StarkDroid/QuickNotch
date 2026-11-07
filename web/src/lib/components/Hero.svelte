@@ -5,7 +5,7 @@
 	import { downloadCta, hero, site } from '$data/site';
 	import { loadMotion, prefersReducedMotion } from '$lib/motion/gsap';
 	import { magnetic } from '$lib/actions/magnetic';
-	import { scrollToId } from '$lib/motion/smoothScroll';
+	import { scrollToId } from '$lib/motion/scroll';
 
 	let copyEl: HTMLDivElement | undefined = $state();
 	/** Reveals the hero immediately if the entrance timeline never runs. */
