@@ -3,7 +3,7 @@
   "private": true,
   "description": "Build entry for the site that ships with the desktop app. The site itself lives in web/.",
   "scripts": {
-    "build": "cd web && npm ci && npm run build",
+    "build": "cd web && npm ci --include=dev && npm run build",
     "check": "cd web && npm run check",
     "deploy": "wrangler deploy"
   }

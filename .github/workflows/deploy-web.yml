@@ -49,7 +49,7 @@ jobs:
 
       - name: Install
         working-directory: web
-        run: npm ci
+        run: npm ci --include=dev
 
       - name: Check
         working-directory: web
