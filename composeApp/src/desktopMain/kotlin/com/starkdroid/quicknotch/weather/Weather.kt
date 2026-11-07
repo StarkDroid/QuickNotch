@@ -52,21 +52,15 @@ object Weather {
 
     private val cacheFile: File get() = File(AppPaths.configDir, "weather.json")
 
-    /**
-     * Start the poller. Idempotent; called once from the app. A manual place
-     * seeds the position up front so the first fetch never detours through the
-     * IP lookup; without one the cached fix (if any) wins as before.
-     */
+    // Paint the cached day first, but only when it belongs to the active position.
     fun start(manualPlace: WeatherPlace? = null) {
         if (pollJob != null) return
         lastManualPlace = manualPlace
         if (manualPlace != null) {
             position = GeoPosition(manualPlace.latitude, manualPlace.longitude, manualPlace.name)
         }
-        // Show the cached day immediately so a cold start paints weather on
-        // the first frame, then refresh in the background — but only when the
-        // cache belongs to the active position. A stale fix from another city
-        // (e.g. after picking a new place) must never paint under the new one.
+        /** Whether the machine has a battery; gates the settings toggle so desktops
+         * never offer a dead control. */
         readCache()?.let { cached ->
             val sameFix = position?.let {
                 abs(it.latitude - cached.lat) < 0.005 && abs(it.longitude - cached.lon) < 0.005

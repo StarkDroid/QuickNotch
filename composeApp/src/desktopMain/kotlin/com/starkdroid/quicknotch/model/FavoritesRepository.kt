@@ -45,11 +45,8 @@ class FavoritesRepository(
     private val _favorites = MutableStateFlow(loadFavorites())
     val favorites: StateFlow<List<AppItem>> = _favorites.asStateFlow()
 
-    // Setters record the latest value of each kind under a plain lock (guarding
-    // only the tiny assignments, never file IO) and wake the writer. The writer
-    // drains the pending snapshots sequentially, so rapid changes — e.g. slider
-    // drags at frame rate — fold into a single disk write and concurrent
-    // writes to the same file can never interleave (no torn JSON).
+    // Drag state renders from a local snapshot; one repository write commits
+    // the final position when the drag ends.
     private sealed interface PersistRequest {
         data class Config(val value: NotchConfig) : PersistRequest
         data class Favorites(val value: List<AppItem>) : PersistRequest

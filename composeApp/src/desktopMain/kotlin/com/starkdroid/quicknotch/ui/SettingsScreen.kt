@@ -125,11 +125,9 @@ fun SettingsScreen(
     val calendarState by GoogleCalendar.state.collectAsState()
     val calendarRefreshing by GoogleCalendar.refreshing.collectAsState()
 
-    // Restore the appearance/sizing/clock defaults. This is the same set the tab
-    // used to own; it now lives here because the button sits in the content
-    // header, and the screen already holds the repository. Widgets and Behavior
-    // keep their own state (pinned apps, toggles) — resetting the notch's look
-    // must not silently undo a user's widget choices.
+    // Setters record the latest value under a lock that guards only the
+    // assignment; one writer drains the snapshots into a single disk write, so
+    // no JSON is torn.
     val onResetDefaults: () -> Unit = {
         repository.updateConfig {
             it.copy(

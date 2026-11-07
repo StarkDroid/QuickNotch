@@ -160,11 +160,7 @@ fun computeNotchMetrics(
         if (config.style == NotchStyle.DRAG_HANDLE) DockLayout.DragHandleHeightDp
         else config.quickViewHeightDp
     val islandCollapsedDepth = collapsedHeightDp.dp + DockLayout.CollapsedMargin
-    // The HUD stacks a value over a caption, so it keeps a floor of its own
-    // even when the quickview has been shrunk to a slim pill.
-    // The HUD is its own, slimmer strip: it may sit shallower than the pill
-    // rather than inheriting the quickview's depth. Its two lines of 11/6sp
-    // type still fit inside 30dp.
+    /** Collapsible widget card: header with icon, title, switch and chevron over an animated body. */
     val collapsedDepth = if (gameActive) DockLayout.GameHudHeight else islandCollapsedDepth
 
     val islandExpanded = DpSize(alongExpanded, islandDepth)

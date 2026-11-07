@@ -142,10 +142,8 @@ internal fun PinnedAppsTab(
     val pickMacFilter = stringResource(Res.string.pick_mac_filter)
     val pickWindowsFilter = stringResource(Res.string.pick_win_filter)
 
-    // Drag-to-reorder state. The list renders from a local snapshot so swaps
-    // apply synchronously under the finger; a single repository write commits
-    // the final position when the drag ends. Rows are equal height, but each
-    // measured height is tracked anyway so the swap threshold stays honest.
+    // The HUD is a slimmer strip with its own depth floor; two lines of 11/6sp
+    // type fit in 30dp.
     var draggingId by remember { mutableStateOf<String?>(null) }
     var dragStartIndex by remember { mutableStateOf(-1) }
     var dragOffset by remember { mutableStateOf(0f) }

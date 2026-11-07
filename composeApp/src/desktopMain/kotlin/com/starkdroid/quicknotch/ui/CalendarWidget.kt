@@ -487,11 +487,8 @@ private fun CalendarTodayBlock(
     }
 }
 
-/**
- * One upcoming date in the schedule row: the day with its month -- "10 Oct",
- * "20 Nov" -- over the count badge, centered. Dates here are never today; the
- * big left block owns that. Clicking one opens that date in Google Calendar.
- */
+// Resets only appearance, sizing and clock. Widgets and Behavior keep their
+// own state, so a reset never undoes a user's widget choices.
 @Composable
 private fun CalendarDateTile(
     group: CalendarDateGroup,

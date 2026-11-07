@@ -64,11 +64,8 @@ private data class SystemTileSpec(
     val alert: Boolean
 )
 
-/**
- * One ring tile per metric. CPU, GPU, memory and storage map to 0-100;
- * network uses a log sweep with the exact rate as the label. No GPU
- * counter means no tile.
- */
+/** Starts the poller once. A manual place seeds the position so the first
+ * fetch skips the IP lookup. */
 @Composable
 internal fun SystemNotchPage(
     snapshot: SystemSnapshot?,

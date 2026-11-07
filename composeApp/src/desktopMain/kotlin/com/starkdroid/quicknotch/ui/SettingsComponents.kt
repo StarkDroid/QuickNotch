@@ -896,9 +896,8 @@ internal fun BehaviorSwitchRow(
 }
 
 /**
- * A collapsible widget card: header row (icon chip, title, enable switch,
- * rotating chevron) over an animated content area. Used by the Widgets tab.
- * The header lifts on hover and the chevron springs 180° when opened.
+ * One ring tile per metric. Network uses a log sweep with the exact rate as
+ * the label; no GPU counter means no tile.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable

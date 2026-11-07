@@ -49,9 +49,8 @@ data class SystemBattery(
         val state: StateFlow<SystemBattery?> = _state.asStateFlow()
 
         /**
-         * Whether the machine actually has a battery (a laptop vs. a desktop).
-         * Stays false until the first successful probe, then tracks presence;
-         * it gates the settings toggle so desktops never offer a dead control.
+         * One upcoming date: month and day over the count badge. Clicking it opens
+         * that date in Google Calendar.
          */
         private val _hasBattery = MutableStateFlow(false)
         val hasBattery: StateFlow<Boolean> = _hasBattery.asStateFlow()
