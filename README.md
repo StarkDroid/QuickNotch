@@ -7,7 +7,7 @@ your screen and it opens into a dock of pinned apps; scroll and it turns into pa
 your machine, the sky, your day and your music. Free, MIT licensed, no account, no
 telemetry.
 
-[![Latest release](https://img.shields.io/github/v/release/StarkDroid/QuickNotch?label=latest&sort=semver&color=E8481C)](https://github.com/StarkDroid/QuickNotch/releases)
+[![Latest release](https://img.shields.io/github/v/release/StarkDroid/QuickNotch?label=latest&color=E8481C)](https://github.com/StarkDroid/QuickNotch/releases)
 [![Downloads](https://img.shields.io/github/downloads/StarkDroid/QuickNotch/total?color=1F4FD8)](https://github.com/StarkDroid/QuickNotch/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1C8F4C)](LICENSE)
 
