@@ -22,7 +22,9 @@ export function GET() {
 	const pages = [
 		{ loc: `${site.url}/`, changefreq: 'monthly', priority: '1.0', image: true },
 		{ loc: `${site.url}/download`, changefreq: 'weekly', priority: '0.9', image: false },
-		{ loc: `${site.url}/changelog`, changefreq: 'weekly', priority: '0.6', image: false }
+		{ loc: `${site.url}/changelog`, changefreq: 'weekly', priority: '0.6', image: false },
+		{ loc: `${site.url}/privacy`, changefreq: 'yearly', priority: '0.3', image: false },
+		{ loc: `${site.url}/terms`, changefreq: 'yearly', priority: '0.3', image: false }
 	];
 
 	const urls = pages

@@ -88,6 +88,8 @@ web/
 │       ├── +page.svelte          # page composition (section order)
 │       ├── download/+page.svelte # platform cards, install notes, thank-you modal
 │       ├── changelog/+page.svelte# the published release history
+│       ├── privacy/+page.svelte  # privacy policy (Google OAuth verification)
+│       ├── terms/+page.svelte    # terms of service
 │       ├── connect/+page.svelte  # Calendar consent (app-invoked, unlinked)
 │       ├── oauth/callback/+page.svelte  # hands the code back to the app
 │       ├── 404/+page.svelte      # rendered to 404.html at the root of the build
@@ -323,17 +325,18 @@ thing the site asks for, and it asks after the installer is on its way.
   the prerendered HTML. The software graph declares `isAccessibleForFree`, a
   zero price, the MIT licence, a screenshot, release notes and the repository in
   `sameAs`.
-- `/download` and `/changelog` carry their own title, description, canonical,
-  Open Graph tags, `WebPage` graph and breadcrumb through `PageSeo.svelte`.
+- `/download`, `/changelog`, `/privacy` and `/terms` carry their own title,
+  description, canonical, Open Graph tags, `WebPage` graph and breadcrumb
+  through `PageSeo.svelte`.
 - `src/routes/sitemap.xml/+server.ts` prerenders the sitemap from the committed
-  release feed, so `lastmod` follows the newest release. It lists all three
+  release feed, so `lastmod` follows the newest release. It lists all five
   public routes; `/connect` and `/oauth/*` stay out of it and out of
   `robots.txt`.
 - One `<h1>` and one `<h2>` per section, with `h3`s beneath.
 - Descriptive anchor text on every link, and `alt`/`aria-label` coverage.
-- Every public link (site, download, changelog, source, issues, Ko-fi) comes from
-  `site` in `src/lib/data/site.ts`, so the markup, the schema and the footer
-  cannot point at different places.
+- Every public link (site, download, changelog, privacy, terms, source, issues,
+  Ko-fi) comes from `site` in `src/lib/data/site.ts`, so the markup, the schema
+  and the footer cannot point at different places.
 
 ---
 
@@ -393,8 +396,8 @@ Then, once, in Cloudflare:
 3. After the first deploy, check: `/` loads over HSTS, `_headers` took effect
    (DevTools → response headers shows `content-security-policy`), `/download`
    resolves without `.html`, `/changelog` shows the published version in its
-   HTML, `/robots.txt` serves the flow disallows, `/sitemap.xml` lists only the
-   three public routes, and a mistyped address returns a real 404 with the
+   HTML, `/robots.txt` serves the flow disallows, `/sitemap.xml` lists the five
+   public routes, and a mistyped address returns a real 404 with the
    "this page never made it into the dock" page.
 
 The site itself can be hosted while the repository is private, but its download

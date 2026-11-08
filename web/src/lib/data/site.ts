@@ -22,6 +22,8 @@ export const site = {
 	homePath: '/',
 	downloadPath: '/download',
 	changelogPath: '/changelog',
+	privacyPath: '/privacy',
+	termsPath: '/terms',
 	downloadUrl: 'https://quicknotch.app/download',
 	keywords: [
 		'app launcher',
@@ -120,6 +122,178 @@ export const notFound = {
 	download: 'Get the app'
 } as const;
 
+/**
+ * Public legal pages. Google asks for both before it will verify an OAuth app,
+ * and a reader deserves the same links without hunting for them.
+ */
+export const privacy = {
+	seo: {
+		title: 'Privacy policy',
+		description:
+			'What QuickNotch stores on your machine, how Google Calendar access works, which third-party services the app and site contact, and how to remove your data.'
+	},
+	eyebrow: 'Privacy',
+	title: 'What QuickNotch does with your data.',
+	lead: 'The app has no account, no telemetry and no server of ours. This page says what stays on your machine, what leaves it, and how to remove it.',
+	updated: 'Last updated 8 November 2026',
+	sections: [
+		{
+			id: 'short',
+			title: 'The short version',
+			paragraphs: [
+				'QuickNotch is a desktop app and a static website. There is no sign-up, no analytics SDK in the app, and no server that stores anything about you.',
+				'Your settings, pinned apps, caches and Google Calendar tokens stay in the app data folder on your machine. The website counts visits with Cloudflare Web Analytics, which uses no cookies and does not follow you between sites.'
+			]
+		},
+		{
+			id: 'storage',
+			title: 'What the app stores',
+			paragraphs: [
+				'QuickNotch keeps its state in a local folder: `%APPDATA%\\QuickNotch` on Windows, `~/Library/Application Support/QuickNotch` on macOS. That folder holds settings, pinned apps, the weather and calendar caches, the downloaded changelog and, if you connect Calendar, the OAuth tokens.',
+				'None of it is uploaded. To remove it, quit the app and delete that folder. To remove only the Calendar connection, open Settings, Calendar, Disconnect, then revoke QuickNotch at `myaccount.google.com/permissions` if you want the grant gone from your Google account as well.'
+			]
+		},
+		{
+			id: 'google-calendar',
+			title: 'Google Calendar, when you connect it',
+			paragraphs: [
+				'Calendar is optional. If you connect it, QuickNotch asks Google for two scopes: `calendar.readonly` to read your calendar and `userinfo.email` to show which account is connected. It never asks for write access, contacts or Gmail.',
+				'The sign-in happens in your browser. The app opens `quicknotch.app/connect`, Google returns the one-time code to `quicknotch.app/oauth/callback`, and that page forwards it to a short-lived loopback server on `127.0.0.1` on your machine. The app exchanges the code directly with Google. The code and the tokens are not sent to us.',
+				'Events are read to draw the calendar page and the pill ticker, then cached locally. They are not shared, sold, used for advertising, used to train AI models or read by a person. QuickNotch\'s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.'
+			]
+		},
+		{
+			id: 'weather',
+			title: 'Weather and location',
+			paragraphs: [
+				'Weather is keyless. The app asks `ip-api.com` for a city-level location based on your IP address, then asks `open-meteo.com` for the forecast. Those requests leave your machine and include your IP address, as any web request does. No precise location or GPS permission is used.',
+				'If you pick a place manually, that place is stored in the local settings file and used instead of the IP lookup.'
+			]
+		},
+		{
+			id: 'system',
+			title: 'System, media, notifications and games',
+			paragraphs: [
+				'The System page, the music controls, the gaming HUD and the notification count read data from your own machine and draw it. CPU, GPU, memory, disk and network readings, media metadata and artwork, game detection, frame rate and the macOS Notification Center count are not transmitted anywhere.',
+				'The macOS notification count needs Full Disk Access because Apple keeps that store behind it. QuickNotch reads a count, not the contents of individual notifications.'
+			]
+		},
+		{
+			id: 'updates',
+			title: 'Updates and the changelog',
+			paragraphs: [
+				'The app checks GitHub for a newer release and downloads the changelog from the release assets. GitHub sees the request and your IP address. There is no account and no telemetry in that request. Installer downloads come from GitHub and are subject to GitHub\'s terms and privacy policy.'
+			]
+		},
+		{
+			id: 'website',
+			title: 'The website',
+			paragraphs: [
+				'quicknotch.app is a static site served by Cloudflare. Cloudflare processes technical request data such as your IP address and user agent to deliver the site and protect it, as a hosting provider normally does.',
+				'Page counts use Cloudflare Web Analytics. It is cookieless, has no cross-site identifier and needs no consent banner. The `/connect` and `/oauth` pages are deliberately not counted, so the one-time code in the callback URL never reaches an analytics endpoint.',
+				'The site loads no third-party fonts or images. The only third-party script is the Cloudflare Web Analytics beacon described above; the Ko-fi button is a local image and nothing is requested from Ko-fi until you click it. The site sets no cookies and has no newsletter or contact form.'
+			]
+		},
+		{
+			id: 'never',
+			title: 'What we never do',
+			paragraphs: [
+				'We do not sell or rent personal data, run advertising or profiling, or add telemetry to the app. We do not ask for an account, and there is no cloud sync.',
+				'If you report a bug on GitHub, the information you choose to put in that issue is public and is handled under GitHub\'s terms. Do not paste tokens or private calendar details into an issue.'
+			]
+		},
+		{
+			id: 'children',
+			title: 'Children',
+			paragraphs: [
+				'QuickNotch is a general-purpose desktop utility and is not directed at children under 13, or under 16 in the EEA and the UK. We do not knowingly collect personal data from children.'
+			]
+		},
+		{
+			id: 'changes',
+			title: 'Changes and contact',
+			paragraphs: [
+				'If this policy changes, the date at the top changes with it and the new version is published at this address.',
+				'Questions about privacy, or a request to delete something: open an issue at `github.com/StarkDroid/QuickNotch/issues`. QuickNotch is maintained by VelocityApps.'
+			]
+		}
+	]
+} as const;
+
+export const terms = {
+	seo: {
+		title: 'Terms of service',
+		description:
+			'The terms for using quicknotch.app and downloading QuickNotch, including the MIT licence, third-party services and the limits of the warranty.'
+	},
+	eyebrow: 'Terms',
+	title: 'The terms, in plain language.',
+	lead: 'QuickNotch is free software under the MIT License. These terms cover the website and the download; the licence covers the app itself.',
+	updated: 'Last updated 8 November 2026',
+	sections: [
+		{
+			id: 'licence',
+			title: 'The app is MIT licensed',
+			paragraphs: [
+				'QuickNotch is released under the MIT License. You may use, copy, modify, merge, publish, distribute, sublicense and sell copies of the software, provided the copyright notice and permission notice stay with it.',
+				`The full licence is in the repository at ${site.repository}/blob/main/LICENSE. If these terms and the licence disagree about the software, the licence wins.`
+			]
+		},
+		{
+			id: 'website',
+			title: 'Using the website',
+			paragraphs: [
+				'You may read, link to and share the site. Do not try to break it, scrape it at a rate that harms it, or use it to misrepresent an affiliation with QuickNotch.',
+				'Links to GitHub, Google, Ko-fi and other services lead to sites with their own terms and privacy policies.'
+			]
+		},
+		{
+			id: 'downloads',
+			title: 'Downloads and releases',
+			paragraphs: [
+				'Installers are published on GitHub and are free of charge. The Windows and macOS installers are not code-signed yet, so the operating system will ask for confirmation on first launch. Every release publishes `SHA256SUMS.txt`; check it if you want to verify a download.',
+				'Ko-fi is optional. Nothing in the app or on the site is gated behind a payment.'
+			]
+		},
+		{
+			id: 'third-parties',
+			title: 'Third-party services',
+			paragraphs: [
+				'QuickNotch can connect to Google Calendar, reads weather from Open-Meteo and ip-api, and checks GitHub for releases. The website is hosted by Cloudflare and counts visits with Cloudflare Web Analytics. The Ko-fi button links to Ko-fi. Each service has its own terms, and they apply when you use it.'
+			]
+		},
+		{
+			id: 'warranty',
+			title: 'No warranty',
+			paragraphs: [
+				'QuickNotch and this website are provided as is, without warranty of any kind, express or implied, including merchantability, fitness for a particular purpose and non-infringement. You use the app at your own risk. Keep backups of anything you cannot afford to lose.'
+			]
+		},
+		{
+			id: 'liability',
+			title: 'Limitation of liability',
+			paragraphs: [
+				'To the maximum extent permitted by law, VelocityApps and the QuickNotch contributors are not liable for indirect, incidental, special or consequential damages, or for lost data, arising from the use of the app or the site. Nothing here limits liability that cannot be limited by law.'
+			]
+		},
+		{
+			id: 'trademarks',
+			title: 'Trademarks',
+			paragraphs: [
+				'Apple, macOS, MacBook, Windows, Google, GitHub, Cloudflare and Ko-fi are trademarks of their respective owners. QuickNotch is not affiliated with or endorsed by any of them.'
+			]
+		},
+		{
+			id: 'changes',
+			title: 'Changes and contact',
+			paragraphs: [
+				'These terms may change; the date at the top changes when they do, and the current version stays at this address.',
+				'Questions: open an issue at `github.com/StarkDroid/QuickNotch/issues`.'
+			]
+		}
+	]
+} as const;
+
 /** The floating support pill, and the artwork it never replaces. */
 export const support = {
 	fabLabel: 'Support me',
@@ -133,6 +307,8 @@ export const footer = {
 		{ label: chrome.home, href: site.homePath, external: false },
 		{ label: 'Download', href: site.downloadPath, external: false },
 		{ label: 'Changelog', href: site.changelogPath, external: false },
+		{ label: 'Privacy', href: site.privacyPath, external: false },
+		{ label: 'Terms', href: site.termsPath, external: false },
 		{ label: 'Source', href: site.repository, external: true },
 		{ label: 'Issues', href: site.issuesUrl, external: true },
 		{ label: 'Back to top', href: '#top', external: false }
