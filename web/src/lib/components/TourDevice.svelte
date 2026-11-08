@@ -153,8 +153,7 @@
 	.lid__word {
 		font-size: 0.62rem;
 		letter-spacing: 0.3em;
-		color: var(--ink-3);
-		opacity: 0.55;
+		color: var(--on-dark-3);
 	}
 
 	.bezel {

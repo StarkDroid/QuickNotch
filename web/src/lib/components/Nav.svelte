@@ -162,7 +162,7 @@
 		padding: 0.58rem 0.95rem;
 		border-radius: 999px;
 		border: 1px solid rgb(0 0 0 / 0.5);
-		background: var(--accent);
+		background: var(--accent-button);
 		color: var(--on-accent);
 		font-family: var(--font-display);
 		font-weight: 700;

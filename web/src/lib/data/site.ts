@@ -49,7 +49,20 @@ export const site = {
 		'in-game overlay',
 		'performance monitor',
 		'notch themes',
-		'productivity utility'
+		'productivity utility',
+		'notch app',
+		'notch app for Windows',
+		'notch app for macOS',
+		'Dynamic Island for Windows',
+		'MacBook notch app',
+		'Windows 11 notch',
+		'NotchNook alternative',
+		'Boring Notch alternative',
+		'free notch app',
+		'open source notch app',
+		'app dock for Windows',
+		'app dock for macOS',
+		'menu bar app'
 	]
 } as const;
 
@@ -61,8 +74,10 @@ export const analytics = {
 
 /** Document-level SEO copy that is not already a page heading. */
 export const seo = {
-	title: 'QuickNotch: the desktop notch, app launcher and widgets for Windows and macOS',
-	alternateName: 'QuickNotch floating dock',
+	title: 'QuickNotch: the free notch app and dock for macOS and Windows',
+	description:
+		'Free, open-source notch app for Windows and macOS. Pin apps, see CPU, weather and calendar, control music, and a Windows gaming HUD. No account or telemetry.',
+	alternateName: 'QuickNotch notch app',
 	applicationCategory: 'UtilitiesApplication',
 	applicationSubCategory: 'Application Launcher',
 	organizationDescription: `Makers of ${site.name}, a floating app launcher and notch for Windows and macOS.`,
@@ -161,7 +176,7 @@ export const downloadCta = 'Download QuickNotch' as const;
 /** Copy for `/download`: the platform cards, install notes and the tip jar. */
 export const download = {
 	seo: {
-		title: 'Download QuickNotch',
+		title: 'Download QuickNotch for Windows and macOS',
 		description:
 			'Download QuickNotch for Windows 10 & 11 or macOS 12+, free and open source. Installers for both platforms, self-updating, MIT licensed.'
 	},
@@ -215,7 +230,7 @@ export const hero = {
 	badge: 'a notchful of good stuff · free & open source',
 	// Rendered as separate masked lines so each can animate on its own.
 	headlineLines: ['Everything you', 'need. One', 'tiny notch.'],
-	sub: 'Pin your apps, watch the machine, check the sky and your day, and boss your music around, all from one slim notch at the top of the screen. No windows to arrange, no tab to find.',
+	sub: 'The floating notch app and app dock for Windows and macOS. Pin your apps, watch the machine, check the sky and your day, and boss your music around, all from one slim notch at the top of the screen. No windows to arrange, no tab to find.',
 	secondaryCta: 'Take the tour',
 	trust: ['Free & open source', 'No account', 'No telemetry', 'Runs offline', 'Windows & macOS'],
 	scrollHint: 'one scroll, the whole tour',
@@ -374,15 +389,40 @@ export const faq = [
 		question: 'How do updates work?',
 		answer:
 			'QuickNotch checks GitHub in the background, downloads the installer for your machine, and swaps it in after you press "Restart & update", with no download hunt and no uninstall step. Settings → Changelog lists what changed in every version up to the one you are running, and the same history is published on this site.'
+	},
+	{
+		question: 'Is there a notch app for Windows?',
+		answer:
+			'Windows has no built-in notch or Dynamic Island, so QuickNotch draws its own at the top of the screen: a notch that sits flush with the edge, or a floating pill. It runs on Windows 10 and 11 (x64) and brings the same dock, system rings, weather, calendar and music controls as the Mac version, plus the gaming HUD.'
+	},
+	{
+		question: 'How is QuickNotch different from NotchNook or Boring Notch?',
+		answer:
+			'NotchNook and Boring Notch are macOS-only; NotchNook is paid and closed source, and Boring Notch is GPL-3.0. QuickNotch is MIT licensed, free, and runs on both Windows and macOS 12 or newer, with a dock, system and weather pages, calendar, music and a Windows gaming HUD. There is no account, subscription or telemetry.'
+	},
+	{
+		question: 'Does QuickNotch work on a MacBook without a notch?',
+		answer:
+			'Yes. On a MacBook without a notch, choose the floating pill or drag-handle style and QuickNotch sits at the top-centre of the screen. It runs on macOS 12 or newer, on Apple silicon and Intel.'
+	},
+	{
+		question: 'Is QuickNotch a Dynamic Island for Windows?',
+		answer:
+			'It is the same idea. Windows has no Dynamic Island, so QuickNotch puts a live island at the top of the screen: hover to open the dock, scroll for system, weather, calendar and music, and a borderless-fullscreen game turns it into a performance HUD. Choose the notch shape or a floating pill.'
+	},
+	{
+		question: 'Does QuickNotch replace the Dock or the Windows taskbar?',
+		answer:
+			'No. The macOS Dock and the Windows taskbar still hold every app. QuickNotch is a shortcut layer for the handful you launch all day, plus glanceable widgets, so it sits above them rather than replacing them.'
 	}
 ] as const;
 
 /** The published history at `/changelog`; `kinds` also drives release group order and labels. */
 export const changelogPage = {
 	seo: {
-		title: 'Changelog',
+		title: 'QuickNotch changelog and release notes',
 		description:
-			'Every QuickNotch release, newest first: new widgets, fixes and improvements for the Windows and macOS notch, straight from the published release feed.'
+			'QuickNotch release notes, newest first: new widgets, fixes and improvements for the Windows and macOS notch, straight from the published release feed.'
 	},
 	eyebrow: 'The changelog',
 	title: 'Every release, in public.',

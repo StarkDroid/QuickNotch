@@ -9,7 +9,7 @@
 	/* Inks */
 	--ink: #211c13;
 	--ink-2: #4c4437;
-	--ink-3: #8b8271;
+	--ink-3: #6b6355;
 
 	/* Accents: spot colours, one per job. */
 	--tomato: #e8481c;
@@ -39,6 +39,8 @@
 	/* Accent fills: flat tints stand in for gradient washes. */
 	--accent: var(--tomato);
 	--accent-text: var(--tomato-deep);
+	/* Buttons use a slightly deeper tomato so the cream label clears AA. */
+	--accent-button: #c93a12;
 	--accent-soft: rgb(232 72 28 / 0.1);
 	--accent-line: rgb(232 72 28 / 0.42);
 	--on-accent: #fff6ea;
@@ -47,7 +49,7 @@
 	/* On-dark neutrals: the product mock and its notch stay dark against the cream page. */
 	--on-dark: #f5f2ea;
 	--on-dark-2: #b9b2a2;
-	--on-dark-3: #7d7767;
+	--on-dark-3: #9a9284;
 	--on-dark-line: rgb(245 242 234 / 0.12);
 	--on-dark-line-strong: rgb(245 242 234 / 0.22);
 
@@ -456,7 +458,7 @@ p {
 	padding: 0.5rem 0.9rem;
 	border-radius: var(--r-sm);
 	border: 2px solid var(--ink);
-	background: var(--accent);
+	background: var(--accent-button);
 	color: var(--on-accent);
 	font-family: var(--font-display);
 	font-weight: 700;
@@ -557,15 +559,15 @@ p {
 
 .btn--primary {
 	color: var(--on-accent);
-	background: var(--accent);
+	background: var(--accent-button);
 	border-color: var(--ink);
 	box-shadow: 4px 4px 0 rgb(33 28 19 / 0.92);
 }
 
 .btn--primary:hover {
 	transform: translate(-1px, -1px);
+	background: var(--tomato-deep);
 	box-shadow: 5px 5px 0 rgb(33 28 19 / 0.92);
-	filter: saturate(112%);
 }
 
 .btn--ghost {

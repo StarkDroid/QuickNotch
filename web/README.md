@@ -73,7 +73,7 @@ web/
 │   │   ├── data/releases.ts      # changelog feed + installer file names
 │   │   ├── motion/
 │   │   │   ├── gsap.ts           # lazy GSAP + ScrollTrigger loader
-│   │   │   └── smoothScroll.ts   # Lenis, wired into the GSAP ticker
+│   │   │   └── scroll.ts         # anchor scrolling with the header offset
 │   │   └── components/           # one component per section, plus shared primitives
 │   │       ├── TourSection.svelte # the sticky scroll tour (state machine)
 │   │       ├── TourDevice.svelte  # the CSS-3D laptop chassis
@@ -84,14 +84,15 @@ web/
 │   │       └── Grain.svelte      # generated film-grain background layer
 │   └── routes/
 │       ├── +layout.ts            # `prerender = true`
-│       ├── +layout.svelte        # fonts, styles, smooth-scroll, backdrop layers
+│       ├── +layout.svelte        # fonts, styles, backdrop layers
 │       ├── +page.svelte          # page composition (section order)
 │       ├── download/+page.svelte # platform cards, install notes, thank-you modal
 │       ├── changelog/+page.svelte# the published release history
 │       ├── connect/+page.svelte  # Calendar consent (app-invoked, unlinked)
 │       ├── oauth/callback/+page.svelte  # hands the code back to the app
-│       └── 404/+page.svelte      # rendered to 404.html at the root of the build
-├── static/                       # favicon, icons, og.png, kofi-button.png, robots.txt, sitemap.xml, manifest, _headers
+│       ├── 404/+page.svelte      # rendered to 404.html at the root of the build
+│       └── sitemap.xml/+server.ts # generated sitemap, lastmod from the feed
+├── static/                       # favicon, icons, og.png, kofi-button.png, robots.txt, manifest, _headers
 ├── worker/site.js                # www and http → the apex, then the assets
 └── scripts/
     ├── generate-og.mjs           # SVG → PNG for the social card and icons
@@ -216,10 +217,9 @@ Two details worth knowing before editing it:
 
 - **GSAP + ScrollTrigger** are dynamically imported on demand (`motion/gsap.ts`),
   so they land in their own chunk and never block first paint.
-- **Lenis** drives inertial scrolling and is wired into the GSAP ticker so the
-  two never disagree about the scroll position. It is disabled for
-  reduced-motion visitors and on touch devices, where native momentum scrolling
-  is better.
+- **Native scrolling**, not a hijacked wheel. Anchor links use `scrollIntoView`
+  with the header offset from `scroll-padding-top`; the tour follows the
+  reader's scroll instead of snapping to a step when the gesture ends.
 - **`reveal` / `stagger` actions** handle entrance animations. They use
   `IntersectionObserver` for cheap visibility checks rather than a scroll
   handler. If the GSAP import fails they fall back to a CSS transition, and a
@@ -318,14 +318,17 @@ thing the site asks for, and it asks after the installer is on its way.
 ## SEO
 
 - Titles, description, canonical, robots directives, Open Graph and Twitter card
-  tags, plus three JSON-LD graphs (`SoftwareApplication`, `WebSite`,
-  `Organization`) rendered in the prerendered HTML. The software graph declares
-  `isAccessibleForFree`, a zero price and the MIT licence, and names the
-  repository in `sameAs`.
-- `/download` and `/changelog` carry their own title, description, canonical and
-  Open Graph tags through `PageSeo.svelte`.
-- `static/sitemap.xml` lists all three public routes; `/connect` and `/oauth/*`
-  stay out of it and out of `robots.txt`.
+  tags, plus JSON-LD for `SoftwareApplication`, `WebSite`, `WebPage`,
+  `Organization`, `FAQPage` and the tour and theme item lists, all rendered in
+  the prerendered HTML. The software graph declares `isAccessibleForFree`, a
+  zero price, the MIT licence, a screenshot, release notes and the repository in
+  `sameAs`.
+- `/download` and `/changelog` carry their own title, description, canonical,
+  Open Graph tags, `WebPage` graph and breadcrumb through `PageSeo.svelte`.
+- `src/routes/sitemap.xml/+server.ts` prerenders the sitemap from the committed
+  release feed, so `lastmod` follows the newest release. It lists all three
+  public routes; `/connect` and `/oauth/*` stay out of it and out of
+  `robots.txt`.
 - One `<h1>` and one `<h2>` per section, with `h3`s beneath.
 - Descriptive anchor text on every link, and `alt`/`aria-label` coverage.
 - Every public link (site, download, changelog, source, issues, Ko-fi) comes from
@@ -434,7 +437,7 @@ Security posture, all in-repo rather than in-dashboard:
   their pixels swap), each is a real heading, and the device and its screen are
   `aria-hidden` because the caption carries the meaning. There are no buttons to
   tab through mid-scroll.
-- `prefers-reduced-motion` disables Lenis, the spotlight tracking and the scroll
+- `prefers-reduced-motion` disables the spotlight tracking and the scroll
   scrub; the tour becomes a static device plus a plain list.
 
 ---

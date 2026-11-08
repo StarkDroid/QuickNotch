@@ -8,6 +8,7 @@
 	 */
 
 	const title = seo.title;
+	const description = seo.description;
 	const canonical = `${site.url}/`;
 	const ogImage = `${site.url}/og.png`;
 	const logo = `${site.url}/icon-512.png`;
@@ -17,6 +18,7 @@
 	const softwareSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'SoftwareApplication',
+		'@id': `${site.url}/#software`,
 		name: site.name,
 		alternateName: seo.alternateName,
 		applicationCategory: seo.applicationCategory,
@@ -27,11 +29,14 @@
 		installUrl: site.downloadUrl,
 		fileFormat: 'application/octet-stream',
 		license: 'https://opensource.org/license/mit',
-		sameAs: [canonical, site.repository],
+		sameAs: [site.repository],
 		isAccessibleForFree: true,
-		description: site.description,
+		description: description,
 		inLanguage: 'en',
 		keywords: site.keywords.join(', '),
+		screenshot: ogImage,
+		releaseNotes: `${site.url}/changelog`,
+		softwareHelp: site.issuesUrl,
 		offers: {
 			'@type': 'Offer',
 			price: offer.price.amount,
@@ -63,6 +68,7 @@
 	const websiteSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'WebSite',
+		'@id': `${site.url}/#website`,
 		name: site.name,
 		url: canonical,
 		description: site.shortDescription,
@@ -75,13 +81,28 @@
 		}
 	};
 
+	const webPageSchema = {
+		'@context': 'https://schema.org',
+		'@type': 'WebPage',
+		'@id': `${canonical}#webpage`,
+		url: canonical,
+		name: title,
+		description: description,
+		inLanguage: 'en',
+		isPartOf: { '@id': `${site.url}/#website` },
+		about: { '@id': `${site.url}/#software` },
+		primaryImageOfPage: { '@type': 'ImageObject', url: ogImage }
+	};
+
 	const organizationSchema = {
 		'@context': 'https://schema.org',
 		'@type': 'Organization',
+		'@id': `${site.url}/#organization`,
 		name: site.author,
 		url: site.url,
 		logo: { '@type': 'ImageObject', url: logo },
-		description: seo.organizationDescription
+		description: seo.organizationDescription,
+		sameAs: [site.repository]
 	};
 
 	/**
@@ -132,7 +153,7 @@
 
 <svelte:head>
 	<title>{title}</title>
-	<meta name="description" content={site.description} />
+	<meta name="description" content={description} />
 	<link rel="canonical" href={canonical} />
 
 	<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
@@ -149,7 +170,7 @@
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content={site.name} />
 	<meta property="og:title" content={title} />
-	<meta property="og:description" content={site.description} />
+	<meta property="og:description" content={description} />
 	<meta property="og:url" content={canonical} />
 	<meta property="og:locale" content="en_US" />
 	<meta property="og:image" content={ogImage} />
@@ -163,7 +184,7 @@
 
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
-	<meta name="twitter:description" content={site.shortDescription} />
+	<meta name="twitter:description" content={description} />
 	<meta name="twitter:image" content={ogImage} />
 	<meta
 		name="twitter:image:alt"
@@ -172,6 +193,7 @@
 
 	{@html `<script type="application/ld+json">${serialise(softwareSchema)}<\/script>`}
 	{@html `<script type="application/ld+json">${serialise(websiteSchema)}<\/script>`}
+	{@html `<script type="application/ld+json">${serialise(webPageSchema)}<\/script>`}
 	{@html `<script type="application/ld+json">${serialise(organizationSchema)}<\/script>`}
 	{@html `<script type="application/ld+json">${serialise(faqSchema)}<\/script>`}
 	{@html `<script type="application/ld+json">${serialise(widgetListSchema)}<\/script>`}

@@ -13,7 +13,7 @@ const config = {
 			// `/404` is not a destination: it is rendered so the adapter can write
 			// `404.html` at the root of the build, which the Worker serves for an
 			// address that matches no route.
-			entries: ['/', '/download', '/changelog', '/connect', '/oauth/callback', '/404'],
+			entries: ['/', '/download', '/changelog', '/connect', '/oauth/callback', '/404', '/sitemap.xml'],
 			handleHttpError: 'fail'
 		},
 		inlineStyleThreshold: 20480,

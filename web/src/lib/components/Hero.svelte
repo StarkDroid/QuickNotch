@@ -44,10 +44,9 @@
 			const extras = section.querySelectorAll<HTMLElement>('[data-hero-extra]');
 			const screen = section.querySelector<HTMLElement>('.hero__screen');
 
-			// The CSS guard hides these before first paint, so the tweens must state
-			// both ends explicitly — a plain `.from()` would read the hidden state as
-			// its destination and leave the hero invisible. Each headline line slides
-			// up out of its own overflow-hidden mask.
+			// The CSS guard hides the headline lines before first paint, so the
+			// tween states both ends; a plain `.from()` would read the hidden state
+			// as its destination. The extras stay visible and only slide up.
 			const timeline = gsap.timeline({ defaults: { ease: 'expo.out' } });
 			timeline
 				.fromTo(
@@ -57,8 +56,8 @@
 				)
 				.fromTo(
 					extras,
-					{ y: 24, opacity: 0 },
-					{ y: 0, opacity: 1, duration: 0.8, stagger: 0.07 },
+					{ y: 24 },
+					{ y: 0, duration: 0.8, stagger: 0.07 },
 					'-=0.62'
 				);
 
@@ -289,11 +288,12 @@
 	}
 
 	/*
-	   The hero hides itself from first paint so nothing flashes while GSAP is
-	   being fetched, then the timeline animates from exactly these values (see
-	   the `fromTo` tweens). With JavaScript disabled the `.js` flag is absent,
-	   and `html.reduced-motion` / `.hero--static` cover the reduced-motion and
-	   import-failure cases, so the headline can never stay invisible.
+	   Only the headline lines wait for GSAP; the lead, CTA and screen paint
+	   immediately so the page has a real LCP before the timeline starts. The
+	   timeline still slides the extras from a small offset, without opacity.
+	   With JavaScript disabled the `.js` flag is absent, and
+	   `html.reduced-motion` / `.hero--static` cover the cases where the
+	   headline must stay visible.
 
 	   The guard deliberately only touches `opacity`. A percentage `translate`
 	   here would be parsed by GSAP as a *pixel* `y` offset, which then survives
@@ -302,16 +302,9 @@
 		opacity: 0;
 	}
 
-	:global(.js .hero [data-hero-extra]) {
-		opacity: 0;
-	}
-
 	:global(html:not(.js) .hero__title .line-mask > span),
 	:global(html.reduced-motion .hero__title .line-mask > span),
-	:global(.js .hero.hero--static .hero__title .line-mask > span),
-	:global(html:not(.js) .hero [data-hero-extra]),
-	:global(html.reduced-motion .hero [data-hero-extra]),
-	:global(.js .hero.hero--static [data-hero-extra]) {
+	:global(.js .hero.hero--static .hero__title .line-mask > span) {
 		opacity: 1;
 		transform: none;
 	}

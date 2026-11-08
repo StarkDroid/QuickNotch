@@ -3,6 +3,7 @@
 	import '@fontsource-variable/fraunces/full.css';
 	import '@fontsource-variable/inter';
 
+	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import Grain from '$components/Grain.svelte';
 	import Spotlight from '$components/Spotlight.svelte';
@@ -18,7 +19,10 @@
 	let { children } = $props();
 
 	const countsVisits = $derived(
-		page.url.pathname !== '/connect' && !page.url.pathname.startsWith('/oauth')
+		browser &&
+			page.url.hostname === 'quicknotch.app' &&
+			page.url.pathname !== '/connect' &&
+			!page.url.pathname.startsWith('/oauth')
 	);
 </script>
 
