@@ -1,8 +1,28 @@
 {
   "schema": 1,
-  "latest": "2.1.0",
-  "updatedAt": "2026-11-07T08:42:09.552Z",
+  "latest": "2.1.1",
+  "updatedAt": "2026-11-09T05:34:31.933Z",
   "releases": [
+    {
+      "version": "2.1.1",
+      "date": "2026-11-09",
+      "title": "Calendar sign-in works from the installed app",
+      "pr": 0,
+      "highlights": [
+        "Google Calendar sign-in now opens the production consent page instead of localhost, so connecting from an installed build works.",
+        "The README and download page now explain the macOS Privacy and Security approval and the Windows SmartScreen prompt."
+      ],
+      "changes": [
+        {
+          "kind": "fixed",
+          "text": "Google Calendar sign-in now opens the production consent page instead of localhost, so connecting from an installed build works."
+        },
+        {
+          "kind": "fixed",
+          "text": "The README and download page now explain the macOS Privacy and Security approval and the Windows SmartScreen prompt."
+        }
+      ]
+    },
     {
       "version": "2.1.0",
       "date": "2026-11-07",
