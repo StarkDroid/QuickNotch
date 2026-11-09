@@ -47,14 +47,12 @@ npm run dev        # http://localhost:5173
 | `npm run og` | Regenerates `static/og.png` and the PNG icons from SVG. Run only when those change; the output is committed. |
 | `npm run banner` | Rasterises `../docs/banner.svg` into `../docs/banner.png` for the README. |
 
-Node 20+ is recommended (developed on Node 24).
+Node 22.17+ is required by SvelteKit 3 (developed on Node 24).
 
-`npm audit` reports no high-severity findings. Six low-severity advisories
-remain in the build toolchain (`@sveltejs/kit` 2.x, `cookie`, `deepmerge`);
-clearing them needs SvelteKit 3, which moves the config into `vite.config.ts`,
-drops `$lib` and requires Vite 8 — a separate migration. None is reachable in
-what ships: the output is prerendered HTML with no server, no cookies and no
-form actions.
+`npm audit` reports one low-severity advisory in `deepmerge`, a build-time
+dependency of `@sveltejs/vite-plugin-svelte` with no patched release. It is not
+reachable in what ships: the output is prerendered HTML with no server, no
+cookies and no form actions.
 
 ---
 
