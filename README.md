@@ -58,10 +58,34 @@ or the [latest release](https://github.com/StarkDroid/QuickNotch/releases/latest
 | macOS 12+ Apple silicon | `-arm64.dmg` |
 | macOS 12+ Intel | `-x64.dmg` |
 
-The builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask
-once — *More info → Run anyway* on Windows, right-click → *Open* on macOS. Once installed,
-QuickNotch updates itself: it checks GitHub in the background and swaps in the next
-release after you press **Restart & update** in **Settings → Changelog**.
+### First launch
+
+The installers are not code-signed or notarized yet, so the operating system will warn
+once. The app is open source, and every release publishes `SHA256SUMS.txt`; download only
+from quicknotch.app or the GitHub releases page.
+
+**macOS**
+
+1. Open the `.dmg` and drag QuickNotch into Applications.
+2. Open QuickNotch. If macOS says it cannot verify the app or that it is damaged, choose
+   **Done**.
+3. Open **System Settings → Privacy & Security**. Scroll to **Security**, click
+   **Open Anyway** for QuickNotch, and confirm with your password or Touch ID.
+4. If you prefer the right-click route: right-click QuickNotch in Applications, choose
+   **Open**, then **Open** again.
+
+Terminal alternative: `xattr -dr com.apple.quarantine /Applications/QuickNotch.app`.
+Use it only on an installer you downloaded from the official release.
+
+**Windows**
+
+1. Run the `.msi` or `.exe` installer.
+2. If Microsoft Defender SmartScreen says **Windows protected your PC**, choose
+   **More info**, then **Run anyway**.
+3. Finish the installer.
+
+Once installed, QuickNotch updates itself: it checks GitHub in the background and swaps in
+the next release after you press **Restart & update** in **Settings → Changelog**.
 
 ## Build from source
 
@@ -81,7 +105,11 @@ On Windows use `gradlew.bat`. Installers land in
 `composeApp/build/compose/binaries/main/` (`.msi`/`.exe`, or `.dmg` plus
 `app/QuickNotch.app` via `:composeApp:createDistributable`).
 
-Run the app with `:composeApp:run`, not `java -jar` — the plain jar has no manifest and
+Calendar sign-in in a local build opens the production site by default. To use the local
+site, run `npm run dev:oauth` in `web/`, then start the app with
+`QUICKNOTCH_WEB_BASE=http://localhost:5173 ./gradlew :composeApp:run`.
+
+Run the app with `:composeApp:run`, not `java -jar`. The plain jar has no manifest and
 the bridges are synced by the build.
 
 Calendar sign-in needs a Google OAuth client, and this repository carries

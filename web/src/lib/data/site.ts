@@ -363,8 +363,31 @@ export const download = {
 	releaseNotes: 'release notes',
 	changelogLink: 'changelog',
 	allReleases: 'All releases on GitHub',
-	unsigned:
-		'The installers are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask once. On Windows: More info → Run anyway. On macOS: right-click QuickNotch → Open.',
+	firstLaunch: {
+		eyebrow: 'First launch',
+		title: 'One approval on the first open.',
+		lead: 'The installers are not code-signed yet, so macOS and Windows cannot verify the publisher. The app is open source, but the OS still asks once. This is expected, not a virus.',
+		macos: {
+			title: 'macOS',
+			steps: [
+				'Open the .dmg and drag QuickNotch into Applications.',
+				'Open QuickNotch. If macOS says it cannot verify the app or that it is damaged, choose Done.',
+				'Open System Settings, then Privacy & Security. Scroll to Security and click Open Anyway for QuickNotch. Confirm with your password or Touch ID.',
+				'The app opens, and later launches work normally. You can also right-click QuickNotch in Applications, choose Open, then Open again.'
+			],
+			terminalLabel: 'Terminal alternative',
+			terminal: 'xattr -dr com.apple.quarantine /Applications/QuickNotch.app'
+		},
+		windows: {
+			title: 'Windows',
+			steps: [
+				'Run the .msi or .exe installer.',
+				'If Microsoft Defender SmartScreen says Windows protected your PC, choose More info, then Run anyway.',
+				'Finish the installer. QuickNotch appears in the Start menu.'
+			]
+		},
+		note: 'Download only from quicknotch.app or the GitHub releases page. Every release publishes SHA256SUMS.txt, and the full source is public under the MIT licence.'
+	},
 	checksums: 'Every file is published as a GitHub release, with SHA256SUMS.txt beside it.',
 	yourPlatform: 'your platform',
 	/** Shown once a download has started; asks for a coffee but gates nothing. */
@@ -580,6 +603,11 @@ export const faq = [
 		question: 'Does QuickNotch work on a MacBook without a notch?',
 		answer:
 			'Yes. On a MacBook without a notch, choose the floating pill or drag-handle style and QuickNotch sits at the top-centre of the screen. It runs on macOS 12 or newer, on Apple silicon and Intel.'
+	},
+	{
+		question: 'Why does macOS say QuickNotch is damaged or cannot be verified?',
+		answer:
+			'The DMG is not notarized by Apple, so Gatekeeper has no publisher certificate to check. It is not a virus. Open System Settings, Privacy and Security, scroll to Security, and click Open Anyway for QuickNotch. You can also right-click the app and choose Open. The download page has the exact steps, and every release publishes SHA256SUMS.txt.'
 	},
 	{
 		question: 'Is QuickNotch a Dynamic Island for Windows?',

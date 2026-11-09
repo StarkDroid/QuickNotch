@@ -388,9 +388,12 @@ Then, once, in Cloudflare:
    certificates are provisioned for you; proxy stays on.
 2. In the Google OAuth client, register the production redirect URI
    `https://quicknotch.app/oauth/callback` alongside the local preview URIs. The
-   desktop reads the loopback port out of `state`, so no app change is needed —
+   desktop reads the loopback port out of `state`, so no app change is needed,
    but consent fails as `redirect_uri_mismatch` until the URI is registered, and
    new URIs can take a while to propagate.
+   For a local OAuth run, start `npm run dev:oauth` and launch the desktop with
+   `QUICKNOTCH_WEB_BASE=http://localhost:5173`; production builds otherwise use
+   `https://quicknotch.app`.
 3. After the first deploy, check: `/` loads over HSTS, `_headers` took effect
    (DevTools → response headers shows `content-security-policy`), `/download`
    resolves without `.html`, `/changelog` shows the published version in its

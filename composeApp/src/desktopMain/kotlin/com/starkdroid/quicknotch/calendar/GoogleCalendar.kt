@@ -77,15 +77,14 @@ object GoogleCalendar {
     private val hasClient: Boolean
         get() = CLIENT_ID.isNotBlank() && CLIENT_SECRET.isNotBlank()
 
-    // Only /oauth/callback is a registered redirect URI, and the port is part of it: the dev server
-    // must use `npm run dev:oauth` (--strictPort) or every flow fails as redirect_uri_mismatch.
+    // Shipped builds use the verified production site. A local run can point at
+    // the dev server by setting QUICKNOTCH_WEB_BASE=http://localhost:5173.
     private const val WEB_BASE_ENV = "QUICKNOTCH_WEB_BASE"
     private const val PRODUCTION_WEB_BASE = "https://quicknotch.app"
-    private const val DEFAULT_WEB_BASE = "http://localhost:5173"
 
     private val webBase: String by lazy {
         val override = System.getenv(WEB_BASE_ENV)?.trim().orEmpty()
-        (if (override.isEmpty()) DEFAULT_WEB_BASE else override).trimEnd('/')
+        (if (override.isEmpty()) PRODUCTION_WEB_BASE else override).trimEnd('/')
     }
 
     private val webConnectUrl: String get() = "$webBase/connect"

@@ -106,11 +106,43 @@
 				{/each}
 			</div>
 
+			<section class="first-launch" aria-labelledby="first-launch-title">
+				<header class="first-launch__head">
+					<p class="eyebrow">{download.firstLaunch.eyebrow}</p>
+					<h2 class="display h3" id="first-launch-title">{download.firstLaunch.title}</h2>
+					<p class="first-launch__lead">{download.firstLaunch.lead}</p>
+				</header>
+
+				<div class="first-launch__grid">
+					<article class="first-launch__card">
+						<h3 class="first-launch__platform">{download.firstLaunch.macos.title}</h3>
+						<ol>
+							{#each download.firstLaunch.macos.steps as step}
+								<li>{step}</li>
+							{/each}
+						</ol>
+						<div class="first-launch__terminal">
+							<span class="mono first-launch__terminal-label">
+								{download.firstLaunch.macos.terminalLabel}
+							</span>
+							<code>{download.firstLaunch.macos.terminal}</code>
+						</div>
+					</article>
+
+					<article class="first-launch__card">
+						<h3 class="first-launch__platform">{download.firstLaunch.windows.title}</h3>
+						<ol>
+							{#each download.firstLaunch.windows.steps as step}
+								<li>{step}</li>
+							{/each}
+						</ol>
+					</article>
+				</div>
+
+				<p class="first-launch__note">{download.firstLaunch.note}</p>
+			</section>
+
 			<div class="notes">
-				<p class="notes__item">
-					<Icon name="shield" size={17} />
-					<span>{download.unsigned}</span>
-				</p>
 				<p class="notes__item notes__item--quiet mono">
 					<Icon name="layers" size={15} />
 					<span>{download.checksums}</span>
@@ -294,6 +326,89 @@
 		font-size: 0.62rem;
 		letter-spacing: 0.08em;
 		opacity: 0.75;
+	}
+
+	.first-launch {
+		margin-top: clamp(2rem, 4vw, 3rem);
+		padding: clamp(1.4rem, 3vw, 2rem);
+		border: 2px solid var(--ink);
+		border-radius: var(--r-lg);
+		background: var(--paper-lift);
+		box-shadow: var(--shadow-3);
+	}
+
+	.first-launch__head {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+		max-width: 68ch;
+		margin-bottom: 1.5rem;
+	}
+
+	.first-launch__lead {
+		color: var(--text-2);
+		line-height: 1.65;
+	}
+
+	.first-launch__grid {
+		display: grid;
+		gap: 1.5rem;
+	}
+
+	@media (min-width: 760px) {
+		.first-launch__grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	.first-launch__card {
+		min-width: 0;
+	}
+
+	.first-launch__platform {
+		margin-bottom: 0.65rem;
+		font-family: var(--font-display);
+		font-size: 1.2rem;
+	}
+
+	.first-launch__card ol {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		margin: 0;
+		padding-left: 1.15rem;
+		color: var(--text-2);
+		line-height: 1.6;
+	}
+
+	.first-launch__terminal {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		margin-top: 0.9rem;
+	}
+
+	.first-launch__terminal-label {
+		color: var(--text-3);
+		font-size: var(--fs-micro);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.first-launch__terminal code {
+		padding: 0.55rem 0.65rem;
+		border-radius: var(--r-sm);
+		background: var(--paper-deep);
+		font-family: var(--font-mono);
+		font-size: var(--fs-small);
+		overflow-wrap: anywhere;
+	}
+
+	.first-launch__note {
+		margin-top: 1.25rem;
+		color: var(--text-3);
+		font-size: var(--fs-small);
+		line-height: 1.6;
 	}
 
 	.notes {
