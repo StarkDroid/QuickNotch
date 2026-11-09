@@ -63,7 +63,14 @@ const HEADINGS = { new: "New", improved: "Improved", fixed: "Fixed" };
 // Imported by the local self-test; running the file executes one mode.
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  const run = MODE === "preview" ? preview : MODE === "splice" ? splice : main;
+  const run =
+    MODE === "preview"
+      ? preview
+      : MODE === "splice"
+        ? splice
+        : MODE === "manual"
+          ? manual
+          : main;
   run().catch((error) => {
     console.error(`changelog ${MODE} failed: ${error.stack || error.message}`);
     process.exit(1);
@@ -133,6 +140,75 @@ async function main() {
   output("bump", bump);
 
   console.log(`planned v${version} from #${pull.number} (${bump} bump, ${appFiles.length} app files)`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Manual release                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Release the current default branch without a pull request. The workflow
+ * checks out `github.sha`, so the build is the commit the maintainer chose to
+ * dispatch, and the notes come from the workflow inputs instead of PR prose.
+ */
+async function manual() {
+  mkdirSync(OUT, { recursive: true });
+  const previous = await previousFeed();
+  const bump = ["major", "minor", "patch"].includes(REQUESTED_BUMP) ? REQUESTED_BUMP : "patch";
+  const version = nextVersion(previous.latest, bump);
+  const title = (process.env.RELEASE_TITLE || "").trim() || `QuickNotch ${version}`;
+  const kind = ["new", "improved", "fixed"].includes(process.env.RELEASE_KIND)
+    ? process.env.RELEASE_KIND
+    : "fixed";
+  const raw = (process.env.RELEASE_NOTES || "").trim();
+  const changes = raw
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, MAX_CHANGES)
+    .map((text) => ({ kind, text }));
+
+  if (changes.length === 0) changes.push({ kind, text: title });
+
+  const entry = {
+    version,
+    date: new Date().toISOString().slice(0, 10),
+    title,
+    pr: 0,
+    highlights: changes.slice(0, 3).map((change) => change.text),
+    changes
+  };
+  const feed = mergeEntry(previous, entry);
+  const notes = renderNotes(entry, {});
+
+  writeFileSync(join(OUT, "changelog.json"), `${JSON.stringify(feed, null, 2)}\n`);
+  writeFileSync(join(OUT, "notes.md"), `${notes}\n`);
+  writeFileSync(
+    join(OUT, "plan.json"),
+    `${JSON.stringify(
+      {
+        release: true,
+        reason: "manual",
+        version,
+        tag: `v${version}`,
+        bump,
+        title,
+        previous: previous.latest,
+        source: previous.source,
+        changes: changes.length
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  output("release", "true");
+  output("version", version);
+  output("tag", `v${version}`);
+  output("pr", "");
+  output("bump", bump);
+
+  console.log(`planned manual v${version} (${bump} bump, ${changes.length} notes)`);
 }
 
 /* ------------------------------------------------------------------ */

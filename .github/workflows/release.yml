@@ -1,25 +1,32 @@
 name: Release
 
-# One release per merged pull request.
+# One release per merged pull request, or one manual release from the current
+# default branch.
 #
-# `plan` turns the PR into a version number, a sanitised changelog entry and the
-# cumulative `changelog.json` the app fetches. `build` produces the installers
-# on three runners, and `publish` attaches them together with a checksum file.
+# `plan` turns the PR (or the manual inputs) into a version number, a
+# sanitised changelog entry and the cumulative `changelog.json` the app fetches.
+# `build` produces the installers on three runners, and `publish` attaches them
+# together with a checksum file.
 #
-# PRs that touch only the site, the docs or CI still merge normally — they just
-# do not produce a build. `workflow_dispatch` exists for a re-run, a forced
-# rebuild, or a fork PR (whose token cannot publish a release).
+# PRs that touch only the site, the docs or CI still merge normally; they just
+# do not produce a build. `workflow_dispatch` runs a re-run, a forced rebuild,
+# a fork PR, or a manual release of `main` with the `manual` input.
 on:
   pull_request:
     types: [closed]
   workflow_dispatch:
     inputs:
+      manual:
+        description: "Release the current main branch without a pull request"
+        required: true
+        type: boolean
+        default: false
       pr_number:
         description: "Pull request to release (blank = most recent merged)"
         required: false
         default: ""
       bump:
-        description: "Version bump (auto follows labels)"
+        description: "Version bump (auto follows labels, or patch for manual)"
         required: true
         type: choice
         default: auto
@@ -28,6 +35,23 @@ on:
           - minor
           - major
           - patch
+      title:
+        description: "Manual release title (blank = QuickNotch <version>)"
+        required: false
+        default: ""
+      notes:
+        description: "Manual release notes, one line per note"
+        required: false
+        default: ""
+      kind:
+        description: "Manual release changelog group"
+        required: true
+        type: choice
+        default: fixed
+        options:
+          - fixed
+          - improved
+          - new
       force:
         description: "Rebuild even if the PR is already in the changelog"
         required: true
@@ -47,6 +71,9 @@ concurrency:
 env:
   RELEASE_BUMP: ${{ inputs.bump || 'auto' }}
   RELEASE_FORCE: ${{ inputs.force || false }}
+  RELEASE_TITLE: ${{ inputs.title || '' }}
+  RELEASE_NOTES: ${{ inputs.notes || '' }}
+  RELEASE_KIND: ${{ inputs.kind || 'fixed' }}
 
 jobs:
   plan:
@@ -82,6 +109,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           BUMP: ${{ env.RELEASE_BUMP }}
           FORCE: ${{ env.RELEASE_FORCE }}
+          MODE: ${{ inputs.manual && 'manual' || 'release' }}
         run: node .github/scripts/changelog.mjs
 
       - name: Keep the release notes
